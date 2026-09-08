@@ -13,15 +13,28 @@ import io
 
 # --- RECONSTRUCCIÓN DE BÓVEDA EN LA NUBE ---
 import os
+import json
 import streamlit as st
 
-if not os.path.exists('token.json') and "token_json" in st.secrets:
-    with open('token.json', 'w') as f:
-        f.write(st.secrets["token_json"])
+def reconstruir_json(nombre_secreto, nombre_archivo):
+    if not os.path.exists(nombre_archivo) and nombre_secreto in st.secrets:
+        datos = st.secrets[nombre_secreto]
         
-if not os.path.exists('credenciales.json') and "credenciales_json" in st.secrets:
-    with open('credenciales.json', 'w') as f:
-        f.write(st.secrets["credenciales_json"])
+        # Si Streamlit lo procesó como texto plano, lo convertimos a diccionario
+        if isinstance(datos, str):
+            datos = json.loads(datos)
+        else:
+            datos = dict(datos)
+            
+        # Escribimos el archivo forzando la estructura JSON exacta que exige Google
+        with open(nombre_archivo, 'w') as f:
+            json.dump(datos, f)
+
+try:
+    reconstruir_json("token_json", "token.json")
+    reconstruir_json("credenciales_json", "credenciales.json")
+except Exception as e:
+    st.error(f"Error descifrando la bóveda: {e}")
 
 st.set_page_config(page_title="USAER 2E", layout="wide")
 
