@@ -488,15 +488,14 @@ with paneles[idx_bap]:
         # AQUÍ IRÁN LOS REACTIVOS COMPLETOS
         
         respuestas_bap = {}
-        respuestas_bap = {}
         for i, item in enumerate(items_anexo3):
             st.markdown(f"**{item}**")
             col_freq, col_ori = st.columns([3, 1])
             with col_freq:
-                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"freq_{i}_{tipo_atencion}", label_visibility="collapsed")
+                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"bap_frecuencia_{i}", label_visibility="collapsed")
             with col_ori:
                 st.markdown("<br>", unsafe_allow_html=True)
-                ori = st.checkbox("Requiere Orientación", key=f"ori_{i}_{tipo_atencion}")
+                ori = st.checkbox("Requiere Orientación", key=f"bap_orientacion_{i}")
             
             respuestas_bap[f"Item_{i+1}"] = {"pregunta": item, "frecuencia": freq, "orientacion": ori}
             st.markdown("---")
