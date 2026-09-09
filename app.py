@@ -1042,34 +1042,44 @@ if idx_visitas != -1:
                     dir_prim = directorio_firmas[clave_escuela]["dir_primaria"]
                     apoyo_prim = directorio_firmas[clave_escuela]["apoyo"]
                     
+                    # Identificar la especialidad para el formato oficial
+                    rol_actual_texto = str(st.session_state.get('rol', '')).upper()
+                    if "PSICOLOG" in rol_actual_texto:
+                        especialidad_visita = "Área de Psicología - USAER 02-E"
+                    elif "COMUNICACI" in rol_actual_texto:
+                        especialidad_visita = "Área de Comunicación - USAER 02-E"
+                    elif "TRABAJO" in rol_actual_texto:
+                        especialidad_visita = "Área de Trabajo Social - USAER 02-E"
+                    else:
+                        especialidad_visita = st.session_state.get('rol', 'USAER 02-E')
+                    
                     def m(opcion):
                         return "( X )" if opcion in motivos_izq or opcion in motivos_der else "( &nbsp;&nbsp; )"
                         
-                    # Si hay detalles, los ponemos en negritas, si no, dejamos la línea vacía de Word
                     def d(opcion, linea="___________________"):
                         return f"<b>{detalles_motivos}</b>" if detalles_motivos and (opcion in motivos_izq or opcion in motivos_der) else linea
 
-# ATENCIÓN: A partir de aquí, cero espacios a la izquierda
+# ATENCIÓN: A partir de aquí, CERO espacios a la izquierda
                     html_constancia = f"""<div style="background-color: white; color: black; padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
 <table style="width: 100%; margin-bottom: 20px; border: none;">
 <tr>
-<td style="width: 30%; text-align: left; vertical-align: middle;">
-<img src="https://educacion.yucatan.gob.mx/images/logo_segey_2024.png" alt="SEGEY" style="max-height: 50px;">
+<td style="width: 25%; text-align: left; vertical-align: middle;">
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Logo_de_la_Secretar%C3%ADa_de_Educaci%C3%B3n_P%C3%BAblica_%28M%C3%A9xico%29.svg/512px-Logo_de_la_Secretar%C3%ADa_de_Educaci%C3%B3n_P%C3%BAblica_%28M%C3%A9xico%29.svg.png" alt="SEP" style="max-width: 120px;">
 </td>
-<td style="width: 40%; text-align: center; vertical-align: middle; font-size: 13px; line-height: 1.2;">
-DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>
-USAER 02 ESTATAL CCT. 31FUA0002Y<br>
-ZONA No. 001
+<td style="width: 50%; text-align: center; vertical-align: middle; font-size: 13px; line-height: 1.2;">
+<b>DIRECCIÓN DE EDUCACIÓN ESPECIAL</b><br>
+<b>USAER 02 ESTATAL CCT. 31FUA0002Y</b><br>
+<b>ZONA No. 001</b>
 </td>
-<td style="width: 30%; text-align: right; vertical-align: middle;">
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Escudo_de_Yucat%C3%A1n.svg/1200px-Escudo_de_Yucat%C3%A1n.svg.png" alt="Yucatan" style="max-height: 60px;">
+<td style="width: 25%; text-align: right; vertical-align: middle;">
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Escudo_de_Yucat%C3%A1n.svg/200px-Escudo_de_Yucat%C3%A1n.svg.png" alt="Yucatan" style="max-height: 70px;">
 </td>
 </tr>
 </table>
 
-<h3 style="text-align: center; font-weight: bold; margin-bottom: 25px;">Constancia de visita</h3>
+<h3 style="text-align: center; font-weight: bold; text-decoration: underline; margin-bottom: 25px;">Constancia de visita</h3>
 
-<div style="font-size: 14px; margin-bottom: 5px;">Servicio de educación especial que realiza la visita: <u>USAER 02-E</u></div>
+<div style="font-size: 14px; margin-bottom: 5px;">Servicio de educación especial que realiza la visita: <u>{especialidad_visita}</u></div>
 <div style="font-size: 14px; margin-bottom: 5px;">Curso escolar: <u>2026 – 2027</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Fecha de la visita: <u>{fecha_visita.strftime('%d/%m/%Y')}</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Hora: <u>de 7:00 a 12:00hrs</u></div>
 <div style="font-size: 14px; margin-bottom: 20px;">Escuela: <u>{escuela_seleccionada}</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Localidad: <u>MÉRIDA</u></div>
 
