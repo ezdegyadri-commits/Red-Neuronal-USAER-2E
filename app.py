@@ -87,7 +87,7 @@ if not st.session_state.usuario_activo:
     st.subheader("Acceso al Sistema")
     with st.form("login_form"):
         # --- EFECTO VISUAL DE ENCENDIDO (INICIO DE SESIÓN) ---
-    st.markdown("""
+        st.markdown("""
         <style>
         /* Oscurecemos el fondo sutilmente para que resalte el formulario */
         .stApp {
