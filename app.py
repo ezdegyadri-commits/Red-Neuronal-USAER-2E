@@ -539,13 +539,29 @@ with paneles[idx_bap]:
             
         else:
             # --- AQUÍ ESTÁN LOS SELECTORES DEL MODO GRUPAL ---
+            
+            # 1. Definir qué escuelas puede ver este especialista
+            rol_activo_bap = str(st.session_state.get("rol", "")).upper()
+            escuelas_perm_bap = str(st.session_state.get("escuelas_permitidas", "")).strip().upper()
+            
+            # Diego (Trabajo Social) y Director ven todas, los demás solo sus asignadas
+            if "DIRECTOR" in rol_activo_bap or "TRABAJO" in rol_activo_bap or "TODAS" in escuelas_perm_bap:
+                opciones_escuela_bap = list(escuelas_usaer.keys())
+            else:
+                claves_permitidas = [e.strip() for e in escuelas_perm_bap.split(",")]
+                opciones_escuela_bap = [nombre for nombre, clave in escuelas_usaer.items() if clave in claves_permitidas]
+
+            # Selector de Escuela
+            escuela_grupal = st.selectbox("Escuela a observar", opciones_escuela_bap if opciones_escuela_bap else ["Sin escuelas asignadas"])
+            
+            # Selectores de Grado y Grupo
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 grado_grupal = st.selectbox("Grado a observar", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
             with col_g2:
                 grupo_grupal = st.selectbox("Grupo a observar", ["A", "B", "C", "D"])
             
-            objetivo_seleccionado = f"Grupo {grado_grupal} {grupo_grupal}"
+            objetivo_seleccionado = f"Grupo {grado_grupal} {grupo_grupal} de la escuela {escuela_grupal}"
             prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el contexto áulico del {objetivo_seleccionado}, enfocadas en el Diseño Universal para el Aprendizaje (DUA) y dinámicas colectivas."
         
         st.markdown("---")
