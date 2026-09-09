@@ -54,58 +54,143 @@ except Exception as e:
     st.stop()
 
 
-# 4. PANTALLA DE INICIO (AMIGABLE)
-def mostrar_pantalla_inicio():
+# 4 y 5. PANTALLA DE INICIO Y LOGIN (SÚPER AMIGABLE Y CON LÁMPARA)
+if not st.session_state.get("autenticado", False):
     st.markdown("""
         <style>
-        .hero-container { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 3rem 2rem; border-radius: 16px; color: #ffffff; text-align: center; margin-bottom: 2rem; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); }
-        .hero-title { font-size: 2.3rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.5px; }
-        .hero-subtitle { font-size: 1.1rem; font-weight: 300; opacity: 0.9; max-width: 650px; margin: 0 auto 1.5rem auto; line-height: 1.5; }
-        .feature-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; text-align: center; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04); transition: transform 0.2s ease; height: 100%; color: black; }
-        .feature-icon { font-size: 2.2rem; margin-bottom: 0.75rem; }
-        .feature-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem; }
-        .feature-desc { font-size: 0.9rem; color: #64748b; line-height: 1.4; }
+        /* Fondo nocturno y cálido para resaltar la luz */
+        .stApp {
+            background-color: #1a1e23;
+            color: #ecf0f1;
+        }
+        
+        /* Animación de la luz descendiendo */
+        @keyframes encenderLuz {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        /* Animación de flotación suave para el mensaje */
+        @keyframes flotar {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* Estructura de la lámpara de techo CSS */
+        .lampara-contenedor {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            margin-top: -60px; /* Para que cuelgue desde el techo de la app */
+            margin-bottom: 20px;
+            z-index: 10;
+        }
+        .cable {
+            width: 4px;
+            height: 60px;
+            background-color: #555;
+        }
+        .campana {
+            width: 0; 
+            height: 0; 
+            border-left: 35px solid transparent;
+            border-right: 35px solid transparent;
+            border-bottom: 45px solid #d4af37; /* Dorado cálido */
+            border-radius: 4px;
+        }
+        .foco {
+            width: 24px;
+            height: 12px;
+            background-color: #fff;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 5px 15px rgba(255, 235, 100, 0.8);
+        }
+        .haz-de-luz {
+            position: absolute;
+            top: 115px;
+            width: 350px;
+            height: 400px;
+            background: linear-gradient(to bottom, rgba(255, 223, 100, 0.15) 0%, rgba(255, 223, 100, 0) 100%);
+            clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+            animation: encenderLuz 2s ease-in-out forwards;
+            pointer-events: none; /* Para que no bloquee los clics */
+            z-index: 0;
+        }
+
+        /* Contenedor del mensaje de bienvenida */
+        .mensaje-bienvenida {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto 30px auto;
+            position: relative;
+            z-index: 1;
+            animation: flotar 4s ease-in-out infinite;
+        }
+        .titulo-calido {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #ffdf64;
+            margin-bottom: 10px;
+        }
+        .texto-calido {
+            font-size: 1.1rem;
+            color: #d1d5db;
+            line-height: 1.6;
+        }
+
+        /* Estilo del formulario de login */
+        [data-testid="stForm"] {
+            background-color: rgba(30, 35, 40, 0.8);
+            border-radius: 16px;
+            border: 1px solid #444;
+            padding: 2.5rem;
+            max-width: 400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            animation: encenderLuz 1.5s ease-out forwards;
+        }
         </style>
-        <div class="hero-container">
-            <div class="hero-title">Red Neuronal USAER 02-E</div>
-            <div class="hero-subtitle">Plataforma de gestión psicopedagógica, seguimiento multidisciplinario y ensamblado automatizado de documentación oficial SEGEY.</div>
+
+        <!-- Dibujo de la lámpara en HTML -->
+        <div class="lampara-contenedor">
+            <div class="cable"></div>
+            <div class="campana"></div>
+            <div class="foco"></div>
+            <div class="haz-de-luz"></div>
+        </div>
+
+        <!-- Mensaje cálido -->
+        <div class="mensaje-bienvenida">
+            <div class="titulo-calido">¡Hola! Qué alegría tenerte aquí.</div>
+            <div class="texto-calido">
+                Sabemos que tu labor transforma vidas en nuestras escuelas todos los días. 
+                Hemos creado este rincón digital especialmente para ti, para hacer tu trabajo más ligero, 
+                rápido y colaborativo.<br><br>
+                <b>👇 Por favor, ingresa tus datos para encender tu espacio de trabajo:</b>
+            </div>
         </div>
     """, unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
-    with col1: st.markdown('<div class="feature-card"><div class="feature-icon">📋</div><div class="feature-title">Eventos Significativos</div><div class="feature-desc">Registro individual con ensamblado automático cronológico para Anexo V.</div></div>', unsafe_allow_html=True)
-    with col2: st.markdown('<div class="feature-card"><div class="feature-icon">✨</div><div class="feature-title">Asistente Técnico IA</div><div class="feature-desc">Corrección de estilo y redacción pedagógica objetiva lista para actas.</div></div>', unsafe_allow_html=True)
-    with col3: st.markdown('<div class="feature-card"><div class="feature-icon">🗂️</div><div class="feature-title">Expedientes en Nube</div><div class="feature-desc">Sincronización directa y almacenamiento seguro de anexos oficiales.</div></div>', unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-
-
-# 5. SISTEMA DE LOGIN CON ANIMACIÓN
-if not st.session_state.get("autenticado", False):
+    
     with st.form("login_form"):
-        st.markdown("""
-            <style>
-            .stApp { background-color: #121417; color: white; }
-            @keyframes encendidoLampara { 0% { opacity: 0; transform: translateY(-20px); box-shadow: 0 0 0px rgba(255, 223, 100, 0); } 100% { opacity: 1; transform: translateY(0); box-shadow: 0 10px 40px rgba(255, 223, 100, 0.15); } }
-            [data-testid="stForm"] { animation: encendidoLampara 1.2s ease-out forwards; background-color: #1c1f24; border-radius: 16px; border: 1px solid #333; padding: 2.5rem; max-width: 450px; margin: 0 auto; }
-            @keyframes latido { 0% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.02); color: #ffdf64; } 100% { opacity: 0.6; transform: scale(1); } }
-            .guia-visual { animation: latido 2.5s infinite; text-align: center; font-size: 1.1rem; margin-bottom: 20px; font-weight: 500; }
-            </style>
-            <div class="guia-visual">👋 ¡Bienvenida! <br>👇 Por favor, ingresa tu usuario y contraseña aquí abajo para comenzar.</div>
-        """, unsafe_allow_html=True)
-        
-        usuario = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        submit = st.form_submit_button("Ingresar")
+        usuario = st.text_input("Tu usuario:")
+        password = st.text_input("Tu contraseña:", type="password")
+        submit = st.form_submit_button("Entrar a mi espacio ✨")
         
         if submit:
-            if usuario == "edgar.yam" and password == "1234": # Ajusta a tu lógica de base de datos
+            if usuario == "edgar.yam" and password == "1234": # Aquí pondrás las contraseñas de las maestras
                 st.session_state.autenticado = True
                 st.session_state.nombre = "Edgar Yam"
                 st.rerun()
             else:
-                st.error("Credenciales incorrectas")
-    st.stop() # Evita que cargue el resto de la página sin loguearse
+                st.error("Mmm, parece que hay un error en tus datos. ¡Intenta de nuevo!")
+    
+    st.stop() # Detiene la ejecución para que no vean la plataforma sin loguearse
 
-# SI EL USUARIO ESTÁ AUTENTICADO:
+# SI EL USUARIO ESTÁ AUTENTICADO, SE SALTA EL STOP Y VE TUS PESTAÑAS:
 mostrar_pantalla_inicio()
 
 # --- AQUÍ ABAJO PEGAS TUS PESTAÑAS (pestañas = st.tabs(...)) Y TUS MÓDULOS DE ALUMNOS, BAP, EVENTOS ---
