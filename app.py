@@ -192,7 +192,20 @@ if not st.session_state.get("autenticado", False):
                 st.error(f"⚠️ Error conectando con la base de datos de usuarios. Detalle: {e}")
     
     st.stop()
-
+# --- PANEL LATERAL Y CERRAR SESIÓN ---
+with st.sidebar:
+    st.markdown(f"### 👤 Sesión activa")
+    st.write(f"**Usuario:** {st.session_state.get('nombre', 'Docente')}")
+    st.markdown("---")
+    
+    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        # Limpiamos el estado de autenticación
+        st.session_state.autenticado = False
+        st.session_state.pop("nombre", None)
+        st.session_state.pop("rol", None)
+        st.session_state.pop("ia_evento_sugerido", None)
+        st.session_state.pop("html_export", None)
+        st.rerun()
 # SI EL USUARIO ESTÁ AUTENTICADO, SE SALTA EL STOP Y VE TUS PESTAÑAS:
 
 
