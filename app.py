@@ -15,6 +15,32 @@ import io
 
 # 1. CONFIGURACIÓN DE PÁGINA (Debe ser la línea 1 operativa)
 st.set_page_config(page_title="USAER 2E", layout="wide")
+def calcular_edad_exacta(curp):
+    if len(str(curp)) < 10:
+        return "Edad no calculable (Falta CURP)"
+    
+    try:
+        # Extraemos YYMMDD de la CURP
+        fecha_str = curp[4:10]
+        año = int(fecha_str[0:2])
+        mes = int(fecha_str[2:4])
+        dia = int(fecha_str[4:6])
+        
+        # Lógica de siglo (Si el año es mayor al actual, nacieron en 1900s, si no, en 2000s)
+        año_actual_corto = datetime.now().year % 100
+        if año > año_actual_corto + 5: 
+            año_completo = 1900 + año
+        else:
+            año_completo = 2000 + año
+            
+        fecha_nac = datetime(año_completo, mes, dia)
+        hoy = datetime.now()
+        
+        # Matemáticas de edad (Resta los años y ajusta si aún no ha pasado su cumpleaños este año)
+        edad = hoy.year - fecha_nac.year - ((hoy.month, hoy.day) < (fecha_nac.month, fecha_nac.day))
+        return f"{edad} años"
+    except:
+        return "Edad no calculable (CURP inválida)"
 
 # 2. VARIABLES MAESTRAS (Coloca aquí tus datos)
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6Lg2KCR-L0SUqRqsk7IGKPHneuENhZH_d4J1SUeHrz79g")
