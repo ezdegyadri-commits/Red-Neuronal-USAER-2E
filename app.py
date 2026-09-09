@@ -11,33 +11,43 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 
-# --- RECONSTRUCCIÓN DE BÓVEDA EN LA NUBE (VERSIÓN BLINDADA) ---
-import os
-import json
-import streamlit as st
+# 1. CONFIGURACIÓN DE PÁGINA
+st.set_page_config(page_title="USAER 2E", layout="wide")
 
-def reconstruir_llave(nombre_secreto, nombre_archivo):
-    if nombre_secreto in st.secrets:
-        # 1. Destrucción del archivo corrupto si existe
-        if os.path.exists(nombre_archivo):
-            os.remove(nombre_archivo)
-            
-        # 2. Escritura limpia y directa
-        datos = st.secrets[nombre_secreto]
-        with open(nombre_archivo, "w", encoding="utf-8") as f:
-            if isinstance(datos, str):
-                f.write(datos)
-            else:
-                json.dump(dict(datos), f)
+# 2. VARIABLES MAESTRAS Y API KEYS (Mantenlas tal cual las tienes)
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AQUÍ_TU_API_KEY_SI_NO_ESTA_EN_SECRETS")
+FOLDER_ID_MAESTRO = "AQUÍ_TU_ID_DE_CARPETA_DRIVE"
+URL_SPREADSHEET_MAESTRO = "AQUÍ_LA_URL_DE_TU_GOOGLE_SHEET"
 
-try:
-    reconstruir_llave("token_json", "token.json")
-    reconstruir_llave("credenciales_json", "credenciales.json")
-except Exception as e:
-    st.error(f"Error crítico en la bóveda: {e}")
-    st.stop() # Detiene la app si algo falla para no arrastrar errores
+# Configuración de Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+modelo_ia = genai.GenerativeModel("gemini-1.5-flash")
 
-# --- 1. CONFIGURACIÓN DE CONEXIONES (REEMPLAZA TUS DATOS AQUÍ) ---
+# 3. RECONSTRUCCIÓN DE BÓVEDA EN LA NUBE (Blindaje)
+def preparar_boveda_segura():
+    for secreto_key, nombre_archivo in [("token_json", "token.json"), ("credenciales_json", "credenciales.json")]:
+        if secreto_key in st.secrets:
+            secreto_crudo = st.secrets[secreto_key]
+            try:
+                if isinstance(secreto_crudo, str):
+                    diccionario_limpio = json.loads(secreto_crudo)
+                else:
+                    diccionario_limpio = dict(secreto_crudo)
+                    
+                with open(nombre_archivo, "w", encoding="utf-8") as f:
+                    json.dump(diccionario_limpio, f, indent=4)
+            except json.JSONDecodeError:
+                st.error(f"Error: El secreto '{secreto_key}' en Streamlit Cloud no tiene formato JSON válido.")
+                st.stop()
+            except Exception as e:
+                st.error(f"Error reconstruyendo {secreto_key}: {e}")
+                st.stop()
+
+preparar_boveda_segura()
+
+# 4. CONEXIÓN A GOOGLE SHEETS
+gc = gspread.service_account(filename="credenciales.json")
+sheet = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
 URL_SPREADSHEET = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
 API_KEY_GEMINI = "AQ.Ab8RN6Lg2KCR-L0SUqRqsk7IGKPHneuENhZH_d4J1SUeHrz79g"
 FOLDER_ID_MAESTRO = "1btFuNK8l9BI5C2s3-Q0_RZBZkUOBhvtr"
