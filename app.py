@@ -197,7 +197,39 @@ if not st.session_state.get("autenticado", False):
 
 
 # --- AQUÍ ABAJO PEGAS TUS PESTAÑAS (pestañas = st.tabs(...)) Y TUS MÓDULOS DE ALUMNOS, BAP, EVENTOS ---
+# ==========================================
+# --- CARGA DE DATOS PARA LOS FORMULARIOS ---
+# ==========================================
+try:
+    # 1. Cargar Alumnos de Sheets
+    df_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
+    # Adaptación automática por si tu columna se llama Nombre o Nombre_Completo
+    col_nombre = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
+    lista_alumnos = df_alumnos[col_nombre].tolist() if not df_alumnos.empty else []
+except Exception:
+    df_alumnos = pd.DataFrame()
+    lista_alumnos = []
 
+# 2. Diccionario de Escuelas (Ajusta los nombres de las escuelas reales después)
+escuelas_usaer = {
+    "Primaria 1": "ESC-001",
+    "Primaria 2": "ESC-002",
+    "Preescolar 3": "ESC-003",
+    "Primaria 4": "ESC-004",
+    "Primaria 5": "ESC-005",
+    "Preescolar 6": "ESC-006",
+    "Secundaria 7": "ESC-007",
+    "Secundaria 8": "ESC-008"
+}
+
+# 3. Elementos de Evaluación (BAPs) para el Anexo 3
+items_anexo3 = [
+    "Sigue instrucciones verbales o visuales durante la clase.",
+    "Logra mantener la atención en las actividades propuestas.",
+    "Participa activamente en dinámicas de equipo.",
+    "Muestra autorregulación emocional ante cambios o frustración."
+]
+# ==========================================
 # --- DEFINICIÓN DE PESTAÑAS (TODAS INCLUIDAS) ---
 tabs = [
     "📝 Alta de Alumnos", 
