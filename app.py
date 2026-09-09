@@ -17,16 +17,16 @@ import json
 import streamlit as st
 
 def reconstruir_json(nombre_secreto, nombre_archivo):
-    if not os.path.exists(nombre_archivo) and nombre_secreto in st.secrets:
+    if nombre_secreto in st.secrets:
         datos = st.secrets[nombre_secreto]
         
-        # Si Streamlit lo procesó como texto plano, lo convertimos a diccionario
+        # Convertimos a diccionario
         if isinstance(datos, str):
             datos = json.loads(datos)
         else:
             datos = dict(datos)
             
-        # Escribimos el archivo forzando la estructura JSON exacta que exige Google
+        # Forzamos la sobrescritura del archivo SIEMPRE para limpiar errores pasados
         with open(nombre_archivo, 'w') as f:
             json.dump(datos, f)
 
@@ -35,8 +35,6 @@ try:
     reconstruir_json("credenciales_json", "credenciales.json")
 except Exception as e:
     st.error(f"Error descifrando la bóveda: {e}")
-
-st.set_page_config(page_title="USAER 2E", layout="wide")
 
 # --- 1. CONFIGURACIÓN DE CONEXIONES (REEMPLAZA TUS DATOS AQUÍ) ---
 URL_SPREADSHEET = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
