@@ -11,30 +11,31 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 
-# --- RECONSTRUCCIÓN DE BÓVEDA EN LA NUBE ---
+# --- RECONSTRUCCIÓN DE BÓVEDA EN LA NUBE (VERSIÓN BLINDADA) ---
 import os
 import json
 import streamlit as st
 
-def reconstruir_json(nombre_secreto, nombre_archivo):
+def reconstruir_llave(nombre_secreto, nombre_archivo):
     if nombre_secreto in st.secrets:
-        datos = st.secrets[nombre_secreto]
-        
-        # Convertimos a diccionario
-        if isinstance(datos, str):
-            datos = json.loads(datos)
-        else:
-            datos = dict(datos)
+        # 1. Destrucción del archivo corrupto si existe
+        if os.path.exists(nombre_archivo):
+            os.remove(nombre_archivo)
             
-        # Forzamos la sobrescritura del archivo SIEMPRE para limpiar errores pasados
-        with open(nombre_archivo, 'w') as f:
-            json.dump(datos, f)
+        # 2. Escritura limpia y directa
+        datos = st.secrets[nombre_secreto]
+        with open(nombre_archivo, "w", encoding="utf-8") as f:
+            if isinstance(datos, str):
+                f.write(datos)
+            else:
+                json.dump(dict(datos), f)
 
 try:
-    reconstruir_json("token_json", "token.json")
-    reconstruir_json("credenciales_json", "credenciales.json")
+    reconstruir_llave("token_json", "token.json")
+    reconstruir_llave("credenciales_json", "credenciales.json")
 except Exception as e:
-    st.error(f"Error descifrando la bóveda: {e}")
+    st.error(f"Error crítico en la bóveda: {e}")
+    st.stop() # Detiene la app si algo falla para no arrastrar errores
 
 # --- 1. CONFIGURACIÓN DE CONEXIONES (REEMPLAZA TUS DATOS AQUÍ) ---
 URL_SPREADSHEET = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
