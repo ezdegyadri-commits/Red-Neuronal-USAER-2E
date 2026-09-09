@@ -330,32 +330,64 @@ if idx_alta != -1:
                         hoja_objetivo = next((h for h in hojas if "USAER" in h.upper()), hojas[-1] if len(hojas) > 1 else hojas[0])
                         df_raw = pd.read_excel(archivo_subido, sheet_name=hoja_objetivo)
                     
-                    # --- 2. ESCÁNER DE CABECERAS (ANTES DE LA VISTA PREVIA) ---
+                    # --- 2. ESCÁNER Y BLINDAJE ANTIDUPLICADOS ---
                     if not any("APELLIDO" in str(c).upper() for c in df_raw.columns):
+                        header_idx = None
                         for idx, row in df_raw.head(15).iterrows():
                             if any("APELLIDO" in str(val).upper() for val in row.values):
-                                df_raw.columns = [str(c).strip().replace('\n', ' ').replace('\r', '') for c in row.values]
-                                df_raw = df_raw.iloc[idx+1:].reset_index(drop=True)
+                                header_idx = idx
                                 break
+                        
+                        if header_idx is not None:
+                            # Unimos la fila de títulos principal con la de abajo para rescatar "Grupo" o "Primaria"
+                            row1 = df_raw.iloc[header_idx].fillna('').astype(str).replace('nan', '')
+                            row2 = df_raw.iloc[header_idx + 1].fillna('').astype(str).replace('nan', '') if header_idx + 1 < len(df_raw) else row1
+                            
+                            nuevas_cols = []
+                            for r1, r2 in zip(row1, row2):
+                                col_name = f"{r1} {r2}".strip()
+                                if not col_name: col_name = "Vacia"
+                                
+                                # Si el nombre se repite (ej. varios 'nan' o 'Vacia'), le ponemos un número
+                                base = col_name
+                                cont = 1
+                                while col_name in nuevas_cols:
+                                    col_name = f"{base}_{cont}"
+                                    cont += 1
+                                nuevas_cols.append(col_name)
+                                
+                            df_raw.columns = nuevas_cols
+                            # Saltamos las 2 filas de títulos combinados
+                            df_raw = df_raw.iloc[header_idx+2:].reset_index(drop=True)
                     else:
-                        df_raw.columns = [str(c).strip().replace('\n', ' ').replace('\r', '') for c in df_raw.columns]
+                        # Deduplicar si por casualidad ya venían repetidas desde el CSV
+                        nuevas_cols = []
+                        for c in df_raw.columns:
+                            col_name = str(c).strip().replace('\n', ' ').replace('\r', '')
+                            base = col_name
+                            cont = 1
+                            while col_name in nuevas_cols:
+                                col_name = f"{base}_{cont}"
+                                cont += 1
+                            nuevas_cols.append(col_name)
+                        df_raw.columns = nuevas_cols
                         
                     # --- 3. LIMPIEZA DE ALUMNOS FANTASMA ---
                     col_nom = next((c for c in df_raw.columns if "APELLIDO" in c.upper()), None)
                     if not col_nom:
-                        st.error("❌ No se encontró la columna de Nombres. Verifica el formato del padrón.")
+                        st.error("❌ No se encontró la columna de Nombres en el archivo.")
                         st.stop()
                         
-                    # Filtrar filas vacías, nulas o con puras firmas
                     df_valido = df_raw[df_raw[col_nom].astype(str).str.strip() != ""]
                     df_valido = df_valido[df_valido[col_nom].notna()]
                     df_valido = df_valido[df_valido[col_nom].astype(str).str.lower() != 'nan']
                     
                     # --- 4. VISTA PREVIA LIMPIA ---
-                    st.write(f"✅ Vista previa ({len(df_valido)} alumnos reales listos para procesar):")
+                    st.write(f"✅ Vista previa ({len(df_valido)} alumnos listos para procesar):")
                     st.dataframe(df_valido.head(3))
                     
                     # --- 5. BOTÓN DE CARGA ---
+                    # (A partir de aquí se queda exactamente igual tu código de 'if st.button("📤 Procesar...")')
                     if st.button("📤 Procesar y subir a la Base de Datos"):
                         with st.spinner("Subiendo padrón a Google Sheets..."):
                             try:
