@@ -454,30 +454,26 @@ if idx_alta != -1:
                     
                     # --- 5. BOTÓN DE CARGA ---
                     # (A partir de aquí se queda exactamente igual tu código de 'if st.button("📤 Procesar...")')
-                    if st.button("📤 Procesar y subir a la Base de Datos"):
-                        with st.spinner("Subiendo padrón a Google Sheets..."):
-                            try:
+                    try:
                                 import re
                                 
                                 df_final = pd.DataFrame()
                                 df_final['ID_Alumno'] = [""] * len(df_valido)
-                                df_final['Nombre'] = df_valido[col_nom].astype(str).str.strip().str.upper()
+                                # AQUÍ ESTÁ LA CORRECCIÓN CLAVE: Nombre_Completo
+                                df_final['Nombre_Completo'] = df_valido[col_nom].astype(str).str.strip().str.upper()
                                 
                                 col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
                                 df_final['CURP'] = df_valido[col_curp] if col_curp else ""
                                 
-                                # --- MOTOR REGEX INVENCIBLE (CERO FRICCIÓN) ---
+                                # --- MOTOR REGEX INVENCIBLE ---
                                 grados_list = []
                                 grupos_list = []
                                 
                                 for _, row in df_valido.iterrows():
                                     texto_fila = " ".join([str(v).upper() for v in row.values])
-                                    
-                                    # Normalizamos el texto (cambiamos PRIMERO por 1, 3RO por 3, etc.)
                                     texto_limpio = texto_fila.replace('1RO','1').replace('2DO','2').replace('3RO','3').replace('4TO','4').replace('5TO','5').replace('6TO','6')
                                     texto_limpio = texto_limpio.replace('PRIMERO','1').replace('SEGUNDO','2').replace('TERCERO','3').replace('CUARTO','4').replace('QUINTO','5').replace('SEXTO','6')
                                     
-                                    # Buscar grado numérico (1 a 6) en toda la fila
                                     match_g = re.search(r'\b([1-6])\b', texto_limpio)
                                     if match_g:
                                         num = match_g.group(1)
@@ -486,7 +482,6 @@ if idx_alta != -1:
                                     else:
                                         val_g = "S/G"
                                         
-                                    # Buscar grupo (A-F) ignorando palabras que puedan confundir al robot
                                     texto_sin_basura = re.sub(r'\b(USAER|MÉRIDA|MERIDA|ESC|CCT|SECUNDARIA|PRIMARIA|PREESCOLAR|TURNO)\b', '', texto_fila)
                                     match_gr = re.search(r'\b([A-F])\b', texto_sin_basura)
                                     val_gr = match_gr.group(1) if match_gr else ""
@@ -498,12 +493,13 @@ if idx_alta != -1:
                                 df_final['Grupo'] = grupos_list
                                 # ------------------------------------------------
                                 
+                                # CORRECCIONES CLAVE: ID_Escuela, ID_Maestro_Reg, Condicion_Discapacidad
                                 col_esc = next((c for c in df_valido.columns if "ESCUELA" in c.upper()), None)
-                                df_final['Escuela_Asignada'] = df_valido[col_esc].fillna('ESC-005') if col_esc else "ESC-005"
-                                df_final['Maestro_Regular'] = "Pendiente"
+                                df_final['ID_Escuela'] = df_valido[col_esc].fillna('ESC-005') if col_esc else "ESC-005"
+                                df_final['ID_Maestro_Reg'] = "Pendiente"
                                 
                                 col_cond = next((c for c in df_valido.columns if "DISCAPACIDAD" in c.upper() or "CONDICION" in c.upper()), None)
-                                df_final['Condicion'] = df_valido[col_cond].fillna('Ninguna') if col_cond else "Ninguna"
+                                df_final['Condicion_Discapacidad'] = df_valido[col_cond].fillna('Ninguna') if col_cond else "Ninguna"
                                 
                                 col_stat = next((c for c in df_valido.columns if "SITUACION" in c.upper()), None)
                                 df_final['Estatus'] = df_valido[col_stat].fillna('Activo') if col_stat else "Activo"
@@ -517,37 +513,28 @@ if idx_alta != -1:
                                 bd_actual = sheet.worksheet("Alumnos").get_all_records()
                                 if bd_actual:
                                     df_bd = pd.DataFrame(bd_actual)
-                                    nombres_nuevos = df_final['Nombre'].tolist()
-                                    col_nom_bd = next((c for c in df_bd.columns if "NOMBRE" in c.upper()), 'Nombre')
+                                    nombres_nuevos = df_final['Nombre_Completo'].tolist()
+                                    col_nom_bd = next((c for c in df_bd.columns if "NOMBRE" in c.upper()), 'Nombre_Completo')
                                     
-                                    # Encontrar a los repetidos y sacarlos de la base vieja
                                     df_bd_limpia = df_bd[~df_bd[col_nom_bd].astype(str).str.strip().str.upper().isin(nombres_nuevos)]
                                     
-                                    # Alinear las columnas para que empaten exacto
                                     for col in df_bd.columns:
                                         if col not in df_final.columns:
                                             df_final[col] = ""
                                     df_final = df_final[df_bd.columns] 
                                     
-                                    # Unir la base limpia con los datos recién procesados y limpios
                                     df_actualizada = pd.concat([df_bd_limpia, df_final], ignore_index=True)
                                     df_actualizada = df_actualizada.fillna("")
                                     
-                                    # Reescribir la base de datos automáticamente
                                     sheet.worksheet("Alumnos").clear()
                                     sheet.worksheet("Alumnos").update([df_actualizada.columns.values.tolist()] + df_actualizada.values.tolist())
                                 else:
                                     sheet.worksheet("Alumnos").append_rows(df_final.values.tolist())
                                 
                                 st.balloons()
-                                st.success(f"¡Magia DUA aplicada! Se escanearon y actualizaron {len(df_final)} alumnos corrigiendo grados y grupos automáticamente.")
-                            
+                                st.success(f"¡Base de datos sincronizada! Se cargaron {len(df_final)} alumnos correctamente.")
                             except Exception as e:
                                 st.error(f"Error procesando los datos: {e}")
-                                
-                except Exception as e:
-                    st.error(f"Error al leer el archivo Excel: {e}")
-
 # --- MÓDULO: BAPs COLABORATIVAS ---
 
 
