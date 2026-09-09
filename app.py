@@ -463,18 +463,25 @@ if idx_alta != -1:
                                 col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
                                 df_final['CURP'] = df_valido[col_curp] if col_curp else ""
                                 
-                                def obtener_grado(row):
-                                    for col in df_valido.columns:
-                                        if "NIVEL" in col.upper() and ("PRIMARIA" in col.upper() or "PREESCOLAR" in col.upper() or "SECUNDARIA" in col.upper()):
-                                            val = str(row.get(col, '')).strip()
-                                            if val and val.lower() != 'nan':
-                                                return val
-                                    return "S/G"
+                                col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
+                                df_final['CURP'] = df_valido[col_curp] if col_curp else ""
                                 
-                                df_final['Grado'] = df_valido.apply(obtener_grado, axis=1)
+                                # --- EXTRACCIÓN AUTOMATIZADA (CERO FRICCIÓN) ---
+                                # 1. Buscar la columna de Grado (Ej: "16- NIVEL Y GRADO...")
+                                col_grado = next((c for c in df_valido.columns if "GRADO" in str(c).upper() or "NIVEL" in str(c).upper()), None)
+                                df_final['Grado'] = df_valido[col_grado].fillna('S/G').astype(str).replace('nan', 'S/G') if col_grado else "S/G"
                                 
-                                col_grp = next((c for c in df_valido.columns if "GRUPO" in c.upper()), None)
+                                # 2. Buscar la columna de Grupo (Puede llamarse GRUPO o estar justo al lado del grado)
+                                col_grp = next((c for c in df_valido.columns if "GRUPO" in str(c).upper()), None)
+                                
+                                # Si no existe la columna "GRUPO", robamos los datos de la columna que esté a la derecha del Grado
+                                if not col_grp and col_grado:
+                                    idx_grado = df_valido.columns.get_loc(col_grado)
+                                    if idx_grado + 1 < len(df_valido.columns):
+                                        col_grp = df_valido.columns[idx_grado + 1]
+                                        
                                 df_final['Grupo'] = df_valido[col_grp].fillna('').astype(str).replace('nan', '') if col_grp else ""
+                                # ------------------------------------------------
                                 
                                 col_esc = next((c for c in df_valido.columns if "ESCUELA" in c.upper()), None)
                                 df_final['Escuela_Asignada'] = df_valido[col_esc].fillna('ESC-005') if col_esc else "ESC-005"
