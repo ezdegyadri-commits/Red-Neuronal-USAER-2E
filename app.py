@@ -731,14 +731,19 @@ with paneles[idx_evt]:
         st.session_state.ia_evento_sugerido = ""
         
     alum_evt = st.selectbox("1. Selecciona al alumno involucrado", lista_alumnos if lista_alumnos else ["Sin registros"])
+    
+    # NUEVO: Calendario interactivo alineado correctamente
+    fecha_evento = st.date_input("📅 Fecha en la que ocurrió el evento:", datetime.now())
+    
     evento_borrador = st.text_area("2. Redacta el evento (borrador)", height=150)
     
     if st.button("✨ Mejorar Redacción con IA"):
         if evento_borrador != "":
             with st.spinner("La red neuronal está analizando y puliendo el texto... 🧠"):
                 meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-                hoy = datetime.now()
-                fecha_ext = f"{hoy.day} de {meses[hoy.month - 1]} de {hoy.year}"
+                
+                # Le pasamos la fecha elegida en el calendario, no el datetime.now()
+                fecha_ext = f"{fecha_evento.day} de {meses[fecha_evento.month - 1]} de {fecha_evento.year}"
                 
                 prompt_estilo = f"""
                 Reescribe este evento significativo para un expediente oficial (Anexo V). 
@@ -823,9 +828,8 @@ with paneles[idx_evt]:
 """
             
             if evento_definitivo:
-                # AQUÍ REEMPLAZAMOS "HOY" POR LA FECHA EXACTA
-                fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
-                html_preview += f"""
+                # AHORA TOMA LA FECHA DEL CALENDARIO CON FORMATO DD/MM/AAAA
+                fecha_hoy_str = fecha_evento.strftime("%d/%m/%Y")
 <tr style="background-color: #e6f7ff;">
 <td style="border: 1px solid black; padding: 10px; vertical-align: top;"><b>{fecha_hoy_str}</b></td>
 <td style="border: 1px solid black; padding: 10px; vertical-align: top;"><b>{str(evento_definitivo).replace(chr(10), '<br>')}</b></td>
@@ -845,7 +849,9 @@ with paneles[idx_evt]:
     if submit_button_anexo5:
         if alum_evt != "Sin registros" and evento_definitivo != "":
             try:
-                fecha_evt = datetime.now().strftime("%Y-%m-%d")
+                # AQUÍ EL CAMBIO: Extraemos la fecha que el maestro eligió en el calendario
+                fecha_evt = fecha_evento.strftime("%Y-%m-%d")
+                
                 sheet.worksheet("Anexo5_Eventos").append_row(["", fecha_evt, alum_evt, grado_grupo_visor, st.session_state.nombre, evento_definitivo])
                 st.session_state.ia_evento_sugerido = "" 
                 
