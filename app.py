@@ -830,13 +830,16 @@ with paneles[idx_evt]:
             if evento_definitivo:
                 # AHORA TOMA LA FECHA DEL CALENDARIO CON FORMATO DD/MM/AAAA
                 fecha_hoy_str = fecha_evento.strftime("%d/%m/%Y")
+                
+                # --- ESTA ES LA LÍNEA QUE FALTABA Y DESFASÓ TODO EL ARCHIVO ---
+                html_preview += f"""
 <tr style="background-color: #e6f7ff;">
 <td style="border: 1px solid black; padding: 10px; vertical-align: top;"><b>{fecha_hoy_str}</b></td>
 <td style="border: 1px solid black; padding: 10px; vertical-align: top;"><b>{str(evento_definitivo).replace(chr(10), '<br>')}</b></td>
 <td style="border: 1px solid black; padding: 10px; text-align: center; vertical-align: bottom;"><br><br>____________________<br><b><i>{st.session_state.get('nombre', '')}</i> (Nuevo)</b></td>
 </tr>
 """
-                
+            
             html_preview += """
 </table>
 </div>
