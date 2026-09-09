@@ -460,27 +460,48 @@ if idx_alta != -1:
                                 df_final['ID_Alumno'] = [""] * len(df_valido)
                                 df_final['Nombre'] = df_valido[col_nom]
                                 
-                                col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
+                               col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
                                 df_final['CURP'] = df_valido[col_curp] if col_curp else ""
                                 
-                                col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
-                                df_final['CURP'] = df_valido[col_curp] if col_curp else ""
-                                
-                                # --- EXTRACCIÓN AUTOMATIZADA (CERO FRICCIÓN) ---
-                                # 1. Buscar la columna de Grado (Ej: "16- NIVEL Y GRADO...")
+                                # --- EXTRACCIÓN AUTOMATIZADA DE RAYOS X (CERO FRICCIÓN MÁXIMA) ---
                                 col_grado = next((c for c in df_valido.columns if "GRADO" in str(c).upper() or "NIVEL" in str(c).upper()), None)
-                                df_final['Grado'] = df_valido[col_grado].fillna('S/G').astype(str).replace('nan', 'S/G') if col_grado else "S/G"
-                                
-                                # 2. Buscar la columna de Grupo (Puede llamarse GRUPO o estar justo al lado del grado)
                                 col_grp = next((c for c in df_valido.columns if "GRUPO" in str(c).upper()), None)
                                 
-                                # Si no existe la columna "GRUPO", robamos los datos de la columna que esté a la derecha del Grado
                                 if not col_grp and col_grado:
-                                    idx_grado = df_valido.columns.get_loc(col_grado)
-                                    if idx_grado + 1 < len(df_valido.columns):
-                                        col_grp = df_valido.columns[idx_grado + 1]
-                                        
-                                df_final['Grupo'] = df_valido[col_grp].fillna('').astype(str).replace('nan', '') if col_grp else ""
+                                    idx_g = df_valido.columns.get_loc(col_grado)
+                                    if idx_g + 1 < len(df_valido.columns): 
+                                        col_grp = df_valido.columns[idx_g + 1]
+                                
+                                grados_list = []
+                                grupos_list = []
+                                
+                                for _, row in df_valido.iterrows():
+                                    val_g = str(row.get(col_grado, '')).strip().upper() if col_grado else ""
+                                    val_gr = str(row.get(col_grp, '')).strip().upper() if col_grp else ""
+                                    
+                                    # Si la columna oficial viene vacía, el robot barre toda la fila buscando el Grado
+                                    if not val_g or val_g == 'NAN':
+                                        val_g = "S/G"
+                                        for v in row.values:
+                                            v_str = str(v).strip().upper()
+                                            if v_str in ['1', '2', '3', '4', '5', '6', '1RO', '2DO', '3RO', '4TO', '5TO', '6TO']:
+                                                val_g = v_str
+                                                break
+                                                
+                                    # Si la columna oficial viene vacía, el robot barre toda la fila buscando el Grupo
+                                    if not val_gr or val_gr == 'NAN':
+                                        val_gr = ""
+                                        for v in row.values:
+                                            v_str = str(v).strip().upper()
+                                            if v_str in ['A', 'B', 'C', 'D', 'E', 'F']:
+                                                val_gr = v_str
+                                                break
+                                                
+                                    grados_list.append(val_g)
+                                    grupos_list.append(val_gr)
+                                    
+                                df_final['Grado'] = grados_list
+                                df_final['Grupo'] = grupos_list
                                 # ------------------------------------------------
                                 
                                 col_esc = next((c for c in df_valido.columns if "ESCUELA" in c.upper()), None)
