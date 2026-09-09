@@ -54,7 +54,7 @@ except Exception as e:
     st.stop()
 
 
-# 4 y 5. PANTALLA DE INICIO Y LOGIN (SÚPER AMIGABLE Y CON LÁMPARA)
+# 4 y 5. PANTALLA DE INICIO Y LOGIN (CON IDENTIDAD USAER 2E GIGANTE)
 if not st.session_state.get("autenticado", False):
     st.markdown("""
         <style>
@@ -64,18 +64,9 @@ if not st.session_state.get("autenticado", False):
             color: #ecf0f1;
         }
         
-        /* Animación de la luz descendiendo */
-        @keyframes encenderLuz {
-            0% { opacity: 0; }
-            100% { opacity: 1; }
-        }
-
-        /* Animación de flotación suave para el mensaje */
-        @keyframes flotar {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-5px); }
-            100% { transform: translateY(0px); }
-        }
+        /* Animaciones */
+        @keyframes encenderLuz { 0% { opacity: 0; } 100% { opacity: 1; } }
+        @keyframes flotar { 0% { transform: translateY(0px); } 50% { transform: translateY(-5px); } 100% { transform: translateY(0px); } }
 
         /* Estructura de la lámpara de techo CSS */
         .lampara-contenedor {
@@ -83,56 +74,51 @@ if not st.session_state.get("autenticado", False):
             flex-direction: column;
             align-items: center;
             position: relative;
-            margin-top: -60px; /* Para que cuelgue desde el techo de la app */
+            margin-top: -60px; 
             margin-bottom: 20px;
             z-index: 10;
         }
-        .cable {
-            width: 4px;
-            height: 60px;
-            background-color: #555;
-        }
-        .campana {
-            width: 0; 
-            height: 0; 
-            border-left: 35px solid transparent;
-            border-right: 35px solid transparent;
-            border-bottom: 45px solid #d4af37; /* Dorado cálido */
-            border-radius: 4px;
-        }
-        .foco {
-            width: 24px;
-            height: 12px;
-            background-color: #fff;
-            border-radius: 0 0 20px 20px;
-            box-shadow: 0 5px 15px rgba(255, 235, 100, 0.8);
-        }
+        .cable { width: 4px; height: 60px; background-color: #555; }
+        .campana { width: 0; height: 0; border-left: 35px solid transparent; border-right: 35px solid transparent; border-bottom: 45px solid #d4af37; border-radius: 4px; }
+        .foco { width: 24px; height: 12px; background-color: #fff; border-radius: 0 0 20px 20px; box-shadow: 0 5px 15px rgba(255, 235, 100, 0.8); }
         .haz-de-luz {
             position: absolute;
             top: 115px;
-            width: 350px;
-            height: 400px;
+            width: 450px;
+            height: 450px;
             background: linear-gradient(to bottom, rgba(255, 223, 100, 0.15) 0%, rgba(255, 223, 100, 0) 100%);
-            clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+            clip-path: polygon(35% 0, 65% 0, 100% 100%, 0 100%);
             animation: encenderLuz 2s ease-in-out forwards;
-            pointer-events: none; /* Para que no bloquee los clics */
+            pointer-events: none; 
             z-index: 0;
         }
 
-        /* Contenedor del mensaje de bienvenida */
+        /* Contenedor del mensaje de bienvenida con el GRAN TÍTULO */
         .mensaje-bienvenida {
             text-align: center;
-            max-width: 600px;
+            max-width: 650px;
             margin: 0 auto 30px auto;
             position: relative;
             z-index: 1;
             animation: flotar 4s ease-in-out infinite;
         }
+        
+        /* EL NUEVO TÍTULO GIGANTE DE USAER */
+        .titulo-usaer {
+            font-size: 4.5rem;
+            font-weight: 900;
+            color: #ffdf64; /* Dorado iluminado */
+            text-shadow: 0 0 25px rgba(255, 223, 100, 0.5);
+            margin-bottom: 5px;
+            line-height: 1;
+            letter-spacing: 2px;
+        }
+
         .titulo-calido {
-            font-size: 2.2rem;
+            font-size: 1.8rem;
             font-weight: 700;
-            color: #ffdf64;
-            margin-bottom: 10px;
+            color: #ffffff;
+            margin-bottom: 12px;
         }
         .texto-calido {
             font-size: 1.1rem;
@@ -155,7 +141,6 @@ if not st.session_state.get("autenticado", False):
         }
         </style>
 
-        <!-- Dibujo de la lámpara en HTML -->
         <div class="lampara-contenedor">
             <div class="cable"></div>
             <div class="campana"></div>
@@ -163,8 +148,8 @@ if not st.session_state.get("autenticado", False):
             <div class="haz-de-luz"></div>
         </div>
 
-        <!-- Mensaje cálido -->
         <div class="mensaje-bienvenida">
+            <div class="titulo-usaer">USAER 02-E</div>
             <div class="titulo-calido">¡Hola! Qué alegría tenerte aquí.</div>
             <div class="texto-calido">
                 Sabemos que tu labor transforma vidas en nuestras escuelas todos los días. 
@@ -181,14 +166,14 @@ if not st.session_state.get("autenticado", False):
         submit = st.form_submit_button("Entrar a mi espacio ✨")
         
         if submit:
-            if usuario == "edgar.yam" and password == "1234": # Aquí pondrás las contraseñas de las maestras
+            if usuario == "edgar.yam" and password == "1234":
                 st.session_state.autenticado = True
                 st.session_state.nombre = "Edgar Yam"
                 st.rerun()
             else:
                 st.error("Mmm, parece que hay un error en tus datos. ¡Intenta de nuevo!")
     
-    st.stop() # Detiene la ejecución para que no vean la plataforma sin loguearse
+    st.stop()
 
 # SI EL USUARIO ESTÁ AUTENTICADO, SE SALTA EL STOP Y VE TUS PESTAÑAS:
 mostrar_pantalla_inicio()
