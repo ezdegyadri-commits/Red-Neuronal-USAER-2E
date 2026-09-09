@@ -321,10 +321,26 @@ if idx_alta != -1:
             
             if archivo_subido is not None:
                 try:
+                    # --- NUEVO BLOQUE DE LECTURA INTELIGENTE DE PESTAÑAS ---
                     if archivo_subido.name.endswith('.csv'):
                         df_masivo = pd.read_csv(archivo_subido)
                     else:
-                        df_masivo = pd.read_excel(archivo_subido)
+                        excel_libro = pd.ExcelFile(archivo_subido)
+                        hojas = excel_libro.sheet_names
+                        
+                        hoja_objetivo = None
+                        for h in hojas:
+                            if "USAER" in h.upper():
+                                hoja_objetivo = h
+                                break
+                        
+                        if not hoja_objetivo:
+                            hoja_objetivo = hojas[-1] if len(hojas) > 1 else hojas[0]
+                            
+                        df_masivo = pd.read_excel(archivo_subido, sheet_name=hoja_objetivo)
+                    # ---------------------------------------------------------
+                    
+                    # Limpiamos posibles espacios en blanco en los nombres de las columnas
                     
                     # Limpiamos posibles espacios en blanco en los nombres de las columnas
                     df_masivo.columns = [str(c).strip() for c in df_masivo.columns]
