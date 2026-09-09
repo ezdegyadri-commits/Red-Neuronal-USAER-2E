@@ -198,7 +198,7 @@ if not st.session_state.get("autenticado", False):
 
 # --- AQUÍ ABAJO PEGAS TUS PESTAÑAS (pestañas = st.tabs(...)) Y TUS MÓDULOS DE ALUMNOS, BAP, EVENTOS ---
 
-tabs = ["📝 Alta de Alumnos", "Anexo IV (BAP)", "Anexo V (Eventos)"]
+tabs = ["📝 Alta de Alumnos", "🔍 BAPs Colaborativas (Anexos 3 y 4)", "Anexo V (Eventos)"]
 paneles = st.tabs(tabs)
 
 # --- MAPEO DE PESTAÑAS SEGÚN EL ROL ---
