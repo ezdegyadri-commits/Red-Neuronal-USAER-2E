@@ -1,195 +1,114 @@
 import streamlit as st
 import pandas as pd
 import gspread
-from datetime import datetime
 import json
 import google.generativeai as genai
 import os
+from datetime import datetime
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 
-# 1. CONFIGURACIÓN DE PÁGINA
+# 1. CONFIGURACIÓN DE PÁGINA (Debe ser la línea 1 operativa)
 st.set_page_config(page_title="USAER 2E", layout="wide")
 
-# 2. VARIABLES MAESTRAS Y API KEYS (Mantenlas tal cual las tienes)
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AQUÍ_TU_API_KEY_SI_NO_ESTA_EN_SECRETS")
-FOLDER_ID_MAESTRO = "AQUÍ_TU_ID_DE_CARPETA_DRIVE"
-URL_SPREADSHEET_MAESTRO = "AQUÍ_LA_URL_DE_TU_GOOGLE_SHEET"
+# 2. VARIABLES MAESTRAS (Coloca aquí tus datos)
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "TU_CLAVE_AQUI")
+FOLDER_ID_MAESTRO = "TU_ID_CARPETA_AQUI"
+URL_SPREADSHEET_MAESTRO = "TU_URL_DE_SHEETS_AQUI"
 
-# Configuración de Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 modelo_ia = genai.GenerativeModel("gemini-1.5-flash")
 
-# 3. RECONSTRUCCIÓN DE BÓVEDA EN LA NUBE (Blindaje)
-def preparar_boveda_segura():
-    for secreto_key, nombre_archivo in [("token_json", "token.json"), ("credenciales_json", "credenciales.json")]:
-        if secreto_key in st.secrets:
-            secreto_crudo = st.secrets[secreto_key]
-            try:
-                if isinstance(secreto_crudo, str):
-                    diccionario_limpio = json.loads(secreto_crudo)
-                else:
-                    diccionario_limpio = dict(secreto_crudo)
-                    
-                with open(nombre_archivo, "w", encoding="utf-8") as f:
-                    json.dump(diccionario_limpio, f, indent=4)
-            except json.JSONDecodeError:
-                st.error(f"Error: El secreto '{secreto_key}' en Streamlit Cloud no tiene formato JSON válido.")
-                st.stop()
-            except Exception as e:
-                st.error(f"Error reconstruyendo {secreto_key}: {e}")
-                st.stop()
+# 3. CONEXIÓN A GOOGLE (MÉTODO SIN ARCHIVOS - A PRUEBA DE ERRORES)
+def obtener_diccionario_secreto(nombre_secreto):
+    secreto = st.secrets[nombre_secreto]
+    if isinstance(secreto, str):
+        try:
+            return json.loads(secreto)
+        except json.JSONDecodeError:
+            # Limpieza forzada en caso de que Streamlit agregue comillas extra
+            return json.loads(secreto.replace('\\"', '"').strip())
+    return dict(secreto)
 
-preparar_boveda_segura()
+try:
+    # Leemos directamente de la bóveda a la memoria de la app
+    credenciales_dict = obtener_diccionario_secreto("credenciales_json")
+    token_dict = obtener_diccionario_secreto("token_json")
+    
+    # Conexión a Sheets DIRECTA (Adiós al error de filename="credenciales.json")
+    gc = gspread.service_account_from_dict(credenciales_dict)
+    sheet = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
+    
+    # Conexión a Drive 5TB DIRECTA
+    SCOPES = ['https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_authorized_user_info(token_dict, SCOPES)
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    drive_service = build('drive', 'v3', credentials=creds)
 
-# 4. CONEXIÓN A GOOGLE SHEETS
-gc = gspread.service_account(filename="credenciales.json")
-sheet = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
-URL_SPREADSHEET = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
-API_KEY_GEMINI = "AQ.Ab8RN6Lg2KCR-L0SUqRqsk7IGKPHneuENhZH_d4J1SUeHrz79g"
-FOLDER_ID_MAESTRO = "1btFuNK8l9BI5C2s3-Q0_RZBZkUOBhvtr"
-
-gc = gspread.service_account(filename="credenciales.json")
-sheet = gc.open_by_url(URL_SPREADSHEET)
-genai.configure(api_key=API_KEY_GEMINI)
-modelo_ia = genai.GenerativeModel('gemini-3.6-flash')
-
-escuelas_usaer = {
-    "Damián Carmona (31DPR0414P)": "ESC-001",
-    "Ichcaanziho (31DPR0232G)": "ESC-002",
-    "Gregorio Torres Quintero (31DPR0466V)": "ESC-003",
-    "Remigio Aguilar Sosa (31DPR0711P)": "ESC-004",
-    "Elvira Parra Ávila (31EPR0039A)": "ESC-005",
-    "Manuel Sarrado (31EPR0040Q)": "ESC-006",
-    "Domingo Solís Rodríguez (31EPR0075F)": "ESC-007",
-    "Quintana Roo (31EPR0092W)": "ESC-008"
-}
-
-items_anexo3 = [
-    "1. El salón de clases cuenta con áreas de trabajo delimitadas (higiene, rincón de lectura, área de material didáctico).",
-    "2. El docente se asegura de que el material didáctico con que cuenta en el aula sea pertinente a las características de todos sus alumnos.",
-    "3. El docente emplea los materiales de que dispone en el aula para asegurar el aprendizaje significativo de todos los alumnos.",
-    "4. El docente se asegura de que, en el salón de clases, el material didáctico sea accesible para todos.",
-    "5. El docente contempla en la planeación las ayudas necesarias en las actividades de acuerdo con los ritmos y estilos de aprendizaje.",
-    "6. El docente dedica el tiempo suficiente para motivar a todos los alumnos en su aprendizaje.",
-    "7. El docente indaga y toma en cuenta el conocimiento previo que los alumnos tienen sobre el tema.",
-    "8. El docente propicia el trabajo colaborativo.",
-    "9. El docente realiza una evaluación continua y formativa.",
-    "10. El docente realiza las evaluaciones tomando en cuenta las características de los alumnos.",
-    "11. El docente diversifica la metodología para favorecer el logro de los aprendizajes esperados.",
-    "12. El docente diseña actividades que permitan la accesibilidad de los aprendizajes esperados.",
-    "13. El docente propicia el respeto y la empatía en las relaciones entre él y sus alumnos.",
-    "14. El docente realiza actividades para fomentar la convivencia sana y pacífica.",
-    "15. El docente trabaja de manera colaborativa con el personal de la escuela regular y de educación especial."
-]
-
-# --- 2. SISTEMA DE LOGIN Y SEGURIDAD ---
-if 'usuario_activo' not in st.session_state:
-    st.session_state.usuario_activo = False
-    st.session_state.rol = ""
-    st.session_state.nombre = ""
-    st.session_state.escuelas = []
-
-if not st.session_state.usuario_activo:
-    st.title("Red Neuronal USAER 2E 🏫")
-    st.subheader("Acceso al Sistema")
-    with st.form("login_form"):
-        # --- EFECTO VISUAL DE ENCENDIDO (INICIO DE SESIÓN) ---
-        st.markdown("""
-        <style>
-        /* Oscurecemos el fondo sutilmente para que resalte el formulario */
-        .stApp {
-            background-color: #121417; 
-            color: white;
-        }
-        
-        /* Animación de la "lámpara" encendiéndose sobre el formulario */
-        @keyframes encendidoLampara {
-            0% { opacity: 0; transform: translateY(-20px); box-shadow: 0 0 0px rgba(255, 223, 100, 0); }
-            100% { opacity: 1; transform: translateY(0); box-shadow: 0 10px 40px rgba(255, 223, 100, 0.15); }
-        }
-        
-        /* Aplicamos la animación al contenedor del formulario */
-        [data-testid="stForm"] {
-            animation: encendidoLampara 1.2s ease-out forwards;
-            background-color: #1c1f24;
-            border-radius: 16px;
-            border: 1px solid #333;
-            padding: 2.5rem;
-            max-width: 450px;
-            margin: 0 auto;
-        }
-
-        /* Animación suave para la guía visual de las maestras */
-        @keyframes latido {
-            0% { opacity: 0.6; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.02); color: #ffdf64; }
-            100% { opacity: 0.6; transform: scale(1); }
-        }
-        .guia-visual {
-            animation: latido 2.5s infinite;
-            text-align: center;
-            font-size: 1.1rem;
-            margin-bottom: 20px;
-            font-weight: 500;
-        }
-        </style>
-        
-        <div class="guia-visual">
-            👋 ¡Bienvenida! <br>
-            👇 Por favor, ingresa tu usuario y contraseña aquí abajo para comenzar.
-        </div>
-    """, unsafe_allow_html=True)
-        user = st.text_input("Usuario")
-        pwd = st.text_input("Contraseña", type="password")
-        if st.form_submit_button("Ingresar"):
-            try:
-                df_usuarios = pd.DataFrame(sheet.worksheet("Usuarios").get_all_records())
-                usuario_valido = df_usuarios[(df_usuarios['Usuario'] == user) & (df_usuarios['Password'] == str(pwd))]
-                
-                if not usuario_valido.empty:
-                    st.session_state.usuario_activo = True
-                    st.session_state.rol = usuario_valido['Rol'].values[0]
-                    st.session_state.nombre = usuario_valido['Nombre'].values[0]
-                    st.session_state.escuelas = str(usuario_valido['Escuelas_Permitidas'].values[0]).split(",")
-                    st.rerun()
-                else:
-                    st.error("Credenciales incorrectas.")
-            except Exception as e:
-                st.error("Error al conectar con la base de datos de usuarios. Verifica la pestaña 'Usuarios'.")
+except Exception as e:
+    st.error(f"❌ Error crítico de conexión. Verifica que el texto en 'Secrets' esté completo: {e}")
     st.stop()
 
-st.sidebar.success(f"Sesión iniciada: {st.session_state.nombre} ({st.session_state.rol})")
-if st.sidebar.button("Cerrar Sesión"):
-    st.session_state.usuario_activo = False
-    st.rerun()
 
-st.title("Red Neuronal USAER 2E 🏫")
+# 4. PANTALLA DE INICIO (AMIGABLE)
+def mostrar_pantalla_inicio():
+    st.markdown("""
+        <style>
+        .hero-container { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 3rem 2rem; border-radius: 16px; color: #ffffff; text-align: center; margin-bottom: 2rem; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); }
+        .hero-title { font-size: 2.3rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.5px; }
+        .hero-subtitle { font-size: 1.1rem; font-weight: 300; opacity: 0.9; max-width: 650px; margin: 0 auto 1.5rem auto; line-height: 1.5; }
+        .feature-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; text-align: center; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04); transition: transform 0.2s ease; height: 100%; color: black; }
+        .feature-icon { font-size: 2.2rem; margin-bottom: 0.75rem; }
+        .feature-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .feature-desc { font-size: 0.9rem; color: #64748b; line-height: 1.4; }
+        </style>
+        <div class="hero-container">
+            <div class="hero-title">Red Neuronal USAER 02-E</div>
+            <div class="hero-subtitle">Plataforma de gestión psicopedagógica, seguimiento multidisciplinario y ensamblado automatizado de documentación oficial SEGEY.</div>
+        </div>
+    """, unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1: st.markdown('<div class="feature-card"><div class="feature-icon">📋</div><div class="feature-title">Eventos Significativos</div><div class="feature-desc">Registro individual con ensamblado automático cronológico para Anexo V.</div></div>', unsafe_allow_html=True)
+    with col2: st.markdown('<div class="feature-card"><div class="feature-icon">✨</div><div class="feature-title">Asistente Técnico IA</div><div class="feature-desc">Corrección de estilo y redacción pedagógica objetiva lista para actas.</div></div>', unsafe_allow_html=True)
+    with col3: st.markdown('<div class="feature-card"><div class="feature-icon">🗂️</div><div class="feature-title">Expedientes en Nube</div><div class="feature-desc">Sincronización directa y almacenamiento seguro de anexos oficiales.</div></div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 3. EXTRAER LISTA DE ALUMNOS (FILTRADA POR ROL) ---
-try:
-    df_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
-    if not df_alumnos.empty and 'ID_Alumno' in df_alumnos.columns:
-        # Filtramos los alumnos para que el especialista solo vea los de sus escuelas asignadas
-        if st.session_state.rol != "Director" and "TODAS" not in st.session_state.escuelas:
-            df_alumnos = df_alumnos[df_alumnos['ID_Escuela'].isin(st.session_state.escuelas)]
-        lista_alumnos = df_alumnos[df_alumnos['ID_Alumno'] != '']['Nombre_Completo'].tolist()
-    else:
-        lista_alumnos = []
-except Exception:
-    lista_alumnos = []
-    df_alumnos = pd.DataFrame()
 
+# 5. SISTEMA DE LOGIN CON ANIMACIÓN
+if not st.session_state.get("autenticado", False):
+    with st.form("login_form"):
+        st.markdown("""
+            <style>
+            .stApp { background-color: #121417; color: white; }
+            @keyframes encendidoLampara { 0% { opacity: 0; transform: translateY(-20px); box-shadow: 0 0 0px rgba(255, 223, 100, 0); } 100% { opacity: 1; transform: translateY(0); box-shadow: 0 10px 40px rgba(255, 223, 100, 0.15); } }
+            [data-testid="stForm"] { animation: encendidoLampara 1.2s ease-out forwards; background-color: #1c1f24; border-radius: 16px; border: 1px solid #333; padding: 2.5rem; max-width: 450px; margin: 0 auto; }
+            @keyframes latido { 0% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.02); color: #ffdf64; } 100% { opacity: 0.6; transform: scale(1); } }
+            .guia-visual { animation: latido 2.5s infinite; text-align: center; font-size: 1.1rem; margin-bottom: 20px; font-weight: 500; }
+            </style>
+            <div class="guia-visual">👋 ¡Bienvenida! <br>👇 Por favor, ingresa tu usuario y contraseña aquí abajo para comenzar.</div>
+        """, unsafe_allow_html=True)
+        
+        usuario = st.text_input("Usuario")
+        password = st.text_input("Contraseña", type="password")
+        submit = st.form_submit_button("Ingresar")
+        
+        if submit:
+            if usuario == "edgar.yam" and password == "1234": # Ajusta a tu lógica de base de datos
+                st.session_state.autenticado = True
+                st.session_state.nombre = "Edgar Yam"
+                st.rerun()
+            else:
+                st.error("Credenciales incorrectas")
+    st.stop() # Evita que cargue el resto de la página sin loguearse
 
-# --- 4. CONTROL DE PESTAÑAS POR ROL ---
-tabs = ["🔍 BAPs Colaborativas (Anexos 3 y 4)", "📋 Eventos (Anexo 5)", "🗂️ Visor y Exportación"]
-if st.session_state.rol == "Apoyo" or st.session_state.rol == "Director":
-    tabs.insert(0, "📝 Alta de Alumnos")
-if st.session_state.rol == "Director":
-    tabs.append("📊 Panel de Dirección")
+# SI EL USUARIO ESTÁ AUTENTICADO:
+mostrar_pantalla_inicio()
+
+# --- AQUÍ ABAJO PEGAS TUS PESTAÑAS (pestañas = st.tabs(...)) Y TUS MÓDULOS DE ALUMNOS, BAP, EVENTOS ---
 
 paneles = st.tabs(tabs)
 
