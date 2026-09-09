@@ -198,8 +198,23 @@ if not st.session_state.get("autenticado", False):
 
 # --- AQUÍ ABAJO PEGAS TUS PESTAÑAS (pestañas = st.tabs(...)) Y TUS MÓDULOS DE ALUMNOS, BAP, EVENTOS ---
 
-tabs = ["📝 Alta de Alumnos", "🔍 BAPs Colaborativas (Anexos 3 y 4)", "Anexo V (Eventos)"]
+# --- DEFINICIÓN DE PESTAÑAS (TODAS INCLUIDAS) ---
+tabs = [
+    "📝 Alta de Alumnos", 
+    "🔍 BAPs Colaborativas (Anexos 3 y 4)", 
+    "📋 Eventos (Anexo 5)",
+    "🗂️ Visor y Exportación",
+    "📊 Panel de Dirección"
+]
 paneles = st.tabs(tabs)
+
+# --- MAPEO DE PESTAÑAS (BLINDADO CONTRA ERRORES) ---
+# Si por alguna razón cambias un nombre después, el código no colapsará, solo ocultará el panel.
+idx_alta = tabs.index("📝 Alta de Alumnos") if "📝 Alta de Alumnos" in tabs else -1
+idx_bap = tabs.index("🔍 BAPs Colaborativas (Anexos 3 y 4)") if "🔍 BAPs Colaborativas (Anexos 3 y 4)" in tabs else -1
+idx_evt = tabs.index("📋 Eventos (Anexo 5)") if "📋 Eventos (Anexo 5)" in tabs else -1
+idx_visor = tabs.index("🗂️ Visor y Exportación") if "🗂️ Visor y Exportación" in tabs else -1
+idx_dir = tabs.index("📊 Panel de Dirección") if "📊 Panel de Dirección" in tabs else -1
 
 # --- MAPEO DE PESTAÑAS SEGÚN EL ROL ---
 idx_alta = tabs.index("📝 Alta de Alumnos") if "📝 Alta de Alumnos" in tabs else -1
