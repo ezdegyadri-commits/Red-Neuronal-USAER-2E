@@ -349,18 +349,34 @@ if idx_alta != -1:
                     st.dataframe(df_masivo.head(3))
                     
                     if st.button("📤 Procesar y subir a la Base de Datos"):
-                        with st.spinner("Limpiando formato oficial y consolidando padrón..."):
+                        with st.spinner("Escaneando formato oficial y consolidando padrón..."):
                             try:
-                                # 1. Forzar limpieza extrema de nombres de columnas (quita saltos de línea y espacios)
+                                # 1. BUSCADOR INTELIGENTE DE CABECERAS (Para formatos de la SEGEY)
+                                # Buscar en las primeras 10 filas dónde están los encabezados reales
+                                if not any("APELLIDO" in str(c).upper() for c in df_masivo.columns):
+                                    for idx, row in df_masivo.head(10).iterrows():
+                                        if any("APELLIDO" in str(val).upper() for val in row.values):
+                                            df_masivo.columns = [str(c) for c in row.values]
+                                            df_masivo = df_masivo.iloc[idx+1:].reset_index(drop=True)
+                                            break
+                                            
                                 df_masivo.columns = [str(c).strip().replace('\n', ' ').replace('\r', '') for c in df_masivo.columns]
                                 
                                 df_procesado = pd.DataFrame()
-                                col_nom = '11.- APELLIDO PATERNO, MATERNO Y NOMBRE(S) COMPLETO DEL ALUMNO'
-                                df_procesado['Nombre'] = df_masivo[col_nom] if col_nom in df_masivo.columns else ""
+                                # Encontrar columnas dinámicamente por palabra clave
+                                col_nom = next((c for c in df_masivo.columns if "APELLIDO" in c.upper()), None)
+                                col_curp = next((c for c in df_masivo.columns if "CURP" in c.upper()), None)
+                                
+                                if not col_nom:
+                                    st.error("No se encontró la columna de Nombres en el archivo.")
+                                    st.stop()
+                                    
+                                df_procesado['Nombre'] = df_masivo[col_nom]
                                 
                                 # 2. MAGIA: Eliminar firmas, filas vacías y alumnos fantasma
                                 df_procesado = df_procesado[df_procesado['Nombre'].astype(str).str.strip() != ""]
                                 df_procesado = df_procesado[df_procesado['Nombre'].notna()]
+                                df_procesado = df_procesado[df_procesado['Nombre'].astype(str).str.lower() != 'nan']
                                 
                                 # 3. Reconstruir solo con los alumnos reales
                                 fil_validas = df_masivo.loc[df_procesado.index]
@@ -368,37 +384,34 @@ if idx_alta != -1:
                                 df_final = pd.DataFrame()
                                 df_final['ID_Alumno'] = [""] * len(fil_validas)
                                 df_final['Nombre'] = df_procesado['Nombre']
-                                
-                                col_curp = '12.- CURP (18 DIGITOS)'
-                                df_final['CURP'] = fil_validas[col_curp] if col_curp in fil_validas.columns else ""
+                                df_final['CURP'] = fil_validas[col_curp] if col_curp else ""
                                 
                                 def obtener_grado(row):
-                                    for col in ['16- NIVEL Y GRADO AL QUE ESTA INSCRITO/PRIMARIA', 
-                                                '16- NIVEL Y GRADO AL QUE ESTA INSCRITO/PREESCOLAR', 
-                                                '16- NIVEL Y GRADO AL QUE ESTA INSCRITO/SECUNDARIA']:
-                                        val = str(row.get(col, '')).strip()
-                                        if val and val.lower() != 'nan':
-                                            return val
+                                    for col in fil_validas.columns:
+                                        if "NIVEL" in col.upper() and ("PRIMARIA" in col.upper() or "PREESCOLAR" in col.upper() or "SECUNDARIA" in col.upper()):
+                                            val = str(row.get(col, '')).strip()
+                                            if val and val.lower() != 'nan':
+                                                return val
                                     return "S/G"
                                 
                                 df_final['Grado'] = fil_validas.apply(obtener_grado, axis=1)
                                 
-                                col_grp = '16- NIVEL Y GRADO AL QUE ESTA INSCRITO/Grupo'
-                                df_final['Grupo'] = fil_validas[col_grp].fillna('').astype(str).replace('nan', '') if col_grp in fil_validas.columns else ""
+                                col_grp = next((c for c in fil_validas.columns if "GRUPO" in c.upper()), None)
+                                df_final['Grupo'] = fil_validas[col_grp].fillna('').astype(str).replace('nan', '') if col_grp else ""
                                 
-                                col_esc = '5.- NOMBRE  DE LA  ESCUELA PREESCOLAR, PRIMARIA Y/O SECUNDARIA ATENDIDA'
-                                df_final['Escuela_Asignada'] = fil_validas[col_esc].fillna('ESC-005') if col_esc in fil_validas.columns else "ESC-005"
+                                col_esc = next((c for c in fil_validas.columns if "ESCUELA" in c.upper()), None)
+                                df_final['Escuela_Asignada'] = fil_validas[col_esc].fillna('ESC-005') if col_esc else "ESC-005"
                                 
                                 df_final['Maestro_Regular'] = "Pendiente"
                                 
-                                col_cond = '15. DISCAPACIDAD O CONDICION'
-                                df_final['Condicion'] = fil_validas[col_cond].fillna('Ninguna') if col_cond in fil_validas.columns else "Ninguna"
+                                col_cond = next((c for c in fil_validas.columns if "DISCAPACIDAD" in c.upper() or "CONDICION" in c.upper()), None)
+                                df_final['Condicion'] = fil_validas[col_cond].fillna('Ninguna') if col_cond else "Ninguna"
                                 
-                                col_stat = '17.- SITUACION DEL ALUMNO'
-                                df_final['Estatus'] = fil_validas[col_stat].fillna('Activo') if col_stat in fil_validas.columns else "Activo"
+                                col_stat = next((c for c in fil_validas.columns if "SITUACION" in c.upper()), None)
+                                df_final['Estatus'] = fil_validas[col_stat].fillna('Activo') if col_stat else "Activo"
                                 
-                                col_atn = '18.-TIPO DE ATENCION'
-                                df_final['Tipo_Atencion'] = fil_validas[col_atn].fillna('Grupal') if col_atn in fil_validas.columns else "Grupal"
+                                col_atn = next((c for c in fil_validas.columns if "TIPO DE ATENCION" in c.upper()), None)
+                                df_final['Tipo_Atencion'] = fil_validas[col_atn].fillna('Grupal') if col_atn else "Grupal"
                                 
                                 df_final = df_final.fillna("")
                                 sheet.worksheet("Alumnos").append_rows(df_final.values.tolist())
@@ -449,14 +462,15 @@ with paneles[idx_bap]:
         # AQUÍ IRÁN LOS REACTIVOS COMPLETOS
         
         respuestas_bap = {}
+        respuestas_bap = {}
         for i, item in enumerate(items_anexo3):
             st.markdown(f"**{item}**")
             col_freq, col_ori = st.columns([3, 1])
             with col_freq:
-                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"freq_{i}_{tipo_evaluacion}", label_visibility="collapsed")
+                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"freq_{i}_{tipo_atencion}", label_visibility="collapsed")
             with col_ori:
                 st.markdown("<br>", unsafe_allow_html=True)
-                ori = st.checkbox("Requiere Orientación", key=f"ori_{i}_{tipo_evaluacion}")
+                ori = st.checkbox("Requiere Orientación", key=f"ori_{i}_{tipo_atencion}")
             
             respuestas_bap[f"Item_{i+1}"] = {"pregunta": item, "frecuencia": freq, "orientacion": ori}
             st.markdown("---")
