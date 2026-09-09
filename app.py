@@ -679,14 +679,12 @@ with paneles[idx_evt]:
                 Borrador original: {evento_borrador}
                 """
                 
-                # Try-Except para amortiguar los fallos del servidor de Google
                 try:
                     respuesta_ia = modelo_ia.generate_content(prompt_estilo)
                     st.session_state.ia_evento_sugerido = respuesta_ia.text
-                    st.rerun() 
-                except Exception as e:
-                    st.error("⚠️ ¡Uy! Los servidores de Google están saturados o hubo un microcorte de red. Por favor, espera 5 segundos e intenta presionar el botón de nuevo.")
-                    # El error técnico se queda oculto en la terminal y no rompe la pantalla de tus usuarios 
+                    st.rerun()
+                except Exception:
+                    st.error("⚠️ Los servidores de Google tardaron en responder. Espera unos segundos y vuelve a presionar el botón.") 
 
     st.markdown("---")
     with st.form("anexo5_guardar", clear_on_submit=True):
