@@ -466,27 +466,44 @@ if idx_alta != -1:
                                 col_curp = next((c for c in df_valido.columns if "CURP" in str(c).upper()), None)
                                 df_final['CURP'] = df_valido[col_curp] if col_curp else ""
                                 
-                                # --- MOTOR REGEX INVENCIBLE ---
+                                # --- EXTRACCIÓN PRECISA DE GRADO Y GRUPO (SIN ALUCINACIONES) ---
+                                col_grado = next((c for c in df_valido.columns if "GRADO" in str(c).upper() or "NIVEL" in str(c).upper()), None)
+                                col_grp = next((c for c in df_valido.columns if "GRUPO" in str(c).upper()), None)
+                                
+                                # Si no hay columna llamada GRUPO, tomamos la que está a la derecha del Grado
+                                if not col_grp and col_grado:
+                                    idx_g = df_valido.columns.get_loc(col_grado)
+                                    if idx_g + 1 < len(df_valido.columns): 
+                                        col_grp = df_valido.columns[idx_g + 1]
+                                        
                                 grados_list = []
                                 grupos_list = []
                                 
                                 for _, row in df_valido.iterrows():
-                                    texto_fila = " ".join([str(v).upper() for v in row.values])
-                                    texto_limpio = texto_fila.replace('1RO','1').replace('2DO','2').replace('3RO','3').replace('4TO','4').replace('5TO','5').replace('6TO','6')
-                                    texto_limpio = texto_limpio.replace('PRIMERO','1').replace('SEGUNDO','2').replace('TERCERO','3').replace('CUARTO','4').replace('QUINTO','5').replace('SEXTO','6')
-                                    
-                                    match_g = re.search(r'\b([1-6])\b', texto_limpio)
-                                    val_g = {'1':'1ro', '2':'2do', '3':'3ro', '4':'4to', '5':'5to', '6':'6to'}.get(match_g.group(1), "S/G") if match_g else "S/G"
+                                    # 1. Limpiar y asignar Grado
+                                    val_g_bruto = str(row.get(col_grado, '')).strip().upper() if col_grado else ""
+                                    if val_g_bruto == 'NAN' or not val_g_bruto:
+                                        val_g = "S/G"
+                                    else:
+                                        val_g_bruto = val_g_bruto.replace('1RO','1').replace('2DO','2').replace('3RO','3').replace('4TO','4').replace('5TO','5').replace('6TO','6')
+                                        val_g_bruto = val_g_bruto.replace('PRIMERO','1').replace('SEGUNDO','2').replace('TERCERO','3')
+                                        match_g = re.search(r'\b([1-6])\b', val_g_bruto)
+                                        val_g = {'1':'1ro', '2':'2do', '3':'3ro', '4':'4to', '5':'5to', '6':'6to'}.get(match_g.group(1), "S/G") if match_g else "S/G"
                                         
-                                    texto_sin_basura = re.sub(r'\b(USAER|MÉRIDA|MERIDA|ESC|CCT|SECUNDARIA|PRIMARIA|PREESCOLAR|TURNO)\b', '', texto_fila)
-                                    match_gr = re.search(r'\b([A-F])\b', texto_sin_basura)
-                                    val_gr = match_gr.group(1) if match_gr else ""
-                                    
+                                    # 2. Limpiar y asignar Grupo (Solo buscando en su propia columna)
+                                    val_gr_bruto = str(row.get(col_grp, '')).strip().upper() if col_grp else ""
+                                    if val_gr_bruto == 'NAN' or not val_gr_bruto:
+                                        val_gr = ""
+                                    else:
+                                        match_gr = re.search(r'\b([A-F])\b', val_gr_bruto)
+                                        val_gr = match_gr.group(1) if match_gr else ""
+                                        
                                     grados_list.append(val_g)
                                     grupos_list.append(val_gr)
                                     
                                 df_final['Grado'] = grados_list
                                 df_final['Grupo'] = grupos_list
+                                # ---------------------------------------------------------------
                                 
                                 col_esc = next((c for c in df_valido.columns if "ESCUELA" in str(c).upper()), None)
                                 df_final['ID_Escuela'] = df_valido[col_esc].fillna('ESC-005') if col_esc else "ESC-005"
