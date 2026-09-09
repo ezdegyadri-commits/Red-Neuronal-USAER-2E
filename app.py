@@ -460,7 +460,7 @@ if idx_alta != -1:
                                 df_final['ID_Alumno'] = [""] * len(df_valido)
                                 df_final['Nombre'] = df_valido[col_nom]
                                 
-                               col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
+                                col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
                                 df_final['CURP'] = df_valido[col_curp] if col_curp else ""
                                 
                                 # --- EXTRACCIÓN AUTOMATIZADA DE RAYOS X (CERO FRICCIÓN MÁXIMA) ---
@@ -525,8 +525,6 @@ if idx_alta != -1:
                                 st.success(f"¡Carga exitosa! Se guardaron {len(df_final)} alumnos.")
                             except Exception as e:
                                 st.error(f"Error procesando los datos: {e}")
-                except Exception as e:
-                    st.error(f"Error leyendo el archivo: {e}")
                                 
                 except KeyError as e:
                     st.error(f"Error de formato: No se encontró la columna {e} en el archivo subido. Asegúrate de subir el padrón oficial inalterado.")
