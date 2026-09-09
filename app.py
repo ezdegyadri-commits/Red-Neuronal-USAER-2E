@@ -349,17 +349,29 @@ if idx_alta != -1:
                     st.dataframe(df_masivo.head(3))
                     
                     if st.button("📤 Procesar y subir a la Base de Datos"):
-                        with st.spinner("Mapeando y consolidando padrón escolar..."):
+                        with st.spinner("Limpiando formato oficial y consolidando padrón..."):
                             try:
+                                # 1. Forzar limpieza extrema de nombres de columnas (quita saltos de línea y espacios)
+                                df_masivo.columns = [str(c).strip().replace('\n', ' ').replace('\r', '') for c in df_masivo.columns]
+                                
                                 df_procesado = pd.DataFrame()
-                                df_procesado['ID_Alumno'] = [""] * len(df_masivo)
-
                                 col_nom = '11.- APELLIDO PATERNO, MATERNO Y NOMBRE(S) COMPLETO DEL ALUMNO'
                                 df_procesado['Nombre'] = df_masivo[col_nom] if col_nom in df_masivo.columns else ""
-
+                                
+                                # 2. MAGIA: Eliminar firmas, filas vacías y alumnos fantasma
+                                df_procesado = df_procesado[df_procesado['Nombre'].astype(str).str.strip() != ""]
+                                df_procesado = df_procesado[df_procesado['Nombre'].notna()]
+                                
+                                # 3. Reconstruir solo con los alumnos reales
+                                fil_validas = df_masivo.loc[df_procesado.index]
+                                
+                                df_final = pd.DataFrame()
+                                df_final['ID_Alumno'] = [""] * len(fil_validas)
+                                df_final['Nombre'] = df_procesado['Nombre']
+                                
                                 col_curp = '12.- CURP (18 DIGITOS)'
-                                df_procesado['CURP'] = df_masivo[col_curp] if col_curp in df_masivo.columns else ""
-
+                                df_final['CURP'] = fil_validas[col_curp] if col_curp in fil_validas.columns else ""
+                                
                                 def obtener_grado(row):
                                     for col in ['16- NIVEL Y GRADO AL QUE ESTA INSCRITO/PRIMARIA', 
                                                 '16- NIVEL Y GRADO AL QUE ESTA INSCRITO/PREESCOLAR', 
@@ -368,30 +380,31 @@ if idx_alta != -1:
                                         if val and val.lower() != 'nan':
                                             return val
                                     return "S/G"
-
-                                df_procesado['Grado'] = df_masivo.apply(obtener_grado, axis=1)
-
+                                
+                                df_final['Grado'] = fil_validas.apply(obtener_grado, axis=1)
+                                
                                 col_grp = '16- NIVEL Y GRADO AL QUE ESTA INSCRITO/Grupo'
-                                df_procesado['Grupo'] = df_masivo[col_grp].fillna('').astype(str).replace('nan', '') if col_grp in df_masivo.columns else ""
-
+                                df_final['Grupo'] = fil_validas[col_grp].fillna('').astype(str).replace('nan', '') if col_grp in fil_validas.columns else ""
+                                
                                 col_esc = '5.- NOMBRE  DE LA  ESCUELA PREESCOLAR, PRIMARIA Y/O SECUNDARIA ATENDIDA'
-                                df_procesado['Escuela_Asignada'] = df_masivo[col_esc].fillna('ESC-005') if col_esc in df_masivo.columns else "ESC-005"
-
-                                df_procesado['Maestro_Regular'] = "Pendiente"
-
+                                df_final['Escuela_Asignada'] = fil_validas[col_esc].fillna('ESC-005') if col_esc in fil_validas.columns else "ESC-005"
+                                
+                                df_final['Maestro_Regular'] = "Pendiente"
+                                
                                 col_cond = '15. DISCAPACIDAD O CONDICION'
-                                df_procesado['Condicion'] = df_masivo[col_cond].fillna('Ninguna') if col_cond in df_masivo.columns else "Ninguna"
-
+                                df_final['Condicion'] = fil_validas[col_cond].fillna('Ninguna') if col_cond in fil_validas.columns else "Ninguna"
+                                
                                 col_stat = '17.- SITUACION DEL ALUMNO'
-                                df_procesado['Estatus'] = df_masivo[col_stat].fillna('Activo') if col_stat in df_masivo.columns else "Activo"
-
+                                df_final['Estatus'] = fil_validas[col_stat].fillna('Activo') if col_stat in fil_validas.columns else "Activo"
+                                
                                 col_atn = '18.-TIPO DE ATENCION'
-                                df_procesado['Tipo_Atencion'] = df_masivo[col_atn].fillna('Grupal') if col_atn in df_masivo.columns else "Grupal"
-
-                                df_procesado = df_procesado.fillna("")
-                                sheet.worksheet("Alumnos").append_rows(df_procesado.values.tolist())
+                                df_final['Tipo_Atencion'] = fil_validas[col_atn].fillna('Grupal') if col_atn in fil_validas.columns else "Grupal"
+                                
+                                df_final = df_final.fillna("")
+                                sheet.worksheet("Alumnos").append_rows(df_final.values.tolist())
+                                
                                 st.balloons()
-                                st.success(f"¡Carga completada! Se registraron {len(df_procesado)} alumnos correctamente.")
+                                st.success(f"¡Carga completada! Se identificaron y registraron {len(df_final)} alumnos reales.")
 
                             except Exception as e:
                                 st.error(f"Error procesando los datos: {e}")
