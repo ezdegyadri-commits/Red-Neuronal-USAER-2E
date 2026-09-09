@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 import pandas as pd
 import gspread
@@ -666,7 +667,7 @@ with paneles[idx_evt]:
     
     if st.button("✨ Mejorar Redacción con IA"):
         if evento_borrador != "":
-            with st.spinner("Pulido ortográfico en proceso... 🧠"):
+            with st.spinner("La red neuronal está analizando y puliendo el texto... 🧠"):
                 meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
                 hoy = datetime.now()
                 fecha_ext = f"{hoy.day} de {meses[hoy.month - 1]} de {hoy.year}"
@@ -679,12 +680,26 @@ with paneles[idx_evt]:
                 Borrador original: {evento_borrador}
                 """
                 
-                try:
-                    respuesta_ia = modelo_ia.generate_content(prompt_estilo)
-                    st.session_state.ia_evento_sugerido = respuesta_ia.text
+                # --- SISTEMA DE REINTENTO SILENCIOSO ---
+                intentos_maximos = 3
+                exito = False
+                
+                for intento in range(intentos_maximos):
+                    try:
+                        respuesta_ia = modelo_ia.generate_content(prompt_estilo)
+                        st.session_state.ia_evento_sugerido = respuesta_ia.text
+                        exito = True
+                        break  # Si la IA responde bien, rompemos el ciclo inmediatamente
+                    except Exception:
+                        if intento < intentos_maximos - 1:
+                            time.sleep(2)  # Pausa silenciosa de 2 segundos antes de volver a intentar
+                        else:
+                            pass # Si ya falló 3 veces, nos rendimos
+                
+                if exito:
                     st.rerun()
-                except Exception:
-                    st.error("⚠️ Los servidores de Google tardaron en responder. Espera unos segundos y vuelve a presionar el botón.") 
+                else:
+                    st.error("⚠️ La red neuronal está experimentando un tráfico inusual. Por favor, intenta presionar el botón una vez más.") 
 
     st.markdown("---")
     with st.form("anexo5_guardar", clear_on_submit=True):
