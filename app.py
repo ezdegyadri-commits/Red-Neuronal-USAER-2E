@@ -1134,8 +1134,10 @@ if idx_visitas != -1:
                     dir_prim = directorio_firmas[clave_escuela]["dir_primaria"]
                     apoyo_prim = directorio_firmas[clave_escuela]["apoyo"]
                     
-                    # Identificar la especialidad para el formato oficial
+                    # Identificar la especialidad y el nombre del especialista activo
+                    nombre_especialista = st.session_state.get('nombre', 'Especialista')
                     rol_actual_texto = str(st.session_state.get('rol', '')).upper()
+                    
                     if "PSICOLOG" in rol_actual_texto:
                         especialidad_visita = "Área de Psicología - USAER 02-E"
                     elif "COMUNICACI" in rol_actual_texto:
@@ -1156,12 +1158,12 @@ if idx_visitas != -1:
 <table style="width: 100%; margin-bottom: 20px; border: none;">
 <tr>
 <td style="width: 25%; text-align: left; vertical-align: middle;">
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Logo_de_la_Secretar%C3%ADa_de_Educaci%C3%B3n_P%C3%BAblica_%28M%C3%A9xico%29.svg/512px-Logo_de_la_Secretar%C3%ADa_de_Educaci%C3%B3n_P%C3%BAblica_%28M%C3%A9xico%29.svg.png" alt="SEP" style="max-width: 120px;">
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Logo_de_la_Secretar%C3%ADa_de_Educaci%C3%B3n_P%C3%BAblica_%28M%C3%A9xico%29.svg/512px-Logo_de_la_Secretar%C3%ADa_de_Educaci%C3%B3n_P%C3%BAblica_%28M%C3%A9xico%29.svg.png" alt="SEP" style="max-height: 60px;">
 </td>
 <td style="width: 50%; text-align: center; vertical-align: middle; font-size: 13px; line-height: 1.2;">
-<b>DIRECCIÓN DE EDUCACIÓN ESPECIAL</b><br>
-<b>USAER 02 ESTATAL CCT. 31FUA0002Y</b><br>
-<b>ZONA No. 001</b>
+DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>
+USAER 02 ESTATAL CCT. 31FUA0002Y<br>
+ZONA No. 001
 </td>
 <td style="width: 25%; text-align: right; vertical-align: middle;">
 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Escudo_de_Yucat%C3%A1n.svg/200px-Escudo_de_Yucat%C3%A1n.svg.png" alt="Yucatan" style="max-height: 70px;">
@@ -1226,8 +1228,8 @@ Director de la USAER 02-E
 </td>
 <td style="width: 50%; padding-left: 20px;">
 ______________________<br>
-<b>Dra. Diana A. Durán González</b><br>
-Supervisora de la zona 001 EE
+<b>{nombre_especialista}</b><br>
+{especialidad_visita}
 </td>
 </tr>
 </table>
