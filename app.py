@@ -213,47 +213,66 @@ with st.sidebar:
 # ==========================================
 # ==========================================
 # ==========================================
+# ==========================================
 # --- CARGA DE DATOS PARA LOS FORMULARIOS ---
 # ==========================================
 try:
     # 1. Descargar la base de datos completa
     df_todos_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
     
-    # 2. APLICAR FILTRO DE SEGURIDAD POR ESPECIALISTA
-    escuelas_usuario = st.session_state.get("escuelas_permitidas", "")
+    # 2. CAPTURAR PERMISOS DE FORMA SEGURA (Cubre variantes de mayúsculas/minúsculas)
+    escuelas_usuario = st.session_state.get("escuelas_permitidas") or st.session_state.get("Escuelas_Permitidas") or st.session_state.get("escuelas") or st.session_state.get("permisos")
     
-    if escuelas_usuario == "TODAS" or not escuelas_usuario:
-        # El Director o Trabajo Social ven todo
+    # 3. DICCIONARIO MAESTRO DE LA ZONA 001 (Claves <-> Nombres Reales)
+    mapeo_zona = {
+        "ESC-001": ["ESC-001", "DAMIÁN CARMONA", "DAMIAN CARMONA"],
+        "ESC-002": ["ESC-002", "ICHCAANZIHO"],
+        "ESC-003": ["ESC-003", "GREGORIO TORRES QUINTERO", "GREGORIO TORRES"],
+        "ESC-004": ["ESC-004", "REMIGIO AGUILAR SOSA", "REMIGIO AGUILAR"],
+        "ESC-005": ["ESC-005", "ELVIRA PARRA"],
+        "ESC-006": ["ESC-006", "MANUEL SARRADO"],
+        "ESC-007": ["ESC-007", "DOMINGO SOLIS", "DOMINGO SOLÍS"],
+        "ESC-008": ["ESC-008", "QUINTANA"]
+    }
+    
+    # 4. APLICAR FILTRO DE SEGURIDAD ESTRICTO
+    if escuelas_usuario == "TODAS":
         df_alumnos = df_todos_alumnos
-    else:
-        # Los especialistas ven solo sus escuelas asignadas
-        lista_permitidas = [e.strip() for e in escuelas_usuario.split(",")]
+    elif escuelas_usuario:
+        # Extraer claves del usuario (Ej. ["ESC-003", "ESC-004", "ESC-006", "ESC-007"])
+        lista_permitidas = [e.strip().upper() for e in str(escuelas_usuario).split(",")]
         
-        if 'Escuela_Asignada' in df_todos_alumnos.columns:
-            df_alumnos = df_todos_alumnos[df_todos_alumnos['Escuela_Asignada'].isin(lista_permitidas)]
+        # Traducir claves a nombres para buscar en la base de datos
+        terminos_autorizados = []
+        for clave in lista_permitidas:
+            if clave in mapeo_zona:
+                terminos_autorizados.extend(mapeo_zona[clave])
+            else:
+                terminos_autorizados.append(clave)
+        
+        # Ubicar la columna donde se guardó la escuela en el padrón
+        col_esc = next((c for c in df_todos_alumnos.columns if "ESCUELA" in c.upper() or "ASIGNADA" in c.upper()), None)
+        
+        if col_esc:
+            # Filtrar: Conservar solo si el nombre de la escuela coincide con los autorizados
+            mascara = df_todos_alumnos[col_esc].astype(str).str.upper().apply(
+                lambda x: any(termino in x for termino in terminos_autorizados)
+            )
+            df_alumnos = df_todos_alumnos[mascara]
         else:
-            df_alumnos = df_todos_alumnos
-            
-    # 3. Generar la lista de alumnos limpia y filtrada para los menús
+            df_alumnos = pd.DataFrame(columns=df_todos_alumnos.columns)
+    else:
+        # CIERRE DE SEGURIDAD: Si no hay permisos definidos, NO VE A NADIE.
+        df_alumnos = pd.DataFrame(columns=df_todos_alumnos.columns)
+        st.error("⚠️ Acceso restringido: No se detectaron escuelas asignadas en tu sesión.")
+        
+    # 5. Generar la lista final para los menús
     col_nombre = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
-    lista_alumnos = [nom for nom in df_alumnos[col_nombre].astype(str).tolist() if nom.strip() != ""]
-    lista_alumnos = sorted(list(set(lista_alumnos)))
+    lista_alumnos = sorted([nom for nom in df_alumnos[col_nombre].astype(str).tolist() if nom.strip() != ""])
 
 except Exception:
     df_alumnos = pd.DataFrame()
     lista_alumnos = []
-
-# --- DICCIONARIOS Y REACTIVOS ---
-escuelas_usaer = {
-    "Primaria 1": "ESC-001",
-    "Primaria 2": "ESC-002",
-    "Preescolar 3": "ESC-003",
-    "Primaria 4": "ESC-004",
-    "Primaria 5": "ESC-005",
-    "Preescolar 6": "ESC-006",
-    "Secundaria 7": "ESC-007",
-    "Secundaria 8": "ESC-008"
-}
 
 items_anexo3 = [
     "1. El salón de clases cuenta con áreas de trabajo delimitadas (higiene, rincón de lectura, área de material didáctico).",
