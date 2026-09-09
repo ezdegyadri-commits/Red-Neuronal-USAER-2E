@@ -1042,48 +1042,96 @@ if idx_visitas != -1:
                     dir_prim = directorio_firmas[clave_escuela]["dir_primaria"]
                     apoyo_prim = directorio_firmas[clave_escuela]["apoyo"]
                     
-                    # Preparación de motivos
-                    todos_motivos = motivos_izq + motivos_der
-                    texto_motivos = f"<ul style='margin-top: 5px; margin-bottom: 5px;'>{''.join([f'<li>{m}</li>' for m in todos_motivos])}</ul>" if todos_motivos else "Sin especificar."
-                    texto_detalles = f"<p style='margin-top: 5px;'><b>Detalles:</b> {detalles_motivos}</p>" if detalles_motivos else ""
-                    
-# ATENCIÓN: El HTML debe ir PEGADO a la izquierda para evitar que Streamlit lo vuelva un cuadro gris de código.
+                    # Funciones para marcar con ( X ) si el motivo fue seleccionado
+                    def m(opcion):
+                        return "( X )" if opcion in motivos_izq or opcion in motivos_der else "( &nbsp; )"
+                        
+                    txt_detalles = f" {detalles_motivos}" if detalles_motivos else "___________________"
+
+# ATENCIÓN: Este HTML debe estar pegado a la izquierda
                     html_constancia = f"""<div style="background-color: white; color: black; padding: 40px; border: 1px solid #ccc; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
-    <h4 style="text-align: center; line-height: 1.2; margin-top: 0;">DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>USAER 02-E CCT. 31FUA0002Y ZONA No. 001</h4>
+    <h4 style="text-align: center; font-weight: bold; margin-bottom: 2px;">DIRECCIÓN DE EDUCACIÓN ESPECIAL</h4>
+    <h4 style="text-align: center; font-weight: bold; margin-top: 0; margin-bottom: 20px;">USAER 02 ESTATAL CCT. 31FUA0002Y ZONA No. 001</h4>
+    
     <h3 style="text-align: center; text-decoration: underline; margin-bottom: 30px;">Constancia de visita</h3>
-    <p style="font-size: 14px; margin-bottom: 5px;"><b>Servicio de educación especial que realiza la visita:</b> USAER 02-E</p>
-    <p style="font-size: 14px; margin-bottom: 5px;"><b>Curso escolar:</b> 2026 – 2027 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Fecha de la visita:</b> {fecha_visita.strftime('%d/%m/%Y')} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Hora:</b> de 7:00 a 12:00hrs</p>
-    <p style="font-size: 14px; margin-bottom: 20px;"><b>Escuela:</b> {escuela_seleccionada} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Localidad:</b> MÉRIDA</p>
-    <div style="font-size: 14px; margin-top: 20px;">
-        <b>Motivo de la visita:</b>
-        {texto_motivos}
-        {texto_detalles}
-    </div>
-    <div style="font-size: 14px; margin-top: 20px; min-height: 100px;">
-        <b>Breve descripción de las actividades desarrolladas:</b><br><br>
-        {descripcion_actividad.replace(chr(10), '<br>')}
-    </div>
-    <br><br>
-    <table style="width: 100%; font-size: 12px; text-align: center; margin-top: 40px; border-collapse: collapse;">
+    
+    <p style="font-size: 14px; margin-bottom: 8px;">Servicio de educación especial que realiza la visita: <u>USAER 02-E</u></p>
+    <p style="font-size: 14px; margin-bottom: 8px;">Curso escolar: 2026 – 2027 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Fecha de la visita: <u>{fecha_visita.strftime('%d/%m/%Y')}</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Hora: de 7:00 a 12:00hrs</p>
+    <p style="font-size: 14px; margin-bottom: 30px;">Escuela: <u>{escuela_seleccionada}</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Localidad: MÉRIDA</p>
+    
+    <p style="font-size: 14px; margin-bottom: 5px;">Motivo de la visita:</p>
+    
+    <table style="width: 100%; font-size: 14px; margin-bottom: 30px; border: none;">
         <tr>
-            <td style="width: 50%; padding-bottom: 40px;">___________________________________<br><b>{dir_prim}</b><br>Directora(or) de la primaria</td>
-            <td style="width: 50%; padding-bottom: 40px;">___________________________________<br><b>{apoyo_prim}</b><br>Maestra(o) de apoyo</td>
+            <td style="width: 50%; vertical-align: top; padding-right: 10px;">
+                <div style="margin-bottom: 5px;">{m('Observación en grupo')} Observación en grupo{txt_detalles if 'Observación en grupo' in motivos_izq else '___________________'}</div>
+                <div style="margin-bottom: 5px;">{m('Entrevista con...')} Entrevista con {txt_detalles if 'Entrevista con...' in motivos_izq else '________________________'}</div>
+                <div style="margin-bottom: 5px;">{m('Trabajo interdisciplinario')} Trabajo interdisciplinario </div>
+                <div style="margin-bottom: 5px;">{m('Sugerencias a Maestra(o)')} Sugerencias a Maestra (o) {txt_detalles if 'Sugerencias a Maestra(o)' in motivos_izq else '_______________'}</div>
+                <div style="margin-bottom: 5px;">{m('Sugerencias a Padres de...')} Sugerencias a Padres de {txt_detalles if 'Sugerencias a Padres de...' in motivos_izq else '________________'}</div>
+                <div style="margin-bottom: 5px;">{m('Valoración a...')} Valoración a {txt_detalles if 'Valoración a...' in motivos_izq else '__________________________'}</div>
+                <div style="margin-bottom: 5px;">{m('Revaloración de sugerencias con...')} Revaloración de sugerencias con: {txt_detalles if 'Revaloración de sugerencias con...' in motivos_izq else '________'}</div>
+                <div style="margin-bottom: 5px;">{m('Elaboración o actualización de EPP')} Elaboración o actualización de EPP _______</div>
+            </td>
+            <td style="width: 5px; border-left: 1px solid black;"></td>
+            <td style="width: 45%; vertical-align: top; padding-left: 10px;">
+                <div style="margin-bottom: 5px;">{m('Intervención en Grupo')} Intervención en Grupo {txt_detalles if 'Intervención en Grupo' in motivos_der else '___________________'}</div>
+                <div style="margin-bottom: 5px;">{m('Apoyo individual en aula')} Apoyo individual a ___________en aula de __</div>
+                <div style="margin-bottom: 5px;">{m('Elaboración del Plan de Intervención')} Elaboración del Plan de Intervención _______</div>
+                <div style="margin-bottom: 5px;">{m('Consejo Técnico Escolar')} Consejo Técnico Escolar </div>
+                <div style="margin-bottom: 5px;">{m('Junta del Servicio de Apoyo')} Junta del Servicio de Apoyo_______________</div>
+                <div style="margin-bottom: 5px;">{m('Junta Académica del Servicio de Apoyo')} Junta Académica del Servicio de Apoyo </div>
+                <div style="margin-bottom: 5px;">{m('Otros')} Otros: {txt_detalles if 'Otros' in motivos_der else '________________________________'}</div>
+            </td>
+        </tr>
+    </table>
+    
+    <p style="font-size: 14px; margin-bottom: 10px;">Breve descripción de las actividades desarrolladas:</p>
+    <div style="font-size: 14px; min-height: 150px; line-height: 1.6;">
+        {descripcion_actividad.replace(chr(10), '<br>') if descripcion_actividad else '<br><br><br><br><br>'}
+    </div>
+    
+    <table style="width: 100%; font-size: 12px; text-align: center; margin-top: 50px; border: none;">
+        <tr>
+            <td style="width: 50%; padding-bottom: 40px; padding-right: 20px;">
+                ___________________________<br>
+                {dir_prim}<br>
+                Directora  de la primaria
+            </td>
+            <td style="width: 50%; padding-bottom: 40px; padding-left: 20px;">
+                _______________________<br>
+                {apoyo_prim}<br>
+                Maestra de apoyo
+            </td>
         </tr>
         <tr>
-            <td style="width: 50%;">___________________________________<br><b>LPA. Lizbeth J. Carvajal García</b><br>Directora de la USAER 02-E</td>
-            <td style="width: 50%;">___________________________________<br><b>Dra. Diana A. Durán González</b><br>Supervisora de la zona 001 EE</td>
+            <td style="width: 50%; padding-right: 20px;">
+                ___________________________<br>
+                LPA. Lizbeth J. Carvajal García<br>
+                Directora de la USAER 02-E
+            </td>
+            <td style="width: 50%; padding-left: 20px;">
+                ______________________<br>
+                Dra. Diana A. Durán González<br>
+                Supervisora de la zona 001 EE
+            </td>
         </tr>
     </table>
 </div>"""
                     
-                    # HTML envuelto para que al descargar y abrir, mande a imprimir en automático
                     html_impresion = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <title>Constancia de Visita - {escuela_seleccionada}</title>
+    <style>
+        @media print {{
+            @page {{ margin: 1cm; }}
+            body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+        }}
+    </style>
 </head>
-<body onload="window.print()" style="padding: 20px;">
+<body onload="window.print()" style="padding: 0; margin: 0; display: flex; justify-content: center;">
     {html_constancia}
 </body>
 </html>"""
@@ -1091,7 +1139,6 @@ if idx_visitas != -1:
                     st.success("¡Constancia generada exitosamente!")
                     st.markdown(html_constancia, unsafe_allow_html=True)
                     
-                    # El botón mágico de descarga
                     st.download_button(
                         label="🖨️ Descargar Constancia para Imprimir",
                         data=html_impresion,
