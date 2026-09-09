@@ -415,26 +415,34 @@ if idx_alta != -1:
                     st.error(f"Error al leer el archivo: {e}")
 
 
-    # --- MÓDULO: BAPs COLABORATIVAS ---
+   # --- MÓDULO: BAPs COLABORATIVAS ---
 with paneles[idx_bap]:
     st.subheader("Evaluación de Barreras en el Contexto Áulico")
     
-    tipo_evaluacion = st.radio("Tipo de Observación y Sugerencias:", ["👥 Grupal (Contexto del Aula)", "👤 Individual (Alumno Específico)"], horizontal=True)
-    
     with st.form("anexo3_form", clear_on_submit=False):
-        if tipo_evaluacion == "👤 Individual (Alumno Específico)":
-            objetivo_seleccionado = st.selectbox("Selecciona al Alumno a evaluar", lista_alumnos if lista_alumnos else ["Sin registros"])
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} considerando sus barreras específicas."
-        else:
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                grado_grupal = st.selectbox("Grado a observar", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
-            with col_g2:
-                grupo_grupal = st.selectbox("Grupo a observar", ["A", "B", "C", "D"])
-            
-            objetivo_seleccionado = f"Grupo {grado_grupal} {grupo_grupal}"
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el aula del grupo {objetivo_seleccionado}, enfocadas en el diseño universal para el aprendizaje (DUA) y dinámicas colectivas."
+        alumno_seleccionado = st.selectbox("Selecciona al Alumno a evaluar", lista_alumnos if lista_alumnos else ["Sin registros"])
         
+        # --- DETECCIÓN AUTOMÁTICA DEL TIPO DE ATENCIÓN ---
+        tipo_atencion = "Grupal" # Valor por defecto
+        grado_grupo_txt = "S/G"
+        
+        if alumno_seleccionado != "Sin registros" and not df_alumnos.empty:
+            col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
+            fila_alumno = df_alumnos.loc[df_alumnos[col_nom_db] == alumno_seleccionado]
+            
+            if not fila_alumno.empty:
+                if 'Tipo_Atencion' in fila_alumno.columns:
+                    tipo_atencion = str(fila_alumno['Tipo_Atencion'].values[0]).strip()
+                grado_grupo_txt = f"{fila_alumno['Grado'].values[0]} {fila_alumno['Grupo'].values[0]}"
+        
+        # Mensaje e Instrucciones dinámicas para la IA
+        if tipo_atencion.lower() == "individual":
+            st.info(f"👤 **Modo Detectado: INDIVIDUAL**. Se elaborarán sugerencias para las barreras específicas de **{alumno_seleccionado}**.")
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {alumno_seleccionado} considerando sus barreras específicas detectadas."
+        else:
+            st.info(f"👥 **Modo Detectado: GRUPAL**. Se elaborarán sugerencias orientadas al Diseño Universal para el Aprendizaje (DUA) para el aula del **{grado_grupo_txt}**.")
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el contexto áulico del {grado_grupo_txt}, enfocadas en dinámicas colectivas."
+
         st.markdown("---")
         st.markdown("### Instrumento de Observación (Anexo III)")
         
