@@ -714,11 +714,23 @@ with paneles[idx_evt]:
             
             grado_grupo_visor = ""
             if alum_evt != "Sin registros" and not df_alumnos.empty:
-                fila_alum_evt = df_alumnos.loc[df_alumnos['Nombre_Completo'] == alum_evt]
+                # Buscador flexible del nombre del alumno
+                col_nom = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
+                fila_alum_evt = df_alumnos.loc[df_alumnos[col_nom] == alum_evt]
+                
                 if not fila_alum_evt.empty:
-                    grado_grupo_visor = f"{fila_alum_evt['Grado'].values[0]} {fila_alum_evt['Grupo'].values[0]}"
+                    # Búsqueda flexible de columnas de grado y grupo en la base de datos
+                    col_g = next((c for c in df_alumnos.columns if "GRADO" in str(c).upper()), 'Grado')
+                    col_gr = next((c for c in df_alumnos.columns if "GRUPO" in str(c).upper()), 'Grupo')
+                    
+                    val_grado = str(fila_alum_evt[col_g].values[0]) if col_g in df_alumnos.columns else ""
+                    val_grupo = str(fila_alum_evt[col_gr].values[0]) if col_gr in df_alumnos.columns else ""
+                    
+                    grado_grupo_visor = f"{val_grado} {val_grupo}".strip()
+                    if grado_grupo_visor == "S/G" or grado_grupo_visor == "":
+                        grado_grupo_visor = "S/G (Falta actualizar en Base de Datos)"
 
-# ATENCIÓN: Este bloque HTML debe ir pegado a la izquierda para evitar que Streamlit lo vuelva código crudo.
+# ATENCIÓN: Este bloque HTML debe ir pegado a la izquierda
             html_preview = f"""
 <div style="background-color: white; color: black; padding: 20px; border-radius: 8px; border: 1px solid #ccc; font-family: Arial, sans-serif;">
 <h3 style="text-align: center; margin-top: 0;">Anexo V. Hoja de Eventos Significativos.</h3>
@@ -743,11 +755,13 @@ with paneles[idx_evt]:
 """
             
             if evento_definitivo:
+                # AQUÍ REEMPLAZAMOS "HOY" POR LA FECHA EXACTA
+                fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
                 html_preview += f"""
 <tr style="background-color: #e6f7ff;">
-<td style="border: 1px solid black; padding: 10px; vertical-align: top;"><b>Hoy</b></td>
+<td style="border: 1px solid black; padding: 10px; vertical-align: top;"><b>{fecha_hoy_str}</b></td>
 <td style="border: 1px solid black; padding: 10px; vertical-align: top;"><b>{str(evento_definitivo).replace(chr(10), '<br>')}</b></td>
-<td style="border: 1px solid black; padding: 10px; text-align: center; vertical-align: bottom;"><br><br>____________________<br><b><i>{st.session_state.nombre}</i> (Nuevo)</b></td>
+<td style="border: 1px solid black; padding: 10px; text-align: center; vertical-align: bottom;"><br><br>____________________<br><b><i>{st.session_state.get('nombre', '')}</i> (Nuevo)</b></td>
 </tr>
 """
                 
