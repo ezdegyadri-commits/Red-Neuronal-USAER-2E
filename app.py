@@ -86,6 +86,52 @@ if not st.session_state.usuario_activo:
     st.title("Red Neuronal USAER 2E 🏫")
     st.subheader("Acceso al Sistema")
     with st.form("login_form"):
+        # --- EFECTO VISUAL DE ENCENDIDO (INICIO DE SESIÓN) ---
+    st.markdown("""
+        <style>
+        /* Oscurecemos el fondo sutilmente para que resalte el formulario */
+        .stApp {
+            background-color: #121417; 
+            color: white;
+        }
+        
+        /* Animación de la "lámpara" encendiéndose sobre el formulario */
+        @keyframes encendidoLampara {
+            0% { opacity: 0; transform: translateY(-20px); box-shadow: 0 0 0px rgba(255, 223, 100, 0); }
+            100% { opacity: 1; transform: translateY(0); box-shadow: 0 10px 40px rgba(255, 223, 100, 0.15); }
+        }
+        
+        /* Aplicamos la animación al contenedor del formulario */
+        [data-testid="stForm"] {
+            animation: encendidoLampara 1.2s ease-out forwards;
+            background-color: #1c1f24;
+            border-radius: 16px;
+            border: 1px solid #333;
+            padding: 2.5rem;
+            max-width: 450px;
+            margin: 0 auto;
+        }
+
+        /* Animación suave para la guía visual de las maestras */
+        @keyframes latido {
+            0% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.02); color: #ffdf64; }
+            100% { opacity: 0.6; transform: scale(1); }
+        }
+        .guia-visual {
+            animation: latido 2.5s infinite;
+            text-align: center;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        </style>
+        
+        <div class="guia-visual">
+            👋 ¡Bienvenida! <br>
+            👇 Por favor, ingresa tu usuario y contraseña aquí abajo para comenzar.
+        </div>
+    """, unsafe_allow_html=True)
         user = st.text_input("Usuario")
         pwd = st.text_input("Contraseña", type="password")
         if st.form_submit_button("Ingresar"):
