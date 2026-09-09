@@ -212,22 +212,38 @@ with st.sidebar:
 # --- AQUÍ ABAJO PEGAS TUS PESTAÑAS (pestañas = st.tabs(...)) Y TUS MÓDULOS DE ALUMNOS, BAP, EVENTOS ---
 # ==========================================
 # ==========================================
+# ==========================================
 # --- CARGA DE DATOS PARA LOS FORMULARIOS ---
 # ==========================================
 try:
-    # 1. Cargar Alumnos de Sheets
-    df_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
-    col_nombre = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
+    # 1. Descargar la base de datos completa
+    df_todos_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
     
-    # Extraemos solo los nombres reales, ignorando celdas vacías, y los ordenamos alfabéticamente
+    # 2. APLICAR FILTRO DE SEGURIDAD POR ESPECIALISTA
+    escuelas_usuario = st.session_state.get("escuelas_permitidas", "")
+    
+    if escuelas_usuario == "TODAS" or not escuelas_usuario:
+        # El Director o Trabajo Social ven todo
+        df_alumnos = df_todos_alumnos
+    else:
+        # Los especialistas ven solo sus escuelas asignadas
+        lista_permitidas = [e.strip() for e in escuelas_usuario.split(",")]
+        
+        if 'Escuela_Asignada' in df_todos_alumnos.columns:
+            df_alumnos = df_todos_alumnos[df_todos_alumnos['Escuela_Asignada'].isin(lista_permitidas)]
+        else:
+            df_alumnos = df_todos_alumnos
+            
+    # 3. Generar la lista de alumnos limpia y filtrada para los menús
+    col_nombre = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
     lista_alumnos = [nom for nom in df_alumnos[col_nombre].astype(str).tolist() if nom.strip() != ""]
     lista_alumnos = sorted(list(set(lista_alumnos)))
-    
+
 except Exception:
     df_alumnos = pd.DataFrame()
     lista_alumnos = []
 
-# 2. Diccionario de Escuelas (Ajusta los nombres de las escuelas reales después)
+# --- DICCIONARIOS Y REACTIVOS ---
 escuelas_usaer = {
     "Primaria 1": "ESC-001",
     "Primaria 2": "ESC-002",
@@ -239,7 +255,6 @@ escuelas_usaer = {
     "Secundaria 8": "ESC-008"
 }
 
-# 3. Elementos de Evaluación (BAPs) para el Anexo III Oficial SEGEY
 items_anexo3 = [
     "1. El salón de clases cuenta con áreas de trabajo delimitadas (higiene, rincón de lectura, área de material didáctico).",
     "2. El docente se asegura de que el material didáctico con que cuenta en el aula sea pertinente a las características de todos sus alumnos.",
