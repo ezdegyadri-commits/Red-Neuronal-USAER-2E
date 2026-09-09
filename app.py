@@ -664,7 +664,7 @@ with paneles[idx_evt]:
     alum_evt = st.selectbox("1. Selecciona al alumno involucrado", lista_alumnos if lista_alumnos else ["Sin registros"])
     evento_borrador = st.text_area("2. Redacta el evento (borrador)", height=150)
     
-   if st.button("✨ Mejorar Redacción con IA"):
+    if st.button("✨ Mejorar Redacción con IA"):
         if evento_borrador != "":
             with st.spinner("Pulido ortográfico en proceso... 🧠"):
                 meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
