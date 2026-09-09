@@ -358,8 +358,6 @@ if idx_alta != -1:
                     st.error(f"Error al leer el archivo: {e}")
 
 
-# --- MÓDULO: BAPs COLABORATIVAS ---
-with paneles[idx_bap]:
     # --- MÓDULO: BAPs COLABORATIVAS ---
 with paneles[idx_bap]:
     st.subheader("Evaluación de Barreras en el Contexto Áulico")
