@@ -15,9 +15,9 @@ import io
 st.set_page_config(page_title="USAER 2E", layout="wide")
 
 # 2. VARIABLES MAESTRAS (Coloca aquí tus datos)
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "TU_CLAVE_AQUI")
-FOLDER_ID_MAESTRO = "TU_ID_CARPETA_AQUI"
-URL_SPREADSHEET_MAESTRO = "TU_URL_DE_SHEETS_AQUI"
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6Lg2KCR-L0SUqRqsk7IGKPHneuENhZH_d4J1SUeHrz79g")
+FOLDER_ID_MAESTRO = "1btFuNK8l9BI5C2s3-Q0_RZBZkUOBhvtr"
+URL_SPREADSHEET_MAESTRO = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
 
 genai.configure(api_key=GEMINI_API_KEY)
 modelo_ia = genai.GenerativeModel("gemini-1.5-flash")
