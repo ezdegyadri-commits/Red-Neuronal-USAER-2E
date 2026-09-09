@@ -211,14 +211,18 @@ with st.sidebar:
 
 # --- AQUÍ ABAJO PEGAS TUS PESTAÑAS (pestañas = st.tabs(...)) Y TUS MÓDULOS DE ALUMNOS, BAP, EVENTOS ---
 # ==========================================
+# ==========================================
 # --- CARGA DE DATOS PARA LOS FORMULARIOS ---
 # ==========================================
 try:
     # 1. Cargar Alumnos de Sheets
     df_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
-    # Adaptación automática por si tu columna se llama Nombre o Nombre_Completo
     col_nombre = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
-    lista_alumnos = df_alumnos[col_nombre].tolist() if not df_alumnos.empty else []
+    
+    # Extraemos solo los nombres reales, ignorando celdas vacías, y los ordenamos alfabéticamente
+    lista_alumnos = [nom for nom in df_alumnos[col_nombre].astype(str).tolist() if nom.strip() != ""]
+    lista_alumnos = sorted(list(set(lista_alumnos)))
+    
 except Exception:
     df_alumnos = pd.DataFrame()
     lista_alumnos = []
@@ -441,36 +445,45 @@ if idx_alta != -1:
                     st.error(f"Error al leer el archivo: {e}")
 
 
-   # --- MÓDULO: BAPs COLABORATIVAS ---
+  # --- MÓDULO: BAPs COLABORATIVAS ---
 with paneles[idx_bap]:
     st.subheader("Evaluación de Barreras en el Contexto Áulico")
     
+    # REGRESAMOS EL SELECTOR MANUAL
+    tipo_evaluacion = st.radio("Tipo de Observación y Sugerencias:", ["👥 Grupal (Contexto del Aula)", "👤 Individual (Alumno Específico)"], horizontal=True)
+    
     with st.form("anexo3_form", clear_on_submit=False):
-        alumno_seleccionado = st.selectbox("Selecciona al Alumno a evaluar", lista_alumnos if lista_alumnos else ["Sin registros"])
         
-        # --- DETECCIÓN AUTOMÁTICA DEL TIPO DE ATENCIÓN ---
-        tipo_atencion = "Grupal" # Valor por defecto
-        grado_grupo_txt = "S/G"
-        
-        if alumno_seleccionado != "Sin registros" and not df_alumnos.empty:
-            col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
-            fila_alumno = df_alumnos.loc[df_alumnos[col_nom_db] == alumno_seleccionado]
-            
-            if not fila_alumno.empty:
-                if 'Tipo_Atencion' in fila_alumno.columns:
-                    tipo_atencion = str(fila_alumno['Tipo_Atencion'].values[0]).strip()
-                grado_grupo_txt = f"{fila_alumno['Grado'].values[0]} {fila_alumno['Grupo'].values[0]}"
-        
-        # Mensaje e Instrucciones dinámicas para la IA
-        if tipo_atencion.lower() == "individual":
-            st.info(f"👤 **Modo Detectado: INDIVIDUAL**. Se elaborarán sugerencias para las barreras específicas de **{alumno_seleccionado}**.")
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {alumno_seleccionado} considerando sus barreras específicas detectadas."
+        # Lógica condicional según la selección del usuario
+        if tipo_evaluacion == "👤 Individual (Alumno Específico)":
+            objetivo_seleccionado = st.selectbox("Selecciona al Alumno a evaluar", lista_alumnos if lista_alumnos else ["Sin registros"])
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} considerando sus barreras específicas detectadas."
         else:
-            st.info(f"👥 **Modo Detectado: GRUPAL**. Se elaborarán sugerencias orientadas al Diseño Universal para el Aprendizaje (DUA) para el aula del **{grado_grupo_txt}**.")
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el contexto áulico del {grado_grupo_txt}, enfocadas en dinámicas colectivas."
-
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                grado_grupal = st.selectbox("Grado a observar", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
+            with col_g2:
+                grupo_grupal = st.selectbox("Grupo a observar", ["A", "B", "C", "D"])
+            
+            objetivo_seleccionado = f"Grupo {grado_grupal} {grupo_grupal}"
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el contexto áulico del {objetivo_seleccionado}, enfocadas en el Diseño Universal para el Aprendizaje (DUA) y dinámicas colectivas."
+        
         st.markdown("---")
         st.markdown("### Instrumento de Observación (Anexo III)")
+        
+        # CICLO DE PREGUNTAS
+        respuestas_bap = {}
+        for i, item in enumerate(items_anexo3):
+            st.markdown(f"**{item}**")
+            col_freq, col_ori = st.columns([3, 1])
+            with col_freq:
+                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"freq_{i}_{tipo_evaluacion}", label_visibility="collapsed")
+            with col_ori:
+                st.markdown("<br>", unsafe_allow_html=True)
+                ori = st.checkbox("Requiere Orientación", key=f"ori_{i}_{tipo_evaluacion}")
+            
+            respuestas_bap[f"Item_{i+1}"] = {"pregunta": item, "frecuencia": freq, "orientacion": ori}
+            st.markdown("---")
         
         # AQUÍ IRÁN LOS REACTIVOS COMPLETOS
         
