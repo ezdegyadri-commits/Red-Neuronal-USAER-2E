@@ -1,6 +1,6 @@
 import time
 import streamlit as st
-import pandas as pd
+import pandas as pd import base64
 import gspread
 import json
 import google.generativeai as genai
@@ -1039,32 +1039,41 @@ with paneles[idx_visor]:
 # --- MÓDULO: PANEL DE DIRECCIÓN (Solo Director) ---
 if idx_dir != -1:
     with paneles[idx_dir]:
-        st.subheader("Centro de Monitoreo")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Alumnos en Red", len(df_alumnos) if not df_alumnos.empty else 0)
+        rol_actual_dir = str(st.session_state.get('rol', '')).upper()
         
-        try:
-            df_anexo4_dir = pd.DataFrame(sheet.worksheet("Anexo4_Sugerencias").get_all_records())
-            df_anexo5_dir = pd.DataFrame(sheet.worksheet("Anexo5_Eventos").get_all_records())
+        # Filtro de Seguridad Exclusivo
+        if "DIRECTOR" not in rol_actual_dir:
+            st.error("🔒 Acceso Restringido.")
+            st.warning("Este panel es un centro de comando en tiempo real de uso exclusivo para la Dirección de la USAER 02-E.")
+        else:
+            st.subheader("Centro de Monitoreo en Tiempo Real")
             
-            col2.metric("Sugerencias Generadas (Anexo 4)", len(df_anexo4_dir) if not df_anexo4_dir.empty else 0)
-            col3.metric("Eventos Registrados (Anexo 5)", len(df_anexo5_dir) if not df_anexo5_dir.empty else 0)
+            # Métricas Generales
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Alumnos en Red", len(df_alumnos) if not df_alumnos.empty else 0)
             
-            st.markdown("### Auditoría de Registros (Anexo 4)")
-            if not df_anexo4_dir.empty:
-                st.dataframe(df_anexo4_dir[['Nombre_Alumno', 'Escuela', 'Fecha_Elaboracion', 'Quien_Brinda_Sugerencias']])
-            else:
-                st.info("No hay registros en el Anexo 4.")
+            try:
+                df_anexo4_dir = pd.DataFrame(sheet.worksheet("Anexo4_Sugerencias").get_all_records())
+                df_anexo5_dir = pd.DataFrame(sheet.worksheet("Anexo5_Eventos").get_all_records())
                 
-            st.markdown("### Auditoría de Eventos (Anexo 5)")
-            if not df_anexo5_dir.empty:
-                st.dataframe(df_anexo5_dir[['Nombre_Alumno', 'Fecha', 'Especialista', 'Evento']])
-            else:
-                st.info("No hay eventos en el Anexo 5.")
-                
-        except Exception as e:
-            st.error(f"Error al cargar métricas del director: {e}")
-
+                col2.metric("Sugerencias (Anexo 4)", len(df_anexo4_dir) if not df_anexo4_dir.empty else 0)
+                col3.metric("Eventos (Anexo 5)", len(df_anexo5_dir) if not df_anexo5_dir.empty else 0)
+            except Exception:
+                pass
+            
+            st.markdown("---")
+            st.markdown("### 📋 Registro de Constancias de Visita Generadas")
+            st.caption("Monitoreo en vivo de la cobertura y despliegue del personal de apoyo.")
+            
+            try:
+                # Lectura de la base de datos de visitas
+                df_visitas_dir = pd.DataFrame(sheet.worksheet("Registro_Visitas").get_all_records())
+                if not df_visitas_dir.empty:
+                    st.dataframe(df_visitas_dir, use_container_width=True)
+                else:
+                    st.info("No hay constancias de visita registradas aún en esta semana.")
+            except Exception:
+                st.warning("⚠️ Acción requerida: Crea una pestaña llamada 'Registro_Visitas' en tu archivo de Google Sheets. Asegúrate de poner estos títulos en la fila 1: Fecha, Escuela, Especialista, Area, Motivos.")
 # --- MÓDULO: CONSTANCIAS DE VISITA (Exclusivo Paradocentes) ---
 if idx_visitas != -1:
     with paneles[idx_visitas]:
@@ -1127,14 +1136,12 @@ if idx_visitas != -1:
                 generar_acta = st.form_submit_button("Generar Constancia Oficial")
                 
             if generar_acta:
-                # Localizar la clave de la escuela seleccionada
                 clave_escuela = next((k for k, v in directorio_firmas.items() if v["escuela"] == escuela_seleccionada), None)
                 
                 if clave_escuela:
                     dir_prim = directorio_firmas[clave_escuela]["dir_primaria"]
                     apoyo_prim = directorio_firmas[clave_escuela]["apoyo"]
                     
-                    # Identificar la especialidad y el nombre del especialista activo
                     nombre_especialista = st.session_state.get('nombre', 'Especialista')
                     rol_actual_texto = str(st.session_state.get('rol', '')).upper()
                     
@@ -1153,12 +1160,31 @@ if idx_visitas != -1:
                     def d(opcion, linea="___________________"):
                         return f"<b>{detalles_motivos}</b>" if detalles_motivos and (opcion in motivos_izq or opcion in motivos_der) else linea
 
-# ATENCIÓN: A partir de aquí, CERO espacios a la izquierda
+                    # --- AUTO-GUARDADO EN TIEMPO REAL PARA EL DIRECTOR ---
+                    try:
+                        motivos_completos = ", ".join(motivos_izq + motivos_der)
+                        nueva_visita = [fecha_visita.strftime("%d/%m/%Y"), escuela_seleccionada, nombre_especialista, especialidad_visita, motivos_completos]
+                        sheet.worksheet("Registro_Visitas").append_row(nueva_visita)
+                    except Exception:
+                        pass # Pasa silencioso si la pestaña aún no existe
+
+                    # --- LECTURA LOCAL DE LOGOS (ANTI-BLOQUEOS) ---
+                    def get_b64(ruta):
+                        try:
+                            with open(ruta, "rb") as f:
+                                return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+                        except:
+                            return "" # Evita que la app colapse si olvidas subir las imágenes
+                            
+                    src_segey = get_b64("segey.png")
+                    src_escudo = get_b64("escudo.png")
+
+# ATENCIÓN: CERO espacios a la izquierda a partir de aquí
                     html_constancia = f"""<div style="background-color: white; color: black; padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
 <table style="width: 100%; margin-bottom: 20px; border: none;">
 <tr>
 <td style="width: 25%; text-align: left; vertical-align: middle;">
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Logo_de_la_Secretar%C3%ADa_de_Educaci%C3%B3n_P%C3%BAblica_%28M%C3%A9xico%29.svg/512px-Logo_de_la_Secretar%C3%ADa_de_Educaci%C3%B3n_P%C3%BAblica_%28M%C3%A9xico%29.svg.png" alt="SEP" style="max-height: 60px;">
+<img src="{src_segey}" alt="SEGEY" style="max-height: 60px;">
 </td>
 <td style="width: 50%; text-align: center; vertical-align: middle; font-size: 13px; line-height: 1.2;">
 DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>
@@ -1166,7 +1192,7 @@ USAER 02 ESTATAL CCT. 31FUA0002Y<br>
 ZONA No. 001
 </td>
 <td style="width: 25%; text-align: right; vertical-align: middle;">
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Escudo_de_Yucat%C3%A1n.svg/200px-Escudo_de_Yucat%C3%A1n.svg.png" alt="Yucatan" style="max-height: 70px;">
+<img src="{src_escudo}" alt="Yucatan" style="max-height: 70px;">
 </td>
 </tr>
 </table>
@@ -1253,7 +1279,7 @@ table td {{ border: 1px dashed #ccc !important; }}
 </body>
 </html>"""
 
-                    st.success("¡Constancia generada exitosamente!")
+                    st.success("¡Constancia generada y registrada en el sistema exitosamente!")
                     st.markdown(html_constancia, unsafe_allow_html=True)
                     
                     st.download_button(
