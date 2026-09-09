@@ -214,16 +214,38 @@ with st.sidebar:
 # ==========================================
 # ==========================================
 # ==========================================
+# ==========================================
 # --- CARGA DE DATOS PARA LOS FORMULARIOS ---
 # ==========================================
+
+# 1. DICCIONARIOS GLOBALES (Soluciona el NameError de la línea 338)
+escuelas_usaer = {
+    "Damián Carmona": "ESC-001",
+    "Ichcaanziho": "ESC-002",
+    "Gregorio Torres Quintero": "ESC-003",
+    "Remigio Aguilar Sosa": "ESC-004",
+    "Elvira Parra Ávila": "ESC-005",
+    "Manuel Sarrado": "ESC-006",
+    "Domingo Solís Rodríguez": "ESC-007",
+    "Quintana Roo": "ESC-008"
+}
+
 try:
-    # 1. Descargar la base de datos completa
     df_todos_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
     
-    # 2. CAPTURAR PERMISOS DE FORMA SEGURA (Cubre variantes de mayúsculas/minúsculas)
-    escuelas_usuario = st.session_state.get("escuelas_permitidas") or st.session_state.get("Escuelas_Permitidas") or st.session_state.get("escuelas") or st.session_state.get("permisos")
+    # 2. ESCÁNER INFALIBLE DE PERMISOS (Busca las claves "ESC-" en cualquier parte de la sesión)
+    escuelas_usuario = None
+    for key, val in st.session_state.items():
+        if isinstance(val, str) and ("ESC-" in val or "TODAS" in val):
+            escuelas_usuario = val
+            break
+        elif isinstance(val, dict): # Por si los datos están agrupados dentro de un diccionario
+            for sub_key, sub_val in val.items():
+                if isinstance(sub_val, str) and ("ESC-" in sub_val or "TODAS" in sub_val):
+                    escuelas_usuario = sub_val
+                    break
     
-    # 3. DICCIONARIO MAESTRO DE LA ZONA 001 (Claves <-> Nombres Reales)
+    # 3. DICCIONARIO MAESTRO DE LA ZONA 001
     mapeo_zona = {
         "ESC-001": ["ESC-001", "DAMIÁN CARMONA", "DAMIAN CARMONA"],
         "ESC-002": ["ESC-002", "ICHCAANZIHO"],
@@ -239,10 +261,7 @@ try:
     if escuelas_usuario == "TODAS":
         df_alumnos = df_todos_alumnos
     elif escuelas_usuario:
-        # Extraer claves del usuario (Ej. ["ESC-003", "ESC-004", "ESC-006", "ESC-007"])
-        lista_permitidas = [e.strip().upper() for e in str(escuelas_usuario).split(",")]
-        
-        # Traducir claves a nombres para buscar en la base de datos
+        lista_permitidas = [e.strip().upper() for e in escuelas_usuario.split(",")]
         terminos_autorizados = []
         for clave in lista_permitidas:
             if clave in mapeo_zona:
@@ -250,11 +269,9 @@ try:
             else:
                 terminos_autorizados.append(clave)
         
-        # Ubicar la columna donde se guardó la escuela en el padrón
         col_esc = next((c for c in df_todos_alumnos.columns if "ESCUELA" in c.upper() or "ASIGNADA" in c.upper()), None)
         
         if col_esc:
-            # Filtrar: Conservar solo si el nombre de la escuela coincide con los autorizados
             mascara = df_todos_alumnos[col_esc].astype(str).str.upper().apply(
                 lambda x: any(termino in x for termino in terminos_autorizados)
             )
@@ -262,7 +279,6 @@ try:
         else:
             df_alumnos = pd.DataFrame(columns=df_todos_alumnos.columns)
     else:
-        # CIERRE DE SEGURIDAD: Si no hay permisos definidos, NO VE A NADIE.
         df_alumnos = pd.DataFrame(columns=df_todos_alumnos.columns)
         st.error("⚠️ Acceso restringido: No se detectaron escuelas asignadas en tu sesión.")
         
