@@ -456,17 +456,23 @@ with paneles[idx_bap]:
         
         # Lógica condicional según la selección del usuario
         if tipo_evaluacion == "👤 Individual (Alumno Específico)":
-            objetivo_seleccionado = st.selectbox("Selecciona al Alumno a evaluar", lista_alumnos if lista_alumnos else ["Sin registros"])
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} considerando sus barreras específicas detectadas."
-        else:
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                grado_grupal = st.selectbox("Grado a observar", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
-            with col_g2:
-                grupo_grupal = st.selectbox("Grupo a observar", ["A", "B", "C", "D"])
+            col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
             
-            objetivo_seleccionado = f"Grupo {grado_grupal} {grupo_grupal}"
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el contexto áulico del {objetivo_seleccionado}, enfocadas en el Diseño Universal para el Aprendizaje (DUA) y dinámicas colectivas."
+            # Filtro estricto: solo alumnos registrados como 'Individual'
+            if not df_alumnos.empty and 'Tipo_Atencion' in df_alumnos.columns:
+                df_ind = df_alumnos[df_alumnos['Tipo_Atencion'].astype(str).str.strip().str.upper() == 'INDIVIDUAL']
+                alumnos_individuales = sorted([nom for nom in df_ind[col_nom_db].astype(str).tolist() if nom.strip() != ""])
+            else:
+                alumnos_individuales = []
+
+            if not alumnos_individuales:
+                st.warning("⚠️ No se encontraron alumnos con tipo de atención 'Individual' en la base de datos.")
+
+            objetivo_seleccionado = st.selectbox(
+                "Selecciona al Alumno a evaluar",
+                alumnos_individuales if alumnos_individuales else ["Sin registros individuales"]
+            )
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} considerando sus barreras específicas detectadas."
         
         st.markdown("---")
         st.markdown("### Instrumento de Observación (Anexo III)")
