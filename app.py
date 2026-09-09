@@ -664,7 +664,7 @@ with paneles[idx_evt]:
     alum_evt = st.selectbox("1. Selecciona al alumno involucrado", lista_alumnos if lista_alumnos else ["Sin registros"])
     evento_borrador = st.text_area("2. Redacta el evento (borrador)", height=150)
     
-    if st.button("✨ Mejorar Redacción con IA"):
+   if st.button("✨ Mejorar Redacción con IA"):
         if evento_borrador != "":
             with st.spinner("Pulido ortográfico en proceso... 🧠"):
                 meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
@@ -678,10 +678,15 @@ with paneles[idx_evt]:
                 REGLA ESTRICTA INQUEBRANTABLE: Devuelve ÚNICAMENTE el texto corregido. NO incluyas saludos, ni introducciones, ni frases como 'Aquí tienes' o 'Esta es la versión'.
                 Borrador original: {evento_borrador}
                 """
-                respuesta_ia = modelo_ia.generate_content(prompt_estilo)
                 
-                st.session_state.ia_evento_sugerido = respuesta_ia.text
-                st.rerun() 
+                # Try-Except para amortiguar los fallos del servidor de Google
+                try:
+                    respuesta_ia = modelo_ia.generate_content(prompt_estilo)
+                    st.session_state.ia_evento_sugerido = respuesta_ia.text
+                    st.rerun() 
+                except Exception as e:
+                    st.error("⚠️ ¡Uy! Los servidores de Google están saturados o hubo un microcorte de red. Por favor, espera 5 segundos e intenta presionar el botón de nuevo.")
+                    # El error técnico se queda oculto en la terminal y no rompe la pantalla de tus usuarios 
 
     st.markdown("---")
     with st.form("anexo5_guardar", clear_on_submit=True):
