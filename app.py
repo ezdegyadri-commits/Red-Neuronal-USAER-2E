@@ -320,9 +320,13 @@ tabs = [
     "🔍 BAPs Colaborativas (Anexos 3 y 4)", 
     "📋 Eventos (Anexo 5)",
     "🗂️ Visor y Exportación",
-    "📊 Panel de Dirección"
+    "📊 Panel de Dirección",
+    "🏫 Constancias de Visita"
 ]
 paneles = st.tabs(tabs)
+
+# Agrega también su índice debajo de los demás:
+idx_visitas = tabs.index("🏫 Constancias de Visita") if "🏫 Constancias de Visita" in tabs else -1
 
 # --- MAPEO DE PESTAÑAS (BLINDADO CONTRA ERRORES) ---
 # Si por alguna razón cambias un nombre después, el código no colapsará, solo ocultará el panel.
@@ -968,3 +972,117 @@ if idx_dir != -1:
                 
         except Exception as e:
             st.error(f"Error al cargar métricas del director: {e}")
+
+# --- MÓDULO: CONSTANCIAS DE VISITA (Exclusivo Paradocentes) ---
+if idx_visitas != -1:
+    with paneles[idx_visitas]:
+        # Filtro estricto de seguridad por Rol
+        rol_actual = str(st.session_state.get('rol', '')).upper()
+        roles_permitidos = ["PSICOLOG", "COMUNICACI", "TRABAJO_SOCIAL", "TRABAJO SOCIAL"]
+        
+        if not any(rol in rol_actual for rol in roles_permitidos):
+            st.warning("🔒 Acceso denegado: Este módulo es de uso exclusivo para los equipos de Psicología, Comunicación y Trabajo Social.")
+        else:
+            st.subheader("Generador Automático de Constancias de Visita")
+            st.markdown("Selecciona la escuela y las actividades. La red neuronal ensamblará el documento oficial con las firmas correspondientes.")
+            
+            # Base de conocimiento interna para autollenado de firmas
+            directorio_firmas = {
+                "ESC-001": {"escuela": "Damián Carmona", "dir_primaria": "Mtra. Maribel Vargas Arana", "apoyo": "Mtra. Cindy Mayanín Burgos González"},
+                "ESC-002": {"escuela": "Ichcaanziho", "dir_primaria": "Mtra. Rennaty Maribel Puga Jimenez", "apoyo": "Mtra. Marycruz Caamal Coral"},
+                "ESC-003": {"escuela": "Gregorio Torres Quintero", "dir_primaria": "Mtro. Elmer Ariel Ontiveros Requena", "apoyo": "Mtra. Dolores Eugenia Cortázar Navarrete"},
+                "ESC-004": {"escuela": "Remigio Aguilar Sosa", "dir_primaria": "Mtro. Carlos Esteban Heredia GCantón", "apoyo": "Mtra. Dianely de Sugeidy Caamal Tamay"},
+                "ESC-005": {"escuela": "Elvira Parra Ávila", "dir_primaria": "Mtro. Manuel Jesús Alcocer Vázquez", "apoyo": "Mtro. Luis Jorge García Herrera"},
+                "ESC-006": {"escuela": "Manuel Sarrado", "dir_primaria": "Mtro. José Alberto Reyna Martínez", "apoyo": "Mtra. María del Rosario Pérez Vitorin"},
+                "ESC-007": {"escuela": "Domingo Solís Rodríguez", "dir_primaria": "Mtra. Erika Basto Ek", "apoyo": "Mtra. Zuemmy del Carmen Pérez Basto"},
+                "ESC-008": {"escuela": "Quintana Roo", "dir_primaria": "Mtro. Jorge Adrián Cetina Cach", "apoyo": "Mtro. Pedro Manuel Torres May"}
+            }
+            
+            # Identificar escuelas permitidas para el especialista activo
+            escuelas_usuario_visita = str(st.session_state.get("escuelas_permitidas", "")).strip().upper()
+            claves_permitidas = [e.strip() for e in escuelas_usuario_visita.split(",")]
+            
+            opciones_escuela = []
+            if escuelas_usuario_visita == "TODAS":
+                opciones_escuela = [datos["escuela"] for datos in directorio_firmas.values()]
+            else:
+                opciones_escuela = [directorio_firmas[clave]["escuela"] for clave in claves_permitidas if clave in directorio_firmas]
+            
+            with st.form("form_constancia", clear_on_submit=False):
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    escuela_seleccionada = st.selectbox("Escuela visitada", opciones_escuela if opciones_escuela else ["Sin escuelas asignadas"])
+                with col2:
+                    fecha_visita = st.date_input("Fecha de la visita")
+                
+                st.markdown("**Motivo de la visita (Selecciona las aplicables):**")
+                col_mot1, col_mot2 = st.columns(2)
+                with col_mot1:
+                    motivos_izq = st.multiselect("Actividades de Seguimiento y Apoyo", [
+                        "Observación en grupo", "Entrevista con...", "Trabajo interdisciplinario",
+                        "Sugerencias a Maestra(o)", "Sugerencias a Padres de...", "Valoración a...",
+                        "Revaloración de sugerencias con...", "Elaboración o actualización de EPP"
+                    ])
+                with col_mot2:
+                    motivos_der = st.multiselect("Intervención y Juntas", [
+                        "Intervención en Grupo", "Apoyo individual en aula", "Elaboración del Plan de Intervención",
+                        "Consejo Técnico Escolar", "Junta del Servicio de Apoyo", "Junta Académica del Servicio de Apoyo", "Otros"
+                    ])
+                    
+                detalles_motivos = st.text_input("Especifica nombres si seleccionaste 'Entrevista con...', 'Sugerencias a...', etc. (Opcional)")
+                descripcion_actividad = st.text_area("Breve descripción de las actividades desarrolladas", height=100)
+                
+                generar_acta = st.form_submit_button("Generar Constancia Oficial")
+                
+            if generar_acta:
+                # Localizar la clave de la escuela seleccionada
+                clave_escuela = next((k for k, v in directorio_firmas.items() if v["escuela"] == escuela_seleccionada), None)
+                
+                if clave_escuela:
+                    dir_prim = directorio_firmas[clave_escuela]["dir_primaria"]
+                    apoyo_prim = directorio_firmas[clave_escuela]["apoyo"]
+                    
+                    # Preparación de motivos
+                    todos_motivos = motivos_izq + motivos_der
+                    texto_motivos = f"<ul>{''.join([f'<li>{m}</li>' for m in todos_motivos])}</ul>" if todos_motivos else "Sin especificar."
+                    texto_detalles = f"<p><b>Detalles:</b> {detalles_motivos}</p>" if detalles_motivos else ""
+                    
+                    # HTML de la constancia basado en el formato SEGEY
+                    html_constancia = f"""
+                    <div style="background-color: white; color: black; padding: 40px; border: 1px solid #ccc; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
+                        <h4 style="text-align: center; line-height: 1.2; margin-top: 0;">DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>USAER 02 ESTATAL CCT. 31FUA0002Y ZONA No. 001</h4>
+                        <h3 style="text-align: center; text-decoration: underline; margin-bottom: 30px;">Constancia de visita</h3>
+                        
+                        <p style="font-size: 14px;"><b>Servicio de educación especial que realiza la visita:</b> USAER 02-E</p>
+                        <p style="font-size: 14px;"><b>Curso escolar:</b> 2026 – 2027 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Fecha de la visita:</b> {fecha_visita.strftime('%d/%m/%Y')} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Hora:</b> de 7:00 a 12:00hrs</p>
+                        <p style="font-size: 14px;"><b>Escuela:</b> {escuela_seleccionada} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Localidad:</b> MÉRIDA</p>
+                        
+                        <div style="font-size: 14px; margin-top: 20px;">
+                            <b>Motivo de la visita:</b>
+                            {texto_motivos}
+                            {texto_detalles}
+                        </div>
+                        
+                        <div style="font-size: 14px; margin-top: 20px; min-height: 100px;">
+                            <b>Breve descripción de las actividades desarrolladas:</b><br><br>
+                            {descripcion_actividad.replace(chr(10), '<br>')}
+                        </div>
+                        
+                        <br><br>
+                        
+                        <table style="width: 100%; font-size: 12px; text-align: center; margin-top: 40px;">
+                            <tr>
+                                <td style="width: 50%; padding-bottom: 40px;">___________________________________<br><b>{dir_prim}</b><br>Directora(or) de la primaria</td>
+                                <td style="width: 50%; padding-bottom: 40px;">___________________________________<br><b>{apoyo_prim}</b><br>Maestra(o) de apoyo</td>
+                            </tr>
+                            <tr>
+                                <td style="width: 50%;">___________________________________<br><b>Psic. Edgar Adrian Yam Briceño</b><br>Director de la USAER 02-E</td>
+                                <td style="width: 50%;">___________________________________<br><b>Dra. Diana A. Durán González</b><br>Supervisora de la zona 001 EE</td>
+                            </tr>
+                        </table>
+                    </div>
+                    """
+                    
+                    st.success("Constancia generada exitosamente.")
+                    st.markdown(html_constancia, unsafe_allow_html=True)
+                    st.info("Para guardarla o imprimirla, puedes usar las opciones de exportación web o imprimir directo desde el navegador (Ctrl+P).")
