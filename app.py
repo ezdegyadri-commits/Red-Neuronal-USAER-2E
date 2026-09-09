@@ -1167,36 +1167,23 @@ if idx_visitas != -1:
                         nueva_visita = [fecha_visita.strftime("%d/%m/%Y"), escuela_seleccionada, nombre_especialista, especialidad_visita, motivos_completos]
                         sheet.worksheet("Registro_Visitas").append_row(nueva_visita)
                     except Exception:
-                        pass # Pasa silencioso si la pestaña aún no existe
+                        pass 
 
-                    # --- LECTURA LOCAL DE LOGOS (ANTI-BLOQUEOS) ---
+                    # --- LECTURA LOCAL DE ENCABEZADO ÚNICO ---
                     def get_b64(ruta):
                         try:
                             with open(ruta, "rb") as f:
                                 return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
                         except:
-                            return "" # Evita que la app colapse si olvidas subir las imágenes
+                            return "" 
                             
-                    src_segey = get_b64("segey.png")
-                    src_escudo = get_b64("escudo.png")
+                    src_encabezado = get_b64("encabezado.png")
 
 # ATENCIÓN: CERO espacios a la izquierda a partir de aquí
                     html_constancia = f"""<div style="background-color: white; color: black; padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
-<table style="width: 100%; margin-bottom: 20px; border: none;">
-<tr>
-<td style="width: 25%; text-align: left; vertical-align: middle;">
-<img src="{src_segey}" alt="SEGEY" style="max-height: 60px;">
-</td>
-<td style="width: 50%; text-align: center; vertical-align: middle; font-size: 13px; line-height: 1.2;">
-DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>
-USAER 02 ESTATAL CCT. 31FUA0002Y<br>
-ZONA No. 001
-</td>
-<td style="width: 25%; text-align: right; vertical-align: middle;">
-<img src="{src_escudo}" alt="Yucatan" style="max-height: 70px;">
-</td>
-</tr>
-</table>
+<div style="text-align: center; margin-bottom: 25px;">
+<img src="{src_encabezado}" alt="Encabezado Oficial" style="max-width: 100%; height: auto;">
+</div>
 
 <h3 style="text-align: center; font-weight: bold; text-decoration: underline; margin-bottom: 25px;">Constancia de visita</h3>
 
