@@ -1044,45 +1044,57 @@ if idx_visitas != -1:
                     
                     # Preparación de motivos
                     todos_motivos = motivos_izq + motivos_der
-                    texto_motivos = f"<ul>{''.join([f'<li>{m}</li>' for m in todos_motivos])}</ul>" if todos_motivos else "Sin especificar."
-                    texto_detalles = f"<p><b>Detalles:</b> {detalles_motivos}</p>" if detalles_motivos else ""
+                    texto_motivos = f"<ul style='margin-top: 5px; margin-bottom: 5px;'>{''.join([f'<li>{m}</li>' for m in todos_motivos])}</ul>" if todos_motivos else "Sin especificar."
+                    texto_detalles = f"<p style='margin-top: 5px;'><b>Detalles:</b> {detalles_motivos}</p>" if detalles_motivos else ""
                     
-                    # HTML de la constancia basado en el formato SEGEY
-                    html_constancia = f"""
-                    <div style="background-color: white; color: black; padding: 40px; border: 1px solid #ccc; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
-                        <h4 style="text-align: center; line-height: 1.2; margin-top: 0;">DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>USAER 02 ESTATAL CCT. 31FUA0002Y ZONA No. 001</h4>
-                        <h3 style="text-align: center; text-decoration: underline; margin-bottom: 30px;">Constancia de visita</h3>
-                        
-                        <p style="font-size: 14px;"><b>Servicio de educación especial que realiza la visita:</b> USAER 02-E</p>
-                        <p style="font-size: 14px;"><b>Curso escolar:</b> 2026 – 2027 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Fecha de la visita:</b> {fecha_visita.strftime('%d/%m/%Y')} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Hora:</b> de 7:00 a 12:00hrs</p>
-                        <p style="font-size: 14px;"><b>Escuela:</b> {escuela_seleccionada} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Localidad:</b> MÉRIDA</p>
-                        
-                        <div style="font-size: 14px; margin-top: 20px;">
-                            <b>Motivo de la visita:</b>
-                            {texto_motivos}
-                            {texto_detalles}
-                        </div>
-                        
-                        <div style="font-size: 14px; margin-top: 20px; min-height: 100px;">
-                            <b>Breve descripción de las actividades desarrolladas:</b><br><br>
-                            {descripcion_actividad.replace(chr(10), '<br>')}
-                        </div>
-                        
-                        <br><br>
-                        
-                        <table style="width: 100%; font-size: 12px; text-align: center; margin-top: 40px;">
-                            <tr>
-                                <td style="width: 50%; padding-bottom: 40px;">___________________________________<br><b>{dir_prim}</b><br>Directora(or) de la primaria</td>
-                                <td style="width: 50%; padding-bottom: 40px;">___________________________________<br><b>{apoyo_prim}</b><br>Maestra(o) de apoyo</td>
-                            </tr>
-                            <tr>
-                                <td style="width: 50%;">___________________________________<br><b>Psic. Edgar Adrian Yam Briceño</b><br>Director de la USAER 02-E</td>
-                                <td style="width: 50%;">___________________________________<br><b>Dra. Diana A. Durán González</b><br>Supervisora de la zona 001 EE</td>
-                            </tr>
-                        </table>
-                    </div>
-                    """
+# ATENCIÓN: El HTML debe ir PEGADO a la izquierda para evitar que Streamlit lo vuelva un cuadro gris de código.
+                    html_constancia = f"""<div style="background-color: white; color: black; padding: 40px; border: 1px solid #ccc; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
+    <h4 style="text-align: center; line-height: 1.2; margin-top: 0;">DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>USAER 02-E CCT. 31FUA0002Y ZONA No. 001</h4>
+    <h3 style="text-align: center; text-decoration: underline; margin-bottom: 30px;">Constancia de visita</h3>
+    <p style="font-size: 14px; margin-bottom: 5px;"><b>Servicio de educación especial que realiza la visita:</b> USAER 02-E</p>
+    <p style="font-size: 14px; margin-bottom: 5px;"><b>Curso escolar:</b> 2026 – 2027 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Fecha de la visita:</b> {fecha_visita.strftime('%d/%m/%Y')} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Hora:</b> de 7:00 a 12:00hrs</p>
+    <p style="font-size: 14px; margin-bottom: 20px;"><b>Escuela:</b> {escuela_seleccionada} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Localidad:</b> MÉRIDA</p>
+    <div style="font-size: 14px; margin-top: 20px;">
+        <b>Motivo de la visita:</b>
+        {texto_motivos}
+        {texto_detalles}
+    </div>
+    <div style="font-size: 14px; margin-top: 20px; min-height: 100px;">
+        <b>Breve descripción de las actividades desarrolladas:</b><br><br>
+        {descripcion_actividad.replace(chr(10), '<br>')}
+    </div>
+    <br><br>
+    <table style="width: 100%; font-size: 12px; text-align: center; margin-top: 40px; border-collapse: collapse;">
+        <tr>
+            <td style="width: 50%; padding-bottom: 40px;">___________________________________<br><b>{dir_prim}</b><br>Directora(or) de la primaria</td>
+            <td style="width: 50%; padding-bottom: 40px;">___________________________________<br><b>{apoyo_prim}</b><br>Maestra(o) de apoyo</td>
+        </tr>
+        <tr>
+            <td style="width: 50%;">___________________________________<br><b>LPA. Lizbeth J. Carvajal García</b><br>Directora de la USAER 02-E</td>
+            <td style="width: 50%;">___________________________________<br><b>Dra. Diana A. Durán González</b><br>Supervisora de la zona 001 EE</td>
+        </tr>
+    </table>
+</div>"""
                     
-                    st.success("Constancia generada exitosamente.")
+                    # HTML envuelto para que al descargar y abrir, mande a imprimir en automático
+                    html_impresion = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Constancia de Visita - {escuela_seleccionada}</title>
+</head>
+<body onload="window.print()" style="padding: 20px;">
+    {html_constancia}
+</body>
+</html>"""
+
+                    st.success("¡Constancia generada exitosamente!")
                     st.markdown(html_constancia, unsafe_allow_html=True)
-                    st.info("Para guardarla o imprimirla, puedes usar las opciones de exportación web o imprimir directo desde el navegador (Ctrl+P).")
+                    
+                    # El botón mágico de descarga
+                    st.download_button(
+                        label="🖨️ Descargar Constancia para Imprimir",
+                        data=html_impresion,
+                        file_name=f"Constancia_Visita_{escuela_seleccionada}.html",
+                        mime="text/html"
+                    )
