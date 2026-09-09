@@ -321,106 +321,87 @@ if idx_alta != -1:
             
             if archivo_subido is not None:
                 try:
-                    # --- NUEVO BLOQUE DE LECTURA INTELIGENTE DE PESTAÑAS ---
+                    # --- 1. LECTURA INTELIGENTE DE PESTAÑAS ---
                     if archivo_subido.name.endswith('.csv'):
-                        df_masivo = pd.read_csv(archivo_subido)
+                        df_raw = pd.read_csv(archivo_subido)
                     else:
                         excel_libro = pd.ExcelFile(archivo_subido)
                         hojas = excel_libro.sheet_names
-                        
-                        hoja_objetivo = None
-                        for h in hojas:
-                            if "USAER" in h.upper():
-                                hoja_objetivo = h
+                        hoja_objetivo = next((h for h in hojas if "USAER" in h.upper()), hojas[-1] if len(hojas) > 1 else hojas[0])
+                        df_raw = pd.read_excel(archivo_subido, sheet_name=hoja_objetivo)
+                    
+                    # --- 2. ESCÁNER DE CABECERAS (ANTES DE LA VISTA PREVIA) ---
+                    if not any("APELLIDO" in str(c).upper() for c in df_raw.columns):
+                        for idx, row in df_raw.head(15).iterrows():
+                            if any("APELLIDO" in str(val).upper() for val in row.values):
+                                df_raw.columns = [str(c).strip().replace('\n', ' ').replace('\r', '') for c in row.values]
+                                df_raw = df_raw.iloc[idx+1:].reset_index(drop=True)
                                 break
+                    else:
+                        df_raw.columns = [str(c).strip().replace('\n', ' ').replace('\r', '') for c in df_raw.columns]
                         
-                        if not hoja_objetivo:
-                            hoja_objetivo = hojas[-1] if len(hojas) > 1 else hojas[0]
-                            
-                        df_masivo = pd.read_excel(archivo_subido, sheet_name=hoja_objetivo)
-                    # ---------------------------------------------------------
+                    # --- 3. LIMPIEZA DE ALUMNOS FANTASMA ---
+                    col_nom = next((c for c in df_raw.columns if "APELLIDO" in c.upper()), None)
+                    if not col_nom:
+                        st.error("❌ No se encontró la columna de Nombres. Verifica el formato del padrón.")
+                        st.stop()
+                        
+                    # Filtrar filas vacías, nulas o con puras firmas
+                    df_valido = df_raw[df_raw[col_nom].astype(str).str.strip() != ""]
+                    df_valido = df_valido[df_valido[col_nom].notna()]
+                    df_valido = df_valido[df_valido[col_nom].astype(str).str.lower() != 'nan']
                     
-                    # Limpiamos posibles espacios en blanco en los nombres de las columnas
+                    # --- 4. VISTA PREVIA LIMPIA ---
+                    st.write(f"✅ Vista previa ({len(df_valido)} alumnos reales listos para procesar):")
+                    st.dataframe(df_valido.head(3))
                     
-                    # Limpiamos posibles espacios en blanco en los nombres de las columnas
-                    df_masivo.columns = [str(c).strip() for c in df_masivo.columns]
-                    
-                    st.write(f"Vista previa ({len(df_masivo)} alumnos detectados):")
-                    st.dataframe(df_masivo.head(3))
-                    
+                    # --- 5. BOTÓN DE CARGA ---
                     if st.button("📤 Procesar y subir a la Base de Datos"):
-                        with st.spinner("Escaneando formato oficial y consolidando padrón..."):
+                        with st.spinner("Subiendo padrón a Google Sheets..."):
                             try:
-                                # 1. BUSCADOR INTELIGENTE DE CABECERAS (Para formatos de la SEGEY)
-                                # Buscar en las primeras 10 filas dónde están los encabezados reales
-                                if not any("APELLIDO" in str(c).upper() for c in df_masivo.columns):
-                                    for idx, row in df_masivo.head(10).iterrows():
-                                        if any("APELLIDO" in str(val).upper() for val in row.values):
-                                            df_masivo.columns = [str(c) for c in row.values]
-                                            df_masivo = df_masivo.iloc[idx+1:].reset_index(drop=True)
-                                            break
-                                            
-                                df_masivo.columns = [str(c).strip().replace('\n', ' ').replace('\r', '') for c in df_masivo.columns]
-                                
-                                df_procesado = pd.DataFrame()
-                                # Encontrar columnas dinámicamente por palabra clave
-                                col_nom = next((c for c in df_masivo.columns if "APELLIDO" in c.upper()), None)
-                                col_curp = next((c for c in df_masivo.columns if "CURP" in c.upper()), None)
-                                
-                                if not col_nom:
-                                    st.error("No se encontró la columna de Nombres en el archivo.")
-                                    st.stop()
-                                    
-                                df_procesado['Nombre'] = df_masivo[col_nom]
-                                
-                                # 2. MAGIA: Eliminar firmas, filas vacías y alumnos fantasma
-                                df_procesado = df_procesado[df_procesado['Nombre'].astype(str).str.strip() != ""]
-                                df_procesado = df_procesado[df_procesado['Nombre'].notna()]
-                                df_procesado = df_procesado[df_procesado['Nombre'].astype(str).str.lower() != 'nan']
-                                
-                                # 3. Reconstruir solo con los alumnos reales
-                                fil_validas = df_masivo.loc[df_procesado.index]
-                                
                                 df_final = pd.DataFrame()
-                                df_final['ID_Alumno'] = [""] * len(fil_validas)
-                                df_final['Nombre'] = df_procesado['Nombre']
-                                df_final['CURP'] = fil_validas[col_curp] if col_curp else ""
+                                df_final['ID_Alumno'] = [""] * len(df_valido)
+                                df_final['Nombre'] = df_valido[col_nom]
+                                
+                                col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
+                                df_final['CURP'] = df_valido[col_curp] if col_curp else ""
                                 
                                 def obtener_grado(row):
-                                    for col in fil_validas.columns:
+                                    for col in df_valido.columns:
                                         if "NIVEL" in col.upper() and ("PRIMARIA" in col.upper() or "PREESCOLAR" in col.upper() or "SECUNDARIA" in col.upper()):
                                             val = str(row.get(col, '')).strip()
                                             if val and val.lower() != 'nan':
                                                 return val
                                     return "S/G"
                                 
-                                df_final['Grado'] = fil_validas.apply(obtener_grado, axis=1)
+                                df_final['Grado'] = df_valido.apply(obtener_grado, axis=1)
                                 
-                                col_grp = next((c for c in fil_validas.columns if "GRUPO" in c.upper()), None)
-                                df_final['Grupo'] = fil_validas[col_grp].fillna('').astype(str).replace('nan', '') if col_grp else ""
+                                col_grp = next((c for c in df_valido.columns if "GRUPO" in c.upper()), None)
+                                df_final['Grupo'] = df_valido[col_grp].fillna('').astype(str).replace('nan', '') if col_grp else ""
                                 
-                                col_esc = next((c for c in fil_validas.columns if "ESCUELA" in c.upper()), None)
-                                df_final['Escuela_Asignada'] = fil_validas[col_esc].fillna('ESC-005') if col_esc else "ESC-005"
+                                col_esc = next((c for c in df_valido.columns if "ESCUELA" in c.upper()), None)
+                                df_final['Escuela_Asignada'] = df_valido[col_esc].fillna('ESC-005') if col_esc else "ESC-005"
                                 
                                 df_final['Maestro_Regular'] = "Pendiente"
                                 
-                                col_cond = next((c for c in fil_validas.columns if "DISCAPACIDAD" in c.upper() or "CONDICION" in c.upper()), None)
-                                df_final['Condicion'] = fil_validas[col_cond].fillna('Ninguna') if col_cond else "Ninguna"
+                                col_cond = next((c for c in df_valido.columns if "DISCAPACIDAD" in c.upper() or "CONDICION" in c.upper()), None)
+                                df_final['Condicion'] = df_valido[col_cond].fillna('Ninguna') if col_cond else "Ninguna"
                                 
-                                col_stat = next((c for c in fil_validas.columns if "SITUACION" in c.upper()), None)
-                                df_final['Estatus'] = fil_validas[col_stat].fillna('Activo') if col_stat else "Activo"
+                                col_stat = next((c for c in df_valido.columns if "SITUACION" in c.upper()), None)
+                                df_final['Estatus'] = df_valido[col_stat].fillna('Activo') if col_stat else "Activo"
                                 
-                                col_atn = next((c for c in fil_validas.columns if "TIPO DE ATENCION" in c.upper()), None)
-                                df_final['Tipo_Atencion'] = fil_validas[col_atn].fillna('Grupal') if col_atn else "Grupal"
+                                col_atn = next((c for c in df_valido.columns if "TIPO DE ATENCION" in c.upper()), None)
+                                df_final['Tipo_Atencion'] = df_valido[col_atn].fillna('Grupal') if col_atn else "Grupal"
                                 
                                 df_final = df_final.fillna("")
                                 sheet.worksheet("Alumnos").append_rows(df_final.values.tolist())
                                 
                                 st.balloons()
-                                st.success(f"¡Carga completada! Se identificaron y registraron {len(df_final)} alumnos reales.")
-
+                                st.success(f"¡Carga exitosa! Se guardaron {len(df_final)} alumnos.")
                             except Exception as e:
                                 st.error(f"Error procesando los datos: {e}")
+                except Exception as e:
+                    st.error(f"Error leyendo el archivo: {e}")
                                 
                 except KeyError as e:
                     st.error(f"Error de formato: No se encontró la columna {e} en el archivo subido. Asegúrate de subir el padrón oficial inalterado.")
