@@ -540,8 +540,14 @@ if idx_alta != -1:
                                 
                                 st.balloons()
                                 st.success(f"¡Magia DUA aplicada! Se escanearon y actualizaron {len(df_final)} alumnos corrigiendo grados y grupos automáticamente.")
+                            
                             except Exception as e:
                                 st.error(f"Error procesando los datos: {e}")
+                                
+                except Exception as e:
+                    st.error(f"Error al leer el archivo Excel: {e}")
+
+# --- MÓDULO: BAPs COLABORATIVAS ---
 
 
   # --- MÓDULO: BAPs COLABORATIVAS ---
