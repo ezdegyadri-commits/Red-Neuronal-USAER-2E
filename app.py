@@ -355,17 +355,23 @@ if idx_alta != -1:
                             
                             df_procesado['Grado'] = df_masivo.apply(obtener_grado, axis=1)
                             
-                            # 4. Grupo (limpieza de nulos)
-                            df_procesado['Grupo'] = df_masivo.get('16- NIVEL Y GRADO AL QUE ESTA INSCRITO/Grupo', '').fillna('').astype(str).replace('nan', '')
-                            
-                            # 5. Escuela y Datos complementarios
-                            df_procesado['Escuela_Asignada'] = df_masivo.get('5.- NOMBRE  DE LA  ESCUELA PREESCOLAR, PRIMARIA Y/O SECUNDARIA ATENDIDA', 'ELVIRA PARRA AVILA')
-                            df_procesado['Maestro_Regular'] = "Pendiente"
-                            df_procesado['Condicion'] = df_masivo.get('15. DISCAPACIDAD O CONDICION', '').fillna('Ninguna')
-                            df_procesado['Estatus'] = df_masivo.get('17.- SITUACION DEL ALUMNO', 'Activo')
-                            
-                            # 6. Tipo de Atención (Grupal vs Individual)
-                            df_procesado['Tipo_Atencion'] = df_masivo.get('18.-TIPO DE ATENCION', 'Grupal').fillna('Grupal')
+                            # 4. Grupo
+                                df_procesado['Grupo'] = df_masivo.get('16- NIVEL Y GRADO AL QUE ESTA INSCRITO/Grupo', '')
+                                df_procesado['Grupo'] = df_procesado['Grupo'].fillna('').astype(str).replace('nan', '')
+                                
+                                # 5. Escuela y Datos complementarios
+                                df_procesado['Escuela_Asignada'] = df_masivo.get('5.- NOMBRE  DE LA  ESCUELA PREESCOLAR, PRIMARIA Y/O SECUNDARIA ATENDIDA', 'ESC-005')
+                                df_procesado['Maestro_Regular'] = "Pendiente"
+                                
+                                df_procesado['Condicion'] = df_masivo.get('15. DISCAPACIDAD O CONDICION', 'Ninguna')
+                                df_procesado['Condicion'] = df_procesado['Condicion'].fillna('Ninguna')
+                                
+                                df_procesado['Estatus'] = df_masivo.get('17.- SITUACION DEL ALUMNO', 'Activo')
+                                df_procesado['Estatus'] = df_procesado['Estatus'].fillna('Activo')
+                                
+                                # 6. Tipo de Atención (Grupal vs Individual)
+                                df_procesado['Tipo_Atencion'] = df_masivo.get('18.-TIPO DE ATENCION', 'Grupal')
+                                df_procesado['Tipo_Atencion'] = df_procesado['Tipo_Atencion'].fillna('Grupal')
                             
                             # Limpieza general de nulos antes de subir
                             df_procesado = df_procesado.fillna("")
