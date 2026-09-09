@@ -170,27 +170,26 @@ if not st.session_state.get("autenticado", False):
                 # 1. Leemos la pestaña Usuarios de tu Sheets maestro
                 df_usuarios = pd.DataFrame(sheet.worksheet("Usuarios").get_all_records())
                 
-                # 2. Limpiamos espacios en blanco accidentales
+                # 2. Limpiamos espacios en blanco accidentales (AHORA APUNTA A 'Password')
                 df_usuarios['Usuario'] = df_usuarios['Usuario'].astype(str).str.strip()
-                df_usuarios['Contraseña'] = df_usuarios['Contraseña'].astype(str).str.strip()
+                df_usuarios['Password'] = df_usuarios['Password'].astype(str).str.strip()
                 
-                # 3. Buscamos coincidencia exacta
+                # 3. Buscamos coincidencia exacta usando tu columna 'Password'
                 usuario_valido = df_usuarios[
                     (df_usuarios['Usuario'] == usuario.strip()) & 
-                    (df_usuarios['Contraseña'] == password.strip())
+                    (df_usuarios['Password'] == password.strip())
                 ]
                 
                 if not usuario_valido.empty:
                     # Si los datos coinciden, guardamos su nombre y le damos acceso
                     st.session_state.autenticado = True
-                    # Asume que tienes una columna llamada 'Nombre' en tu hoja
                     st.session_state.nombre = str(usuario_valido['Nombre'].values[0]) 
                     st.rerun()
                 else:
                     st.error("Mmm, parece que hay un error en tus datos. ¡Intenta de nuevo!")
                     
             except Exception as e:
-                st.error(f"⚠️ Error conectando con la base de datos de usuarios: Revisa que exista una pestaña llamada 'Usuarios' con las columnas 'Usuario', 'Contraseña' y 'Nombre'. Detalle: {e}")
+                st.error(f"⚠️ Error conectando con la base de datos de usuarios. Detalle: {e}")
     
     st.stop()
 
