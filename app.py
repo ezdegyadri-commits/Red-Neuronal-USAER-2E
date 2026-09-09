@@ -458,9 +458,13 @@ with paneles[idx_bap]:
         if tipo_evaluacion == "👤 Individual (Alumno Específico)":
             col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
             
-            # Filtro estricto: solo alumnos registrados como 'Individual'
-            if not df_alumnos.empty and 'Tipo_Atencion' in df_alumnos.columns:
-                df_ind = df_alumnos[df_alumnos['Tipo_Atencion'].astype(str).str.strip().str.upper() == 'INDIVIDUAL']
+            # Buscador flexible de la columna de atención (ignora mayúsculas, acentos y guiones)
+            col_atn_db = next((c for c in df_alumnos.columns if "ATENCION" in c.upper().replace('Ó', 'O') or "MODALIDAD" in c.upper()), None)
+            
+            if not df_alumnos.empty and col_atn_db:
+                # Normalizamos texto quitando espacios y pasando a mayúsculas
+                mascara_ind = df_alumnos[col_atn_db].astype(str).str.strip().str.upper() == 'INDIVIDUAL'
+                df_ind = df_alumnos[mascara_ind]
                 alumnos_individuales = sorted([nom for nom in df_ind[col_nom_db].astype(str).tolist() if nom.strip() != ""])
             else:
                 alumnos_individuales = []
