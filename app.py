@@ -235,12 +235,23 @@ escuelas_usaer = {
     "Secundaria 8": "ESC-008"
 }
 
-# 3. Elementos de Evaluación (BAPs) para el Anexo 3
+# 3. Elementos de Evaluación (BAPs) para el Anexo III Oficial SEGEY
 items_anexo3 = [
-    "Sigue instrucciones verbales o visuales durante la clase.",
-    "Logra mantener la atención en las actividades propuestas.",
-    "Participa activamente en dinámicas de equipo.",
-    "Muestra autorregulación emocional ante cambios o frustración."
+    "1. El salón de clases cuenta con áreas de trabajo delimitadas (higiene, rincón de lectura, área de material didáctico).",
+    "2. El docente se asegura de que el material didáctico con que cuenta en el aula sea pertinente a las características de todos sus alumnos.",
+    "3. El docente emplea los materiales de que dispone en el aula para asegurar el aprendizaje significativo de todos los alumnos.",
+    "4. El docente se asegura de que, en el salón de clases, el material didáctico (material concreto, libros, cuentos, fichas, etc.) sea accesible para todos.",
+    "5. El docente contempla en la planeación las ayudas necesarias en las actividades de acuerdo con los ritmos y estilos de aprendizaje, para desarrollar el potencial de cada uno de los alumnos.",
+    "6. El docente dedica el tiempo suficiente para motivar a todos los alumnos en su aprendizaje, antes, durante y después de las actividades.",
+    "7. El docente indaga y toma en cuenta el conocimiento previo que los alumnos tienen sobre el tema que trata la actividad antes de abordarlo.",
+    "8. El docente propicia el trabajo colaborativo.",
+    "9. El docente realiza una evaluación continua y formativa, es decir, mediante las actividades diarias y tareas, que le permiten conocer los avances de sus alumnos.",
+    "10. El docente realiza las evaluaciones tomando en cuenta las características de los alumnos.",
+    "11. El docente diversifica la metodología para favorecer el logro de los aprendizajes esperados de los alumnos.",
+    "12. El docente diseña actividades que permitan la accesibilidad de los aprendizajes esperados de los alumnos y mejoren el nivel de logro.",
+    "13. El docente propicia el respeto y la empatia en las relaciones entre él y sus alumnos.",
+    "14. El docente realiza actividades para fomentar la convivencia sana y pacífica entre los alumnos (respeto, compañerismo, ayuda mutua, práctica de valores, disciplina, otros).",
+    "15. El docente trabaja de manera colaborativa con el personal de la escuela regular y de educación especial para favorecer el aprendizaje y la participación de los estudiantes con necesidades educativas específicas."
 ]
 # ==========================================
 # --- DEFINICIÓN DE PESTAÑAS (TODAS INCLUIDAS) ---
@@ -273,57 +284,121 @@ idx_dir = tabs.index("📊 Panel de Dirección") if "📊 Panel de Dirección" i
 if idx_alta != -1:
     with paneles[idx_alta]:
         st.markdown("Utiliza este panel para registrar nuevos alumnos en la red neuronal.")
-        with st.form("registro_alumno", clear_on_submit=True):
-            nombre = st.text_input("Nombre Completo del Alumno")
-            curp = st.text_input("CURP", max_chars=18)
-            col1, col2 = st.columns(2)
-            with col1:
-                grado = st.selectbox("Grado", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
-            with col2:
-                grupo = st.selectbox("Grupo", ["A", "B", "C", "D"])
-                
-            nombre_escuela = st.selectbox("Escuela Asignada", list(escuelas_usaer.keys()))
-            maestro_regular = st.text_input("Nombre del Maestro Regular")
-            condicion = st.selectbox("Condición / Discapacidad", ["Intelectual", "Auditiva", "Visual", "Motora", "TEA", "TDAH", "Aptitudes Sobresalientes", "Dificultades severas de aprendizaje", "Dificultades severas de conducta", "Dificultades severas de comunicación", "Ninguna"])
-            estatus = st.selectbox("Estatus", ["Activo", "Baja", "Egresado"])
-            submit_button_alta = st.form_submit_button("Guardar Registro")
+        
+        modo_ingreso = st.radio("Método de registro:", ["📝 Carga Manual (Uno por uno)", "📂 Carga Masiva (Subir Excel)"], horizontal=True)
+        
+        if modo_ingreso == "📝 Carga Manual (Uno por uno)":
+            with st.form("registro_alumno", clear_on_submit=True):
+                nombre = st.text_input("Nombre Completo del Alumno")
+                curp = st.text_input("CURP", max_chars=18)
+                col1, col2 = st.columns(2)
+                with col1:
+                    grado = st.selectbox("Grado", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
+                with col2:
+                    grupo = st.selectbox("Grupo", ["A", "B", "C", "D"])
+                    
+                nombre_escuela = st.selectbox("Escuela Asignada", list(escuelas_usaer.keys()))
+                maestro_regular = st.text_input("Nombre del Maestro Regular")
+                condicion = st.selectbox("Condición / Discapacidad", ["Intelectual", "Auditiva", "Visual", "Motora", "TEA", "TDAH", "Aptitudes Sobresalientes", "Dificultades severas de aprendizaje", "Dificultades severas de conducta", "Dificultades severas de comunicación", "Ninguna"])
+                estatus = st.selectbox("Estatus", ["Activo", "Baja", "Egresado"])
+                submit_button_alta = st.form_submit_button("Guardar Registro")
 
-        if submit_button_alta:
-            if nombre == "" or curp == "":
-                st.error("Por favor, llena al menos el Nombre y la CURP.")
-            else:
+            if submit_button_alta:
+                if nombre == "" or curp == "":
+                    st.error("Por favor, llena al menos el Nombre y la CURP.")
+                else:
+                    try:
+                        id_escuela_seleccionada = escuelas_usaer[nombre_escuela]
+                        nuevo_registro = ["", nombre, curp, grado, grupo, id_escuela_seleccionada, maestro_regular, condicion, estatus]
+                        sheet.worksheet("Alumnos").append_row(nuevo_registro)
+                        st.success(f"¡El alumno {nombre} ha sido registrado exitosamente!")
+                    except Exception as e:
+                        st.error(f"Error en la operación: {e}")
+                        
+        else:
+            st.info("Sube tu archivo del Padrón de Alumnos (Formato USAER). El sistema mapeará las columnas automáticamente.")
+            archivo_subido = st.file_uploader("Selecciona el archivo Excel o CSV", type=['xlsx', 'xls', 'csv'])
+            
+            if archivo_subido is not None:
                 try:
-                    id_escuela_seleccionada = escuelas_usaer[nombre_escuela]
-                    nuevo_registro = ["", nombre, curp, grado, grupo, id_escuela_seleccionada, maestro_regular, condicion, estatus]
-                    sheet.worksheet("Alumnos").append_row(nuevo_registro)
-                    st.success(f"¡El alumno {nombre} ha sido registrado exitosamente!")
+                    # Detectamos si es CSV o Excel
+                    if archivo_subido.name.endswith('.csv'):
+                        df_masivo = pd.read_csv(archivo_subido)
+                    else:
+                        df_masivo = pd.read_excel(archivo_subido)
+                        
+                    st.dataframe(df_masivo.head()) # Vista previa de lo subido
+                    
+                    if st.button("📤 Procesar y subir a la Base de Datos"):
+                        with st.spinner("Mapeando columnas y subiendo registros a Google Sheets..."):
+                            try:
+                                # Extracción usando las columnas exactas del padrón
+                                df_procesado = pd.DataFrame()
+                                # Ponemos una columna vacía para el ID que Sheets autogenerará o ignorará si usas fórmula
+                                df_procesado['ID_Vacio'] = [""] * len(df_masivo)
+                                df_procesado['Nombre'] = df_masivo['11.- APELLIDO PATERNO, MATERNO Y NOMBRE(S) COMPLETO DEL ALUMNO']
+                                df_procesado['CURP'] = df_masivo['12.- CURP (18 DIGITOS)']
+                                df_procesado['Grado'] = df_masivo['16- NIVEL Y GRADO AL QUE ESTA INSCRITO/PRIMARIA'].astype(str)
+                                df_procesado['Grupo'] = df_masivo['16- NIVEL Y GRADO AL QUE ESTA INSCRITO/Grupo'].astype(str)
+                                df_procesado['Escuela_Asignada'] = df_masivo['5.- NOMBRE  DE LA  ESCUELA PREESCOLAR, PRIMARIA Y/O SECUNDARIA ATENDIDA']
+                                df_procesado['Maestro_Regular'] = "Pendiente" # No viene en el padrón, se deja pendiente
+                                df_procesado['Condicion'] = df_masivo['15. DISCAPACIDAD O CONDICION']
+                                df_procesado['Estatus'] = df_masivo['17.- SITUACION DEL ALUMNO']
+                                
+                                # Limpiamos los nulos (NaN) para que Google Sheets no marque error
+                                df_procesado = df_procesado.fillna("")
+                                
+                                # Subimos los datos en bloque (es mucho más rápido que uno por uno)
+                                sheet.worksheet("Alumnos").append_rows(df_procesado.values.tolist())
+                                st.success(f"¡Éxito! Se procesaron {len(df_masivo)} registros correctamente.")
+                                
+                            except KeyError as e:
+                                st.error(f"Error de formato: No se encontró la columna {e} en el archivo subido. Asegúrate de subir el padrón oficial inalterado.")
                 except Exception as e:
-                    st.error(f"Error en la operación: {e}")
+                    st.error(f"Error al leer el archivo: {e}")
 
 
 # --- MÓDULO: BAPs COLABORATIVAS ---
 with paneles[idx_bap]:
+    # --- MÓDULO: BAPs COLABORATIVAS ---
+with paneles[idx_bap]:
     st.subheader("Evaluación de Barreras en el Contexto Áulico")
+    
+    tipo_evaluacion = st.radio("Tipo de Observación y Sugerencias:", ["👥 Grupal (Contexto del Aula)", "👤 Individual (Alumno Específico)"], horizontal=True)
+    
     with st.form("anexo3_form", clear_on_submit=False):
-        alumno_seleccionado = st.selectbox("Selecciona al Alumno a evaluar", lista_alumnos if lista_alumnos else ["Sin registros"])
+        if tipo_evaluacion == "👤 Individual (Alumno Específico)":
+            objetivo_seleccionado = st.selectbox("Selecciona al Alumno a evaluar", lista_alumnos if lista_alumnos else ["Sin registros"])
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} considerando sus barreras específicas."
+        else:
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                grado_grupal = st.selectbox("Grado a observar", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
+            with col_g2:
+                grupo_grupal = st.selectbox("Grupo a observar", ["A", "B", "C", "D"])
+            
+            objetivo_seleccionado = f"Grupo {grado_grupal} {grupo_grupal}"
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el aula del grupo {objetivo_seleccionado}, enfocadas en el diseño universal para el aprendizaje (DUA) y dinámicas colectivas."
         
         st.markdown("---")
-        st.markdown("### Instrumento de Observación")
+        st.markdown("### Instrumento de Observación (Anexo III)")
+        
+        # AQUÍ IRÁN LOS REACTIVOS COMPLETOS
         
         respuestas_bap = {}
         for i, item in enumerate(items_anexo3):
             st.markdown(f"**{item}**")
             col_freq, col_ori = st.columns([3, 1])
             with col_freq:
-                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"freq_{i}", label_visibility="collapsed")
+                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"freq_{i}_{tipo_evaluacion}", label_visibility="collapsed")
             with col_ori:
                 st.markdown("<br>", unsafe_allow_html=True)
-                ori = st.checkbox("Requiere Orientación", key=f"ori_{i}")
+                ori = st.checkbox("Requiere Orientación", key=f"ori_{i}_{tipo_evaluacion}")
             
             respuestas_bap[f"Item_{i+1}"] = {"pregunta": item, "frecuencia": freq, "orientacion": ori}
             st.markdown("---")
             
-        contexto_extra = st.text_area("Añade observaciones cualitativas, detalles sobre el estilo de aprendizaje del alumno o estrategias previas intentadas.", height=100)
+        contexto_extra = st.text_area("Añade observaciones cualitativas, detalles sobre la dinámica del grupo o estrategias previas intentadas.", height=100)
         submit_button_anexo3 = st.form_submit_button("Guardar Evaluación y Generar Sugerencias")
         
     if submit_button_anexo3:
