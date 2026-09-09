@@ -1043,51 +1043,64 @@ if idx_visitas != -1:
                     apoyo_prim = directorio_firmas[clave_escuela]["apoyo"]
                     
                     def m(opcion):
-                        return "( X )" if opcion in motivos_izq or opcion in motivos_der else "( &nbsp; )"
+                        return "( X )" if opcion in motivos_izq or opcion in motivos_der else "( &nbsp;&nbsp; )"
                         
-                    txt_detalles = f" {detalles_motivos}" if detalles_motivos else "___________________"
+                    # Si hay detalles, los ponemos en negritas, si no, dejamos la línea vacía de Word
+                    def d(opcion, linea="___________________"):
+                        return f"<b>{detalles_motivos}</b>" if detalles_motivos and (opcion in motivos_izq or opcion in motivos_der) else linea
 
-# ATENCIÓN: El código a partir de aquí NO DEBE TENER ESPACIOS A LA IZQUIERDA
-                    html_constancia = f"""<div style="background-color: white; color: black; padding: 40px; border: 1px solid #ccc; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
-<h4 style="text-align: center; font-weight: bold; margin-bottom: 2px;">DIRECCIÓN DE EDUCACIÓN ESPECIAL</h4>
-<h4 style="text-align: center; font-weight: bold; margin-top: 0; margin-bottom: 20px;">USAER 02 ESTATAL CCT. 31FUA0002Y ZONA No. 001</h4>
-
-<h3 style="text-align: center; text-decoration: underline; margin-bottom: 30px;">Constancia de visita</h3>
-
-<p style="font-size: 14px; margin-bottom: 8px;">Servicio de educación especial que realiza la visita: <u>USAER 02-E</u></p>
-<p style="font-size: 14px; margin-bottom: 8px;">Curso escolar: 2026 – 2027 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Fecha de la visita: <u>{fecha_visita.strftime('%d/%m/%Y')}</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Hora: de 7:00 a 12:00hrs</p>
-<p style="font-size: 14px; margin-bottom: 30px;">Escuela: <u>{escuela_seleccionada}</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Localidad: MÉRIDA</p>
-
-<p style="font-size: 14px; margin-bottom: 5px;">Motivo de la visita:</p>
-
-<table style="width: 100%; font-size: 14px; margin-bottom: 30px; border: none;">
+# ATENCIÓN: A partir de aquí, cero espacios a la izquierda
+                    html_constancia = f"""<div style="background-color: white; color: black; padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
+<table style="width: 100%; margin-bottom: 20px; border: none;">
 <tr>
-<td style="width: 50%; vertical-align: top; padding-right: 10px;">
-<div style="margin-bottom: 5px;">{m('Observación en grupo')} Observación en grupo{txt_detalles if 'Observación en grupo' in motivos_izq else '___________________'}</div>
-<div style="margin-bottom: 5px;">{m('Entrevista con...')} Entrevista con {txt_detalles if 'Entrevista con...' in motivos_izq else '________________________'}</div>
-<div style="margin-bottom: 5px;">{m('Trabajo interdisciplinario')} Trabajo interdisciplinario </div>
-<div style="margin-bottom: 5px;">{m('Sugerencias a Maestra(o)')} Sugerencias a Maestra (o) {txt_detalles if 'Sugerencias a Maestra(o)' in motivos_izq else '_______________'}</div>
-<div style="margin-bottom: 5px;">{m('Sugerencias a Padres de...')} Sugerencias a Padres de {txt_detalles if 'Sugerencias a Padres de...' in motivos_izq else '________________'}</div>
-<div style="margin-bottom: 5px;">{m('Valoración a...')} Valoración a {txt_detalles if 'Valoración a...' in motivos_izq else '__________________________'}</div>
-<div style="margin-bottom: 5px;">{m('Revaloración de sugerencias con...')} Revaloración de sugerencias con: {txt_detalles if 'Revaloración de sugerencias con...' in motivos_izq else '________'}</div>
-<div style="margin-bottom: 5px;">{m('Elaboración o actualización de EPP')} Elaboración o actualización de EPP _______</div>
+<td style="width: 30%; text-align: left; vertical-align: middle;">
+<img src="https://educacion.yucatan.gob.mx/images/logo_segey_2024.png" alt="SEGEY" style="max-height: 50px;">
 </td>
-<td style="width: 5px; border-left: 1px solid black;"></td>
-<td style="width: 45%; vertical-align: top; padding-left: 10px;">
-<div style="margin-bottom: 5px;">{m('Intervención en Grupo')} Intervención en Grupo {txt_detalles if 'Intervención en Grupo' in motivos_der else '___________________'}</div>
-<div style="margin-bottom: 5px;">{m('Apoyo individual en aula')} Apoyo individual a ___________en aula de __</div>
-<div style="margin-bottom: 5px;">{m('Elaboración del Plan de Intervención')} Elaboración del Plan de Intervención _______</div>
-<div style="margin-bottom: 5px;">{m('Consejo Técnico Escolar')} Consejo Técnico Escolar </div>
-<div style="margin-bottom: 5px;">{m('Junta del Servicio de Apoyo')} Junta del Servicio de Apoyo_______________</div>
-<div style="margin-bottom: 5px;">{m('Junta Académica del Servicio de Apoyo')} Junta Académica del Servicio de Apoyo </div>
-<div style="margin-bottom: 5px;">{m('Otros')} Otros: {txt_detalles if 'Otros' in motivos_der else '________________________________'}</div>
+<td style="width: 40%; text-align: center; vertical-align: middle; font-size: 13px; line-height: 1.2;">
+DIRECCIÓN DE EDUCACIÓN ESPECIAL<br>
+USAER 02 ESTATAL CCT. 31FUA0002Y<br>
+ZONA No. 001
+</td>
+<td style="width: 30%; text-align: right; vertical-align: middle;">
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Escudo_de_Yucat%C3%A1n.svg/1200px-Escudo_de_Yucat%C3%A1n.svg.png" alt="Yucatan" style="max-height: 60px;">
 </td>
 </tr>
 </table>
 
-<p style="font-size: 14px; margin-bottom: 10px;">Breve descripción de las actividades desarrolladas:</p>
-<div style="font-size: 14px; min-height: 150px; line-height: 1.6;">
-{descripcion_actividad.replace(chr(10), '<br>') if descripcion_actividad else '<br><br><br><br><br>'}
+<h3 style="text-align: center; font-weight: bold; margin-bottom: 25px;">Constancia de visita</h3>
+
+<div style="font-size: 14px; margin-bottom: 5px;">Servicio de educación especial que realiza la visita: <u>USAER 02-E</u></div>
+<div style="font-size: 14px; margin-bottom: 5px;">Curso escolar: <u>2026 – 2027</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Fecha de la visita: <u>{fecha_visita.strftime('%d/%m/%Y')}</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Hora: <u>de 7:00 a 12:00hrs</u></div>
+<div style="font-size: 14px; margin-bottom: 20px;">Escuela: <u>{escuela_seleccionada}</u> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Localidad: <u>MÉRIDA</u></div>
+
+<div style="font-size: 14px; margin-bottom: 2px;">Motivo de la visita:</div>
+<table style="width: 100%; font-size: 13px; margin-bottom: 20px; border-collapse: collapse;">
+<tr>
+<td style="width: 50%; vertical-align: top; border: 1px dashed #ccc; padding: 5px; line-height: 1.5;">
+{m('Observación en grupo')} Observación en grupo {d('Observación en grupo', '_________________')}<br>
+{m('Entrevista con...')} Entrevista con {d('Entrevista con...', '______________________')}<br>
+{m('Trabajo interdisciplinario')} Trabajo interdisciplinario<br>
+{m('Sugerencias a Maestra(o)')} Sugerencias a Maestra (o) {d('Sugerencias a Maestra(o)', '_____________')}<br>
+{m('Sugerencias a Padres de...')} Sugerencias a Padres de {d('Sugerencias a Padres de...', '______________')}<br>
+{m('Valoración a...')} Valoración a {d('Valoración a...', '________________________')}<br>
+{m('Revaloración de sugerencias con...')} Revaloración de sugerencias con: {d('Revaloración de sugerencias con...', '______')}<br>
+{m('Elaboración o actualización de EPP')} Elaboración o actualización de EPP _______
+</td>
+<td style="width: 50%; vertical-align: top; border: 1px dashed #ccc; padding: 5px; line-height: 1.5;">
+{m('Intervención en Grupo')} Intervención en Grupo {d('Intervención en Grupo', '_________________')}<br>
+{m('Apoyo individual en aula')} Apoyo individual a ___________en aula de __<br>
+{m('Elaboración del Plan de Intervención')} Elaboración del Plan de Intervención _______<br>
+{m('Consejo Técnico Escolar')} Consejo Técnico Escolar<br>
+{m('Junta del Servicio de Apoyo')} Junta del Servicio de Apoyo_______________<br>
+{m('Junta Académica del Servicio de Apoyo')} Junta Académica del Servicio de Apoyo<br>
+{m('Otros')} Otros: {d('Otros', '______________________________')}
+</td>
+</tr>
+</table>
+
+<div style="font-size: 14px; margin-bottom: 10px;">Breve descripción de las actividades desarrolladas:</div>
+<div style="font-size: 14px; min-height: 120px; line-height: 1.6;">
+{descripcion_actividad.replace(chr(10), '<br>') if descripcion_actividad else '<br><br><br><br>'}
 </div>
 
 <table style="width: 100%; font-size: 12px; text-align: center; margin-top: 50px; border: none;">
@@ -1107,7 +1120,7 @@ Maestra(o) de apoyo
 <td style="width: 50%; padding-right: 20px;">
 ___________________________<br>
 <b>Psic. Edgar Adrián Yam Briceño MD</b><br>
-Director de la USAER 2E
+Director de la USAER 02-E
 </td>
 <td style="width: 50%; padding-left: 20px;">
 ______________________<br>
@@ -1117,7 +1130,7 @@ Supervisora de la zona 001 EE
 </tr>
 </table>
 </div>"""
-                    
+
                     html_impresion = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -1127,6 +1140,7 @@ Supervisora de la zona 001 EE
 @media print {{
 @page {{ margin: 1cm; }}
 body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+table td {{ border: 1px dashed #ccc !important; }}
 }}
 </style>
 </head>
@@ -1141,6 +1155,6 @@ body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
                     st.download_button(
                         label="🖨️ Descargar Constancia para Imprimir",
                         data=html_impresion,
-                        file_name=f"Constancia_Visita_{escuela_seleccionada}.html",
+                        file_name=f"Constancia_Visita_{escuela_seleccionada.replace(' ', '_')}.html",
                         mime="text/html"
                     )
