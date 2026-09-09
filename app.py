@@ -549,6 +549,11 @@ if idx_alta != -1:
                                 
                             except Exception as e:
                                 st.error(f"Error procesando los datos: {e}")
+                                
+                except Exception as e:
+                    st.error(f"Error al leer el archivo Excel: {e}")
+
+# --- MÓDULO: BAPs COLABORATIVAS ---
 # --- MÓDULO: BAPs COLABORATIVAS ---
 
 
