@@ -316,41 +316,67 @@ if idx_alta != -1:
                         st.error(f"Error en la operación: {e}")
                         
         else:
-            st.info("Sube tu archivo del Padrón de Alumnos (Formato USAER). El sistema mapeará las columnas automáticamente.")
+            st.info("Sube el padrón oficial de alumnos de la USAER. El sistema adaptará los campos automáticamente.")
             archivo_subido = st.file_uploader("Selecciona el archivo Excel o CSV", type=['xlsx', 'xls', 'csv'])
             
             if archivo_subido is not None:
                 try:
-                    # Detectamos si es CSV o Excel
                     if archivo_subido.name.endswith('.csv'):
                         df_masivo = pd.read_csv(archivo_subido)
                     else:
                         df_masivo = pd.read_excel(archivo_subido)
-                        
-                    st.dataframe(df_masivo.head()) # Vista previa de lo subido
+                    
+                    # Limpiamos posibles espacios en blanco en los nombres de las columnas
+                    df_masivo.columns = [str(c).strip() for c in df_masivo.columns]
+                    
+                    st.write(f"Vista previa ({len(df_masivo)} alumnos detectados):")
+                    st.dataframe(df_masivo.head(3))
                     
                     if st.button("📤 Procesar y subir a la Base de Datos"):
-                        with st.spinner("Mapeando columnas y subiendo registros a Google Sheets..."):
-                            try:
-                                # Extracción usando las columnas exactas del padrón
-                                df_procesado = pd.DataFrame()
-                                # Ponemos una columna vacía para el ID que Sheets autogenerará o ignorará si usas fórmula
-                                df_procesado['ID_Vacio'] = [""] * len(df_masivo)
-                                df_procesado['Nombre'] = df_masivo['11.- APELLIDO PATERNO, MATERNO Y NOMBRE(S) COMPLETO DEL ALUMNO']
-                                df_procesado['CURP'] = df_masivo['12.- CURP (18 DIGITOS)']
-                                df_procesado['Grado'] = df_masivo['16- NIVEL Y GRADO AL QUE ESTA INSCRITO/PRIMARIA'].astype(str)
-                                df_procesado['Grupo'] = df_masivo['16- NIVEL Y GRADO AL QUE ESTA INSCRITO/Grupo'].astype(str)
-                                df_procesado['Escuela_Asignada'] = df_masivo['5.- NOMBRE  DE LA  ESCUELA PREESCOLAR, PRIMARIA Y/O SECUNDARIA ATENDIDA']
-                                df_procesado['Maestro_Regular'] = "Pendiente" # No viene en el padrón, se deja pendiente
-                                df_procesado['Condicion'] = df_masivo['15. DISCAPACIDAD O CONDICION']
-                                df_procesado['Estatus'] = df_masivo['17.- SITUACION DEL ALUMNO']
-                                
-                                # Limpiamos los nulos (NaN) para que Google Sheets no marque error
-                                df_procesado = df_procesado.fillna("")
-                                
-                                # Subimos los datos en bloque (es mucho más rápido que uno por uno)
-                                sheet.worksheet("Alumnos").append_rows(df_procesado.values.tolist())
-                                st.success(f"¡Éxito! Se procesaron {len(df_masivo)} registros correctamente.")
+                        with st.spinner("Mapeando y consolidando padrón escolar..."):
+                            df_procesado = pd.DataFrame()
+                            
+                            # 1. ID vacío (para que Sheets use correlativo o ID generado)
+                            df_procesado['ID_Alumno'] = [""] * len(df_masivo)
+                            
+                            # 2. Nombre completo y CURP
+                            df_procesado['Nombre'] = df_masivo.get('11.- APELLIDO PATERNO, MATERNO Y NOMBRE(S) COMPLETO DEL ALUMNO', '')
+                            df_procesado['CURP'] = df_masivo.get('12.- CURP (18 DIGITOS)', '')
+                            
+                            # 3. Consolidación de Grado (Primaria, Preescolar o Secundaria)
+                            def obtener_grado(row):
+                                for col in ['16- NIVEL Y GRADO AL QUE ESTA INSCRITO/PRIMARIA', 
+                                            '16- NIVEL Y GRADO AL QUE ESTA INSCRITO/PREESCOLAR', 
+                                            '16- NIVEL Y GRADO AL QUE ESTA INSCRITO/SECUNDARIA']:
+                                    val = str(row.get(col, '')).strip()
+                                    if val and val.lower() != 'nan':
+                                        return val
+                                return "S/G"
+                            
+                            df_procesado['Grado'] = df_masivo.apply(obtener_grado, axis=1)
+                            
+                            # 4. Grupo (limpieza de nulos)
+                            df_procesado['Grupo'] = df_masivo.get('16- NIVEL Y GRADO AL QUE ESTA INSCRITO/Grupo', '').fillna('').astype(str).replace('nan', '')
+                            
+                            # 5. Escuela y Datos complementarios
+                            df_procesado['Escuela_Asignada'] = df_masivo.get('5.- NOMBRE  DE LA  ESCUELA PREESCOLAR, PRIMARIA Y/O SECUNDARIA ATENDIDA', 'ELVIRA PARRA AVILA')
+                            df_procesado['Maestro_Regular'] = "Pendiente"
+                            df_procesado['Condicion'] = df_masivo.get('15. DISCAPACIDAD O CONDICION', '').fillna('Ninguna')
+                            df_procesado['Estatus'] = df_masivo.get('17.- SITUACION DEL ALUMNO', 'Activo')
+                            
+                            # 6. Tipo de Atención (Grupal vs Individual)
+                            df_procesado['Tipo_Atencion'] = df_masivo.get('18.-TIPO DE ATENCION', 'Grupal').fillna('Grupal')
+                            
+                            # Limpieza general de nulos antes de subir
+                            df_procesado = df_procesado.fillna("")
+                            
+                            # Carga en lote hacia Google Sheets
+                            sheet.worksheet("Alumnos").append_rows(df_procesado.values.tolist())
+                            st.balloons()
+                            st.success(f"¡Carga completada! Se registraron {len(df_procesado)} alumnos de {df_procesado['Escuela_Asignada'].iloc[0]}.")
+                            
+                except Exception as e:
+                    st.error(f"Error durante el procesamiento del archivo: {e}")
                                 
                             except KeyError as e:
                                 st.error(f"Error de formato: No se encontró la columna {e} en el archivo subido. Asegúrate de subir el padrón oficial inalterado.")
