@@ -506,19 +506,7 @@ with paneles[idx_bap]:
             st.markdown("---")
         
         # AQUÍ IRÁN LOS REACTIVOS COMPLETOS
-        
-        respuestas_bap = {}
-        for i, item in enumerate(items_anexo3):
-            st.markdown(f"**{item}**")
-            col_freq, col_ori = st.columns([3, 1])
-            with col_freq:
-                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"bap_frecuencia_{i}", label_visibility="collapsed")
-            with col_ori:
-                st.markdown("<br>", unsafe_allow_html=True)
-                ori = st.checkbox("Requiere Orientación", key=f"bap_orientacion_{i}")
-            
-            respuestas_bap[f"Item_{i+1}"] = {"pregunta": item, "frecuencia": freq, "orientacion": ori}
-            st.markdown("---")
+
             
         contexto_extra = st.text_area("Añade observaciones cualitativas, detalles sobre la dinámica del grupo o estrategias previas intentadas.", height=100)
         submit_button_anexo3 = st.form_submit_button("Guardar Evaluación y Generar Sugerencias")
