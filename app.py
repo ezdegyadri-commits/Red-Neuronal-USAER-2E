@@ -194,7 +194,7 @@ if not st.session_state.get("autenticado", False):
     st.stop()
 
 # SI EL USUARIO ESTÁ AUTENTICADO, SE SALTA EL STOP Y VE TUS PESTAÑAS:
-mostrar_pantalla_inicio()
+
 
 # --- AQUÍ ABAJO PEGAS TUS PESTAÑAS (pestañas = st.tabs(...)) Y TUS MÓDULOS DE ALUMNOS, BAP, EVENTOS ---
 
