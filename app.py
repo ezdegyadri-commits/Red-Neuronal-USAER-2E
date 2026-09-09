@@ -458,11 +458,10 @@ with paneles[idx_bap]:
         if tipo_evaluacion == "👤 Individual (Alumno Específico)":
             col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
             
-            # Buscador flexible de la columna de atención (ignora mayúsculas, acentos y guiones)
+            # Buscador flexible de la columna de atención
             col_atn_db = next((c for c in df_alumnos.columns if "ATENCION" in c.upper().replace('Ó', 'O') or "MODALIDAD" in c.upper()), None)
             
             if not df_alumnos.empty and col_atn_db:
-                # Normalizamos texto quitando espacios y pasando a mayúsculas
                 mascara_ind = df_alumnos[col_atn_db].astype(str).str.strip().str.upper() == 'INDIVIDUAL'
                 df_ind = df_alumnos[mascara_ind]
                 alumnos_individuales = sorted([nom for nom in df_ind[col_nom_db].astype(str).tolist() if nom.strip() != ""])
@@ -477,6 +476,17 @@ with paneles[idx_bap]:
                 alumnos_individuales if alumnos_individuales else ["Sin registros individuales"]
             )
             prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} considerando sus barreras específicas detectadas."
+            
+        else:
+            # --- AQUÍ ESTÁN LOS SELECTORES DEL MODO GRUPAL ---
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                grado_grupal = st.selectbox("Grado a observar", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
+            with col_g2:
+                grupo_grupal = st.selectbox("Grupo a observar", ["A", "B", "C", "D"])
+            
+            objetivo_seleccionado = f"Grupo {grado_grupal} {grupo_grupal}"
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el contexto áulico del {objetivo_seleccionado}, enfocadas en el Diseño Universal para el Aprendizaje (DUA) y dinámicas colectivas."
         
         st.markdown("---")
         st.markdown("### Instrumento de Observación (Anexo III)")
