@@ -378,8 +378,8 @@ if idx_alta != -1:
                 except Exception as e:
                     st.error(f"Error durante el procesamiento del archivo: {e}")
                                 
-                            except KeyError as e:
-                                st.error(f"Error de formato: No se encontró la columna {e} en el archivo subido. Asegúrate de subir el padrón oficial inalterado.")
+                except KeyError as e:
+                    st.error(f"Error de formato: No se encontró la columna {e} en el archivo subido. Asegúrate de subir el padrón oficial inalterado.")
                 except Exception as e:
                     st.error(f"Error al leer el archivo: {e}")
 
