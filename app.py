@@ -233,17 +233,29 @@ escuelas_usaer = {
 try:
     df_todos_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
     
-    # 2. ESCÁNER INFALIBLE DE PERMISOS (Busca las claves "ESC-" en cualquier parte de la sesión)
+    # 2. EXTRACCIÓN DIRECTA DE PERMISOS DESDE LA BASE DE DATOS
     escuelas_usuario = None
-    for key, val in st.session_state.items():
-        if isinstance(val, str) and ("ESC-" in val or "TODAS" in val):
-            escuelas_usuario = val
-            break
-        elif isinstance(val, dict): # Por si los datos están agrupados dentro de un diccionario
-            for sub_key, sub_val in val.items():
-                if isinstance(sub_val, str) and ("ESC-" in sub_val or "TODAS" in sub_val):
-                    escuelas_usuario = sub_val
-                    break
+    try:
+        df_users = pd.DataFrame(sheet.worksheet("Usuarios").get_all_records())
+        # Tu login guarda el nombre en st.session_state.nombre
+        nombre_activo = st.session_state.get("nombre", "")
+        
+        col_u_nom = next((c for c in df_users.columns if "NOMBRE" in c.upper() or "USUARIO" in c.upper()), None)
+        col_u_esc = next((c for c in df_users.columns if "ESCUELA" in c.upper() or "PERMITIDA" in c.upper() or "ASIGNADA" in c.upper()), None)
+        
+        if col_u_nom and col_u_esc and nombre_activo:
+            # Buscamos la fila de Abril usando su primer nombre
+            primer_nombre = str(nombre_activo).split()[0]
+            coincidencia = df_users[df_users[col_u_nom].astype(str).str.contains(primer_nombre, case=False, na=False)]
+            
+            if not coincidencia.empty:
+                escuelas_usuario = str(coincidencia[col_u_esc].values[0]).strip()
+    except Exception:
+        pass
+        
+    rol_activo = str(st.session_state.get("rol", "")).upper()
+    if "DIRECTOR" in rol_activo or "TRABAJO" in rol_activo:
+        escuelas_usuario = "TODAS"
     
     # 3. DICCIONARIO MAESTRO DE LA ZONA 001
     mapeo_zona = {
