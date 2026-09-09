@@ -454,15 +454,16 @@ if idx_alta != -1:
                     
                     # --- 5. BOTÓN DE CARGA ---
                     # (A partir de aquí se queda exactamente igual tu código de 'if st.button("📤 Procesar...")')
-                    try:
+                    if st.button("📤 Procesar y subir a la Base de Datos"):
+                        with st.spinner("Subiendo padrón a Google Sheets..."):
+                            try:
                                 import re
                                 
                                 df_final = pd.DataFrame()
                                 df_final['ID_Alumno'] = [""] * len(df_valido)
-                                # AQUÍ ESTÁ LA CORRECCIÓN CLAVE: Nombre_Completo
                                 df_final['Nombre_Completo'] = df_valido[col_nom].astype(str).str.strip().str.upper()
                                 
-                                col_curp = next((c for c in df_valido.columns if "CURP" in c.upper()), None)
+                                col_curp = next((c for c in df_valido.columns if "CURP" in str(c).upper()), None)
                                 df_final['CURP'] = df_valido[col_curp] if col_curp else ""
                                 
                                 # --- MOTOR REGEX INVENCIBLE ---
@@ -475,12 +476,7 @@ if idx_alta != -1:
                                     texto_limpio = texto_limpio.replace('PRIMERO','1').replace('SEGUNDO','2').replace('TERCERO','3').replace('CUARTO','4').replace('QUINTO','5').replace('SEXTO','6')
                                     
                                     match_g = re.search(r'\b([1-6])\b', texto_limpio)
-                                    if match_g:
-                                        num = match_g.group(1)
-                                        mapa_grados = {'1':'1ro', '2':'2do', '3':'3ro', '4':'4to', '5':'5to', '6':'6to'}
-                                        val_g = mapa_grados.get(num, "S/G")
-                                    else:
-                                        val_g = "S/G"
+                                    val_g = {'1':'1ro', '2':'2do', '3':'3ro', '4':'4to', '5':'5to', '6':'6to'}.get(match_g.group(1), "S/G") if match_g else "S/G"
                                         
                                     texto_sin_basura = re.sub(r'\b(USAER|MÉRIDA|MERIDA|ESC|CCT|SECUNDARIA|PRIMARIA|PREESCOLAR|TURNO)\b', '', texto_fila)
                                     match_gr = re.search(r'\b([A-F])\b', texto_sin_basura)
@@ -491,21 +487,38 @@ if idx_alta != -1:
                                     
                                 df_final['Grado'] = grados_list
                                 df_final['Grupo'] = grupos_list
-                                # ------------------------------------------------
                                 
-                                # CORRECCIONES CLAVE: ID_Escuela, ID_Maestro_Reg, Condicion_Discapacidad
-                                col_esc = next((c for c in df_valido.columns if "ESCUELA" in c.upper()), None)
+                                col_esc = next((c for c in df_valido.columns if "ESCUELA" in str(c).upper()), None)
                                 df_final['ID_Escuela'] = df_valido[col_esc].fillna('ESC-005') if col_esc else "ESC-005"
                                 df_final['ID_Maestro_Reg'] = "Pendiente"
                                 
-                                col_cond = next((c for c in df_valido.columns if "DISCAPACIDAD" in c.upper() or "CONDICION" in c.upper()), None)
+                                col_cond = next((c for c in df_valido.columns if "DISCAPACIDAD" in str(c).upper() or "CONDICION" in str(c).upper()), None)
                                 df_final['Condicion_Discapacidad'] = df_valido[col_cond].fillna('Ninguna') if col_cond else "Ninguna"
                                 
-                                col_stat = next((c for c in df_valido.columns if "SITUACION" in c.upper()), None)
+                                col_stat = next((c for c in df_valido.columns if "SITUACION" in str(c).upper()), None)
                                 df_final['Estatus'] = df_valido[col_stat].fillna('Activo') if col_stat else "Activo"
                                 
-                                col_atn = next((c for c in df_valido.columns if "TIPO DE ATENCION" in c.upper()), None)
-                                df_final['Tipo_Atencion'] = df_valido[col_atn].fillna('Grupal') if col_atn else "Grupal"
+                                # --- ESCÁNER DE ATENCIÓN (CERO FRICCIÓN) ---
+                                col_atn = None
+                                # 1. Buscar por nombre del encabezado
+                                for c in df_valido.columns:
+                                    c_upper = str(c).upper()
+                                    if "ATENCION" in c_upper or "ATENCIÓN" in c_upper or "MODALIDAD" in c_upper:
+                                        col_atn = c
+                                        break
+                                # 2. Buscar por contenido (Por si la columna U tiene un título raro)
+                                if not col_atn:
+                                    for c in df_valido.columns:
+                                        valores = df_valido[c].astype(str).str.strip().str.upper().head(15).tolist()
+                                        if any(v == 'INDIVIDUAL' or v == 'GRUPAL' for v in valores):
+                                            col_atn = c
+                                            break
+                                            
+                                if col_atn:
+                                    df_final['Tipo_Atencion'] = df_valido[col_atn].astype(str).str.strip().str.title().replace('Nan', 'Grupal').replace('', 'Grupal')
+                                else:
+                                    df_final['Tipo_Atencion'] = "Grupal"
+                                # -------------------------------------------
                                 
                                 df_final = df_final.fillna("")
                                 
@@ -514,7 +527,7 @@ if idx_alta != -1:
                                 if bd_actual:
                                     df_bd = pd.DataFrame(bd_actual)
                                     nombres_nuevos = df_final['Nombre_Completo'].tolist()
-                                    col_nom_bd = next((c for c in df_bd.columns if "NOMBRE" in c.upper()), 'Nombre_Completo')
+                                    col_nom_bd = next((c for c in df_bd.columns if "NOMBRE" in str(c).upper()), 'Nombre_Completo')
                                     
                                     df_bd_limpia = df_bd[~df_bd[col_nom_bd].astype(str).str.strip().str.upper().isin(nombres_nuevos)]
                                     
@@ -533,6 +546,7 @@ if idx_alta != -1:
                                 
                                 st.balloons()
                                 st.success(f"¡Base de datos sincronizada! Se cargaron {len(df_final)} alumnos correctamente.")
+                                
                             except Exception as e:
                                 st.error(f"Error procesando los datos: {e}")
 # --- MÓDULO: BAPs COLABORATIVAS ---
