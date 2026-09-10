@@ -773,19 +773,37 @@ with paneles[idx_bap]:
         submit_button_anexo3 = st.form_submit_button("Guardar Evaluación y Generar Sugerencias")
         
     if submit_button_anexo3:
-        if alumno_seleccionado == "Sin registros" or df_alumnos.empty:
-            st.error("No hay alumnos disponibles para evaluar.")
+        if objetivo_seleccionado in ["Sin registros individuales", "Sin escuelas asignadas"] or (tipo_evaluacion == "👤 Individual (Alumno Específico)" and df_alumnos.empty):
+            st.error("No hay un alumno o grupo válido seleccionado para evaluar.")
         else:
             with st.spinner("Conectando a la red neuronal y procesando datos... 🧠"):
                 try:
-                    fila_alumno = df_alumnos.loc[df_alumnos['Nombre_Completo'] == alumno_seleccionado]
-                    id_alumno = str(fila_alumno['ID_Alumno'].values[0])
-                    condicion_alumno = str(fila_alumno['Condicion_Discapacidad'].values[0])
                     fecha = datetime.now().strftime("%Y-%m-%d")
+                    col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
+                    
+                    if tipo_evaluacion == "👤 Individual (Alumno Específico)":
+                        fila_alumno = df_alumnos.loc[df_alumnos[col_nom_db] == objetivo_seleccionado]
+                        id_alumno = str(fila_alumno['ID_Alumno'].values[0]) if not fila_alumno.empty and 'ID_Alumno' in fila_alumno else ""
+                        condicion_alumno = str(fila_alumno['Condicion_Discapacidad'].values[0]) if not fila_alumno.empty and 'Condicion_Discapacidad' in fila_alumno else "No especificada"
+                        
+                        col_g = next((c for c in df_alumnos.columns if "GRADO" in str(c).upper()), 'Grado')
+                        col_gr = next((c for c in df_alumnos.columns if "GRUPO" in str(c).upper()), 'Grupo')
+                        val_g = str(fila_alumno[col_g].values[0]) if col_g in df_alumnos.columns and not fila_alumno.empty else ""
+                        val_gr = str(fila_alumno[col_gr].values[0]) if col_gr in df_alumnos.columns and not fila_alumno.empty else ""
+                        grado_grupo = f"{val_g} {val_gr}".strip()
+                        
+                        id_esc_val = fila_alumno['ID_Escuela'].values[0] if 'ID_Escuela' in fila_alumno and not fila_alumno.empty else ""
+                        escuela_nombre = next((k for k, v in escuelas_usaer.items() if v == id_esc_val), "USAER 02-E")
+                        contexto_prompt_tipo = f"DATOS DEL ALUMNO:\n- Alumno: {objetivo_seleccionado}\n- Condición: {condicion_alumno}\n- Grado y Grupo: {grado_grupo}\n- Escuela: {escuela_nombre}"
+                    else:
+                        id_alumno = "GRUPAL"
+                        grado_grupo = f"{grado_grupal} {grupo_grupal}"
+                        escuela_nombre = escuela_grupal
+                        contexto_prompt_tipo = f"EVALUACIÓN GRUPAL/AÚLICA:\n- Contexto: {objetivo_seleccionado}\n- Escuela: {escuela_nombre}"
                     
                     baps_detectadas = [data for key, data in respuestas_bap.items() if data['frecuencia'] in ["Nunca", "Pocas veces"] or data['orientacion']]
-                    
                     paquete_respuestas = json.dumps(respuestas_bap, ensure_ascii=False)
+                    
                     nuevo_anexo3 = ["", fecha, id_alumno, st.session_state.nombre, paquete_respuestas, contexto_extra, "", "", "Procesado"]
                     sheet.worksheet("Anexo3_Deteccion").append_row(nuevo_anexo3)
                     
@@ -793,9 +811,8 @@ with paneles[idx_bap]:
                     Eres un experto en Educación Especial y educación inclusiva de la USAER.
                     Tu objetivo es generar sugerencias pedagógicas para el "Anexo 4".
                     
-                    DATOS DEL ALUMNO:
-                    - Condición: {condicion_alumno}
-                    - Contexto de la maestra: {contexto_extra}
+                    {contexto_prompt_tipo}
+                    - Observaciones del especialista: {contexto_extra}
                     
                     BARRERAS DETECTADAS:
                     {json.dumps(baps_detectadas, ensure_ascii=False, indent=2)}
@@ -811,27 +828,26 @@ with paneles[idx_bap]:
                     respuesta_ia = modelo_ia.generate_content(prompt)
                     sugerencias_finales = respuesta_ia.text
                     
-                    grado_grupo = f"{fila_alumno['Grado'].values[0]} {fila_alumno['Grupo'].values[0]}"
                     motivo = "Resultados del Anexo 3: Barreras identificadas en el contexto áulico"
-                    escuela_nombre = [k for k, v in escuelas_usaer.items() if v == fila_alumno['ID_Escuela'].values[0]][0]
-
+                    
                     nuevo_anexo4 = [
                         "", 
-                        alumno_seleccionado, 
+                        objetivo_seleccionado, 
                         grado_grupo, 
                         escuela_nombre, 
                         "USAER 2E", 
-                        st.session_state.rol, 
+                        st.session_state.get('rol', 'USAER 2E'), 
                         fecha, 
                         motivo, 
                         "", 
                         sugerencias_finales, 
                         "Pendiente de revisión", 
-                        st.session_state.nombre 
+                        st.session_state.get('nombre', '') 
                     ]
                     sheet.worksheet("Anexo4_Sugerencias").append_row(nuevo_anexo4)
                     
-                    st.success("¡Operación Completada! Anexo 3 y Anexo 4 han sido procesados y guardados.")
+                    st.balloons()
+                    st.success("¡Operación Completada! Anexo 3 y Anexo 4 han sido procesados y guardados exitosamente.")
                     st.info(sugerencias_finales)
                     
                 except Exception as e:
