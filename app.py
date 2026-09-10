@@ -43,7 +43,7 @@ def calcular_edad_exacta(curp):
         return "Edad no calculable (CURP inválida)"
 
 # 2. VARIABLES MAESTRAS (Coloca aquí tus datos)
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6Lg2KCR-L0SUqRqsk7IGKPHneuENhZH_d4J1SUeHrz79g")
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 FOLDER_ID_MAESTRO = "1btFuNK8l9BI5C2s3-Q0_RZBZkUOBhvtr"
 URL_SPREADSHEET_MAESTRO = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
 
