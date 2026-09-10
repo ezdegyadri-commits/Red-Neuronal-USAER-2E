@@ -1047,14 +1047,17 @@ table td {{ border: 1px dashed #ccc !important; }}
 </body>
 </html>"""
 
-            st.download_button(
-                label="🖨️ Descargar Vista Previa para Imprimir",
-                data=html_impresion_a5,
-                file_name=f"Anexo_V_Previo_{alum_evt.replace(' ', '_')}.html",
-                mime="text/html"
-            )            
+            # AQUÍ CIERRA EL FORMULARIO OFICIAL
         submit_button_anexo5 = st.form_submit_button("💾 Guardar Evento Oficial")
         
+    # --- EL BOTÓN DE DESCARGA DEBE ESTAR AQUÍ, AFUERA DEL FORMULARIO ---
+    st.download_button(
+        label="🖨️ Descargar Vista Previa para Imprimir",
+        data=html_impresion_a5,
+        file_name=f"Anexo_V_Previo_{alum_evt.replace(' ', '_')}.html",
+        mime="text/html"
+    )
+
     if submit_button_anexo5:
         if alum_evt != "Sin registros" and evento_definitivo != "":
             try:
