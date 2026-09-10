@@ -48,7 +48,7 @@ FOLDER_ID_MAESTRO = "1btFuNK8l9BI5C2s3-Q0_RZBZkUOBhvtr"
 URL_SPREADSHEET_MAESTRO = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
 
 genai.configure(api_key=GEMINI_API_KEY)
-modelo_ia = genai.GenerativeModel("gemini-1.5-flash")
+modelo_ia = genai.GenerativeModel("gemini-2.5-flash")
 
 # 3. CONEXIÓN A GOOGLE (MÉTODO SIN ARCHIVOS - A PRUEBA DE ERRORES)
 def obtener_diccionario_secreto(nombre_secreto):
