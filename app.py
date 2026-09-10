@@ -230,6 +230,96 @@ if not st.session_state.get("autenticado", False):
                 st.error(f"⚠️ Error conectando con la base de datos de usuarios. Detalle: {e}")
     
     st.stop()
+    # --- ESTILOS CORPORATIVOS MODERNOS (INSPIRACIÓN BOOTSTRAP) ---
+st.markdown("""
+<style>
+/* 1. Importar fuente corporativa (Inter) y Bootstrap Icons */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css');
+
+/* 2. Aplicar la nueva tipografía a toda la app */
+html, body, [class*="css"]  {
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* 3. Botones primarios (Estilo .btn-primary de Bootstrap) */
+.stButton > button {
+    background-color: #0d6efd !important;
+    color: white !important;
+    border-radius: 8px !important;
+    border: none !important;
+    padding: 0.5rem 1rem !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease-in-out !important;
+    box-shadow: 0 2px 4px rgba(13, 110, 253, 0.2) !important;
+}
+.stButton > button:hover {
+    background-color: #0b5ed7 !important;
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.4) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* 4. Botones secundarios (Formularios) */
+[data-testid="stForm"] .stButton > button {
+    background-color: #198754 !important; /* Verde success */
+    box-shadow: 0 2px 4px rgba(25, 135, 84, 0.2) !important;
+}
+[data-testid="stForm"] .stButton > button:hover {
+    background-color: #157347 !important;
+    box-shadow: 0 4px 8px rgba(25, 135, 84, 0.4) !important;
+}
+
+/* 5. Tarjetas / Expanders más limpios y definidos */
+.streamlit-expanderHeader {
+    background-color: #f8f9fa !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    color: #212529 !important;
+    border: 1px solid #dee2e6 !important;
+}
+[data-testid="stExpander"] {
+    border: none !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+    border-radius: 8px !important;
+    margin-bottom: 1rem !important;
+}
+
+/* 6. Campos de texto y selectores pulidos */
+.stTextInput input, .stSelectbox div[data-baseweb="select"], .stTextArea textarea {
+    border-radius: 6px !important;
+    border: 1px solid #ced4da !important;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+.stTextInput input:focus, .stSelectbox div[data-baseweb="select"]:focus-within, .stTextArea textarea:focus {
+    border-color: #86b7fe !important;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
+}
+
+/* 7. Alertas (Success, Error, Info) con sombra suave */
+.stAlert {
+    border-radius: 8px !important;
+    border: none !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.04) !important;
+}
+
+/* 8. Panel lateral más corporativo */
+[data-testid="stSidebar"] {
+    background-color: #f8f9fa !important;
+    border-right: 1px solid #dee2e6 !important;
+}
+
+/* 9. Pestañas (Tabs) estilo navegación moderna */
+[data-testid="stTabs"] button {
+    font-weight: 500 !important;
+    color: #6c757d !important;
+}
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: #0d6efd !important;
+    border-bottom-color: #0d6efd !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # --- PANEL LATERAL Y CERRAR SESIÓN ---
 with st.sidebar:
     st.markdown(f"### 👤 Sesión activa")
