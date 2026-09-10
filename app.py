@@ -888,10 +888,15 @@ with paneles[idx_evt]:
         else:
             df_evt = df_alumnos
             
-    col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_evt.columns else 'Nombre'
-    lista_alumnos_evt = sorted([nom for nom in df_evt[col_nom_db].astype(str).tolist() if nom.strip() != ""])
+    # Buscador flexible para la columna de nombres (Evita KeyError)
+    col_nom_db = next((c for c in df_evt.columns if "NOMBRE" in str(c).upper()), None)
     
-    alum_evt = st.selectbox("👤 2. Selecciona al alumno involucrado", lista_alumnos_evt if lista_alumnos_evt else ["Sin alumnos registrados en este centro"])
+    if col_nom_db and not df_evt.empty:
+        lista_alumnos_evt = sorted([nom for nom in df_evt[col_nom_db].astype(str).tolist() if str(nom).strip() != ""])
+    else:
+        lista_alumnos_evt = []
+    
+    alum_evt = st.selectbox("👤 2. Selecciona al alumno involucrado", lista_alumnos_evt if lista_alumnos_evt else ["Sin registros"])
     
     # NUEVO: Calendario interactivo alineado correctamente
     fecha_evento = st.date_input("📅 3. Fecha en la que ocurrió el evento:", datetime.now())
