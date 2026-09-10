@@ -975,10 +975,23 @@ with paneles[idx_evt]:
                     if grado_grupo_visor == "S/G" or grado_grupo_visor == "":
                         grado_grupo_visor = "S/G (Falta actualizar en Base de Datos)"
 
+# --- LECTURA LOCAL DE ENCABEZADO ÚNICO ---
+            def get_b64_local(ruta):
+                try:
+                    with open(ruta, "rb") as f:
+                        return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+                except:
+                    return "" 
+                    
+            src_encabezado_a5 = get_b64_local("encabezado.png")
+
 # ATENCIÓN: Este bloque HTML debe ir pegado a la izquierda
             html_preview = f"""
 <div style="background-color: white; color: black; padding: 20px; border-radius: 8px; border: 1px solid #ccc; font-family: Arial, sans-serif;">
-<h3 style="text-align: center; margin-top: 0;">Anexo V. Hoja de Eventos Significativos.</h3>
+<div style="text-align: center; margin-bottom: 20px;">
+<img src="{src_encabezado_a5}" alt="Encabezado Oficial" style="max-width: 100%; height: auto;">
+</div>
+<h3 style="text-align: center; margin-top: 0; text-decoration: underline;">Anexo V. Hoja de Eventos Significativos.</h3>
 <p style="font-size: 14px;"><b>Nombre del alumno:</b> {alum_evt}<br>
 <b>Grado y grupo:</b> {grado_grupo_visor}</p>
 <table style="width: 100%; border-collapse: collapse; border: 1px solid black; font-size: 14px;">
@@ -1000,10 +1013,7 @@ with paneles[idx_evt]:
 """
             
             if evento_definitivo:
-                # AHORA TOMA LA FECHA DEL CALENDARIO CON FORMATO DD/MM/AAAA
                 fecha_hoy_str = fecha_evento.strftime("%d/%m/%Y")
-                
-                # --- ESTA ES LA LÍNEA QUE FALTABA Y DESFASÓ TODO EL ARCHIVO ---
                 html_preview += f"""
 <tr style="background-color: #e6f7ff;">
 <td style="border: 1px solid black; padding: 10px; vertical-align: top;"><b>{fecha_hoy_str}</b></td>
@@ -1016,9 +1026,33 @@ with paneles[idx_evt]:
 </table>
 </div>
 """
-            
             st.markdown(html_preview, unsafe_allow_html=True)
             
+            # --- NUEVO: BOTÓN DE DESCARGA PARA IMPRIMIR DIRECTO ---
+            html_impresion_a5 = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Anexo V - {alum_evt}</title>
+<style>
+@media print {{
+@page {{ margin: 1cm; }}
+body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+table td {{ border: 1px dashed #ccc !important; }}
+}}
+</style>
+</head>
+<body onload="window.print()" style="padding: 20px; margin: 0; display: flex; justify-content: center;">
+{html_preview}
+</body>
+</html>"""
+
+            st.download_button(
+                label="🖨️ Descargar Vista Previa para Imprimir",
+                data=html_impresion_a5,
+                file_name=f"Anexo_V_Previo_{alum_evt.replace(' ', '_')}.html",
+                mime="text/html"
+            )            
         submit_button_anexo5 = st.form_submit_button("💾 Guardar Evento Oficial")
         
     if submit_button_anexo5:
@@ -1061,12 +1095,26 @@ with paneles[idx_visor]:
                     st.markdown(f"## Expediente Digital: {alum_visor}")
                     
                     # --- INICIO DE CONSTRUCCIÓN DEL DOCUMENTO OFICIAL (HTML) ---
+                    # --- LECTURA LOCAL DE ENCABEZADO ---
+                    def get_b64_visor(ruta):
+                        try:
+                            with open(ruta, "rb") as f:
+                                return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+                        except:
+                            return "" 
+                    src_encabezado_visor = get_b64_visor("encabezado.png")
+
+                    # --- INICIO DE CONSTRUCCIÓN DEL DOCUMENTO OFICIAL (HTML) ---
                     html_content = "<html><head><meta charset='UTF-8'></head><body style='font-family: Arial, sans-serif;'>"
-                    html_content += f"<h1 style='text-align: center;'>Expediente Digital Oficial: {alum_visor}</h1>"
                     
                     # --- PROCESAR ANEXO 4 EN ORDEN CRONOLÓGICO ---
                     st.markdown("### 📄 Anexo IV. Hoja de Sugerencias")
-                    html_content += "<h2 style='text-align: center;'>Anexo IV. Hoja de Sugerencias.</h2>"
+                    html_content += f"""
+                    <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="{src_encabezado_visor}" alt="Encabezado Oficial" style="max-width: 100%; height: auto;">
+                    </div>
+                    <h2 style='text-align: center; text-decoration: underline;'>Anexo IV. Hoja de Sugerencias.</h2>
+                    """
                     
                     if not df_anexo4.empty and 'Nombre_Alumno' in df_anexo4.columns:
                         # Ordenar por fecha de más antiguo a más reciente
@@ -1123,9 +1171,14 @@ with paneles[idx_visor]:
                     
                     # --- PROCESAR ANEXO 5 EN ORDEN CRONOLÓGICO ---
                     st.markdown("### 📄 Anexo V. Hoja de Eventos Significativos")
-                    # Salto de página para el Anexo V
+                    # Salto de página para el Anexo V y Logo Oficial
                     html_content += "<div style='page-break-before: always;'></div>"
-                    html_content += "<h2 style='text-align: center;'>Anexo V. Hoja de Eventos Significativos.</h2>"
+                    html_content += f"""
+                    <div style="text-align: center; margin-bottom: 20px; margin-top: 20px;">
+                    <img src="{src_encabezado_visor}" alt="Encabezado Oficial" style="max-width: 100%; height: auto;">
+                    </div>
+                    <h2 style='text-align: center; text-decoration: underline;'>Anexo V. Hoja de Eventos Significativos.</h2>
+                    """
                     
                     if not df_anexo5.empty and 'Nombre_Alumno' in df_anexo5.columns:
                         # Ordenar cronológicamente
