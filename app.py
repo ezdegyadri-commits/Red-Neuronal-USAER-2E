@@ -245,13 +245,16 @@ html, body, [class*="css"]  {
 /* 3. Botones primarios (Estilo .btn-primary de Bootstrap) */
 .stButton > button {
     background-color: #0d6efd !important;
-    color: white !important;
     border-radius: 8px !important;
     border: none !important;
     padding: 0.5rem 1rem !important;
     font-weight: 500 !important;
     transition: all 0.2s ease-in-out !important;
     box-shadow: 0 2px 4px rgba(13, 110, 253, 0.2) !important;
+}
+/* ¡NUEVO: Forzar texto blanco en todo el contenido del botón! */
+.stButton > button * {
+    color: #ffffff !important; 
 }
 .stButton > button:hover {
     background-color: #0b5ed7 !important;
@@ -264,11 +267,14 @@ html, body, [class*="css"]  {
     background-color: #198754 !important; /* Verde success */
     box-shadow: 0 2px 4px rgba(25, 135, 84, 0.2) !important;
 }
+/* ¡NUEVO: Forzar texto blanco en botones verdes! */
+[data-testid="stForm"] .stButton > button * {
+    color: #ffffff !important;
+}
 [data-testid="stForm"] .stButton > button:hover {
     background-color: #157347 !important;
     box-shadow: 0 4px 8px rgba(25, 135, 84, 0.4) !important;
 }
-
 /* 5. Tarjetas / Expanders más limpios y definidos */
 .streamlit-expanderHeader {
     background-color: #f8f9fa !important;
