@@ -1181,18 +1181,6 @@ with paneles[idx_visor]:
         else:
             with st.spinner("Creando documentos independientes en Google Docs..."):
                 try:
-                    SCOPES = ['https://www.googleapis.com/auth/drive']
-                    creds = None
-                    if os.path.exists('token.json'):
-                        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-                    if not creds or not creds.valid:
-                        if creds and creds.expired and creds.refresh_token:
-                            creds.refresh(Request())
-                            with open('token.json', 'w') as token:
-                                token.write(creds.to_json())
-                                
-                    drive_service = build('drive', 'v3', credentials=creds)
-                    
                     escuela_alumno = st.session_state['escuela_export']
                     alum_visor = st.session_state['alumno_export']
                     fecha_hoy = datetime.now().strftime('%Y%m%d')
