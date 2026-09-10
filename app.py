@@ -862,12 +862,41 @@ with paneles[idx_evt]:
     if 'ia_evento_sugerido' not in st.session_state:
         st.session_state.ia_evento_sugerido = ""
         
-    alum_evt = st.selectbox("1. Selecciona al alumno involucrado", lista_alumnos if lista_alumnos else ["Sin registros"])
+    # --- NUEVO: FILTRO INTELIGENTE DE ESCUELA (RED NEURONAL) ---
+    rol_activo_evt = str(st.session_state.get("rol", "")).upper()
+    escuelas_perm_evt = str(st.session_state.get("escuelas_permitidas", "")).strip().upper()
+    
+    if "DIRECTOR" in rol_activo_evt or "TRABAJO" in rol_activo_evt or "TODAS" in escuelas_perm_evt:
+        opciones_esc = ["Todas las escuelas"] + list(escuelas_usaer.keys())
+    else:
+        claves_permitidas = [e.strip() for e in escuelas_perm_evt.split(",")]
+        opciones_esc = ["Todas las escuelas"] + [nombre for nombre, clave in escuelas_usaer.items() if clave in claves_permitidas]
+        
+    filtro_escuela = st.selectbox("🏢 1. Filtrar por Centro de Trabajo", opciones_esc)
+    
+    if filtro_escuela == "Todas las escuelas":
+        df_evt = df_alumnos
+    else:
+        id_escuela_buscada = escuelas_usaer.get(filtro_escuela, "")
+        col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
+        if col_esc_db:
+            terminos = [id_escuela_buscada.upper(), filtro_escuela.upper()]
+            mascara_esc = df_alumnos[col_esc_db].astype(str).str.upper().apply(
+                lambda x: any(t in x for t in terminos if t)
+            )
+            df_evt = df_alumnos[mascara_esc]
+        else:
+            df_evt = df_alumnos
+            
+    col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_evt.columns else 'Nombre'
+    lista_alumnos_evt = sorted([nom for nom in df_evt[col_nom_db].astype(str).tolist() if nom.strip() != ""])
+    
+    alum_evt = st.selectbox("👤 2. Selecciona al alumno involucrado", lista_alumnos_evt if lista_alumnos_evt else ["Sin alumnos registrados en este centro"])
     
     # NUEVO: Calendario interactivo alineado correctamente
-    fecha_evento = st.date_input("📅 Fecha en la que ocurrió el evento:", datetime.now())
+    fecha_evento = st.date_input("📅 3. Fecha en la que ocurrió el evento:", datetime.now())
     
-    evento_borrador = st.text_area("2. Redacta el evento (borrador)", height=150)
+    evento_borrador = st.text_area("✍️ 4. Redacta el evento (borrador)", height=150)
     
     if st.button("✨ Mejorar Redacción con IA"):
         if evento_borrador != "":
