@@ -915,6 +915,11 @@ with paneles[idx_evt]:
         col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
         if col_esc_db:
             terminos = [id_escuela_buscada.upper(), filtro_escuela.upper()]
+            
+            # --- PARCHE PARA RECONOCER EL ACENTO EN LA BASE DE DATOS ---
+            if "ICHCAANZIHO" in filtro_escuela.upper():
+                terminos.append("ICHCAANZIHÓ")
+                
             mascara_esc = df_alumnos[col_esc_db].astype(str).str.upper().apply(
                 lambda x: any(t in x for t in terminos if t)
             )
