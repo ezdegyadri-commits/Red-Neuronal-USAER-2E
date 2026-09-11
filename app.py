@@ -725,22 +725,24 @@ with paneles[idx_bap]:
             col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
             
             if col_esc_db and not df_alumnos.empty and escuela_ind != "Sin escuelas asignadas":
-                # Candado de búsqueda exacta
-                busqueda = f"{id_escuela_seleccionada}|{escuela_ind}"
+                # Limpiamos los términos para que los espacios vacíos no rompan el filtro
+                terminos_validos = [t.upper() for t in [id_escuela_seleccionada, escuela_ind] if t.strip()]
                 if "ICHCAANZIHO" in escuela_ind.upper():
-                    busqueda += "|ICHCAANZIHÓ"
+                    terminos_validos.append("ICHCAANZIHÓ")
                     
-                mascara_escuela = df_alumnos[col_esc_db].astype(str).str.upper().str.contains(busqueda.upper(), regex=True)
+                mascara_escuela = df_alumnos[col_esc_db].astype(str).str.upper().apply(
+                    lambda x: any(t in x for t in terminos_validos)
+                )
                 df_esc_ind = df_alumnos[mascara_escuela]
             else:
-                df_esc_ind = df_alumnos.iloc[0:0] # Devuelve vacío si no hay escuela, para que no salgan todos
+                df_esc_ind = df_alumnos.iloc[0:0] 
                 
-            # 3. Filtrar por atención Individual
+            # 3. Filtrar por atención Individual (Flexible para tolerar espacios extra en el Excel)
             col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
-            col_atn_db = next((c for c in df_alumnos.columns if "ATENCION" in c.upper().replace('Ó', 'O') or "MODALIDAD" in c.upper()), None)
+            col_atn_db = next((c for c in df_alumnos.columns if "ATENCION" in str(c).upper().replace('Ó', 'O') or "MODALIDAD" in str(c).upper()), None)
             
             if not df_esc_ind.empty and col_atn_db:
-                mascara_ind = df_esc_ind[col_atn_db].astype(str).str.strip().str.upper() == 'INDIVIDUAL'
+                mascara_ind = df_esc_ind[col_atn_db].astype(str).str.upper().str.contains('INDIVIDUAL')
                 df_ind = df_esc_ind[mascara_ind]
                 alumnos_individuales = sorted([nom for nom in df_ind[col_nom_db].astype(str).tolist() if str(nom).strip() != ""])
             else:
