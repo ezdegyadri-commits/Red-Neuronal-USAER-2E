@@ -720,21 +720,20 @@ with paneles[idx_bap]:
 
             escuela_ind = st.selectbox("1. Selecciona la Escuela", opciones_escuela_ind if opciones_escuela_ind else ["Sin escuelas asignadas"])
             
-            # 2. Filtrar alumnos por la escuela seleccionada
+            # 2. Filtrar alumnos ESTRICTAMENTE por la escuela seleccionada
             id_escuela_seleccionada = escuelas_usaer.get(escuela_ind, "")
             col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
             
-            if col_esc_db and not df_alumnos.empty:
-                terminos_escuela = [id_escuela_seleccionada.upper(), escuela_ind.upper()]
+            if col_esc_db and not df_alumnos.empty and escuela_ind != "Sin escuelas asignadas":
+                # Candado de búsqueda exacta
+                busqueda = f"{id_escuela_seleccionada}|{escuela_ind}"
                 if "ICHCAANZIHO" in escuela_ind.upper():
-                    terminos_escuela.append("ICHCAANZIHÓ")
+                    busqueda += "|ICHCAANZIHÓ"
                     
-                mascara_escuela = df_alumnos[col_esc_db].astype(str).str.upper().apply(
-                    lambda x: any(t in x for t in terminos_escuela if t)
-                )
+                mascara_escuela = df_alumnos[col_esc_db].astype(str).str.upper().str.contains(busqueda.upper(), regex=True)
                 df_esc_ind = df_alumnos[mascara_escuela]
             else:
-                df_esc_ind = df_alumnos
+                df_esc_ind = df_alumnos.iloc[0:0] # Devuelve vacío si no hay escuela, para que no salgan todos
                 
             # 3. Filtrar por atención Individual
             col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
@@ -910,6 +909,37 @@ with paneles[idx_evt]:
     
     if filtro_escuela == "Todas las escuelas":
         df_evt = df_alumnos
+        # --- FILTRO 1: ESCUELA ---
+        filtro_escuela = st.selectbox("1. Filtrar por Centro de Trabajo", opciones_escuela)
+        id_escuela_buscada = escuelas_usaer.get(filtro_escuela, "")
+        col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
+        
+        if col_esc_db:
+            terminos = [id_escuela_buscada.upper(), filtro_escuela.upper()]
+            if "ICHCAANZIHO" in filtro_escuela.upper():
+                terminos.append("ICHCAANZIHÓ")
+                
+            mascara_esc = df_alumnos[col_esc_db].astype(str).str.upper().apply(
+                lambda x: any(t in x for t in terminos if t)
+            )
+            df_evt = df_alumnos[mascara_esc]
+        else:
+            df_evt = df_alumnos
+
+        # --- FILTRO 1.5: MAESTRA DE APOYO / ESPECIALISTA (NUEVO) ---
+        # Busca automáticamente cómo le pusiste a la columna en tu Excel (Maestra, Apoyo, Docente, etc.)
+        col_maestra = next((c for c in df_alumnos.columns if "MAESTRA" in str(c).upper() or "APOYO" in str(c).upper() or "DOCENTE" in str(c).upper() or "ESPECIALISTA" in str(c).upper()), None)
+        
+        if col_maestra and not df_evt.empty:
+            # Extrae los nombres de las maestras de esa escuela específica (Ej. Cecilia, Marycruz)
+            maestras_disponibles = sorted([m for m in df_evt[col_maestra].astype(str).unique() if m.strip() and m.upper() != "NAN"])
+            
+            if len(maestras_disponibles) > 0:
+                filtro_maestra = st.selectbox("1.5. Selecciona a la Maestra de Apoyo (Opcional)", ["Todas"] + maestras_disponibles)
+                
+                # Si elige a una maestra en específico, cortamos la lista solo para ella
+                if filtro_maestra != "Todas":
+                    df_evt = df_evt[df_evt[col_maestra].astype(str) == filtro_maestra]
     else:
         id_escuela_buscada = escuelas_usaer.get(filtro_escuela, "")
         col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
