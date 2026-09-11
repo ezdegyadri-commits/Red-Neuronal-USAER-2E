@@ -720,31 +720,33 @@ with paneles[idx_bap]:
 
             escuela_ind = st.selectbox("1. Selecciona la Escuela", opciones_escuela_ind if opciones_escuela_ind else ["Sin escuelas asignadas"])
             
-            # 2. Filtrar alumnos ESTRICTAMENTE por escuela y modalidad (Sin adivinar columnas)
+            # 2. Filtrar alumnos por escuela y atención (CERO FRICCIÓN Y SIN FANTASMAS)
             alumnos_individuales = []
             
             if not df_alumnos.empty and escuela_ind != "Sin escuelas asignadas":
                 
-                # A. Ubicar las columnas estandarizadas (generadas en Alta de Alumnos)
-                col_esc = 'ID_Escuela' if 'ID_Escuela' in df_alumnos.columns else next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper()), None)
-                col_atn = 'Tipo_Atencion' if 'Tipo_Atencion' in df_alumnos.columns else next((c for c in df_alumnos.columns if "ATENCION" in str(c).upper() or "MODALIDAD" in str(c).upper()), None)
+                # Identificar dinámicamente las columnas para evitar errores
+                col_esc = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
+                col_atn = next((c for c in df_alumnos.columns if "ATENCION" in str(c).upper().replace('Ó','O') or "MODALIDAD" in str(c).upper() or "TIPO" in str(c).upper()), None)
                 col_nom = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else next((c for c in df_alumnos.columns if "NOMBRE" in str(c).upper()), None)
 
                 if col_esc and col_atn and col_nom:
-                    # 1. Obtenemos la clave oficial de la escuela (Ej. ESC-006)
-                    id_escuela_oficial = escuelas_usaer.get(escuela_ind, "").strip().upper()
-                    nombre_escuela_limpio = escuela_ind.upper().replace('Ó', 'O')
+                    # Filtro 1: Escuela Segura (Evita que alumnos de otras escuelas se cuelen)
+                    id_esc = escuelas_usaer.get(escuela_ind, "").upper()
+                    nom_esc = escuela_ind.upper().replace('Ó', 'O').replace('Í', 'I')
                     
-                    # 2. Filtramos la escuela bloqueando fantasmas
-                    mascara_escuela = df_alumnos[col_esc].astype(str).str.upper().str.replace('Ó', 'O').apply(
-                        lambda x: (id_escuela_oficial in x if id_escuela_oficial else False) or (nombre_escuela_limpio in x)
+                    mascara_escuela = df_alumnos[col_esc].astype(str).str.upper().str.replace('Ó', 'O').str.replace('Í', 'I').apply(
+                        lambda x: (id_esc in x if id_esc else False) or 
+                                  (nom_esc in x) or 
+                                  ("ICHCAANZIHO" in x if "ICHCAANZIHO" in nom_esc else False)
                     )
-                    df_esc_ind = df_alumnos[mascara_escuela]
                     
-                    # 3. Filtramos por estatus "Individual"
-                    if not df_esc_ind.empty:
-                        mascara_ind = df_esc_ind[col_atn].astype(str).str.strip().str.upper() == 'INDIVIDUAL'
-                        df_ind = df_esc_ind[mascara_ind]
+                    df_esc = df_alumnos[mascara_escuela]
+                    
+                    # Filtro 2: Atención (A prueba de espacios basura, busca solo que contenga la palabra)
+                    if not df_esc.empty:
+                        mascara_ind = df_esc[col_atn].astype(str).str.upper().str.contains("INDIVIDUAL", na=False)
+                        df_ind = df_esc[mascara_ind]
                         
                         alumnos_individuales = sorted([nom for nom in df_ind[col_nom].astype(str).unique() if str(nom).strip() != "" and str(nom).upper() != "NAN"])
 
