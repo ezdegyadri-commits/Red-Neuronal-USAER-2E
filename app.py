@@ -910,7 +910,18 @@ with paneles[idx_evt]:
     if filtro_escuela == "Todas las escuelas":
         df_evt = df_alumnos
         # --- FILTRO 1: ESCUELA ---
-        filtro_escuela = st.selectbox("1. Filtrar por Centro de Trabajo", opciones_escuela)
+        # --- DETERMINAR ESCUELAS PERMITIDAS PARA EL USUARIO EN EVENTOS ---
+        rol_activo_evt = str(st.session_state.get("rol", "")).upper()
+        escuelas_perm_evt = str(st.session_state.get("escuelas_permitidas", "")).strip().upper()
+        
+        if "DIRECTOR" in rol_activo_evt or "TRABAJO" in rol_activo_evt or "TODAS" in escuelas_perm_evt:
+            opciones_escuela = list(escuelas_usaer.keys())
+        else:
+            claves_permitidas = [e.strip() for e in escuelas_perm_evt.split(",")]
+            opciones_escuela = [nombre for nombre, clave in escuelas_usaer.items() if clave in claves_permitidas]
+
+        # --- FILTRO 1: ESCUELA ---
+        filtro_escuela = st.selectbox("1. Filtrar por Centro de Trabajo", opciones_escuela if opciones_escuela else ["Sin escuelas asignadas"])
         id_escuela_buscada = escuelas_usaer.get(filtro_escuela, "")
         col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
         
