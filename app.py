@@ -378,7 +378,7 @@ try:
     # 3. DICCIONARIO MAESTRO DE LA ZONA 001
     mapeo_zona = {
         "ESC-001": ["ESC-001", "DAMIÁN CARMONA", "DAMIAN CARMONA"],
-        "ESC-002": ["ESC-002", "ICHCAANZIHO"],
+        "ESC-002": ["ESC-002", "ICHCAANZIHO", "ICHCAANZIHÓ"],
         "ESC-003": ["ESC-003", "GREGORIO TORRES QUINTERO", "GREGORIO TORRES"],
         "ESC-004": ["ESC-004", "REMIGIO AGUILAR SOSA", "REMIGIO AGUILAR"],
         "ESC-005": ["ESC-005", "ELVIRA PARRA"],
@@ -707,26 +707,54 @@ with paneles[idx_bap]:
         
         # Lógica condicional según la selección del usuario
         if tipo_evaluacion == "👤 Individual (Alumno Específico)":
-            col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
             
-            # Buscador flexible de la columna de atención
+            # 1. Selector de Escuela para Individual
+            rol_activo_bap = str(st.session_state.get("rol", "")).upper()
+            escuelas_perm_bap = str(st.session_state.get("escuelas_permitidas", "")).strip().upper()
+            
+            if "DIRECTOR" in rol_activo_bap or "TRABAJO" in rol_activo_bap or "TODAS" in escuelas_perm_bap:
+                opciones_escuela_ind = list(escuelas_usaer.keys())
+            else:
+                claves_permitidas = [e.strip() for e in escuelas_perm_bap.split(",")]
+                opciones_escuela_ind = [nombre for nombre, clave in escuelas_usaer.items() if clave in claves_permitidas]
+
+            escuela_ind = st.selectbox("1. Selecciona la Escuela", opciones_escuela_ind if opciones_escuela_ind else ["Sin escuelas asignadas"])
+            
+            # 2. Filtrar alumnos por la escuela seleccionada
+            id_escuela_seleccionada = escuelas_usaer.get(escuela_ind, "")
+            col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
+            
+            if col_esc_db and not df_alumnos.empty:
+                terminos_escuela = [id_escuela_seleccionada.upper(), escuela_ind.upper()]
+                if "ICHCAANZIHO" in escuela_ind.upper():
+                    terminos_escuela.append("ICHCAANZIHÓ")
+                    
+                mascara_escuela = df_alumnos[col_esc_db].astype(str).str.upper().apply(
+                    lambda x: any(t in x for t in terminos_escuela if t)
+                )
+                df_esc_ind = df_alumnos[mascara_escuela]
+            else:
+                df_esc_ind = df_alumnos
+                
+            # 3. Filtrar por atención Individual
+            col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
             col_atn_db = next((c for c in df_alumnos.columns if "ATENCION" in c.upper().replace('Ó', 'O') or "MODALIDAD" in c.upper()), None)
             
-            if not df_alumnos.empty and col_atn_db:
-                mascara_ind = df_alumnos[col_atn_db].astype(str).str.strip().str.upper() == 'INDIVIDUAL'
-                df_ind = df_alumnos[mascara_ind]
-                alumnos_individuales = sorted([nom for nom in df_ind[col_nom_db].astype(str).tolist() if nom.strip() != ""])
+            if not df_esc_ind.empty and col_atn_db:
+                mascara_ind = df_esc_ind[col_atn_db].astype(str).str.strip().str.upper() == 'INDIVIDUAL'
+                df_ind = df_esc_ind[mascara_ind]
+                alumnos_individuales = sorted([nom for nom in df_ind[col_nom_db].astype(str).tolist() if str(nom).strip() != ""])
             else:
                 alumnos_individuales = []
 
             if not alumnos_individuales:
-                st.warning("⚠️ No se encontraron alumnos con tipo de atención 'Individual' en la base de datos.")
+                st.warning(f"⚠️ No se encontraron alumnos con atención 'Individual' en {escuela_ind}.")
 
             objetivo_seleccionado = st.selectbox(
-                "Selecciona al Alumno a evaluar",
-                alumnos_individuales if alumnos_individuales else ["Sin registros individuales"]
+                "2. Selecciona al Alumno a evaluar",
+                alumnos_individuales if alumnos_individuales else ["Sin registros"]
             )
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} considerando sus barreras específicas detectadas."
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} de la escuela {escuela_ind} considerando sus barreras específicas detectadas."
             
         else:
             # --- AQUÍ ESTÁN LOS SELECTORES DEL MODO GRUPAL ---
@@ -1120,13 +1148,37 @@ with paneles[idx_visor]:
                     """
                     
                     if not df_anexo4.empty and 'Nombre_Alumno' in df_anexo4.columns:
-                        # Ordenar por fecha de más antiguo a más reciente
-                        registros_a4 = df_anexo4[df_anexo4['Nombre_Alumno'] == alum_visor].sort_values(by='Fecha_Elaboracion')
+                        # 1. Identificar el grupo y escuela del alumno para jalar las BAP Grupales
+                        string_grupal_exacto = "SIN_GRUPO"
+                        grado_grupo_visor = "S/G"
+                        escuela_visor = "USAER_General"
+                        
+                        if not df_alumnos.empty:
+                            col_nom_v = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
+                            fila_alum_v = df_alumnos.loc[df_alumnos[col_nom_v] == alum_visor]
+                            
+                            if not fila_alum_v.empty:
+                                col_g = next((c for c in df_alumnos.columns if "GRADO" in str(c).upper()), 'Grado')
+                                col_gr = next((c for c in df_alumnos.columns if "GRUPO" in str(c).upper()), 'Grupo')
+                                col_esc_v = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
+                                
+                                val_grado = str(fila_alum_v[col_g].values[0]) if col_g in df_alumnos.columns else ""
+                                val_grupo = str(fila_alum_v[col_gr].values[0]) if col_gr in df_alumnos.columns else ""
+                                grado_grupo_visor = f"{val_grado} {val_grupo}".strip()
+                                
+                                id_esc_v = str(fila_alum_v[col_esc_v].values[0]) if col_esc_v else ""
+                                escuela_visor = next((k for k, v in escuelas_usaer.items() if v == id_esc_v), id_esc_v)
+                                
+                                string_grupal_exacto = f"Grupo {grado_grupo_visor} de la escuela {escuela_visor}"
+                        
+                        # 2. Filtrar Anexo 4 (Individuales + Grupales de su salón)
+                        mascara_a4 = (df_anexo4['Nombre_Alumno'] == alum_visor) | (df_anexo4['Nombre_Alumno'] == string_grupal_exacto)
+                        registros_a4 = df_anexo4[mascara_a4].sort_values(by='Fecha_Elaboracion')
                         
                         if not registros_a4.empty:
                             for idx, row in registros_a4.iterrows():
-                                escuela_alumno = row.get('Escuela', 'USAER_General')
-                                grado_grupo = row.get('Grado_Grupo', '')
+                                escuela_alumno = row.get('Escuela', escuela_visor)
+                                grado_grupo = row.get('Grado_Grupo', grado_grupo_visor)
                                 fecha_doc = row.get('Fecha_Elaboracion', '')
                                 especialista_doc = row.get('Quien_Brinda_Sugerencias', '')
                                 motivo_doc = row.get('Motivo', '')
@@ -1134,8 +1186,12 @@ with paneles[idx_visor]:
                                 nivel_cump = row.get('Nivel_Cumplimiento_Resultados', '')
                                 sugerencias_doc = str(row.get('Sugerencias', '')).replace(chr(10), '<br>')
                                 
+                                # Determinar si es grupal o individual
+                                es_grupal = "Grupo" in str(row.get('Nombre_Alumno', ''))
+                                etiqueta_tipo = "GRUPALES" if es_grupal else "INDIVIDUALES"
+                                
                                 # Mostrar en pantalla
-                                with st.expander(f"Sugerencias del {fecha_doc} - Especialista: {especialista_doc}"):
+                                with st.expander(f"Sugerencias {etiqueta_tipo} del {fecha_doc} - Especialista: {especialista_doc}"):
                                     st.write(f"**Motivo:** {motivo_doc}")
                                     st.info(row.get('Sugerencias', ''))
                                     
@@ -1148,6 +1204,7 @@ with paneles[idx_visor]:
                                     <b>Servicio de EE:</b> USAER 2E</p>
                                     
                                     <p><b>Sugerencias del área:</b> {area_doc} [ X ]<br>
+                                    <b>Enfoque de las Sugerencias:</b> {etiqueta_tipo}<br>
                                     <b>Fecha de elaboración:</b> {fecha_doc}<br>
                                     <b>Motivo por el que se brindan las sugerencias:</b> {motivo_doc}<br>
                                     <b>Fecha de seguimiento:</b> ___________________</p>
