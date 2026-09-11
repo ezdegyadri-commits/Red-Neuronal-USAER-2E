@@ -720,38 +720,39 @@ with paneles[idx_bap]:
 
             escuela_ind = st.selectbox("1. Selecciona la Escuela", opciones_escuela_ind if opciones_escuela_ind else ["Sin escuelas asignadas"])
             
-            # 2. Filtrar alumnos ESTRICTAMENTE por escuela y atención
+            # 2. MÉTODO INFALIBLE: Verificación fila por fila (For Loop)
             alumnos_individuales = []
             
             if not df_alumnos.empty and escuela_ind != "Sin escuelas asignadas":
-                # Usar los nombres exactos de las columnas de tu Excel maestro
-                col_esc = "ID_Escuela"
-                col_atn = "Tipo_Atencion"
-                col_nom = "Nombre_Completo"
-                
-                # Validar que las 3 columnas existan de verdad en la memoria
-                if col_esc in df_alumnos.columns and col_atn in df_alumnos.columns and col_nom in df_alumnos.columns:
-                    
-                    # A. Aislar LA ESCUELA EXACTA. Sin variables ambiguas.
+                # Detectamos las columnas reales para evitar errores de espacios en Excel
+                col_esc = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
+                col_atn = next((c for c in df_alumnos.columns if "ATENCION" in str(c).upper().replace('Ó','O') or "MODALIDAD" in str(c).upper()), None)
+                col_nom = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else next((c for c in df_alumnos.columns if "NOMBRE" in str(c).upper()), None)
+
+                if col_esc and col_atn and col_nom:
                     id_oficial = escuelas_usaer.get(escuela_ind, "").strip().upper()
-                    nombre_oficial = escuela_ind.strip().upper()
+                    nombre_oficial = escuela_ind.strip().upper().replace('Ó', 'O')
                     
-                    # Convertir toda la columna de escuelas a mayúsculas limpias para comparar
-                    serie_escuela = df_alumnos[col_esc].astype(str).str.strip().str.upper()
-                    
-                    # Regla estricta: O coincide la clave (ESC-00X) O coincide el nombre exacto
-                    mascara_escuela = (serie_escuela == id_oficial) | (serie_escuela == nombre_oficial)
-                    if "ICHCAANZIHO" in nombre_oficial:
-                        mascara_escuela = mascara_escuela | (serie_escuela == "ICHCAANZIHÓ")
-                    
-                    df_esc = df_alumnos[mascara_escuela]
-                    
-                    # B. De esa escuela específica, buscar SOLO los individuales
-                    if not df_esc.empty:
-                        mascara_ind = df_esc[col_atn].astype(str).str.strip().str.upper() == "INDIVIDUAL"
-                        df_ind = df_esc[mascara_ind]
+                    # Escaneo manual con lupa de cada alumno en la base de datos
+                    for index, row in df_alumnos.iterrows():
+                        val_esc = str(row[col_esc]).strip().upper().replace('Ó', 'O')
+                        val_atn = str(row[col_atn]).strip().upper()
+                        val_nom = str(row[col_nom]).strip()
                         
-                        alumnos_individuales = sorted([nom for nom in df_ind[col_nom].astype(str).unique() if str(nom).strip() != "" and str(nom).upper() != "NAN"])
+                        # Condición 1: ¿Pertenece EXACTAMENTE a la escuela seleccionada?
+                        es_su_escuela = (val_esc == id_oficial) or (val_esc == nombre_oficial)
+                        if "ICHCAANZIHO" in nombre_oficial and "ICHCAANZIHO" in val_esc:
+                            es_su_escuela = True
+                            
+                        # Condición 2: ¿Su tipo de atención es estrictamente INDIVIDUAL?
+                        es_individual = (val_atn == "INDIVIDUAL")
+                        
+                        # Si cumple AMBAS, lo dejamos pasar a la lista
+                        if es_su_escuela and es_individual and val_nom and val_nom != "NAN":
+                            alumnos_individuales.append(val_nom)
+                            
+                    # Ordenamos alfabéticamente y eliminamos posibles duplicados
+                    alumnos_individuales = sorted(list(set(alumnos_individuales)))
 
             if not alumnos_individuales:
                 st.warning(f"⚠️ No hay alumnos con estatus 'Individual' registrados en la escuela {escuela_ind}.")
