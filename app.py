@@ -721,40 +721,40 @@ with paneles[idx_bap]:
             escuela_ind = st.selectbox("1. Selecciona la Escuela", opciones_escuela_ind if opciones_escuela_ind else ["Sin escuelas asignadas"])
             
             # 2. Filtrar alumnos ESTRICTAMENTE por la escuela seleccionada
-            id_escuela_seleccionada = escuelas_usaer.get(escuela_ind, "")
             col_esc_db = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
             
             if col_esc_db and not df_alumnos.empty and escuela_ind != "Sin escuelas asignadas":
-                # Limpiamos los términos para que los espacios vacíos no rompan el filtro
-                terminos_validos = [t.upper() for t in [id_escuela_seleccionada, escuela_ind] if t.strip()]
+                # Candado de escuela (tolerando el acento de Ichcaanzihó)
                 if "ICHCAANZIHO" in escuela_ind.upper():
-                    terminos_validos.append("ICHCAANZIHÓ")
-                    
-                mascara_escuela = df_alumnos[col_esc_db].astype(str).str.upper().apply(
-                    lambda x: any(t in x for t in terminos_validos)
-                )
+                    mascara_escuela = df_alumnos[col_esc_db].astype(str).str.upper().str.contains("ICHCAANZIHO|ICHCAANZIHÓ", regex=True, na=False)
+                else:
+                    mascara_escuela = df_alumnos[col_esc_db].astype(str).str.upper().str.contains(escuela_ind.upper(), regex=False, na=False)
+                
                 df_esc_ind = df_alumnos[mascara_escuela]
             else:
                 df_esc_ind = df_alumnos.iloc[0:0] 
                 
-            # 3. Filtrar por atención Individual (Flexible para tolerar espacios extra en el Excel)
+            # 3. Filtrar ESTRICTAMENTE por atención "Individual" (Limpiando espacios basura de Excel)
             col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
             col_atn_db = next((c for c in df_alumnos.columns if "ATENCION" in str(c).upper().replace('Ó', 'O') or "MODALIDAD" in str(c).upper()), None)
             
-            if not df_esc_ind.empty and col_atn_db:
-                mascara_ind = df_esc_ind[col_atn_db].astype(str).str.upper().str.contains('INDIVIDUAL')
+            if not df_esc_ind.empty and col_atn_db and col_nom_db in df_esc_ind.columns:
+                # La magia está en .str.strip(): borra espacios invisibles antes de comparar
+                mascara_ind = df_esc_ind[col_atn_db].astype(str).str.strip().str.upper() == 'INDIVIDUAL'
                 df_ind = df_esc_ind[mascara_ind]
-                alumnos_individuales = sorted([nom for nom in df_ind[col_nom_db].astype(str).tolist() if str(nom).strip() != ""])
+                alumnos_individuales = sorted([nom for nom in df_ind[col_nom_db].astype(str).unique() if str(nom).strip() != ""])
             else:
                 alumnos_individuales = []
 
             if not alumnos_individuales:
-                st.warning(f"⚠️ No se encontraron alumnos con atención 'Individual' en {escuela_ind}.")
+                st.warning(f"⚠️ No se encontraron alumnos con estatus 'Individual' en la escuela {escuela_ind}.")
 
             objetivo_seleccionado = st.selectbox(
                 "2. Selecciona al Alumno a evaluar",
-                alumnos_individuales if alumnos_individuales else ["Sin registros"]
+                alumnos_individuales if alumnos_individuales else ["Sin alumnos individuales"]
             )
+            
+            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} de la escuela {escuela_ind} considerando sus barreras específicas detectadas."
             prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} de la escuela {escuela_ind} considerando sus barreras específicas detectadas."
             
         else:
