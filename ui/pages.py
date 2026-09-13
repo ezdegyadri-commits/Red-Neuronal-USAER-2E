@@ -91,43 +91,50 @@ def bap_page(df):
     modo = st.radio("Tipo de evaluación", ["Individual (alumno específico)", "Grupal (contexto áulico)"], horizontal=True, key="bap_modo")
     opciones_escuela = list(ESCUELAS_USAER)
 
-    if modo.startswith("Individual"):
-        escuela = st.selectbox(
+        if modo.startswith("Individual"):
+            escuela = st.selectbox(
             "1. Escuela",
             opciones_escuela,
             key="bap_escuela_ind"
-    )
-
-    escuela_df = alumnos_individuales_de_escuela(
-        df,
-        escuela
-    )
-
-    if escuela_df.empty:
-        st.warning(
-            "No hay alumnos con atención individual registrados "
-            "en esta escuela."
         )
-        return
 
-    alumno_nombre = st.selectbox(
-        "2. Alumno",
-        escuela_df["Nombre_Completo"].astype(str).tolist(),
-        key="bap_alumno_ind"
-    )
+        escuela_df = alumnos_individuales_de_escuela(
+            df,
+            escuela
+        )
 
-    fila = escuela_df[
-        escuela_df["Nombre_Completo"].astype(str)
-        == alumno_nombre
-    ].iloc[0]
+        if escuela_df.empty:
+            st.warning(
+                "No hay alumnos con atención individual registrados "
+                "en esta escuela."
+            )
+            return
 
-    id_a = str(fila["ID_Alumno"])
-    objetivo = alumno_nombre
+        alumno_nombre = st.selectbox(
+            "2. Alumno",
+            escuela_df["Nombre_Completo"].astype(str).tolist(),
+            key="bap_alumno_ind"
+        )
 
-    grado_grupo = (
-        f"{fila.get('Grado', '')} "
-        f"{fila.get('Grupo', '')}"
-    ).strip()
+        fila = escuela_df[
+            escuela_df["Nombre_Completo"].astype(str)
+            == alumno_nombre
+        ].iloc[0]
+
+        id_a = str(fila["ID_Alumno"])
+        objetivo = alumno_nombre
+
+        grado_grupo = (
+            f"{fila.get('Grado', '')} "
+            f"{fila.get('Grupo', '')}"
+        ).strip()
+
+        escuela_nombre = escuela
+
+        contexto_base = {
+            "tipo": "Individual",
+            "alumno": fila.to_dict()
+        }
 
     escuela_nombre = escuela
 
