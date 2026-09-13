@@ -92,13 +92,49 @@ def bap_page(df):
     opciones_escuela = list(ESCUELAS_USAER)
 
     if modo.startswith("Individual"):
-        escuela = st.selectbox("1. Escuela", opciones_escuela, key="bap_escuela_ind")
-        escuela_df = df[df["ID_Escuela"].astype(str).str.upper().str.contains(ESCUELAS_USAER[escuela], na=False)] if "ID_Escuela" in df.columns else df.iloc[0:0]
-        if "Tipo_Atencion" in escuela_df.columns:
-            escuela_df = escuela_df[escuela_df["Tipo_Atencion"].astype(str).str.upper().str.contains("INDIVIDUAL", na=False)]
-        if escuela_df.empty:
-            st.warning("No hay alumnos con atención individual registrados en esta escuela.")
-            return
+    escuela = st.selectbox(
+        "1. Escuela",
+        opciones_escuela,
+        key="bap_escuela_ind"
+    )
+
+    escuela_df = alumnos_individuales_de_escuela(
+        df,
+        escuela
+    )
+
+    if escuela_df.empty:
+        st.warning(
+            "No hay alumnos con atención individual registrados "
+            "en esta escuela."
+        )
+        return
+
+    alumno_nombre = st.selectbox(
+        "2. Alumno",
+        escuela_df["Nombre_Completo"].astype(str).tolist(),
+        key="bap_alumno_ind"
+    )
+
+    fila = escuela_df[
+        escuela_df["Nombre_Completo"].astype(str)
+        == alumno_nombre
+    ].iloc[0]
+
+    id_a = str(fila["ID_Alumno"])
+    objetivo = alumno_nombre
+
+    grado_grupo = (
+        f"{fila.get('Grado', '')} "
+        f"{fila.get('Grupo', '')}"
+    ).strip()
+
+    escuela_nombre = escuela
+
+    contexto_base = {
+        "tipo": "Individual",
+        "alumno": fila.to_dict()
+    }
         alumno_nombre = st.selectbox("2. Alumno", escuela_df["Nombre_Completo"].astype(str).tolist(), key="bap_alumno_ind")
         fila = escuela_df[escuela_df["Nombre_Completo"].astype(str) == alumno_nombre].iloc[0]
         id_a = str(fila["ID_Alumno"])
