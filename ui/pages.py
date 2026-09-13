@@ -92,10 +92,10 @@ def bap_page(df):
     opciones_escuela = list(ESCUELAS_USAER)
 
     if modo.startswith("Individual"):
-    escuela = st.selectbox(
-        "1. Escuela",
-        opciones_escuela,
-        key="bap_escuela_ind"
+        escuela = st.selectbox(
+            "1. Escuela",
+            opciones_escuela,
+            key="bap_escuela_ind"
     )
 
     escuela_df = alumnos_individuales_de_escuela(
