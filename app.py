@@ -15,6 +15,157 @@ import io
 
 # 1. CONFIGURACIÓN DE PÁGINA (Debe ser la línea 1 operativa)
 st.set_page_config(page_title="USAER 2E", layout="wide")
+import unicodedata
+
+def normalizar_texto(valor):
+    """
+    Normaliza textos para comparar correctamente:
+    - Mayúsculas/minúsculas
+    - Acentos
+    - Espacios sobrantes
+    """
+    if pd.isna(valor):
+        return ""
+
+    texto = str(valor).strip().upper()
+
+    texto = unicodedata.normalize("NFD", texto)
+
+    texto = "".join(
+        caracter
+        for caracter in texto
+        if unicodedata.category(caracter) != "Mn"
+    )
+
+    return texto.strip()
+
+
+def obtener_alumnos_de_escuela(df, nombre_escuela, escuelas_diccionario):
+    """
+    Devuelve únicamente los alumnos pertenecientes
+    a la escuela seleccionada.
+    """
+
+    if df.empty:
+        return pd.DataFrame(columns=df.columns)
+
+    id_escuela = escuelas_diccionario.get(
+        nombre_escuela,
+        ""
+    )
+
+    id_normalizado = normalizar_texto(id_escuela)
+    nombre_normalizado = normalizar_texto(nombre_escuela)
+
+    # ---------------------------------------------------------
+    # Buscar columna de escuela
+    # ---------------------------------------------------------
+
+    posibles_columnas = [
+        c for c in df.columns
+        if (
+            "ID_ESCUELA" in normalizar_texto(c)
+            or normalizar_texto(c) == "ESCUELA"
+            or "ESCUELA_ASIGNADA" in normalizar_texto(c)
+            or "ESCUELA" in normalizar_texto(c)
+        )
+    ]
+
+    col_escuela = posibles_columnas[0] if posibles_columnas else None
+
+    if not col_escuela:
+        return pd.DataFrame(columns=df.columns)
+
+    # ---------------------------------------------------------
+    # Normalizar valores de escuela
+    # ---------------------------------------------------------
+
+    valores_escuela = (
+        df[col_escuela]
+        .fillna("")
+        .astype(str)
+        .apply(normalizar_texto)
+    )
+
+    # ---------------------------------------------------------
+    # PRIMERA OPCIÓN:
+    # buscar por ID oficial
+    # ---------------------------------------------------------
+
+    if id_normalizado:
+
+        mascara = (
+            valores_escuela == id_normalizado
+        )
+
+        df_resultado = df[mascara].copy()
+
+        if not df_resultado.empty:
+            return df_resultado
+
+    # ---------------------------------------------------------
+    # SEGUNDA OPCIÓN:
+    # buscar por nombre exacto
+    # ---------------------------------------------------------
+
+    mascara_nombre = (
+        valores_escuela == nombre_normalizado
+    )
+
+    df_resultado = df[mascara_nombre].copy()
+
+    if not df_resultado.empty:
+        return df_resultado
+
+    # ---------------------------------------------------------
+    # TERCERA OPCIÓN:
+    # compatibilidad con bases antiguas
+    # ---------------------------------------------------------
+
+    if id_normalizado:
+
+        mascara_parcial = valores_escuela.str.contains(
+            id_normalizado,
+            regex=False,
+            na=False
+        )
+
+        df_resultado = df[mascara_parcial].copy()
+
+        if not df_resultado.empty:
+            return df_resultado
+
+    mascara_parcial_nombre = valores_escuela.str.contains(
+        nombre_normalizado,
+        regex=False,
+        na=False
+    )
+
+    return df[mascara_parcial_nombre].copy()
+
+
+def obtener_columna_atencion(df):
+    """
+    Encuentra automáticamente la columna que contiene
+    el tipo de atención.
+    """
+
+    if df.empty:
+        return None
+
+    for columna in df.columns:
+
+        nombre = normalizar_texto(columna)
+
+        if (
+            "TIPO_ATENCION" in nombre
+            or "TIPO DE ATENCION" in nombre
+            or "ATENCION" in nombre
+            or "MODALIDAD" in nombre
+        ):
+            return columna
+
+    return None
 def calcular_edad_exacta(curp):
     if len(str(curp)) < 10:
         return "Edad no calculable (Falta CURP)"
@@ -653,10 +804,43 @@ if idx_alta != -1:
                                             col_atn = c
                                             break
                                             
-                                if col_atn:
-                                    df_final['Tipo_Atencion'] = df_valido[col_atn].astype(str).str.strip().str.title().replace('Nan', 'Grupal').replace('', 'Grupal')
-                                else:
-                                    df_final['Tipo_Atencion'] = "Grupal"
+                                # ===============================================================
+# TIPO DE ATENCIÓN
+# ===============================================================
+
+if col_atn:
+
+    df_final['Tipo_Atencion'] = (
+        df_valido[col_atn]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .apply(normalizar_texto)
+    )
+
+    # Normalizamos únicamente los valores conocidos
+    df_final['Tipo_Atencion'] = (
+        df_final['Tipo_Atencion']
+        .replace({
+            "INDIVIDUAL": "Individual",
+            "GRUPAL": "Grupal"
+        })
+    )
+
+else:
+
+    # IMPORTANTE:
+    # NO convertir automáticamente a Grupal.
+    # Eso provocaba que todos los alumnos quedaran
+    # clasificados incorrectamente.
+
+    df_final['Tipo_Atencion'] = ""
+
+    st.warning(
+        "⚠️ No se encontró una columna de Tipo de Atención "
+        "en el archivo importado. Los alumnos quedaron sin "
+        "clasificación para evitar asignarlos incorrectamente."
+    )
                                 # -------------------------------------------
                                 
                                 df_final = df_final.fillna("")
@@ -697,203 +881,914 @@ if idx_alta != -1:
 
 
   # --- MÓDULO: BAPs COLABORATIVAS ---
+# ============================================================
+# MÓDULO: BAPs COLABORATIVAS
+# ============================================================
+
 with paneles[idx_bap]:
-    st.subheader("Evaluación de Barreras en el Contexto Áulico")
-    
-    # REGRESAMOS EL SELECTOR MANUAL
-    tipo_evaluacion = st.radio("Tipo de Observación y Sugerencias:", ["👥 Grupal (Contexto del Aula)", "👤 Individual (Alumno Específico)"], horizontal=True)
-    
-    with st.form("anexo3_form", clear_on_submit=False):
-        
-        # Lógica condicional según la selección del usuario
-        if tipo_evaluacion == "👤 Individual (Alumno Específico)":
-            
-            # 1. Selector de Escuela para Individual
-            rol_activo_bap = str(st.session_state.get("rol", "")).upper()
-            escuelas_perm_bap = str(st.session_state.get("escuelas_permitidas", "")).strip().upper()
-            
-            if "DIRECTOR" in rol_activo_bap or "TRABAJO" in rol_activo_bap or "TODAS" in escuelas_perm_bap:
-                opciones_escuela_ind = list(escuelas_usaer.keys())
-            else:
-                claves_permitidas = [e.strip() for e in escuelas_perm_bap.split(",")]
-                opciones_escuela_ind = [nombre for nombre, clave in escuelas_usaer.items() if clave in claves_permitidas]
 
-            escuela_ind = st.selectbox("1. Selecciona la Escuela", opciones_escuela_ind if opciones_escuela_ind else ["Sin escuelas asignadas"])
-            
-            # 2. MÉTODO INFALIBLE: Verificación fila por fila (For Loop)
-            alumnos_individuales = []
-            
-            if not df_alumnos.empty and escuela_ind != "Sin escuelas asignadas":
-                # Detectamos las columnas reales para evitar errores de espacios en Excel
-                col_esc = next((c for c in df_alumnos.columns if "ESCUELA" in str(c).upper() or "ASIGNADA" in str(c).upper()), None)
-                col_atn = next((c for c in df_alumnos.columns if "ATENCION" in str(c).upper().replace('Ó','O') or "MODALIDAD" in str(c).upper()), None)
-                col_nom = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else next((c for c in df_alumnos.columns if "NOMBRE" in str(c).upper()), None)
+    st.subheader(
+        "Evaluación de Barreras en el Contexto Áulico"
+    )
 
-                if col_esc and col_atn and col_nom:
-                    id_oficial = escuelas_usaer.get(escuela_ind, "").strip().upper()
-                    nombre_oficial = escuela_ind.strip().upper().replace('Ó', 'O')
-                    
-                    # Escaneo manual con lupa de cada alumno en la base de datos
-                    for index, row in df_alumnos.iterrows():
-                        val_esc = str(row[col_esc]).strip().upper().replace('Ó', 'O')
-                        val_atn = str(row[col_atn]).strip().upper()
-                        val_nom = str(row[col_nom]).strip()
-                        
-                        # Condición 1: ¿Pertenece EXACTAMENTE a la escuela seleccionada?
-                        es_su_escuela = (val_esc == id_oficial) or (val_esc == nombre_oficial)
-                        if "ICHCAANZIHO" in nombre_oficial and "ICHCAANZIHO" in val_esc:
-                            es_su_escuela = True
-                            
-                        # Condición 2: ¿Su tipo de atención es estrictamente INDIVIDUAL?
-                        es_individual = (val_atn == "INDIVIDUAL")
-                        
-                        # Si cumple AMBAS, lo dejamos pasar a la lista
-                        if es_su_escuela and es_individual and val_nom and val_nom != "NAN":
-                            alumnos_individuales.append(val_nom)
-                            
-                    # Ordenamos alfabéticamente y eliminamos posibles duplicados
-                    alumnos_individuales = sorted(list(set(alumnos_individuales)))
+    # ========================================================
+    # 1. TIPO DE EVALUACIÓN
+    # ========================================================
 
-            if not alumnos_individuales:
-                st.warning(f"⚠️ No hay alumnos con estatus 'Individual' registrados en la escuela {escuela_ind}.")
+    tipo_evaluacion = st.radio(
+        "Tipo de Observación y Sugerencias:",
+        [
+            "👥 Grupal (Contexto del Aula)",
+            "👤 Individual (Alumno Específico)"
+        ],
+        horizontal=True,
+        key="tipo_evaluacion_bap"
+    )
 
-            objetivo_seleccionado = st.selectbox(
-                "2. Selecciona al Alumno a evaluar",
-                alumnos_individuales if alumnos_individuales else ["Sin registros"]
+    # ========================================================
+    # MODO INDIVIDUAL
+    # ========================================================
+
+    if tipo_evaluacion == "👤 Individual (Alumno Específico)":
+
+        # ----------------------------------------------------
+        # 2. DETERMINAR ESCUELAS DISPONIBLES
+        # ----------------------------------------------------
+
+        rol_activo_bap = normalizar_texto(
+            st.session_state.get("rol", "")
+        )
+
+        escuelas_perm_bap = normalizar_texto(
+            st.session_state.get(
+                "escuelas_permitidas",
+                ""
             )
-            
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias INDIVIDUALES para el alumno {objetivo_seleccionado} de la escuela {escuela_ind} considerando sus barreras específicas detectadas."
-            
+        )
+
+        if (
+            "DIRECTOR" in rol_activo_bap
+            or "TRABAJO" in rol_activo_bap
+            or "TODAS" in escuelas_perm_bap
+        ):
+
+            opciones_escuela_ind = list(
+                escuelas_usaer.keys()
+            )
+
         else:
-            # --- AQUÍ ESTÁN LOS SELECTORES DEL MODO GRUPAL ---
-            
-            # 1. Definir qué escuelas puede ver este especialista
-            rol_activo_bap = str(st.session_state.get("rol", "")).upper()
-            escuelas_perm_bap = str(st.session_state.get("escuelas_permitidas", "")).strip().upper()
-            
-            # Diego (Trabajo Social) y Director ven todas, los demás solo sus asignadas
-            if "DIRECTOR" in rol_activo_bap or "TRABAJO" in rol_activo_bap or "TODAS" in escuelas_perm_bap:
-                opciones_escuela_bap = list(escuelas_usaer.keys())
+
+            claves_permitidas = [
+                normalizar_texto(e)
+                for e in escuelas_perm_bap.split(",")
+                if e.strip()
+            ]
+
+            opciones_escuela_ind = []
+
+            for nombre, clave in escuelas_usaer.items():
+
+                if (
+                    normalizar_texto(clave)
+                    in claves_permitidas
+                    or normalizar_texto(nombre)
+                    in claves_permitidas
+                ):
+                    opciones_escuela_ind.append(nombre)
+
+        # ----------------------------------------------------
+        # 3. SELECTOR DE ESCUELA
+        #
+        # IMPORTANTE:
+        # Está FUERA del st.form.
+        # Esto permite que al cambiar de escuela
+        # Streamlit vuelva a ejecutar el código.
+        # ----------------------------------------------------
+
+        escuela_ind = st.selectbox(
+            "1. Selecciona la Escuela",
+            opciones_escuela_ind
+            if opciones_escuela_ind
+            else ["Sin escuelas asignadas"],
+            key="escuela_individual_bap"
+        )
+
+        # ----------------------------------------------------
+        # 4. OBTENER ALUMNOS DE ESA ESCUELA
+        # ----------------------------------------------------
+
+        alumnos_individuales = []
+
+        if (
+            escuela_ind != "Sin escuelas asignadas"
+            and not df_alumnos.empty
+        ):
+
+            df_escuela_ind = obtener_alumnos_de_escuela(
+                df_alumnos,
+                escuela_ind,
+                escuelas_usaer
+            )
+
+            # ------------------------------------------------
+            # 5. ENCONTRAR COLUMNA TIPO DE ATENCIÓN
+            # ------------------------------------------------
+
+            col_atn_db = obtener_columna_atencion(
+                df_escuela_ind
+            )
+
+            # ------------------------------------------------
+            # 6. ENCONTRAR COLUMNA DE NOMBRE
+            # ------------------------------------------------
+
+            if "Nombre_Completo" in df_escuela_ind.columns:
+
+                col_nom_db = "Nombre_Completo"
+
+            elif "Nombre" in df_escuela_ind.columns:
+
+                col_nom_db = "Nombre"
+
             else:
-                claves_permitidas = [e.strip() for e in escuelas_perm_bap.split(",")]
-                opciones_escuela_bap = [nombre for nombre, clave in escuelas_usaer.items() if clave in claves_permitidas]
 
-            # Selector de Escuela
-            escuela_grupal = st.selectbox("Escuela a observar", opciones_escuela_bap if opciones_escuela_bap else ["Sin escuelas asignadas"])
-            
-            # Selectores de Grado y Grupo
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                grado_grupal = st.selectbox("Grado a observar", ["1ro", "2do", "3ro", "4to", "5to", "6to"])
-            with col_g2:
-                grupo_grupal = st.selectbox("Grupo a observar", ["A", "B", "C", "D"])
-            
-            objetivo_seleccionado = f"Grupo {grado_grupal} {grupo_grupal} de la escuela {escuela_grupal}"
-            prompt_contexto = f"Eres un experto de la USAER. Genera sugerencias GRUPALES para el contexto áulico del {objetivo_seleccionado}, enfocadas en el Diseño Universal para el Aprendizaje (DUA) y dinámicas colectivas."
-        
-        st.markdown("---")
-        st.markdown("### Instrumento de Observación (Anexo III)")
-        
-        # CICLO DE PREGUNTAS
-        respuestas_bap = {}
-        for i, item in enumerate(items_anexo3):
-            st.markdown(f"**{item}**")
-            col_freq, col_ori = st.columns([3, 1])
-            with col_freq:
-                freq = st.radio("Frecuencia", ["Siempre", "Muchas veces", "Pocas veces", "Nunca"], horizontal=True, key=f"freq_{i}_{tipo_evaluacion}", label_visibility="collapsed")
-            with col_ori:
-                st.markdown("<br>", unsafe_allow_html=True)
-                ori = st.checkbox("Requiere Orientación", key=f"ori_{i}_{tipo_evaluacion}")
-            
-            respuestas_bap[f"Item_{i+1}"] = {"pregunta": item, "frecuencia": freq, "orientacion": ori}
-            st.markdown("---")
-        
-        # AQUÍ IRÁN LOS REACTIVOS COMPLETOS
+                col_nom_db = None
 
-            
-        contexto_extra = st.text_area("Añade observaciones cualitativas, detalles sobre la dinámica del grupo o estrategias previas intentadas.", height=100)
-        submit_button_anexo3 = st.form_submit_button("Guardar Evaluación y Generar Sugerencias")
-        
-    if submit_button_anexo3:
-        if objetivo_seleccionado in ["Sin registros individuales", "Sin escuelas asignadas"] or (tipo_evaluacion == "👤 Individual (Alumno Específico)" and df_alumnos.empty):
-            st.error("No hay un alumno o grupo válido seleccionado para evaluar.")
+            # ------------------------------------------------
+            # 7. FILTRAR SOLO INDIVIDUALES
+            # ------------------------------------------------
+
+            if col_atn_db and col_nom_db:
+
+                valores_atencion = (
+                    df_escuela_ind[col_atn_db]
+                    .fillna("")
+                    .astype(str)
+                    .apply(normalizar_texto)
+                )
+
+                mascara_individual = (
+                    valores_atencion == "INDIVIDUAL"
+                )
+
+                df_ind = df_escuela_ind[
+                    mascara_individual
+                ].copy()
+
+                # --------------------------------------------
+                # 8. GENERAR LISTA FINAL
+                # --------------------------------------------
+
+                if not df_ind.empty:
+
+                    alumnos_individuales = sorted(
+                        [
+                            str(nombre).strip()
+                            for nombre
+                            in df_ind[col_nom_db].tolist()
+                            if (
+                                str(nombre).strip()
+                                and normalizar_texto(nombre)
+                                != "NAN"
+                            )
+                        ]
+                    )
+
+            elif not col_atn_db:
+
+                st.error(
+                    "❌ BAX no encuentra la columna "
+                    "'Tipo_Atencion' en la hoja Alumnos."
+                )
+
+            elif not col_nom_db:
+
+                st.error(
+                    "❌ BAX no encuentra la columna "
+                    "Nombre_Completo o Nombre."
+                )
+
+        # ----------------------------------------------------
+        # 9. MOSTRAR RESULTADO
+        # ----------------------------------------------------
+
+        if alumnos_individuales:
+
+            st.success(
+                f"✅ {len(alumnos_individuales)} "
+                f"alumno(s) con atención individual "
+                f"en {escuela_ind}."
+            )
+
         else:
-            with st.spinner("Conectando a la red neuronal y procesando datos... 🧠"):
-                try:
-                    fecha = datetime.now().strftime("%Y-%m-%d")
-                    col_nom_db = 'Nombre_Completo' if 'Nombre_Completo' in df_alumnos.columns else 'Nombre'
-                    
-                    if tipo_evaluacion == "👤 Individual (Alumno Específico)":
-                        fila_alumno = df_alumnos.loc[df_alumnos[col_nom_db] == objetivo_seleccionado]
-                        id_alumno = str(fila_alumno['ID_Alumno'].values[0]) if not fila_alumno.empty and 'ID_Alumno' in fila_alumno else ""
-                        condicion_alumno = str(fila_alumno['Condicion_Discapacidad'].values[0]) if not fila_alumno.empty and 'Condicion_Discapacidad' in fila_alumno else "No especificada"
-                        
-                        col_g = next((c for c in df_alumnos.columns if "GRADO" in str(c).upper()), 'Grado')
-                        col_gr = next((c for c in df_alumnos.columns if "GRUPO" in str(c).upper()), 'Grupo')
-                        val_g = str(fila_alumno[col_g].values[0]) if col_g in df_alumnos.columns and not fila_alumno.empty else ""
-                        val_gr = str(fila_alumno[col_gr].values[0]) if col_gr in df_alumnos.columns and not fila_alumno.empty else ""
-                        grado_grupo = f"{val_g} {val_gr}".strip()
-                        
-                        id_esc_val = fila_alumno['ID_Escuela'].values[0] if 'ID_Escuela' in fila_alumno and not fila_alumno.empty else ""
-                        escuela_nombre = next((k for k, v in escuelas_usaer.items() if v == id_esc_val), "USAER 02-E")
-                        contexto_prompt_tipo = f"DATOS DEL ALUMNO:\n- Alumno: {objetivo_seleccionado}\n- Condición: {condicion_alumno}\n- Grado y Grupo: {grado_grupo}\n- Escuela: {escuela_nombre}"
-                    else:
-                        id_alumno = "GRUPAL"
-                        grado_grupo = f"{grado_grupal} {grupo_grupal}"
-                        escuela_nombre = escuela_grupal
-                        contexto_prompt_tipo = f"EVALUACIÓN GRUPAL/AÚLICA:\n- Contexto: {objetivo_seleccionado}\n- Escuela: {escuela_nombre}"
-                    
-                    baps_detectadas = [data for key, data in respuestas_bap.items() if data['frecuencia'] in ["Nunca", "Pocas veces"] or data['orientacion']]
-                    paquete_respuestas = json.dumps(respuestas_bap, ensure_ascii=False)
-                    
-                    nuevo_anexo3 = ["", fecha, id_alumno, st.session_state.nombre, paquete_respuestas, contexto_extra, "", "", "Procesado"]
-                    sheet.worksheet("Anexo3_Deteccion").append_row(nuevo_anexo3)
-                    
-                    prompt = f"""
-                    Eres un experto en Educación Especial y educación inclusiva de la USAER.
-                    Tu objetivo es generar sugerencias pedagógicas para el "Anexo 4".
-                    
-                    {contexto_prompt_tipo}
-                    - Observaciones del especialista: {contexto_extra}
-                    
-                    BARRERAS DETECTADAS:
-                    {json.dumps(baps_detectadas, ensure_ascii=False, indent=2)}
-                    
-                    INSTRUCCIÓN:
-                    Redacta sugerencias específicas, aplicables y concretas en 3 bloques cortos utilizando viñetas:
-                    1. Sugerencias Organizativas
-                    2. Sugerencias Metodológicas
-                    3. Sugerencias de Evaluación
-                    No incluyas saludos ni introducciones largas.
-                    """
-                    
-                    respuesta_ia = modelo_ia.generate_content(prompt)
-                    sugerencias_finales = respuesta_ia.text
-                    
-                    motivo = "Resultados del Anexo 3: Barreras identificadas en el contexto áulico"
-                    
-                    nuevo_anexo4 = [
-                        "", 
-                        objetivo_seleccionado, 
-                        grado_grupo, 
-                        escuela_nombre, 
-                        "USAER 2E", 
-                        st.session_state.get('rol', 'USAER 2E'), 
-                        fecha, 
-                        motivo, 
-                        "", 
-                        sugerencias_finales, 
-                        "Pendiente de revisión", 
-                        st.session_state.get('nombre', '') 
-                    ]
-                    sheet.worksheet("Anexo4_Sugerencias").append_row(nuevo_anexo4)
-                    
-                    st.balloons()
-                    st.success("¡Operación Completada! Anexo 3 y Anexo 4 han sido procesados y guardados exitosamente.")
-                    st.info(sugerencias_finales)
-                    
-                except Exception as e:
-                    st.error(f"Error en el procesamiento: {e}")
+
+            st.warning(
+                f"⚠️ No hay alumnos con atención "
+                f"'Individual' registrados en "
+                f"{escuela_ind}."
+            )
+
+        # ----------------------------------------------------
+        # 10. SELECTOR DEL ALUMNO
+        #
+        # TAMBIÉN ESTÁ FUERA DEL FORM.
+        # ----------------------------------------------------
+
+        objetivo_seleccionado = st.selectbox(
+            "2. Selecciona al Alumno a evaluar",
+            alumnos_individuales
+            if alumnos_individuales
+            else ["Sin registros"],
+            key="alumno_individual_bap"
+        )
+
+        prompt_contexto = (
+            f"Eres un experto de la USAER. "
+            f"Genera sugerencias INDIVIDUALES para "
+            f"el alumno {objetivo_seleccionado} "
+            f"de la escuela {escuela_ind} "
+            f"considerando sus barreras específicas "
+            f"detectadas."
+        )
+
+        # ====================================================
+        # FORMULARIO DE EVALUACIÓN
+        # ====================================================
+
+        with st.form(
+            "anexo3_form_individual",
+            clear_on_submit=False
+        ):
+
+            st.markdown("---")
+
+            st.markdown(
+                "### Instrumento de Observación "
+                "(Anexo III)"
+            )
+
+            respuestas_bap = {}
+
+            for i, item in enumerate(items_anexo3):
+
+                st.markdown(
+                    f"**{item}**"
+                )
+
+                col_freq, col_ori = st.columns(
+                    [3, 1]
+                )
+
+                with col_freq:
+
+                    freq = st.radio(
+                        "Frecuencia",
+                        [
+                            "Siempre",
+                            "Muchas veces",
+                            "Pocas veces",
+                            "Nunca"
+                        ],
+                        horizontal=True,
+                        key=f"freq_ind_{i}",
+                        label_visibility="collapsed"
+                    )
+
+                with col_ori:
+
+                    st.markdown("<br>",
+                                unsafe_allow_html=True)
+
+                    ori = st.checkbox(
+                        "Requiere Orientación",
+                        key=f"ori_ind_{i}"
+                    )
+
+                respuestas_bap[
+                    f"Item_{i+1}"
+                ] = {
+                    "pregunta": item,
+                    "frecuencia": freq,
+                    "orientacion": ori
+                }
+
+                st.markdown("---")
+
+            contexto_extra = st.text_area(
+                "Añade observaciones cualitativas, "
+                "detalles sobre la dinámica del grupo "
+                "o estrategias previas intentadas.",
+                height=100,
+                key="contexto_extra_individual"
+            )
+
+            submit_button_anexo3 = (
+                st.form_submit_button(
+                    "Guardar Evaluación y Generar Sugerencias"
+                )
+            )
+
+    # ========================================================
+    # MODO GRUPAL
+    # ========================================================
+
+    else:
+
+        # ----------------------------------------------------
+        # DETERMINAR ESCUELAS PERMITIDAS
+        # ----------------------------------------------------
+
+        rol_activo_bap = normalizar_texto(
+            st.session_state.get("rol", "")
+        )
+
+        escuelas_perm_bap = normalizar_texto(
+            st.session_state.get(
+                "escuelas_permitidas",
+                ""
+            )
+        )
+
+        if (
+            "DIRECTOR" in rol_activo_bap
+            or "TRABAJO" in rol_activo_bap
+            or "TODAS" in escuelas_perm_bap
+        ):
+
+            opciones_escuela_bap = list(
+                escuelas_usaer.keys()
+            )
+
+        else:
+
+            claves_permitidas = [
+                normalizar_texto(e)
+                for e in escuelas_perm_bap.split(",")
+                if e.strip()
+            ]
+
+            opciones_escuela_bap = [
+                nombre
+                for nombre, clave
+                in escuelas_usaer.items()
+                if (
+                    normalizar_texto(clave)
+                    in claves_permitidas
+                )
+            ]
+
+        # ----------------------------------------------------
+        # SELECTOR ESCUELA
+        # ----------------------------------------------------
+
+        escuela_grupal = st.selectbox(
+            "Escuela a observar",
+            opciones_escuela_bap
+            if opciones_escuela_bap
+            else ["Sin escuelas asignadas"],
+            key="escuela_grupal_bap"
+        )
+
+        # ----------------------------------------------------
+        # GRADO Y GRUPO
+        # ----------------------------------------------------
+
+        col_g1, col_g2 = st.columns(2)
+
+        with col_g1:
+
+            grado_grupal = st.selectbox(
+                "Grado a observar",
+                [
+                    "1ro",
+                    "2do",
+                    "3ro",
+                    "4to",
+                    "5to",
+                    "6to"
+                ],
+                key="grado_grupal_bap"
+            )
+
+        with col_g2:
+
+            grupo_grupal = st.selectbox(
+                "Grupo a observar",
+                [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ],
+                key="grupo_grupal_bap"
+            )
+
+        objetivo_seleccionado = (
+            f"Grupo {grado_grupal} "
+            f"{grupo_grupal} de la escuela "
+            f"{escuela_grupal}"
+        )
+
+        prompt_contexto = (
+            f"Eres un experto de la USAER. "
+            f"Genera sugerencias GRUPALES para "
+            f"el contexto áulico del "
+            f"{objetivo_seleccionado}, "
+            f"enfocadas en el Diseño Universal "
+            f"para el Aprendizaje (DUA) y dinámicas "
+            f"colectivas."
+        )
+
+        # ====================================================
+        # FORMULARIO GRUPAL
+        # ====================================================
+
+        with st.form(
+            "anexo3_form_grupal",
+            clear_on_submit=False
+        ):
+
+            st.markdown("---")
+
+            st.markdown(
+                "### Instrumento de Observación "
+                "(Anexo III)"
+            )
+
+            respuestas_bap = {}
+
+            for i, item in enumerate(items_anexo3):
+
+                st.markdown(
+                    f"**{item}**"
+                )
+
+                col_freq, col_ori = st.columns(
+                    [3, 1]
+                )
+
+                with col_freq:
+
+                    freq = st.radio(
+                        "Frecuencia",
+                        [
+                            "Siempre",
+                            "Muchas veces",
+                            "Pocas veces",
+                            "Nunca"
+                        ],
+                        horizontal=True,
+                        key=f"freq_grupal_{i}",
+                        label_visibility="collapsed"
+                    )
+
+                with col_ori:
+
+                    st.markdown(
+                        "<br>",
+                        unsafe_allow_html=True
+                    )
+
+                    ori = st.checkbox(
+                        "Requiere Orientación",
+                        key=f"ori_grupal_{i}"
+                    )
+
+                respuestas_bap[
+                    f"Item_{i+1}"
+                ] = {
+                    "pregunta": item,
+                    "frecuencia": freq,
+                    "orientacion": ori
+                }
+
+                st.markdown("---")
+
+            contexto_extra = st.text_area(
+                "Añade observaciones cualitativas, "
+                "detalles sobre la dinámica del grupo "
+                "o estrategias previas intentadas.",
+                height=100,
+                key="contexto_extra_grupal"
+            )
+
+            submit_button_anexo3 = (
+                st.form_submit_button(
+                    "Guardar Evaluación y Generar Sugerencias"
+                )
+            )
+
+    # ========================================================
+    # PROCESAMIENTO DEL ANEXO 3 Y ANEXO 4
+    # ========================================================
+
+    if submit_button_anexo3:
+
+        # ----------------------------------------------------
+        # VALIDACIÓN
+        # ----------------------------------------------------
+
+        if tipo_evaluacion == "👤 Individual (Alumno Específico)":
+
+            if (
+                objetivo_seleccionado
+                == "Sin registros"
+            ):
+
+                st.error(
+                    "❌ No hay un alumno individual "
+                    "válido seleccionado."
+                )
+
+                st.stop()
+
+        if (
+            tipo_evaluacion
+            == "👥 Grupal (Contexto del Aula)"
+            and escuela_grupal
+            == "Sin escuelas asignadas"
+        ):
+
+            st.error(
+                "❌ No hay una escuela válida "
+                "seleccionada."
+            )
+
+            st.stop()
+
+        # ----------------------------------------------------
+        # PROCESAMIENTO
+        # ----------------------------------------------------
+
+        with st.spinner(
+            "Conectando a la red neuronal "
+            "y procesando datos... 🧠"
+        ):
+
+            try:
+
+                fecha = datetime.now().strftime(
+                    "%Y-%m-%d"
+                )
+
+                col_nom_db = (
+                    "Nombre_Completo"
+                    if "Nombre_Completo"
+                    in df_alumnos.columns
+                    else "Nombre"
+                )
+
+                # =================================================
+                # INDIVIDUAL
+                # =================================================
+
+                if (
+                    tipo_evaluacion
+                    == "👤 Individual (Alumno Específico)"
+                ):
+
+                    # ---------------------------------------------
+                    # MUY IMPORTANTE:
+                    # Buscar primero por escuela y después
+                    # por alumno.
+                    # ---------------------------------------------
+
+                    df_escuela_seleccionada = (
+                        obtener_alumnos_de_escuela(
+                            df_alumnos,
+                            escuela_ind,
+                            escuelas_usaer
+                        )
+                    )
+
+                    # ---------------------------------------------
+                    # Buscar columna de nombre
+                    # ---------------------------------------------
+
+                    col_nom_ind = (
+                        "Nombre_Completo"
+                        if "Nombre_Completo"
+                        in df_escuela_seleccionada.columns
+                        else "Nombre"
+                    )
+
+                    # ---------------------------------------------
+                    # Buscar alumno dentro de esa escuela
+                    # ---------------------------------------------
+
+                    mascara_alumno = (
+                        df_escuela_seleccionada[
+                            col_nom_ind
+                        ]
+                        .apply(normalizar_texto)
+                        ==
+                        normalizar_texto(
+                            objetivo_seleccionado
+                        )
+                    )
+
+                    fila_alumno = (
+                        df_escuela_seleccionada[
+                            mascara_alumno
+                        ].copy()
+                    )
+
+                    # ---------------------------------------------
+                    # Seguridad adicional:
+                    # comprobar que realmente existe
+                    # ---------------------------------------------
+
+                    if fila_alumno.empty:
+
+                        st.error(
+                            "❌ El alumno seleccionado "
+                            "ya no pertenece a la escuela "
+                            "seleccionada."
+                        )
+
+                        st.stop()
+
+                    # ---------------------------------------------
+                    # ID DEL ALUMNO
+                    # ---------------------------------------------
+
+                    id_alumno = (
+                        str(
+                            fila_alumno[
+                                "ID_Alumno"
+                            ].iloc[0]
+                        )
+                        if "ID_Alumno"
+                        in fila_alumno.columns
+                        else ""
+                    )
+
+                    # ---------------------------------------------
+                    # CONDICIÓN
+                    # ---------------------------------------------
+
+                    condicion_alumno = (
+                        str(
+                            fila_alumno[
+                                "Condicion_Discapacidad"
+                            ].iloc[0]
+                        )
+                        if (
+                            "Condicion_Discapacidad"
+                            in fila_alumno.columns
+                        )
+                        else "No especificada"
+                    )
+
+                    # ---------------------------------------------
+                    # GRADO
+                    # ---------------------------------------------
+
+                    col_g = next(
+                        (
+                            c
+                            for c
+                            in df_alumnos.columns
+                            if "GRADO"
+                            in normalizar_texto(c)
+                        ),
+                        "Grado"
+                    )
+
+                    # ---------------------------------------------
+                    # GRUPO
+                    # ---------------------------------------------
+
+                    col_gr = next(
+                        (
+                            c
+                            for c
+                            in df_alumnos.columns
+                            if "GRUPO"
+                            in normalizar_texto(c)
+                        ),
+                        "Grupo"
+                    )
+
+                    val_g = (
+                        str(
+                            fila_alumno[
+                                col_g
+                            ].iloc[0]
+                        )
+                        if col_g
+                        in fila_alumno.columns
+                        else ""
+                    )
+
+                    val_gr = (
+                        str(
+                            fila_alumno[
+                                col_gr
+                            ].iloc[0]
+                        )
+                        if col_gr
+                        in fila_alumno.columns
+                        else ""
+                    )
+
+                    grado_grupo = (
+                        f"{val_g} {val_gr}"
+                        .strip()
+                    )
+
+                    escuela_nombre = escuela_ind
+
+                    # ---------------------------------------------
+                    # CONTEXTO PARA IA
+                    # ---------------------------------------------
+
+                    contexto_prompt_tipo = f"""
+DATOS DEL ALUMNO:
+
+- Alumno: {objetivo_seleccionado}
+- Condición: {condicion_alumno}
+- Grado y Grupo: {grado_grupo}
+- Escuela: {escuela_nombre}
+- Tipo de atención: Individual
+"""
+
+                # =================================================
+                # GRUPAL
+                # =================================================
+
+                else:
+
+                    id_alumno = "GRUPAL"
+
+                    grado_grupo = (
+                        f"{grado_grupal} "
+                        f"{grupo_grupal}"
+                    )
+
+                    escuela_nombre = escuela_grupal
+
+                    contexto_prompt_tipo = f"""
+EVALUACIÓN GRUPAL/AÚLICA:
+
+- Contexto: {objetivo_seleccionado}
+- Escuela: {escuela_nombre}
+"""
+
+                # =================================================
+                # BARRERAS DETECTADAS
+                # =================================================
+
+                baps_detectadas = [
+                    data
+                    for key, data
+                    in respuestas_bap.items()
+                    if (
+                        data["frecuencia"]
+                        in [
+                            "Nunca",
+                            "Pocas veces"
+                        ]
+                        or data["orientacion"]
+                    )
+                ]
+
+                paquete_respuestas = json.dumps(
+                    respuestas_bap,
+                    ensure_ascii=False
+                )
+
+                # =================================================
+                # GUARDAR ANEXO 3
+                # =================================================
+
+                nuevo_anexo3 = [
+                    "",
+                    fecha,
+                    id_alumno,
+                    st.session_state.nombre,
+                    paquete_respuestas,
+                    contexto_extra,
+                    "",
+                    "",
+                    "Procesado"
+                ]
+
+                sheet.worksheet(
+                    "Anexo3_Deteccion"
+                ).append_row(
+                    nuevo_anexo3
+                )
+
+                # =================================================
+                # PROMPT IA
+                # =================================================
+
+                prompt = f"""
+Eres un experto en Educación Especial
+y educación inclusiva de la USAER.
+
+Tu objetivo es generar sugerencias pedagógicas
+para el "Anexo 4".
+
+{contexto_prompt_tipo}
+
+- Observaciones del especialista:
+{contexto_extra}
+
+BARRERAS DETECTADAS:
+
+{json.dumps(
+    baps_detectadas,
+    ensure_ascii=False,
+    indent=2
+)}
+
+INSTRUCCIÓN:
+
+Redacta sugerencias específicas,
+aplicables y concretas en 3 bloques cortos
+utilizando viñetas:
+
+1. Sugerencias Organizativas
+2. Sugerencias Metodológicas
+3. Sugerencias de Evaluación
+
+No incluyas saludos ni introducciones largas.
+"""
+
+                # =================================================
+                # GENERAR IA
+                # =================================================
+
+                respuesta_ia = (
+                    modelo_ia.generate_content(
+                        prompt
+                    )
+                )
+
+                sugerencias_finales = (
+                    respuesta_ia.text
+                )
+
+                # =================================================
+                # ANEXO 4
+                # =================================================
+
+                motivo = (
+                    "Resultados del Anexo 3: "
+                    "Barreras identificadas "
+                    "en el contexto áulico"
+                )
+
+                nuevo_anexo4 = [
+                    "",
+                    objetivo_seleccionado,
+                    grado_grupo,
+                    escuela_nombre,
+                    "USAER 2E",
+                    st.session_state.get(
+                        "rol",
+                        "USAER 2E"
+                    ),
+                    fecha,
+                    motivo,
+                    "",
+                    sugerencias_finales,
+                    "Pendiente de revisión",
+                    st.session_state.get(
+                        "nombre",
+                        ""
+                    )
+                ]
+
+                sheet.worksheet(
+                    "Anexo4_Sugerencias"
+                ).append_row(
+                    nuevo_anexo4
+                )
+
+                # =================================================
+                # ÉXITO
+                # =================================================
+
+                st.balloons()
+
+                st.success(
+                    "✅ ¡Operación completada! "
+                    "El Anexo 3 y el Anexo 4 "
+                    "han sido procesados y guardados."
+                )
+
+                st.info(
+                    sugerencias_finales
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"❌ Error en el procesamiento: {e}"
+                )
 
 
 # --- MÓDULO: EVENTOS (ANEXO 5) ---
