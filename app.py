@@ -42,12 +42,25 @@ def normalizar_texto(valor):
 
 def obtener_alumnos_de_escuela(df, nombre_escuela, escuelas_diccionario):
     """
-    Devuelve únicamente los alumnos pertenecientes
-    a la escuela seleccionada.
+    Devuelve TODOS los alumnos pertenecientes a la escuela seleccionada.
+
+    La base de datos puede contener escuelas identificadas:
+    - por ID oficial (ESC-001, ESC-002, etc.)
+    - por nombre completo
+    - por nombre sin acentos
+    - por nombre parcial
+
+    IMPORTANTE:
+    No se detiene al encontrar la primera coincidencia.
+    Une todas las coincidencias para evitar perder alumnos.
     """
 
     if df.empty:
         return pd.DataFrame(columns=df.columns)
+
+    # ---------------------------------------------------------
+    # 1. OBTENER ID Y NOMBRE DE LA ESCUELA
+    # ---------------------------------------------------------
 
     id_escuela = escuelas_diccionario.get(
         nombre_escuela,
@@ -58,7 +71,7 @@ def obtener_alumnos_de_escuela(df, nombre_escuela, escuelas_diccionario):
     nombre_normalizado = normalizar_texto(nombre_escuela)
 
     # ---------------------------------------------------------
-    # Buscar columna de escuela
+    # 2. BUSCAR LA COLUMNA QUE CONTIENE LA ESCUELA
     # ---------------------------------------------------------
 
     posibles_columnas = [
@@ -71,13 +84,20 @@ def obtener_alumnos_de_escuela(df, nombre_escuela, escuelas_diccionario):
         )
     ]
 
-    col_escuela = posibles_columnas[0] if posibles_columnas else None
-
-    if not col_escuela:
+    if not posibles_columnas:
         return pd.DataFrame(columns=df.columns)
 
+    # Preferir explícitamente ID_Escuela
+    col_escuela = next(
+        (
+            c for c in posibles_columnas
+            if "ID_ESCUELA" in normalizar_texto(c)
+        ),
+        posibles_columnas[0]
+    )
+
     # ---------------------------------------------------------
-    # Normalizar valores de escuela
+    # 3. NORMALIZAR TODA LA COLUMNA DE ESCUELAS
     # ---------------------------------------------------------
 
     valores_escuela = (
@@ -88,63 +108,72 @@ def obtener_alumnos_de_escuela(df, nombre_escuela, escuelas_diccionario):
     )
 
     # ---------------------------------------------------------
-    # PRIMERA OPCIÓN:
-    # buscar por ID oficial
+    # 4. CONSTRUIR UNA SOLA MÁSCARA CON TODAS LAS COINCIDENCIAS
     # ---------------------------------------------------------
 
-    if id_normalizado:
+    mascara = pd.Series(
+        False,
+        index=df.index
+    )
 
-        mascara = (
+    # Coincidencia exacta por ID
+    if id_normalizado:
+        mascara = mascara | (
             valores_escuela == id_normalizado
         )
 
-        df_resultado = df[mascara].copy()
-
-        if not df_resultado.empty:
-            return df_resultado
-
-    # ---------------------------------------------------------
-    # SEGUNDA OPCIÓN:
-    # buscar por nombre exacto
-    # ---------------------------------------------------------
-
-    mascara_nombre = (
-        valores_escuela == nombre_normalizado
-    )
-
-    df_resultado = df[mascara_nombre].copy()
-
-    if not df_resultado.empty:
-        return df_resultado
+    # Coincidencia exacta por nombre
+    if nombre_normalizado:
+        mascara = mascara | (
+            valores_escuela == nombre_normalizado
+        )
 
     # ---------------------------------------------------------
-    # TERCERA OPCIÓN:
-    # compatibilidad con bases antiguas
+    # 5. COINCIDENCIAS PARCIALES
     # ---------------------------------------------------------
 
     if id_normalizado:
-
-        mascara_parcial = valores_escuela.str.contains(
+        mascara = mascara | valores_escuela.str.contains(
             id_normalizado,
             regex=False,
             na=False
         )
 
-        df_resultado = df[mascara_parcial].copy()
+    if nombre_normalizado:
+        mascara = mascara | valores_escuela.str.contains(
+            nombre_normalizado,
+            regex=False,
+            na=False
+        )
 
-        if not df_resultado.empty:
-            return df_resultado
+    # ---------------------------------------------------------
+    # 6. DEVOLVER TODOS LOS REGISTROS
+    # ---------------------------------------------------------
 
-    mascara_parcial_nombre = valores_escuela.str.contains(
-        nombre_normalizado,
-        regex=False,
-        na=False
-    )
+    df_resultado = df[mascara].copy()
 
-    return df[mascara_parcial_nombre].copy()
+    # ---------------------------------------------------------
+    # 7. ELIMINAR DUPLICADOS
+    # ---------------------------------------------------------
 
+    if "ID_Alumno" in df_resultado.columns:
 
-def obtener_columna_atencion(df):
+        df_resultado = (
+            df_resultado
+            .drop_duplicates(
+                subset=["ID_Alumno"],
+                keep="first"
+            )
+        )
+
+    else:
+
+        df_resultado = (
+            df_resultado
+            .drop_duplicates()
+        )
+
+    return df_resultado
     """
     Encuentra automáticamente la columna que contiene
     el tipo de atención.
@@ -1037,15 +1066,17 @@ with paneles[idx_bap]:
             if col_atn_db and col_nom_db:
 
                 valores_atencion = (
-                    df_escuela_ind[col_atn_db]
-                    .fillna("")
-                    .astype(str)
-                    .apply(normalizar_texto)
-                )
+    df_escuela_ind[col_atn_db]
+    .fillna("")
+    .astype(str)
+    .apply(normalizar_texto)
+)
 
-                mascara_individual = (
-                    valores_atencion == "INDIVIDUAL"
-                )
+mascara_individual = valores_atencion.str.contains(
+    "INDIVIDUAL",
+    regex=False,
+    na=False
+)
 
                 df_ind = df_escuela_ind[
                     mascara_individual
