@@ -788,61 +788,77 @@ if idx_alta != -1:
                                 col_stat = next((c for c in df_valido.columns if "SITUACION" in str(c).upper()), None)
                                 df_final['Estatus'] = df_valido[col_stat].fillna('Activo') if col_stat else "Activo"
                                 
-                                # --- ESCÁNER DE ATENCIÓN (CERO FRICCIÓN) ---
+                                # --- ESCÁNER DE ATENCIÓN ---
                                 col_atn = None
+
                                 # 1. Buscar por nombre del encabezado
                                 for c in df_valido.columns:
                                     c_upper = str(c).upper()
-                                    if "ATENCION" in c_upper or "ATENCIÓN" in c_upper or "MODALIDAD" in c_upper:
+
+                                    if (
+                                        "ATENCION" in c_upper
+                                        or "ATENCIÓN" in c_upper
+                                        or "MODALIDAD" in c_upper
+                                        or "TIPO_ATENCION" in c_upper
+                                    ):
                                         col_atn = c
                                         break
-                                # 2. Buscar por contenido (Por si la columna U tiene un título raro)
+
+                                # 2. Buscar por contenido
                                 if not col_atn:
+
                                     for c in df_valido.columns:
-                                        valores = df_valido[c].astype(str).str.strip().str.upper().head(15).tolist()
-                                        if any(v == 'INDIVIDUAL' or v == 'GRUPAL' for v in valores):
+
+                                        valores = (
+                                            df_valido[c]
+                                            .astype(str)
+                                            .str.strip()
+                                            .str.upper()
+                                            .head(20)
+                                            .tolist()
+                                        )
+
+                                        if any(
+                                            v in ["INDIVIDUAL", "GRUPAL"]
+                                            for v in valores
+                                        ):
                                             col_atn = c
                                             break
-                                            
-                                # ===============================================================
-# TIPO DE ATENCIÓN
-# ===============================================================
 
-if col_atn:
+                                # 3. Guardar Tipo de Atención
+                                if col_atn:
 
-    df_final['Tipo_Atencion'] = (
-        df_valido[col_atn]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .apply(normalizar_texto)
-    )
+                                    df_final["Tipo_Atencion"] = (
+                                        df_valido[col_atn]
+                                        .fillna("")
+                                        .astype(str)
+                                        .str.strip()
+                                        .apply(normalizar_texto)
+                                    )
 
-    # Normalizamos únicamente los valores conocidos
-    df_final['Tipo_Atencion'] = (
-        df_final['Tipo_Atencion']
-        .replace({
-            "INDIVIDUAL": "Individual",
-            "GRUPAL": "Grupal"
-        })
-    )
+                                    # Convertir a los valores oficiales
+                                    df_final["Tipo_Atencion"] = (
+                                        df_final["Tipo_Atencion"]
+                                        .replace({
+                                            "INDIVIDUAL": "Individual",
+                                            "GRUPAL": "Grupal"
+                                        })
+                                    )
 
-else:
+                                else:
 
-    # IMPORTANTE:
-    # NO convertir automáticamente a Grupal.
-    # Eso provocaba que todos los alumnos quedaran
-    # clasificados incorrectamente.
+                                    # IMPORTANTE:
+                                    # No asumir que son grupales.
+                                    df_final["Tipo_Atencion"] = ""
 
-    df_final['Tipo_Atencion'] = ""
+                                    st.warning(
+                                        "⚠️ No se encontró la columna "
+                                        "'Tipo de Atención' en el archivo. "
+                                        "Los alumnos quedarán sin clasificación "
+                                        "hasta que se identifique dicha columna."
+                                    )
 
-    st.warning(
-        "⚠️ No se encontró una columna de Tipo de Atención "
-        "en el archivo importado. Los alumnos quedaron sin "
-        "clasificación para evitar asignarlos incorrectamente."
-    )
-                                # -------------------------------------------
-                                
+                                # Asegurar que no haya NaN
                                 df_final = df_final.fillna("")
                                 
                                 # --- AUTO-LIMPIEZA DE BASE DE DATOS MÁXIMA ---
