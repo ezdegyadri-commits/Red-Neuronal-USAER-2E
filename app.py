@@ -174,18 +174,31 @@ def obtener_alumnos_de_escuela(df, nombre_escuela, escuelas_diccionario):
         )
 
     return df_resultado
-    """
-    Encuentra automáticamente la columna que contiene
-    el tipo de atención.
-    """
 
-    if df.empty:
+
+def obtener_columna_atencion(df):
+    """
+    Encuentra de forma robusta la columna que contiene el tipo de atención.
+
+    Se prueban primero nombres exactos/canonizados y después coincidencias
+    parciales para soportar variaciones de encabezados en la base de datos.
+    """
+    if df is None or df.empty:
         return None
 
+    # Primero: nombres conocidos con máxima prioridad.
     for columna in df.columns:
+        nombre = normalizar_texto(columna).replace("_", " ")
+        if nombre in {
+            "TIPO ATENCION",
+            "TIPO DE ATENCION",
+            "TIPO DE ATENCION DEL ALUMNO",
+        }:
+            return columna
 
+    # Segundo: encabezados que contengan las palabras clave.
+    for columna in df.columns:
         nombre = normalizar_texto(columna)
-
         if (
             "TIPO_ATENCION" in nombre
             or "TIPO DE ATENCION" in nombre
@@ -195,6 +208,8 @@ def obtener_alumnos_de_escuela(df, nombre_escuela, escuelas_diccionario):
             return columna
 
     return None
+
+
 def calcular_edad_exacta(curp):
     if len(str(curp)) < 10:
         return "Edad no calculable (Falta CURP)"
