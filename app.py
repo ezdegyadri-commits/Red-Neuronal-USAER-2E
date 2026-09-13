@@ -1060,23 +1060,24 @@ with paneles[idx_bap]:
                 col_nom_db = None
 
             # ------------------------------------------------
+                        # ------------------------------------------------
             # 7. FILTRAR SOLO INDIVIDUALES
             # ------------------------------------------------
 
             if col_atn_db and col_nom_db:
 
                 valores_atencion = (
-    df_escuela_ind[col_atn_db]
-    .fillna("")
-    .astype(str)
-    .apply(normalizar_texto)
-)
+                    df_escuela_ind[col_atn_db]
+                    .fillna("")
+                    .astype(str)
+                    .apply(normalizar_texto)
+                )
 
-mascara_individual = valores_atencion.str.contains(
-    "INDIVIDUAL",
-    regex=False,
-    na=False
-)
+                mascara_individual = valores_atencion.str.contains(
+                    "INDIVIDUAL",
+                    regex=False,
+                    na=False
+                )
 
                 df_ind = df_escuela_ind[
                     mascara_individual
@@ -1091,16 +1092,27 @@ mascara_individual = valores_atencion.str.contains(
                     alumnos_individuales = sorted(
                         [
                             str(nombre).strip()
-                            for nombre
-                            in df_ind[col_nom_db].tolist()
+                            for nombre in df_ind[col_nom_db].tolist()
                             if (
                                 str(nombre).strip()
-                                and normalizar_texto(nombre)
-                                != "NAN"
+                                and normalizar_texto(nombre) != "NAN"
                             )
                         ]
                     )
 
+            elif not col_atn_db:
+
+                st.error(
+                    "❌ BAX no encuentra la columna "
+                    "'Tipo_Atencion' en la hoja Alumnos."
+                )
+
+            elif not col_nom_db:
+
+                st.error(
+                    "❌ BAX no encuentra la columna "
+                    "'Nombre_Completo o Nombre."
+                )
             elif not col_atn_db:
 
                 st.error(
