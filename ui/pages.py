@@ -5,6 +5,7 @@ import streamlit as st
 from config.settings import ESCUELAS_USAER, BAP_ITEMS, BAP_FRECUENCIAS, SERVICE_NAME, SCHOOL_YEAR
 from data import repository as repo
 from services.expedientes import alumnos_visibles, expediente, alumno
+from services.alumnos import alumnos_individuales_de_escuela
 from ai.engine import generar_sugerencias
 from documents.anexos import anexo4_html, anexo5_html
 from ui.components import hero, card
