@@ -83,25 +83,35 @@ def alta_page(df):
 
 
 def bap_page(df):
-    hero("Evaluación BAP → intervención", "La captura estructurada alimenta la IA; la decisión profesional queda en tus manos.")
+    hero(
+        "Evaluación BAP → intervención",
+        "La captura estructurada alimenta la IA; la decisión profesional queda en tus manos."
+    )
+
     if df.empty:
         st.warning("No hay alumnos disponibles.")
         return
 
-    modo = st.radio("Tipo de evaluación", ["Individual (alumno específico)", "Grupal (contexto áulico)"], horizontal=True, key="bap_modo")
+    modo = st.radio(
+        "Tipo de evaluación",
+        [
+            "Individual (alumno específico)",
+            "Grupal (contexto áulico)"
+        ],
+        horizontal=True,
+        key="bap_modo"
+    )
+
     opciones_escuela = list(ESCUELAS_USAER)
 
-        if modo.startswith("Individual"):
-            escuela = st.selectbox(
+    if modo.startswith("Individual"):
+        escuela = st.selectbox(
             "1. Escuela",
             opciones_escuela,
             key="bap_escuela_ind"
         )
 
-        escuela_df = alumnos_individuales_de_escuela(
-            df,
-            escuela
-        )
+        escuela_df = alumnos_individuales_de_escuela(df, escuela)
 
         if escuela_df.empty:
             st.warning(
@@ -117,8 +127,7 @@ def bap_page(df):
         )
 
         fila = escuela_df[
-            escuela_df["Nombre_Completo"].astype(str)
-            == alumno_nombre
+            escuela_df["Nombre_Completo"].astype(str) == alumno_nombre
         ].iloc[0]
 
         id_a = str(fila["ID_Alumno"])
@@ -130,100 +139,271 @@ def bap_page(df):
         ).strip()
 
         escuela_nombre = escuela
-
         contexto_base = {
             "tipo": "Individual",
             "alumno": fila.to_dict()
         }
 
-    escuela_nombre = escuela
-
-    contexto_base = {
-        "tipo": "Individual",
-        "alumno": fila.to_dict()
-    }
-        alumno_nombre = st.selectbox("2. Alumno", escuela_df["Nombre_Completo"].astype(str).tolist(), key="bap_alumno_ind")
-        fila = escuela_df[escuela_df["Nombre_Completo"].astype(str) == alumno_nombre].iloc[0]
-        id_a = str(fila["ID_Alumno"])
-        objetivo = alumno_nombre
-        grado_grupo = f"{fila.get('Grado','')} {fila.get('Grupo','')}".strip()
-        escuela_nombre = escuela
-        contexto_base = {"tipo": "Individual", "alumno": fila.to_dict()}
     else:
-        escuela = st.selectbox("Escuela a observar", opciones_escuela, key="bap_escuela_grp")
-        c1,c2=st.columns(2)
-        with c1: grado=st.selectbox("Grado",["1ro","2do","3ro","4to","5to","6to"],key="bap_grado_grp")
-        with c2: grupo=st.selectbox("Grupo",["A","B","C","D"],key="bap_grupo_grp")
-        id_a=f"GRUPO-{ESCUELAS_USAER[escuela]}-{grado}-{grupo}"
-        objetivo=f"Grupo {grado} {grupo} de la escuela {escuela}"
-        grado_grupo=f"{grado} {grupo}"
-        escuela_nombre=escuela
-        contexto_base={"tipo":"Grupal","objetivo":objetivo,"escuela":escuela}
+        escuela = st.selectbox(
+            "Escuela a observar",
+            opciones_escuela,
+            key="bap_escuela_grp"
+        )
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            grado = st.selectbox(
+                "Grado",
+                ["1ro", "2do", "3ro", "4to", "5to", "6to"],
+                key="bap_grado_grp"
+            )
+
+        with c2:
+            grupo = st.selectbox(
+                "Grupo",
+                ["A", "B", "C", "D"],
+                key="bap_grupo_grp"
+            )
+
+        id_a = f"GRUPO-{ESCUELAS_USAER[escuela]}-{grado}-{grupo}"
+        objetivo = f"Grupo {grado} {grupo} de la escuela {escuela}"
+        grado_grupo = f"{grado} {grupo}"
+        escuela_nombre = escuela
+
+        contexto_base = {
+            "tipo": "Grupal",
+            "objetivo": objetivo,
+            "escuela": escuela
+        }
 
     st.markdown("### Instrumento de Observación — Anexo III")
+
     with st.form("bap_form_integrado", clear_on_submit=False):
-        respuestas={}
-        for i,pregunta in enumerate(BAP_ITEMS,1):
-            c1,c2=st.columns([3,1])
+        respuestas = {}
+
+        for i, pregunta in enumerate(BAP_ITEMS, 1):
+            c1, c2 = st.columns([3, 1])
+
             with c1:
-                freq=st.radio(f"{i}. {pregunta}",BAP_FRECUENCIAS,index=1,horizontal=True,key=f"bap_freq_{modo}_{id_a}_{i}")
+                frecuencia = st.radio(
+                    f"{i}. {pregunta}",
+                    BAP_FRECUENCIAS,
+                    index=1,
+                    horizontal=True,
+                    key=f"bap_freq_{modo}_{id_a}_{i}"
+                )
+
             with c2:
-                ori=st.checkbox("Requiere orientación",key=f"bap_ori_{modo}_{id_a}_{i}")
-            respuestas[f"Item_{i}"]={"pregunta":pregunta,"frecuencia":freq,"orientacion":ori}
-        observaciones=st.text_area("Observaciones cualitativas / estrategias previas",height=120,key=f"bap_obs_{id_a}")
-        analizar=st.form_submit_button("Analizar BAP con IA",type="primary")
+                orientacion = st.checkbox(
+                    "Requiere orientación",
+                    key=f"bap_ori_{modo}_{id_a}_{i}"
+                )
+
+            respuestas[f"Item_{i}"] = {
+                "pregunta": pregunta,
+                "frecuencia": frecuencia,
+                "orientacion": orientacion
+            }
+
+        observaciones = st.text_area(
+            "Observaciones cualitativas / estrategias previas",
+            height=120,
+            key=f"bap_obs_{id_a}"
+        )
+
+        analizar = st.form_submit_button(
+            "Analizar BAP con IA",
+            type="primary"
+        )
 
     if analizar:
-        detectadas=[v for v in respuestas.values() if v["frecuencia"] in ["Nunca","Pocas veces"] or v["orientacion"]]
-        contexto={**contexto_base,"expediente":expediente_id(id_a),"grado_grupo":grado_grupo,"escuela":escuela_nombre,"bap":respuestas,"barreras_detectadas":detectadas,"observaciones":observaciones}
-        with st.spinner("Analizando barreras y preparando una propuesta profesional..."):
-            st.session_state["ai_draft"]=generar_sugerencias(contexto)
-            st.session_state["ai_context"]=contexto
+        detectadas = [
+            valor
+            for valor in respuestas.values()
+            if valor["frecuencia"] in ["Nunca", "Pocas veces"]
+            or valor["orientacion"]
+        ]
 
-    draft=st.session_state.get("ai_draft")
+        contexto = {
+            **contexto_base,
+            "expediente": expediente_id(id_a),
+            "grado_grupo": grado_grupo,
+            "escuela": escuela_nombre,
+            "bap": respuestas,
+            "barreras_detectadas": detectadas,
+            "observaciones": observaciones
+        }
+
+        with st.spinner(
+            "Analizando barreras y preparando una propuesta profesional..."
+        ):
+            st.session_state["ai_draft"] = generar_sugerencias(contexto)
+            st.session_state["ai_context"] = contexto
+
+    draft = st.session_state.get("ai_draft")
+
     if not draft:
         return
 
     st.markdown("### Propuesta de IA")
-    st.caption("La IA propone; el profesional decide. Nada se incorpora al expediente hasta que lo apruebes.")
-    area=st.text_input("Sugerencias del área",draft.get("area","Aprendizaje"),key="draft_area")
-    motivo=st.text_area("Motivo por el que se brindan las sugerencias",draft.get("motivo","Resultados del Anexo 3: Barreras identificadas en el contexto áulico"),key="draft_motivo")
-    sugerencias=st.text_area("Sugerencias",draft.get("sugerencias",""),height=300,key="draft_sug")
-    seguimiento=st.text_input("Fecha / plazo de seguimiento",draft.get("seguimiento",""),key="draft_follow")
+    st.caption(
+        "La IA propone; el profesional decide. "
+        "Nada se incorpora al expediente hasta que lo apruebes."
+    )
 
-    if st.button("Aprobar → generar Anexo 3 y Anexo 4",type="primary",key="approve_bap"):
-        hoy=str(date.today())
-        contexto=st.session_state.get("ai_context",{})
-        respuestas_json=json.dumps(contexto.get("bap",{}),ensure_ascii=False)
-        a3=repo.save_anexo3({"Fecha":hoy,"ID_Alumno":id_a,"ID_Personal":st.session_state.get("nombre",""),"BAP_Fisicas":respuestas_json,"BAP_Actitudinales":"","BAP_Pedagogicas":"","BAP_Organizativas":"","Estatus_IA":"Procesado"})
-        a4=repo.save_anexo4({"Nombre_Alumno":objetivo,"Grado_Grupo":grado_grupo,"Escuela":escuela_nombre,"Servicio_EE":SERVICE_NAME,"Sugerencias_Area":area,"Fecha_Elaboracion":hoy,"Motivo":motivo,"Fecha_Seguimiento":seguimiento,"Sugerencias":sugerencias,"Nivel_Cumplimiento_Resultados":"Pendiente de revisión","Quien_Brinda_Sugerencias":st.session_state.get("nombre","")})
+    area = st.text_input(
+        "Sugerencias del área",
+        draft.get("area", "Aprendizaje"),
+        key="draft_area"
+    )
+
+    motivo = st.text_area(
+        "Motivo por el que se brindan las sugerencias",
+        draft.get(
+            "motivo",
+            "Resultados del Anexo 3: Barreras identificadas en el contexto áulico"
+        ),
+        key="draft_motivo"
+    )
+
+    sugerencias = st.text_area(
+        "Sugerencias",
+        draft.get("sugerencias", ""),
+        height=300,
+        key="draft_sug"
+    )
+
+    seguimiento = st.text_input(
+        "Fecha / plazo de seguimiento",
+        draft.get("seguimiento", ""),
+        key="draft_follow"
+    )
+
+    if st.button(
+        "Aprobar → generar Anexo 3 y Anexo 4",
+        type="primary",
+        key="approve_bap"
+    ):
+        hoy = str(date.today())
+        contexto = st.session_state.get("ai_context", {})
+        respuestas_json = json.dumps(
+            contexto.get("bap", {}),
+            ensure_ascii=False
+        )
+
+        a3 = repo.save_anexo3({
+            "Fecha": hoy,
+            "ID_Alumno": id_a,
+            "ID_Personal": st.session_state.get("nombre", ""),
+            "BAP_Fisicas": respuestas_json,
+            "BAP_Actitudinales": "",
+            "BAP_Pedagogicas": "",
+            "BAP_Organizativas": "",
+            "Estatus_IA": "Procesado"
+        })
+
+        a4 = repo.save_anexo4({
+            "Nombre_Alumno": objetivo,
+            "Grado_Grupo": grado_grupo,
+            "Escuela": escuela_nombre,
+            "Servicio_EE": SERVICE_NAME,
+            "Sugerencias_Area": area,
+            "Fecha_Elaboracion": hoy,
+            "Motivo": motivo,
+            "Fecha_Seguimiento": seguimiento,
+            "Sugerencias": sugerencias,
+            "Nivel_Cumplimiento_Resultados": "Pendiente de revisión",
+            "Quien_Brinda_Sugerencias": st.session_state.get("nombre", "")
+        })
+
         try:
-            repo.ensure_expediente(expediente_id(id_a),id_a)
-            repo.link_record(expediente_id(id_a),id_a,"ANEXO3",a3,hoy)
-            repo.link_record(expediente_id(id_a),id_a,"ANEXO4",a4,hoy)
-            repo.timeline(expediente_id(id_a),id_a,hoy,"SUGERENCIA","Anexo 4 aprobado",sugerencias,st.session_state.get("nombre",""))
+            repo.ensure_expediente(expediente_id(id_a), id_a)
+            repo.link_record(expediente_id(id_a), id_a, "ANEXO3", a3, hoy)
+            repo.link_record(expediente_id(id_a), id_a, "ANEXO4", a4, hoy)
+            repo.timeline(
+                expediente_id(id_a),
+                id_a,
+                hoy,
+                "SUGERENCIA",
+                "Anexo 4 aprobado",
+                sugerencias,
+                st.session_state.get("nombre", "")
+            )
         except Exception as ex:
-            st.warning(f"Los formatos se guardaron. La vinculación adicional no pudo completarse: {ex}")
-        st.session_state["last_anexo4"]={"id":a4,"id_alumno":id_a,"nombre":objetivo,"sugerencias":sugerencias}
-        st.session_state.pop("ai_draft",None)
-        st.success("Anexo 3 y Anexo 4 generados y vinculados al expediente.")
+            st.warning(
+                "Los formatos se guardaron. La vinculación adicional "
+                f"no pudo completarse: {ex}"
+            )
 
-    last=st.session_state.get("last_anexo4")
+        st.session_state["last_anexo4"] = {
+            "id": a4,
+            "id_alumno": id_a,
+            "nombre": objetivo,
+            "sugerencias": sugerencias
+        }
+        st.session_state.pop("ai_draft", None)
+
+        st.success(
+            "Anexo 3 y Anexo 4 generados y vinculados al expediente."
+        )
+
+    last = st.session_state.get("last_anexo4")
+
     if last:
         st.divider()
         st.markdown("### Convertir la sugerencia en acción")
-        st.info("Este es el punto de conexión entre Anexo 4 y Anexo 5: puedes documentar inmediatamente qué se hizo y qué resultado produjo.")
-        evento=st.text_area("Acción / resultado observado",key="quick_event")
-        if st.button("Registrar como evento de seguimiento",key="quick_event_btn"):
-            a=alumno(df,last["id_alumno"])
-            eid=repo.save_anexo5({"Fecha":str(date.today()),"Nombre_Alumno":last["nombre"],"Grado_Grupo":(f"{a.get('Grado','')} {a.get('Grupo','')}".strip() if a else ''),"Especialista":st.session_state.get("nombre",""),"Evento":evento})
+        st.info(
+            "Este es el punto de conexión entre Anexo 4 y Anexo 5: "
+            "puedes documentar inmediatamente qué se hizo y qué resultado produjo."
+        )
+
+        evento = st.text_area(
+            "Acción / resultado observado",
+            key="quick_event"
+        )
+
+        if st.button(
+            "Registrar como evento de seguimiento",
+            key="quick_event_btn"
+        ):
+            a = alumno(df, last["id_alumno"])
+
+            eid = repo.save_anexo5({
+                "Fecha": str(date.today()),
+                "Nombre_Alumno": last["nombre"],
+                "Grado_Grupo": (
+                    f"{a.get('Grado', '')} {a.get('Grupo', '')}".strip()
+                    if a else ""
+                ),
+                "Especialista": st.session_state.get("nombre", ""),
+                "Evento": evento
+            })
+
             try:
-                repo.link_record(expediente_id(last["id_alumno"]),last["id_alumno"],"ANEXO5",eid,str(date.today()))
-                repo.timeline(expediente_id(last["id_alumno"]),last["id_alumno"],str(date.today()),"SEGUIMIENTO","Evento derivado de Anexo 4",evento,st.session_state.get("nombre",""))
+                repo.link_record(
+                    expediente_id(last["id_alumno"]),
+                    last["id_alumno"],
+                    "ANEXO5",
+                    eid,
+                    str(date.today())
+                )
+                repo.timeline(
+                    expediente_id(last["id_alumno"]),
+                    last["id_alumno"],
+                    str(date.today()),
+                    "SEGUIMIENTO",
+                    "Evento derivado de Anexo 4",
+                    evento,
+                    st.session_state.get("nombre", "")
+                )
             except Exception:
                 pass
-            st.success("La sugerencia ya tiene un evento de seguimiento asociado.")
 
+            st.success(
+                "La sugerencia ya tiene un evento de seguimiento asociado."
+            )
 def seguimiento_page(df):
     hero("Seguimiento y eventos", "Convierte una sugerencia aprobada en una acción documentada.")
     if df.empty: return
