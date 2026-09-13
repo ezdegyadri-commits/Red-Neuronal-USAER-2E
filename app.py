@@ -256,24 +256,48 @@ def obtener_diccionario_secreto(nombre_secreto):
             return json.loads(secreto.replace('\\"', '"').strip())
     return dict(secreto)
 
-try:
-    # Leemos directamente de la bóveda a la memoria de la app
+@st.cache_resource(show_spinner=False)
+def obtener_conexiones_google():
+    """Crea las conexiones a Google una sola vez por proceso de Streamlit."""
     credenciales_dict = obtener_diccionario_secreto("credenciales_json")
     token_dict = obtener_diccionario_secreto("token_json")
-    
-    # Conexión a Sheets DIRECTA (Adiós al error de filename="credenciales.json")
-    gc = gspread.service_account_from_dict(credenciales_dict)
-    sheet = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
-    
-    # Conexión a Drive 5TB DIRECTA
-    SCOPES = ['https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_authorized_user_info(token_dict, SCOPES)
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    drive_service = build('drive', 'v3', credentials=creds)
 
+    gc = gspread.service_account_from_dict(credenciales_dict)
+    sheet_obj = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
+
+    SCOPES = ['https://www.googleapis.com/auth/drive']
+    creds_obj = Credentials.from_authorized_user_info(token_dict, SCOPES)
+    if creds_obj and creds_obj.expired and creds_obj.refresh_token:
+        creds_obj.refresh(Request())
+    drive_obj = build('drive', 'v3', credentials=creds_obj)
+
+    return sheet_obj, drive_obj
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def cargar_hoja(nombre_hoja):
+    """Lee una hoja de Google Sheets y conserva el resultado 120 segundos."""
+    ultimo_error = None
+
+    for intento in range(4):
+        try:
+            registros = sheet.worksheet(nombre_hoja).get_all_records()
+            return pd.DataFrame(registros)
+        except Exception as e:
+            ultimo_error = e
+            mensaje = str(e)
+            if "429" not in mensaje and "Quota exceeded" not in mensaje:
+                raise
+            if intento < 3:
+                time.sleep(1.5 * (2 ** intento))
+
+    raise ultimo_error
+
+
+try:
+    sheet, drive_service = obtener_conexiones_google()
 except Exception as e:
-    st.error(f"❌ Error crítico de conexión. Verifica que el texto en 'Secrets' esté completo: {e}")
+    st.error(f"❌ Error crítico de conexión con Google. Verifica Secrets y permisos: {e}")
     st.stop()
 
 
@@ -391,7 +415,7 @@ if not st.session_state.get("autenticado", False):
         if submit:
             try:
                 # 1. Leemos la pestaña Usuarios de tu Sheets maestro
-                df_usuarios = pd.DataFrame(sheet.worksheet("Usuarios").get_all_records())
+                df_usuarios = cargar_hoja("Usuarios")
                 
                 # 2. Limpiamos espacios en blanco accidentales (AHORA APUNTA A 'Password')
                 df_usuarios['Usuario'] = df_usuarios['Usuario'].astype(str).str.strip()
@@ -560,7 +584,7 @@ escuelas_usaer = {
 }
 
 try:
-    df_todos_alumnos = pd.DataFrame(sheet.worksheet("Alumnos").get_all_records())
+    df_todos_alumnos = cargar_hoja("Alumnos")
     
     # 2. RECUPERAR DATOS EXACTOS DE LA SESIÓN
     escuelas_usuario = str(st.session_state.get("escuelas_permitidas", "")).strip()
@@ -694,6 +718,7 @@ if idx_alta != -1:
                         id_escuela_seleccionada = escuelas_usaer[nombre_escuela]
                         nuevo_registro = ["", nombre, curp, grado, grupo, id_escuela_seleccionada, maestro_regular, condicion, estatus]
                         sheet.worksheet("Alumnos").append_row(nuevo_registro)
+                        cargar_hoja.clear("Alumnos")
                         st.success(f"¡El alumno {nombre} ha sido registrado exitosamente!")
                     except Exception as e:
                         st.error(f"Error en la operación: {e}")
@@ -924,9 +949,11 @@ if idx_alta != -1:
                                     
                                     sheet.worksheet("Alumnos").clear()
                                     sheet.worksheet("Alumnos").update([df_actualizada.columns.values.tolist()] + df_actualizada.values.tolist())
+                                    cargar_hoja.clear("Alumnos")
                                 else:
                                     sheet.worksheet("Alumnos").append_rows(df_final.values.tolist())
                                 
+                                cargar_hoja.clear("Alumnos")
                                 st.balloons()
                                 st.success(f"¡Base de datos sincronizada! Se cargaron {len(df_final)} alumnos correctamente.")
                                 
@@ -1753,6 +1780,7 @@ EVALUACIÓN GRUPAL/AÚLICA:
                 ).append_row(
                     nuevo_anexo3
                 )
+                cargar_hoja.clear("Anexo3_Deteccion")
 
                 # =================================================
                 # PROMPT IA
@@ -1841,6 +1869,7 @@ No incluyas saludos ni introducciones largas.
                 ).append_row(
                     nuevo_anexo4
                 )
+                cargar_hoja.clear("Anexo4_Sugerencias")
 
                 # =================================================
                 # ÉXITO
@@ -2004,7 +2033,7 @@ with paneles[idx_evt]:
         
         with st.expander("👁️ Vista Previa del Formato SEGEY (Historial Completo)"):
             try:
-                df_historico_a5 = pd.DataFrame(sheet.worksheet("Anexo5_Eventos").get_all_records())
+                df_historico_a5 = cargar_hoja("Anexo5_Eventos")
                 registros_previos = df_historico_a5[df_historico_a5['Nombre_Alumno'] == alum_evt].sort_values(by='Fecha') if not df_historico_a5.empty else pd.DataFrame()
             except:
                 registros_previos = pd.DataFrame()
@@ -2117,6 +2146,7 @@ table td {{ border: 1px dashed #ccc !important; }}
                 fecha_evt = fecha_evento.strftime("%Y-%m-%d")
                 
                 sheet.worksheet("Anexo5_Eventos").append_row(["", fecha_evt, alum_evt, grado_grupo_visor, st.session_state.nombre, evento_definitivo])
+                cargar_hoja.clear("Anexo5_Eventos")
                 st.session_state.ia_evento_sugerido = "" 
                 
                 # --- ANIMACIONES DE ÉXITO ---
@@ -2143,8 +2173,8 @@ with paneles[idx_visor]:
         else:
             with st.spinner("Extrayendo documentos y ensamblando formatos oficiales... 🗂️"):
                 try:
-                    df_anexo4 = pd.DataFrame(sheet.worksheet("Anexo4_Sugerencias").get_all_records())
-                    df_anexo5 = pd.DataFrame(sheet.worksheet("Anexo5_Eventos").get_all_records())
+                    df_anexo4 = cargar_hoja("Anexo4_Sugerencias")
+                    df_anexo5 = cargar_hoja("Anexo5_Eventos")
                     
                     escuela_alumno = "USAER_General"
                     st.markdown(f"## Expediente Digital: {alum_visor}")
@@ -2383,8 +2413,8 @@ if idx_dir != -1:
             col1.metric("Total Alumnos en Red", len(df_alumnos) if not df_alumnos.empty else 0)
             
             try:
-                df_anexo4_dir = pd.DataFrame(sheet.worksheet("Anexo4_Sugerencias").get_all_records())
-                df_anexo5_dir = pd.DataFrame(sheet.worksheet("Anexo5_Eventos").get_all_records())
+                df_anexo4_dir = cargar_hoja("Anexo4_Sugerencias")
+                df_anexo5_dir = cargar_hoja("Anexo5_Eventos")
                 
                 col2.metric("Sugerencias (Anexo 4)", len(df_anexo4_dir) if not df_anexo4_dir.empty else 0)
                 col3.metric("Eventos (Anexo 5)", len(df_anexo5_dir) if not df_anexo5_dir.empty else 0)
@@ -2397,7 +2427,7 @@ if idx_dir != -1:
             
             try:
                 # Lectura de la base de datos de visitas
-                df_visitas_dir = pd.DataFrame(sheet.worksheet("Registro_Visitas").get_all_records())
+                df_visitas_dir = cargar_hoja("Registro_Visitas")
                 if not df_visitas_dir.empty:
                     st.dataframe(df_visitas_dir, use_container_width=True)
                 else:
@@ -2495,6 +2525,7 @@ if idx_visitas != -1:
                         motivos_completos = ", ".join(motivos_izq + motivos_der)
                         nueva_visita = [fecha_visita.strftime("%d/%m/%Y"), escuela_seleccionada, nombre_especialista, especialidad_visita, motivos_completos]
                         sheet.worksheet("Registro_Visitas").append_row(nueva_visita)
+                        cargar_hoja.clear("Registro_Visitas")
                     except Exception:
                         pass 
 
