@@ -6,6 +6,7 @@ from config.settings import ESCUELAS_USAER, BAP_ITEMS, BAP_FRECUENCIAS, SERVICE_
 from data import repository as repo
 from services.expedientes import alumnos_visibles, expediente, alumno
 from services.alumnos import alumnos_individuales_de_escuela
+from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
 from ai.engine import generar_sugerencias
 from documents.anexos import anexo4_html, anexo5_html
 from ui.components import hero, card
