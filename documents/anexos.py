@@ -1,11 +1,16 @@
 import html
 import base64
+from pathlib import Path
 from config.settings import SERVICE_NAME, SCHOOL_YEAR
 
 
 def header_b64(path="encabezado.png"):
+    """Incrusta el encabezado oficial con una ruta estable en producción."""
     try:
-        with open(path, "rb") as f:
+        archivo = Path(path)
+        if not archivo.is_absolute():
+            archivo = Path(__file__).resolve().parents[1] / archivo
+        with archivo.open("rb") as f:
             return "data:image/png;base64," + base64.b64encode(f.read()).decode()
     except Exception:
         return ""
