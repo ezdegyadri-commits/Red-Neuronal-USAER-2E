@@ -1102,7 +1102,7 @@ def visitas_page(df):
 <div style="
     background-color:white;
     color:black;
-    padding:40px;
+    padding:24px;
     font-family:Arial,sans-serif;
     max-width:800px;
     margin:auto;
@@ -1114,17 +1114,17 @@ def visitas_page(df):
     text-align:center;
     font-weight:bold;
     text-decoration:underline;
-    margin-bottom:25px;
+    margin:0 0 14px;
 ">
     Constancia de visita
 </h3>
 
-<div style="font-size:14px;margin-bottom:8px;">
+<div style="font-size:12px;margin-bottom:4px;">
     Servicio de educación especial que realiza la visita:
     <u>{especialidad}</u>
 </div>
 
-<div style="font-size:14px;margin-bottom:8px;">
+<div style="font-size:12px;margin-bottom:4px;">
     Curso escolar:
     <u>{SCHOOL_YEAR}</u>
     &nbsp;&nbsp;&nbsp;&nbsp;
@@ -1135,7 +1135,7 @@ def visitas_page(df):
     <u>de 7:00 a 12:00 hrs</u>
 </div>
 
-<div style="font-size:14px;margin-bottom:20px;">
+<div style="font-size:12px;margin-bottom:10px;">
     Escuela:
     <u>{escuela_seleccionada}</u>
     &nbsp;&nbsp;&nbsp;&nbsp;
@@ -1143,14 +1143,14 @@ def visitas_page(df):
     <u>MÉRIDA</u>
 </div>
 
-<div style="font-size:14px;margin-bottom:5px;">
+<div style="font-size:12px;margin-bottom:3px;">
     <b>Motivo de la visita:</b>
 </div>
 
 <table style="
     width:100%;
-    font-size:13px;
-    margin-bottom:20px;
+    font-size:11px;
+    margin-bottom:10px;
     border-collapse:collapse;
 ">
 
@@ -1160,8 +1160,8 @@ def visitas_page(df):
     width:50%;
     vertical-align:top;
     border:1px dashed #ccc;
-    padding:6px;
-    line-height:1.6;
+    padding:4px;
+    line-height:1.35;
 ">
 
 {marca("Observación en grupo")}
@@ -1194,8 +1194,8 @@ Elaboración o actualización de EPP
     width:50%;
     vertical-align:top;
     border:1px dashed #ccc;
-    padding:6px;
-    line-height:1.6;
+    padding:4px;
+    line-height:1.35;
 ">
 
 {marca("Intervención en Grupo")}
@@ -1225,33 +1225,35 @@ Otros: {detalle("Otros")}
 </table>
 
 <div style="
-    font-size:14px;
-    margin-bottom:10px;
+    font-size:12px;
+    margin-bottom:5px;
 ">
     <b>Breve descripción de las actividades desarrolladas:</b>
 </div>
 
 <div style="
-    font-size:14px;
-    min-height:120px;
-    line-height:1.6;
+    font-size:12px;
+    min-height:65px;
+    line-height:1.35;
 ">
     {descripcion_html}
 </div>
 
 <table style="
     width:100%;
-    font-size:12px;
+    font-size:11px;
     text-align:center;
-    margin-top:50px;
+    margin-top:22px;
+    break-inside:avoid;
+    page-break-inside:avoid;
 ">
 
 <tr>
 
 <td style="
     width:50%;
-    padding-bottom:40px;
-    padding-right:20px;
+    padding-bottom:16px;
+    padding-right:8px;
 ">
 
 ___________________________<br>
@@ -1264,8 +1266,8 @@ ___________________________<br>
 
 <td style="
     width:50%;
-    padding-bottom:40px;
-    padding-left:20px;
+    padding-bottom:16px;
+    padding-left:8px;
 ">
 
 ___________________________<br>
@@ -1282,7 +1284,7 @@ Maestra(o) de apoyo
 
 <td style="
     width:50%;
-    padding-right:20px;
+    padding-right:8px;
 ">
 
 ___________________________<br>
@@ -1295,7 +1297,7 @@ Director de la USAER 02-E
 
 <td style="
     width:50%;
-    padding-left:20px;
+    padding-left:8px;
 ">
 
 ___________________________<br>
@@ -1328,7 +1330,7 @@ Constancia de Visita - {escuela_seleccionada}
 @media print {{
 
     @page {{
-        margin:1cm;
+        margin:0.65cm;
     }}
 
     body {{
