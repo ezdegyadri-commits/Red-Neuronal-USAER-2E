@@ -8,7 +8,7 @@ from services.expedientes import alumnos_visibles, expediente, alumno
 from services.alumnos import alumnos_individuales_de_escuela
 from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
 from ai.engine import fallback, generar_sugerencias
-from documents.anexos import anexo4_html, anexo5_html
+from documents.anexos import anexo3_html, anexo4_html, anexo5_html
 from ui.components import hero, card
 from assets.encabezado import ENCABEZADO_PNG_BASE64
 from utils.ids import expediente_id
@@ -452,15 +452,281 @@ def seguimiento_page(df):
         st.success("Evento registrado en Anexo 5 y en la trazabilidad del expediente.")
 
 
-def documentos_page(df):
-    hero("Documentos", "Genera las salidas oficiales desde los datos ya capturados.")
-    if df.empty:return
-    opts=df[["ID_Alumno","Nombre_Completo"]].drop_duplicates().sort_values("Nombre_Completo")
-    nombre=st.selectbox("Alumno",opts["Nombre_Completo"].tolist(),key="doc_alumno")
-    id_a=opts.loc[opts["Nombre_Completo"]==nombre,"ID_Alumno"].iloc[0]; e=expediente(id_a)
-    if not e["anexo4"].empty: st.download_button("Descargar Anexo IV",anexo4_html(e["alumno"],e["anexo4"]),f"Anexo_IV_{id_a}.html","text/html")
-    if not e["anexo5"].empty: st.download_button("Descargar Anexo V",anexo5_html(e["alumno"],e["anexo5"]),f"Anexo_V_{id_a}.html","text/html")
 
+def eventos_page(df):
+    hero(
+        "Eventos significativos — Anexo V",
+        "Registra avances, acuerdos y situaciones relevantes. Cada evento queda "
+        "vinculado al expediente y disponible para imprimir."
+    )
+
+    nombre_usuario = st.session_state.get("nombre", "")
+    rol_usuario = st.session_state.get("rol", "")
+    modo = st.radio(
+        "¿Dónde ocurrió el evento?",
+        ["Alumno individual", "Grupo / contexto áulico"],
+        horizontal=True,
+        key="evento_modo",
+    )
+
+    if modo == "Alumno individual":
+        if df.empty:
+            st.info("No hay alumnos disponibles en tus escuelas asignadas.")
+            return
+        opciones = (
+            df[["ID_Alumno", "Nombre_Completo"]]
+            .drop_duplicates()
+            .sort_values("Nombre_Completo")
+        )
+        nombre = st.selectbox(
+            "Alumno",
+            opciones["Nombre_Completo"].astype(str).tolist(),
+            key="evento_alumno",
+        )
+        id_alumno = str(
+            opciones.loc[
+                opciones["Nombre_Completo"].astype(str) == str(nombre),
+                "ID_Alumno",
+            ].iloc[0]
+        )
+        datos = alumno(df, id_alumno) or {}
+        objetivo = str(datos.get("Nombre_Completo", nombre))
+        grado_grupo = (
+            f"{datos.get('Grado', '')} {datos.get('Grupo', '')}".strip()
+        )
+    else:
+        escuelas = escuelas_asignadas(nombre_usuario, rol_usuario)
+        if not escuelas:
+            st.error("No tienes escuelas asignadas para registrar este evento.")
+            return
+        escuela = st.selectbox(
+            "Escuela", escuelas, key="evento_escuela_grupo"
+        )
+        col_grado, col_grupo = st.columns(2)
+        with col_grado:
+            grado = st.selectbox(
+                "Grado",
+                ["1ro", "2do", "3ro", "4to", "5to", "6to"],
+                key="evento_grado",
+            )
+        with col_grupo:
+            grupo = st.selectbox(
+                "Grupo", ["A", "B", "C", "D"], key="evento_grupo"
+            )
+        grado_grupo = f"{grado} {grupo}"
+        id_alumno = f"GRUPO-{ESCUELAS_USAER[escuela]}-{grado}-{grupo}"
+        objetivo = f"Grupo {grado_grupo} de la escuela {escuela}"
+        datos = {"Nombre_Completo": objetivo}
+
+    st.caption(
+        "Escribe únicamente información observable y útil para el seguimiento."
+    )
+    with st.form("evento_significativo", clear_on_submit=True):
+        fecha = st.date_input("Fecha del evento", date.today())
+        evento = st.text_area(
+            "¿Qué ocurrió? Incluye avances, acuerdos, apoyos y próximo paso.",
+            height=180,
+            placeholder=(
+                "Ejemplo: Se observó mayor participación durante la lectura. "
+                "Se acordó mantener el apoyo visual y revisar avances en dos semanas."
+            ),
+        )
+        especialista = st.text_input(
+            "Especialista responsable", nombre_usuario
+        )
+        guardar = st.form_submit_button(
+            "Guardar evento y generar Anexo V",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if not guardar:
+        return
+    if not evento.strip():
+        st.error("Describe el evento antes de guardarlo.")
+        return
+
+    registro = {
+        "Fecha": str(fecha),
+        "Nombre_Alumno": objetivo,
+        "Grado_Grupo": grado_grupo,
+        "Especialista": especialista.strip() or nombre_usuario,
+        "Evento": evento.strip(),
+    }
+    try:
+        id_evento = repo.save_anexo5(registro)
+        repo.ensure_expediente(expediente_id(id_alumno), id_alumno)
+        repo.link_record(
+            expediente_id(id_alumno), id_alumno, "ANEXO5", id_evento, str(fecha)
+        )
+        repo.timeline(
+            expediente_id(id_alumno),
+            id_alumno,
+            str(fecha),
+            "SEGUIMIENTO",
+            "Evento significativo registrado",
+            evento.strip(),
+            registro["Especialista"],
+        )
+    except Exception as ex:
+        st.error(f"No fue posible guardar el evento: {ex}")
+        return
+
+    st.success(
+        "Evento guardado. Ya forma parte del expediente y del Anexo V."
+    )
+    st.download_button(
+        "Descargar Anexo V para imprimir",
+        anexo5_html(datos, pd.DataFrame([registro])),
+        f"Anexo_V_{id_alumno}_{fecha.strftime('%Y%m%d')}.html",
+        "text/html",
+        use_container_width=True,
+    )
+
+def documentos_page(df):
+    hero(
+        "Expediente documental",
+        "Aquí viven los Anexos III, IV y V generados. Elige un alumno o un grupo "
+        "para consultar y descargar su expediente."
+    )
+
+    tipo = st.radio(
+        "Tipo de expediente",
+        ["Alumno individual", "Grupo / contexto áulico"],
+        horizontal=True,
+        key="documentos_tipo",
+    )
+
+    if tipo == "Alumno individual":
+        if df.empty:
+            st.info("No hay alumnos disponibles en tus escuelas asignadas.")
+            return
+        opciones = (
+            df[["ID_Alumno", "Nombre_Completo"]]
+            .drop_duplicates()
+            .sort_values("Nombre_Completo")
+        )
+        nombre = st.selectbox(
+            "Alumno",
+            opciones["Nombre_Completo"].astype(str).tolist(),
+            key="doc_alumno",
+        )
+        id_alumno = str(
+            opciones.loc[
+                opciones["Nombre_Completo"].astype(str) == str(nombre),
+                "ID_Alumno",
+            ].iloc[0]
+        )
+        expediente_actual = expediente(id_alumno)
+        if not expediente_actual:
+            st.info("Aún no hay documentos para este alumno.")
+            return
+        alumno_documento = expediente_actual["alumno"]
+        a3 = expediente_actual["anexo3"]
+        a4 = expediente_actual["anexo4"]
+        a5 = expediente_actual["anexo5"]
+        etiqueta = str(alumno_documento.get("Nombre_Completo", nombre))
+        archivo_base = id_alumno
+    else:
+        a3_todos = repo.anexo3()
+        a4_todos = repo.anexo4()
+        a5_todos = repo.anexo5()
+        grupos = set()
+        for tabla in (a4_todos, a5_todos):
+            if (
+                not tabla.empty
+                and "Nombre_Alumno" in tabla.columns
+            ):
+                grupos.update(
+                    str(valor)
+                    for valor in tabla["Nombre_Alumno"].dropna()
+                    if str(valor).startswith("Grupo ")
+                )
+        grupos = sorted(grupos)
+        if not grupos:
+            st.info("Aún no hay anexos generados para grupos.")
+            return
+        etiqueta = st.selectbox(
+            "Grupo",
+            grupos,
+            key="doc_grupo",
+        )
+        a4 = (
+            a4_todos[
+                a4_todos["Nombre_Alumno"].astype(str) == etiqueta
+            ].copy()
+            if not a4_todos.empty and "Nombre_Alumno" in a4_todos.columns
+            else pd.DataFrame()
+        )
+        a5 = (
+            a5_todos[
+                a5_todos["Nombre_Alumno"].astype(str) == etiqueta
+            ].copy()
+            if not a5_todos.empty and "Nombre_Alumno" in a5_todos.columns
+            else pd.DataFrame()
+        )
+        a3 = pd.DataFrame()
+        archivo_base = etiqueta.replace(" ", "_")
+        alumno_documento = {"Nombre_Completo": etiqueta}
+
+        if not a4.empty:
+            fila_grupo = a4.iloc[0]
+            escuela = str(fila_grupo.get("Escuela", ""))
+            grado_grupo = str(fila_grupo.get("Grado_Grupo", "")).split()
+            codigo = ESCUELAS_USAER.get(escuela, "")
+            if codigo and len(grado_grupo) >= 2 and not a3_todos.empty:
+                id_grupo = (
+                    f"GRUPO-{codigo}-{grado_grupo[0]}-{grado_grupo[1]}"
+                )
+                if "ID_Alumno" in a3_todos.columns:
+                    a3 = a3_todos[
+                        a3_todos["ID_Alumno"].astype(str) == id_grupo
+                    ].copy()
+
+    st.markdown(f"### Documentos de {etiqueta}")
+    tabs = st.tabs(["Anexo III", "Anexo IV", "Anexo V"])
+
+    with tabs[0]:
+        if a3.empty:
+            st.info("Todavía no hay un Anexo III para este expediente.")
+        else:
+            st.dataframe(a3, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Descargar Anexo III",
+                anexo3_html(alumno_documento, a3),
+                f"Anexo_III_{archivo_base}.html",
+                "text/html",
+                use_container_width=True,
+                key=f"descargar_a3_{archivo_base}",
+            )
+
+    with tabs[1]:
+        if a4.empty:
+            st.info("Todavía no hay un Anexo IV para este expediente.")
+        else:
+            st.dataframe(a4, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Descargar Anexo IV",
+                anexo4_html(alumno_documento, a4),
+                f"Anexo_IV_{archivo_base}.html",
+                "text/html",
+                use_container_width=True,
+                key=f"descargar_a4_{archivo_base}",
+            )
+
+    with tabs[2]:
+        if a5.empty:
+            st.info("Todavía no hay un Anexo V para este expediente.")
+        else:
+            st.dataframe(a5, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Descargar Anexo V",
+                anexo5_html(alumno_documento, a5),
+                f"Anexo_V_{archivo_base}.html",
+                "text/html",
+                use_container_width=True,
+                key=f"descargar_a5_{archivo_base}",
+            )
 
 def direccion_page(df):
     hero("Panel de Dirección", "Indicadores para gestionar la red, no solo consultar registros.")
