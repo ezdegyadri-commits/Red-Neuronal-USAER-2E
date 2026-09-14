@@ -1,4 +1,4 @@
-# USAE 02-E — Gestión Integral
+# USAER 02E — Gestión Integral
 
 ## Objetivo
 Transformar la aplicación de formularios independientes en una plataforma centrada en el **Expediente Único** y la doctrina **capturar una vez, reutilizar siempre**.
