@@ -23,7 +23,7 @@ escuelas=st.session_state.get("escuelas_permitidas","")
 authorized = alumnos_visibles(rol, escuelas)
 
 with st.sidebar:
-    st.markdown("<div class='brand'><h1>USAE 02-E</h1><p>Gestión integral de intervención educativa</p></div>",unsafe_allow_html=True)
+    st.markdown("<div class='brand'><h1>USAER 02E</h1><p>Gestión integral de intervención educativa</p></div>",unsafe_allow_html=True)
     st.caption(f"Sesión: {st.session_state.get('nombre','')}")
     st.divider()
     menu=["Inicio","Expedientes","Evaluación BAP","Eventos significativos","Documentos"]
