@@ -7,7 +7,7 @@ from data import repository as repo
 from services.expedientes import alumnos_visibles, expediente, alumno
 from services.alumnos import alumnos_individuales_de_escuela
 from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
-from ai.engine import generar_sugerencias
+from ai.engine import fallback, generar_sugerencias
 from documents.anexos import anexo4_html, anexo5_html
 from ui.components import hero, card
 from assets.encabezado import ENCABEZADO_PNG_BASE64
@@ -255,7 +255,16 @@ def bap_page(df):
         with st.spinner(
             "Analizando barreras y preparando una propuesta profesional..."
         ):
-            st.session_state["ai_draft"] = generar_sugerencias(contexto)
+            try:
+                st.session_state["ai_draft"] = generar_sugerencias(contexto)
+            except RuntimeError:
+                # La operación continúa con una propuesta editable si el
+                # proveedor de IA no está disponible temporalmente.
+                st.session_state["ai_draft"] = fallback()
+                st.warning(
+                    "La IA no está disponible en este momento. "
+                    "Se preparó una propuesta base que puedes editar y aprobar."
+                )
             st.session_state["ai_context"] = contexto
 
     draft = st.session_state.get("ai_draft")
