@@ -2,10 +2,11 @@ import json
 from datetime import date
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from config.settings import ESCUELAS_USAER, BAP_ITEMS, BAP_FRECUENCIAS, SERVICE_NAME, SCHOOL_YEAR
 from data import repository as repo
 from services.expedientes import alumnos_visibles, expediente, alumno
-from services.alumnos import alumnos_individuales_de_escuela
+from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
 from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
 from ai.engine import fallback, generar_sugerencias
 from documents.anexos import anexo3_html, anexo4_html, anexo5_html, header_b64
@@ -455,12 +456,18 @@ def seguimiento_page(df):
 def eventos_page(df):
     hero(
         "Eventos significativos — Anexo V",
-        "Registra avances, acuerdos y situaciones relevantes. Cada evento queda "
-        "vinculado al expediente y disponible para imprimir."
+        "Una hoja cronológica por alumno o grupo: registra, revisa la vista "
+        "previa e imprime cuando esté lista."
     )
 
     nombre_usuario = st.session_state.get("nombre", "")
     rol_usuario = st.session_state.get("rol", "")
+    rol_normalizado = normalizar_texto(rol_usuario)
+    es_especialista = any(
+        palabra in rol_normalizado
+        for palabra in ("PSICOLOG", "COMUNICACI", "TRABAJO")
+    )
+
     modo = st.radio(
         "¿Dónde ocurrió el evento?",
         ["Alumno individual", "Grupo / contexto áulico"],
@@ -468,12 +475,31 @@ def eventos_page(df):
         key="evento_modo",
     )
 
+    escuela = ""
     if modo == "Alumno individual":
         if df.empty:
             st.info("No hay alumnos disponibles en tus escuelas asignadas.")
             return
+
+        alumnos_disponibles = df
+        if es_especialista:
+            escuelas = escuelas_asignadas(nombre_usuario, rol_usuario)
+            if not escuelas:
+                st.error("No tienes escuelas asignadas para registrar eventos.")
+                return
+            escuela = st.selectbox(
+                "Escuela",
+                escuelas,
+                key="evento_escuela_individual",
+            )
+            alumnos_disponibles = alumnos_de_escuela(df, escuela)
+
+        if alumnos_disponibles.empty:
+            st.info("No hay alumnos registrados para la escuela seleccionada.")
+            return
+
         opciones = (
-            df[["ID_Alumno", "Nombre_Completo"]]
+            alumnos_disponibles[["ID_Alumno", "Nombre_Completo"]]
             .drop_duplicates()
             .sort_values("Nombre_Completo")
         )
@@ -488,7 +514,7 @@ def eventos_page(df):
                 "ID_Alumno",
             ].iloc[0]
         )
-        datos = alumno(df, id_alumno) or {}
+        datos = alumno(alumnos_disponibles, id_alumno) or {}
         objetivo = str(datos.get("Nombre_Completo", nombre))
         grado_grupo = (
             f"{datos.get('Grado', '')} {datos.get('Grupo', '')}".strip()
@@ -499,7 +525,9 @@ def eventos_page(df):
             st.error("No tienes escuelas asignadas para registrar este evento.")
             return
         escuela = st.selectbox(
-            "Escuela", escuelas, key="evento_escuela_grupo"
+            "Escuela",
+            escuelas,
+            key="evento_escuela_grupo",
         )
         col_grado, col_grupo = st.columns(2)
         with col_grado:
@@ -517,43 +545,93 @@ def eventos_page(df):
         objetivo = f"Grupo {grado_grupo} de la escuela {escuela}"
         datos = {"Nombre_Completo": objetivo}
 
+    eventos_todos = repo.anexo5()
+    if (
+        eventos_todos.empty
+        or "Nombre_Alumno" not in eventos_todos.columns
+    ):
+        eventos_registrados = pd.DataFrame()
+    else:
+        eventos_registrados = eventos_todos[
+            eventos_todos["Nombre_Alumno"].astype(str) == objetivo
+        ].copy()
+
+    if not eventos_registrados.empty and "Fecha" in eventos_registrados.columns:
+        eventos_registrados["_orden"] = pd.to_datetime(
+            eventos_registrados["Fecha"],
+            errors="coerce",
+            dayfirst=True,
+        )
+        eventos_registrados = (
+            eventos_registrados
+            .sort_values("_orden", na_position="last")
+            .drop(columns="_orden")
+        )
+
     st.caption(
-        "Escribe únicamente información observable y útil para el seguimiento."
+        f"Hoja de eventos de {objetivo}. "
+        f"Registros guardados: {len(eventos_registrados)}."
     )
-    with st.form("evento_significativo", clear_on_submit=True):
-        fecha = st.date_input("Fecha del evento", date.today())
-        evento = st.text_area(
-            "¿Qué ocurrió? Incluye avances, acuerdos, apoyos y próximo paso.",
-            height=180,
-            placeholder=(
-                "Ejemplo: Se observó mayor participación durante la lectura. "
-                "Se acordó mantener el apoyo visual y revisar avances en dos semanas."
-            ),
-        )
-        especialista = st.text_input(
-            "Especialista responsable", nombre_usuario
-        )
-        guardar = st.form_submit_button(
-            "Guardar evento y generar Anexo V",
-            type="primary",
-            use_container_width=True,
-        )
 
-    if not guardar:
-        return
-    if not evento.strip():
-        st.error("Describe el evento antes de guardarlo.")
-        return
+    fecha = st.date_input(
+        "Fecha del evento",
+        date.today(),
+        key="evento_fecha",
+    )
+    evento = st.text_area(
+        "¿Qué ocurrió? Incluye avances, acuerdos, apoyos y próximo paso.",
+        height=180,
+        placeholder=(
+            "Ejemplo: Se observó mayor participación durante la lectura. "
+            "Se acordó mantener el apoyo visual y revisar avances en dos semanas."
+        ),
+        key="evento_descripcion",
+    )
+    especialista = st.text_input(
+        "Quien registra el evento",
+        nombre_usuario,
+        key="evento_especialista",
+    )
 
-    registro = {
+    borrador = {
         "Fecha": str(fecha),
         "Nombre_Alumno": objetivo,
         "Grado_Grupo": grado_grupo,
         "Especialista": especialista.strip() or nombre_usuario,
         "Evento": evento.strip(),
     }
+    vista_eventos = eventos_registrados.copy()
+    if borrador["Evento"]:
+        vista_eventos = pd.concat(
+            [vista_eventos, pd.DataFrame([borrador])],
+            ignore_index=True,
+        )
+
+    st.markdown("### Vista previa del Anexo V")
+    st.caption(
+        "La anotación actual aparece en esta vista antes de guardarla. "
+        "Las anotaciones previas permanecen ordenadas cronológicamente."
+    )
+    components.html(
+        anexo5_html(datos, vista_eventos),
+        height=690,
+        scrolling=True,
+    )
+
+    guardar = st.button(
+        "Guardar evento en Anexo V",
+        type="primary",
+        use_container_width=True,
+        key="guardar_evento_anexo5",
+    )
+    if not guardar:
+        return
+    if not borrador["Evento"]:
+        st.error("Describe el evento antes de guardarlo.")
+        return
+
     try:
-        id_evento = repo.save_anexo5(registro)
+        id_evento = repo.save_anexo5(borrador)
         repo.ensure_expediente(expediente_id(id_alumno), id_alumno)
         repo.link_record(
             expediente_id(id_alumno), id_alumno, "ANEXO5", id_evento, str(fecha)
@@ -564,22 +642,27 @@ def eventos_page(df):
             str(fecha),
             "SEGUIMIENTO",
             "Evento significativo registrado",
-            evento.strip(),
-            registro["Especialista"],
+            borrador["Evento"],
+            borrador["Especialista"],
         )
     except Exception as ex:
         st.error(f"No fue posible guardar el evento: {ex}")
         return
 
+    documento_actualizado = pd.concat(
+        [eventos_registrados, pd.DataFrame([borrador])],
+        ignore_index=True,
+    )
     st.success(
-        "Evento guardado. Ya forma parte del expediente y del Anexo V."
+        "Evento guardado en su hoja Anexo V y vinculado al expediente concentrador."
     )
     st.download_button(
         "Descargar Anexo V para imprimir",
-        anexo5_html(datos, pd.DataFrame([registro])),
-        f"Anexo_V_{id_alumno}_{fecha.strftime('%Y%m%d')}.html",
+        anexo5_html(datos, documento_actualizado),
+        f"Anexo_V_{id_alumno}.html",
         "text/html",
         use_container_width=True,
+        key=f"imprimir_anexo5_{id_alumno}",
     )
 
 def documentos_page(df):
