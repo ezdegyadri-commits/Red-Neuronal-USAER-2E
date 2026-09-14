@@ -1,6 +1,7 @@
 import hmac
 import streamlit as st
 from data.repository import usuarios
+from services.asignaciones import escuelas_asignadas
 from utils.text import normalizar_texto
 
 
@@ -21,7 +22,23 @@ def login():
         if match is None:
             st.error("Usuario o contraseña incorrectos.")
         else:
-            st.session_state.update({"autenticado": True, "nombre": str(match.get("Nombre", "")), "rol": str(match.get("Rol", "")), "escuelas_permitidas": str(match.get("Escuelas_Permitidas", ""))})
+            nombre = str(match.get("Nombre", ""))
+            rol = str(match.get("Rol", ""))
+            escuelas_configuradas = str(match.get("Escuelas_Permitidas", ""))
+            escuelas_oficiales = escuelas_asignadas(nombre, rol)
+
+            # Las asignaciones oficiales prevalecen para Dirección, Trabajo
+            # Social y especialistas; los demás usuarios conservan su permiso
+            # configurado en la hoja Usuarios.
+            if escuelas_oficiales:
+                escuelas_configuradas = ",".join(escuelas_oficiales)
+
+            st.session_state.update({
+                "autenticado": True,
+                "nombre": nombre,
+                "rol": rol,
+                "escuelas_permitidas": escuelas_configuradas,
+            })
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
