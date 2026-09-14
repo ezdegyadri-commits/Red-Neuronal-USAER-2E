@@ -5,7 +5,15 @@ SERVICE_NAME = "USAE 02-E"
 SCHOOL_YEAR = "2026 – 2027"
 FOLDER_ID_MAESTRO = "1btFuNK8l9BI5C2s3-Q0_RZBZkUOBhvtr"
 URL_SPREADSHEET_MAESTRO = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
-GEMINI_MODEL = st.secrets.get("GEMINI_MODEL", "gemini-3.6-flash")
+def secret_or_default(name, default):
+    """Lee una configuración opcional sin impedir el inicio de la aplicación."""
+    try:
+        return st.secrets.get(name, default)
+    except Exception:
+        return default
+
+
+GEMINI_MODEL = secret_or_default("GEMINI_MODEL", "gemini-3.6-flash")
 
 ESCUELAS_USAER = {
     "Damián Carmona": "ESC-001",
