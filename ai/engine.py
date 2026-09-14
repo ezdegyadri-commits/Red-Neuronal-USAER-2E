@@ -1,11 +1,19 @@
 import json, re
 import streamlit as st
-from google import genai
+try:
+    from google import genai
+except ImportError:
+    genai = None
 from config.settings import GEMINI_MODEL
 
 @st.cache_resource(show_spinner=False)
 def client():
-    key = st.secrets.get('GEMINI_API_KEY', '')
+    if genai is None:
+        return None
+    try:
+        key = st.secrets.get('GEMINI_API_KEY', '')
+    except Exception:
+        key = ''
     return genai.Client(api_key=key) if key else None
 
 def fallback():
