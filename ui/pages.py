@@ -104,9 +104,11 @@ def bap_page(df):
         key="bap_modo"
     )
 
-        opciones_escuela = escuelas_asignadas(
-        st.session_state.get("nombre", ""),
-        st.session_state.get("rol", "")
+    nombre_usuario = st.session_state.get("nombre", "")
+    rol_usuario = st.session_state.get("rol", "")
+    opciones_escuela = escuelas_asignadas(nombre_usuario, rol_usuario)
+    alumnos_asignados = alumnos_de_escuelas_asignadas(
+        df, nombre_usuario, rol_usuario
     )
 
     if not opciones_escuela:
@@ -122,7 +124,9 @@ def bap_page(df):
             key="bap_escuela_ind"
         )
 
-        escuela_df = alumnos_individuales_de_escuela(df, escuela)
+        escuela_df = alumnos_individuales_de_escuela(
+            alumnos_asignados, escuela
+        )
 
         if escuela_df.empty:
             st.warning(
