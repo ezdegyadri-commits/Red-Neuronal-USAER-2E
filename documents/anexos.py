@@ -1,5 +1,6 @@
 import html
 import base64
+import json
 from pathlib import Path
 from config.settings import SERVICE_NAME, SCHOOL_YEAR
 
@@ -36,4 +37,48 @@ def anexo5_html(alumno, rows):
     for _, r in rows.iterrows():
         out.append(f"<tr><td>{html.escape(str(r.get('Fecha','')))}</td><td>{html.escape(str(r.get('Evento',''))).replace(chr(10),'<br>')}</td><td style='text-align:center'><br><br>_____________________<br>{html.escape(str(r.get('Especialista','')))}</td></tr>")
     out.append("</table></body></html>")
+    return "".join(out)
+
+
+def anexo3_html(alumno, rows):
+    """Genera una vista imprimible de las observaciones BAP guardadas."""
+    head = header_b64()
+    nombre = html.escape(str(alumno.get("Nombre_Completo", "")))
+    out = [
+        "<html><head><meta charset='UTF-8'><style>"
+        "body{font-family:Arial,sans-serif;color:#111;margin:28px;}"
+        "table{width:100%;border-collapse:collapse;margin-top:16px;}"
+        "th,td{border:1px solid #111;padding:8px;vertical-align:top;}"
+        "th{background:#eef3f7;text-align:left}.header{text-align:center}"
+        "@media print{@page{margin:1cm}}"
+        "</style></head><body>"
+    ]
+    for _, r in rows.iterrows():
+        try:
+            respuestas = json.loads(str(r.get("BAP_Fisicas", "{}")) or "{}")
+        except (TypeError, json.JSONDecodeError):
+            respuestas = {}
+        out.append(
+            f"<section><div class='header'><img src='{head}' style='max-width:100%'></div>"
+            "<h2 style='text-align:center;text-decoration:underline'>"
+            "Anexo III. Instrumento de observación de barreras para el aprendizaje y la participación"
+            "</h2>"
+            f"<p><b>Alumno o grupo:</b> {nombre}<br>"
+            f"<b>Fecha:</b> {html.escape(str(r.get('Fecha', '')))}<br>"
+            f"<b>Personal:</b> {html.escape(str(r.get('ID_Personal', '')))}</p>"
+            "<table><tr><th>Indicador observado</th><th>Frecuencia</th>"
+            "<th>Requiere orientación</th></tr>"
+        )
+        for respuesta in respuestas.values():
+            if not isinstance(respuesta, dict):
+                continue
+            pregunta = html.escape(str(respuesta.get("pregunta", "")))
+            frecuencia = html.escape(str(respuesta.get("frecuencia", "")))
+            orientacion = "Sí" if respuesta.get("orientacion") else "No"
+            out.append(
+                f"<tr><td>{pregunta}</td><td>{frecuencia}</td>"
+                f"<td>{orientacion}</td></tr>"
+            )
+        out.append("</table></section><div style='page-break-after:always'></div>")
+    out.append("</body></html>")
     return "".join(out)
