@@ -31,6 +31,17 @@ ASIGNACIONES_ESPECIALISTAS = {
         "Domingo Solís Rodríguez",
     ],
 
+    # Maestras de apoyo según el directorio oficial 2026-2027.
+    "CINDY MAYANIN BURGOS GONZALEZ": ["Damián Carmona"],
+    "MARYCRUZ CAAMAL CORAL": ["Ichcaanziho"],
+    "MARIA CECILIA SOLIS VAZQUEZ": ["Ichcaanziho"],
+    "DOLORES EUGENIA CORTAZAR NAVARRETE": ["Gregorio Torres Quintero"],
+    "DIANELY DE SUGEIDY CAAMAL TAMAY": ["Remigio Aguilar Sosa"],
+    "LUIS JORGE GARCIA HERRERA": ["Elvira Parra Ávila"],
+    "MARIA DEL ROSARIO PEREZ VITORIN": ["Manuel Sarrado"],
+    "ZUEMMY DEL CARMEN PEREZ BASTO": ["Domingo Solís Rodríguez"],
+    "PEDRO MANUEL TORRES MAY": ["Quintana Roo"],
+
     "DIEGO PERALTA TORRES": list(ESCUELAS_USAER.keys()),
 }
 
