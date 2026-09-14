@@ -5,149 +5,179 @@ def inject():
     st.markdown("""
     <style>
     :root {
-        --u-blue: #0B3A5B;
-        --u-blue2: #075985;
-        --u-gold: #9A6700;
-        --u-bg: #F5F7FA;
-        --u-surface: #FFFFFF;
-        --u-ink: #102A43;
-        --u-muted: #486581;
-        --u-line: #BCCCDC;
-        --u-focus: #005FCC;
+        --bs-primary: #0B5ED7;
+        --bs-primary-dark: #084298;
+        --bs-info: #0AA2C0;
+        --bs-success: #198754;
+        --bs-body-bg: #F4F7FB;
+        --bs-surface: #FFFFFF;
+        --bs-body-color: #1F2937;
+        --bs-secondary-color: #52606D;
+        --bs-border-color: #D9E2EC;
+        --bs-focus-ring: rgba(13, 110, 253, .25);
     }
 
     .stApp, [data-testid="stAppViewContainer"] {
-        background: var(--u-bg);
-        color: var(--u-ink);
+        background: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     }
+    .stApp, .stApp * { color-scheme: light; }
     .stApp p, .stApp label, .stApp li,
-    .stApp [data-testid="stMarkdownContainer"],
-    .stApp [data-testid="stCaptionContainer"] {
-        color: var(--u-ink);
+    .stApp [data-testid="stMarkdownContainer"] {
+        color: var(--bs-body-color);
     }
     .stApp [data-testid="stCaptionContainer"] {
-        color: var(--u-muted);
+        color: var(--bs-secondary-color);
     }
 
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0B3A5B, #062B45);
+        background: linear-gradient(180deg, #123B5D 0%, #082F49 100%);
+        border-right: 1px solid rgba(255,255,255,.12);
     }
-    [data-testid="stSidebar"] * {
-        color: #FFFFFF !important;
+    [data-testid="stSidebar"] * { color: #FFFFFF !important; }
+    [data-testid="stSidebar"] .stRadio label:hover {
+        background: rgba(255,255,255,.12);
+        border-radius: .375rem;
     }
-    [data-testid="stSidebar"] [data-baseweb="select"] > div,
-    [data-testid="stSidebar"] input {
-        background: #FFFFFF !important;
-        color: #102A43 !important;
+    .brand {
+        padding: 1rem .25rem 1.25rem;
+        border-bottom: 1px solid rgba(255,255,255,.16);
+        margin-bottom: .75rem;
     }
-
-    .brand { padding: 8px 0 18px; }
-    .brand h1 { font-size: 1.7rem; margin: 0; color: #FFFFFF; }
-    .brand p { margin: 3px 0 0; color: #E6F1F8 !important; font-size: .9rem; }
+    .brand h1 {
+        font-size: 1.45rem;
+        letter-spacing: .02em;
+        margin: 0;
+        color: #FFFFFF;
+        font-weight: 750;
+    }
+    .brand p {
+        color: #D9EAF7 !important;
+        font-size: .88rem;
+        margin: .35rem 0 0;
+    }
 
     .hero {
-        background: linear-gradient(135deg, #0B3A5B, #075985);
-        padding: 28px;
-        border-radius: 20px;
+        background: linear-gradient(135deg, #123B5D 0%, #0B5ED7 100%);
+        border-radius: .75rem;
         color: #FFFFFF;
-        box-shadow: 0 10px 25px rgba(11,58,91,.20);
-        margin-bottom: 22px;
+        padding: 1.75rem 2rem;
+        margin: 0 0 1.5rem;
+        box-shadow: 0 .5rem 1rem rgba(8, 47, 73, .15);
     }
-    .hero h1, .hero p { color: #FFFFFF !important; }
-    .hero h1 { margin: 0; font-size: 2rem; line-height: 1.2; }
-    .hero p { margin: .55rem 0 0; color: #E6F1F8 !important; }
+    .hero h1 {
+        color: #FFFFFF !important;
+        font-size: clamp(1.5rem, 3vw, 2rem);
+        line-height: 1.2;
+        margin: 0;
+        font-weight: 750;
+    }
+    .hero p {
+        color: #E9F2FF !important;
+        margin: .55rem 0 0;
+        max-width: 52rem;
+    }
 
     .card, [data-testid="stMetric"] {
-        background: var(--u-surface);
-        border: 1px solid var(--u-line);
-        border-radius: 16px;
-        box-shadow: 0 4px 14px rgba(16,42,67,.08);
+        background: var(--bs-surface);
+        border: 1px solid var(--bs-border-color);
+        border-radius: .5rem;
+        box-shadow: 0 .125rem .25rem rgba(31, 41, 55, .075);
     }
-    .card { padding: 18px; height: 100%; }
-    .card *, [data-testid="stMetric"] * { color: var(--u-ink); }
-    .kpi { font-size: 1.9rem; font-weight: 800; color: var(--u-blue); margin: 0; }
-    .muted { color: var(--u-muted) !important; font-size: .92rem; }
+    .card { padding: 1.1rem; height: 100%; }
+    .card * { color: var(--bs-body-color); }
+    .kpi {
+        color: var(--bs-primary-dark);
+        font-size: 1.8rem;
+        font-weight: 750;
+        margin: 0;
+    }
+    .muted { color: var(--bs-secondary-color) !important; font-size: .92rem; }
     .badge {
+        background: #DCEBFF;
+        border-radius: 50rem;
+        color: #084298 !important;
         display: inline-block;
-        padding: 4px 9px;
-        border-radius: 999px;
-        background: #D9EAF7;
-        color: #073B5C !important;
-        font-size: .78rem;
-        font-weight: 800;
+        font-size: .75rem;
+        font-weight: 700;
+        padding: .3rem .55rem;
     }
-    .section-title { font-size: 1.2rem; font-weight: 800; color: var(--u-blue); margin: 12px 0; }
+    .section-title {
+        color: #123B5D;
+        font-size: 1.2rem;
+        font-weight: 750;
+        margin: 1rem 0 .65rem;
+    }
 
-    /* Controles con fondo claro y texto oscuro, incluso si Android usa modo oscuro. */
-    .stApp, .stApp * { color-scheme: light; }
-    .stApp [data-testid="stSelectbox"] [data-baseweb="select"],
-    .stApp [data-testid="stSelectbox"] [data-baseweb="select"] > div,
-    .stApp [data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
-    .stApp [data-testid="stDateInput"] [data-baseweb="input"],
-    .stApp [data-testid="stDateInput"] [data-baseweb="input"] > div,
+    /* Campos legibles en Android, incluido cuando el teléfono está en modo oscuro. */
     .stApp [data-baseweb="input"] > div,
     .stApp [data-baseweb="textarea"] > div,
     .stApp [data-baseweb="select"] > div,
+    .stApp [data-testid="stDateInput"] [data-baseweb="input"] > div,
+    .stApp [data-testid="stSelectbox"] [data-baseweb="select"] > div,
     .stApp input,
     .stApp textarea {
-        background-color: #FFFFFF !important;
         background: #FFFFFF !important;
-        color: #102A43 !important;
-        -webkit-text-fill-color: #102A43 !important;
-        border-color: #486581 !important;
+        background-color: #FFFFFF !important;
+        border-color: #9FB3C8 !important;
+        color: #1F2937 !important;
+        -webkit-text-fill-color: #1F2937 !important;
         opacity: 1 !important;
     }
-    .stApp [data-testid="stSelectbox"] [data-baseweb="select"] *,
-    .stApp [data-testid="stDateInput"] input,
-    .stApp [data-baseweb="select"] span,
-    .stApp [data-baseweb="select"] input,
+    .stApp [data-baseweb="select"] *,
     .stApp [data-baseweb="input"] input,
-    .stApp [data-baseweb="textarea"] textarea {
-        color: #102A43 !important;
-        -webkit-text-fill-color: #102A43 !important;
+    .stApp [data-baseweb="textarea"] textarea,
+    .stApp [data-testid="stDateInput"] input {
+        color: #1F2937 !important;
+        -webkit-text-fill-color: #1F2937 !important;
         opacity: 1 !important;
     }
     .stApp [data-baseweb="select"] svg,
     .stApp [data-testid="stDateInput"] svg {
-        fill: #102A43 !important;
-        color: #102A43 !important;
+        color: #1F2937 !important;
+        fill: #1F2937 !important;
     }
     .stApp input::placeholder, .stApp textarea::placeholder {
-        color: #486581 !important;
-        -webkit-text-fill-color: #486581 !important;
+        color: #52606D !important;
+        -webkit-text-fill-color: #52606D !important;
         opacity: 1 !important;
-    }
-    .stApp [data-baseweb="radio"] label,
-    .stApp [data-baseweb="checkbox"] label {
-        color: var(--u-ink) !important;
     }
 
     div.stButton > button, div.stDownloadButton > button {
-        border-radius: 10px;
-        border: 2px solid #486581;
         background: #FFFFFF;
-        color: #102A43;
-        font-weight: 700;
-        min-height: 44px;
+        border: 1px solid #0B5ED7;
+        border-radius: .375rem;
+        color: #0B5ED7;
+        font-weight: 650;
+        min-height: 42px;
+        padding: .45rem .85rem;
     }
     div.stButton > button[kind="primary"],
     div.stDownloadButton > button[kind="primary"] {
-        background: var(--u-blue) !important;
+        background: #0B5ED7 !important;
+        border-color: #0B5ED7 !important;
         color: #FFFFFF !important;
-        border-color: var(--u-blue) !important;
     }
     div.stButton > button:hover, div.stDownloadButton > button:hover {
-        border-color: var(--u-focus) !important;
-        box-shadow: 0 0 0 3px rgba(0,95,204,.18);
+        background: #084298 !important;
+        border-color: #084298 !important;
+        color: #FFFFFF !important;
     }
-    .stApp a { color: #005FCC; font-weight: 600; }
-    .stApp [data-testid="stDataFrame"] { border: 1px solid var(--u-line); border-radius: 10px; }
+    div.stButton > button:focus, div.stDownloadButton > button:focus {
+        box-shadow: 0 0 0 .25rem var(--bs-focus-ring) !important;
+    }
+    .stApp a { color: #0B5ED7; font-weight: 600; }
+    .stApp [data-testid="stDataFrame"] {
+        border: 1px solid var(--bs-border-color);
+        border-radius: .5rem;
+        overflow: hidden;
+    }
 
     @media (max-width: 768px) {
-        .block-container { padding: 1rem .8rem 5rem !important; }
-        .hero { padding: 20px 16px; border-radius: 14px; margin-bottom: 16px; }
-        .hero h1 { font-size: 1.55rem; }
-        .hero p { font-size: .98rem; }
+        .block-container { padding: 1rem .8rem 4rem !important; }
+        .hero { border-radius: .65rem; padding: 1.35rem 1rem; margin-bottom: 1rem; }
+        .hero h1 { font-size: 1.45rem; }
         [data-testid="stHorizontalBlock"] {
             flex-wrap: wrap !important;
             gap: .75rem !important;
@@ -157,9 +187,9 @@ def inject():
             min-width: 100% !important;
         }
         div.stButton > button, div.stDownloadButton > button {
-            width: 100%;
-            min-height: 48px;
             font-size: 1rem;
+            min-height: 48px;
+            width: 100%;
         }
         .stApp label, .stApp p, .stApp li { font-size: 1rem; }
         [data-testid="stSidebar"] { min-width: 17rem; }
