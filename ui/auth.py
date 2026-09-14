@@ -6,7 +6,7 @@ from utils.text import normalizar_texto
 
 
 def login():
-    st.markdown("<div style='max-width:620px;margin:8vh auto'><div class='hero'><h1>USAE 02-E</h1><p>Gestión integral de la intervención educativa</p></div>", unsafe_allow_html=True)
+    st.markdown("<div style='max-width:620px;margin:8vh auto'><div class='hero'><h1>USAER 02E</h1><p>Gestión integral de la intervención educativa</p></div>", unsafe_allow_html=True)
     with st.form("login"):
         user = st.text_input("Usuario")
         password = st.text_input("Contraseña", type="password")
