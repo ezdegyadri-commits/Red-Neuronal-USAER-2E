@@ -78,22 +78,43 @@ def inject():
     }
     .section-title { font-size: 1.2rem; font-weight: 800; color: var(--u-blue); margin: 12px 0; }
 
+    /* Controles con fondo claro y texto oscuro, incluso si Android usa modo oscuro. */
+    .stApp, .stApp * { color-scheme: light; }
+    .stApp [data-testid="stSelectbox"] [data-baseweb="select"],
+    .stApp [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+    .stApp [data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
+    .stApp [data-testid="stDateInput"] [data-baseweb="input"],
+    .stApp [data-testid="stDateInput"] [data-baseweb="input"] > div,
     .stApp [data-baseweb="input"] > div,
     .stApp [data-baseweb="textarea"] > div,
-    .stApp [data-baseweb="select"] > div {
+    .stApp [data-baseweb="select"] > div,
+    .stApp input,
+    .stApp textarea {
+        background-color: #FFFFFF !important;
         background: #FFFFFF !important;
-        color: var(--u-ink) !important;
-        border-color: #829AB1 !important;
-    }
-    .stApp input, .stApp textarea,
-    .stApp [data-baseweb="select"] span {
-        color: var(--u-ink) !important;
-        -webkit-text-fill-color: var(--u-ink) !important;
+        color: #102A43 !important;
+        -webkit-text-fill-color: #102A43 !important;
+        border-color: #486581 !important;
         opacity: 1 !important;
     }
+    .stApp [data-testid="stSelectbox"] [data-baseweb="select"] *,
+    .stApp [data-testid="stDateInput"] input,
+    .stApp [data-baseweb="select"] span,
+    .stApp [data-baseweb="select"] input,
+    .stApp [data-baseweb="input"] input,
+    .stApp [data-baseweb="textarea"] textarea {
+        color: #102A43 !important;
+        -webkit-text-fill-color: #102A43 !important;
+        opacity: 1 !important;
+    }
+    .stApp [data-baseweb="select"] svg,
+    .stApp [data-testid="stDateInput"] svg {
+        fill: #102A43 !important;
+        color: #102A43 !important;
+    }
     .stApp input::placeholder, .stApp textarea::placeholder {
-        color: #627D98 !important;
-        -webkit-text-fill-color: #627D98 !important;
+        color: #486581 !important;
+        -webkit-text-fill-color: #486581 !important;
         opacity: 1 !important;
     }
     .stApp [data-baseweb="radio"] label,
