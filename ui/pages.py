@@ -67,14 +67,22 @@ def expedientes_page(df):
 
 def alta_page(df):
     hero("Alta de alumnos", "Registra nuevos expedientes sin duplicar información.")
+    escuelas_disponibles = escuelas_asignadas(
+        st.session_state.get("nombre", ""),
+        st.session_state.get("rol", ""),
+    )
+    if not escuelas_disponibles:
+        st.error("No tienes escuelas asignadas para registrar alumnos.")
+        return
+
     with st.form("alta"):
         nombre=st.text_input("Nombre completo")
         curp=st.text_input("CURP",max_chars=18)
         c1,c2=st.columns(2)
         with c1: grado=st.selectbox("Grado",["1ro","2do","3ro","4to","5to","6to"])
         with c2: grupo=st.selectbox("Grupo",["A","B","C","D"])
-        escuela=st.selectbox("Escuela",list(ESCUELAS_USAER))
-        apoyo=st.text_input("Maestra/o de apoyo")
+        escuela=st.selectbox("Escuela",escuelas_disponibles)
+        apoyo=st.text_input("Maestra/o de apoyo",st.session_state.get("nombre",""))
         regular=st.text_input("Docente regular")
         condicion=st.selectbox("Condición / discapacidad",["Intelectual","Auditiva","Visual","Motora","TEA","TDAH","Aptitudes Sobresalientes","Dificultades severas de aprendizaje","Dificultades severas de conducta","Dificultades severas de comunicación","Ninguna"])
         tipo=st.selectbox("Tipo de atención",["Individual","Grupal"])
@@ -713,6 +721,21 @@ def documentos_page(df):
         a3_todos = repo.anexo3()
         a4_todos = repo.anexo4()
         a5_todos = repo.anexo5()
+        escuelas_disponibles = escuelas_asignadas(
+            st.session_state.get("nombre", ""),
+            st.session_state.get("rol", ""),
+        )
+        if not escuelas_disponibles:
+            st.error("No tienes escuelas asignadas para consultar grupos.")
+            return
+
+        def grupo_permitido(nombre_grupo):
+            grupo_normalizado = normalizar_texto(nombre_grupo)
+            return any(
+                normalizar_texto(escuela) in grupo_normalizado
+                for escuela in escuelas_disponibles
+            )
+
         grupos = set()
         for tabla in (a4_todos, a5_todos):
             if (
@@ -722,7 +745,10 @@ def documentos_page(df):
                 grupos.update(
                     str(valor)
                     for valor in tabla["Nombre_Alumno"].dropna()
-                    if str(valor).startswith("Grupo ")
+                    if (
+                        str(valor).startswith("Grupo ")
+                        and grupo_permitido(str(valor))
+                    )
                 )
         grupos = sorted(grupos)
         if not grupos:
