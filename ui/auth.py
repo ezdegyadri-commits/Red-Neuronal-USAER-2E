@@ -43,8 +43,15 @@ def login():
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def logout():
-    if st.sidebar.button("Cerrar sesión", use_container_width=True):
-        for k in ["autenticado","nombre","rol","escuelas_permitidas","selected_alumno"]:
+def logout(key="cerrar_sesion"):
+    """Muestra un cierre de sesión en el contenedor actual."""
+    if st.button("Cerrar sesión", key=key, use_container_width=True):
+        for k in [
+            "autenticado",
+            "nombre",
+            "rol",
+            "escuelas_permitidas",
+            "selected_alumno",
+        ]:
             st.session_state.pop(k, None)
         st.rerun()
