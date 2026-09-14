@@ -10,6 +10,7 @@ from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asigna
 from ai.engine import generar_sugerencias
 from documents.anexos import anexo4_html, anexo5_html
 from ui.components import hero, card
+from assets.encabezado import ENCABEZADO_PNG_BASE64
 from utils.ids import expediente_id
 from utils.text import normalizar_texto
 
@@ -698,6 +699,14 @@ def visitas_page(df):
         else "<br><br><br><br>"
     )
 
+    encabezado_html = (
+        '<div style="text-align:center; margin:0 0 18px;">'
+        f'<img src="data:image/png;base64,{ENCABEZADO_PNG_BASE64}" '
+        'alt="Encabezado oficial de USAER 02-E" '
+        'style="display:block; width:100%; max-width:720px; height:auto; margin:auto;">'
+        '</div>'
+    )
+
     html_constancia = f"""
 <div style="
     background-color:white;
@@ -707,6 +716,8 @@ def visitas_page(df):
     max-width:800px;
     margin:auto;
 ">
+
+{encabezado_html}
 
 <h3 style="
     text-align:center;
