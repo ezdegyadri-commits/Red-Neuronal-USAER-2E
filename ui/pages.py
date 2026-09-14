@@ -450,7 +450,524 @@ def direccion_page(df):
 
 
 def visitas_page(df):
-    hero("Constancias de visita", "Registra la actividad de campo y conserva evidencia en la plataforma.")
-    st.info("Esta primera versión modular conserva el registro actual; la siguiente iteración puede mover el formato oficial de constancia a un generador independiente sin duplicar datos.")
-    try: st.dataframe(repo.df_sheet("Registro_Visitas"),use_container_width=True,hide_index=True)
-    except Exception: st.warning("La hoja Registro_Visitas no está disponible o requiere permisos.")
+    hero(
+        "Constancias de visita",
+        "Registra la actividad de campo y genera la constancia oficial."
+    )
+
+    nombre_usuario = str(
+        st.session_state.get("nombre", "")
+    ).strip()
+
+    rol_usuario = str(
+        st.session_state.get("rol", "")
+    ).strip()
+
+    escuelas_permitidas = escuelas_asignadas(
+        nombre_usuario,
+        rol_usuario
+    )
+
+    if not escuelas_permitidas:
+        st.error(
+            "No se encontraron escuelas asignadas para tu usuario. "
+            "Verifica la configuración de tu sesión."
+        )
+        return
+
+    st.success(
+        f"Escuelas disponibles para {nombre_usuario}: "
+        f"{len(escuelas_permitidas)}"
+    )
+
+    with st.form("form_constancia", clear_on_submit=False):
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            escuela_seleccionada = st.selectbox(
+                "Escuela visitada",
+                escuelas_permitidas,
+                key="visita_escuela"
+            )
+
+        with col2:
+            fecha_visita = st.date_input(
+                "Fecha de la visita",
+                date.today(),
+                key="visita_fecha"
+            )
+
+        st.markdown(
+            "### Motivo de la visita"
+        )
+
+        col_mot1, col_mot2 = st.columns(2)
+
+        with col_mot1:
+            motivos_izq = st.multiselect(
+                "Actividades de seguimiento y apoyo",
+                [
+                    "Observación en grupo",
+                    "Entrevista con...",
+                    "Trabajo interdisciplinario",
+                    "Sugerencias a Maestra(o)",
+                    "Sugerencias a Padres de...",
+                    "Valoración a...",
+                    "Revaloración de sugerencias con...",
+                    "Elaboración o actualización de EPP",
+                ],
+                key="visita_motivos_izq"
+            )
+
+        with col_mot2:
+            motivos_der = st.multiselect(
+                "Intervención y juntas",
+                [
+                    "Intervención en Grupo",
+                    "Apoyo individual en aula",
+                    "Elaboración del Plan de Intervención",
+                    "Consejo Técnico Escolar",
+                    "Junta del Servicio de Apoyo",
+                    "Junta Académica del Servicio de Apoyo",
+                    "Otros",
+                ],
+                key="visita_motivos_der"
+            )
+
+        detalles_motivos = st.text_input(
+            "Especifica nombres o detalles del motivo (opcional)",
+            key="visita_detalles"
+        )
+
+        descripcion_actividad = st.text_area(
+            "Breve descripción de las actividades desarrolladas",
+            height=140,
+            key="visita_descripcion"
+        )
+
+        generar_acta = st.form_submit_button(
+            "🖨️ Generar Constancia Oficial",
+            type="primary",
+            use_container_width=True
+        )
+
+    if not generar_acta:
+        return
+
+    # ---------------------------------------------------------
+    # DATOS DE LA ESCUELA
+    # ---------------------------------------------------------
+
+    directorio_firmas = {
+        "Damián Carmona": {
+            "director": "Mtra. Maribel Vargas Arana",
+            "apoyo": "Mtra. Cindy Mayanín Burgos González",
+        },
+        "Ichcaanziho": {
+            "director": "Mtra. Rennaty Maribel Puga Jimenez",
+            "apoyo": "Mtra. Marycruz Caamal Coral",
+        },
+        "Gregorio Torres Quintero": {
+            "director": "Mtro. Elmer Ariel Ontiveros Requena",
+            "apoyo": "Mtra. Dolores Eugenia Cortázar Navarrete",
+        },
+        "Remigio Aguilar Sosa": {
+            "director": "Mtro. Carlos Esteban Heredia GCantón",
+            "apoyo": "Mtra. Dianely de Sugeidy Caamal Tamay",
+        },
+        "Elvira Parra Ávila": {
+            "director": "Mtro. Manuel Jesús Alcocer Vázquez",
+            "apoyo": "Mtro. Luis Jorge García Herrera",
+        },
+        "Manuel Sarrado": {
+            "director": "Mtro. José Alberto Reyna Martínez",
+            "apoyo": "Mtra. María del Rosario Pérez Vitorin",
+        },
+        "Domingo Solís Rodríguez": {
+            "director": "Mtra. Erika Basto Ek",
+            "apoyo": "Mtra. Zuemmy del Carmen Pérez Basto",
+        },
+        "Quintana Roo": {
+            "director": "Mtro. Jorge Adrián Cetina Cach",
+            "apoyo": "Mtro. Pedro Manuel Torres May",
+        },
+    }
+
+    datos_escuela = directorio_firmas.get(
+        escuela_seleccionada
+    )
+
+    if not datos_escuela:
+        st.error(
+            "No se encontró la información de firmas de esta escuela."
+        )
+        return
+
+    # ---------------------------------------------------------
+    # ESPECIALIDAD
+    # ---------------------------------------------------------
+
+    rol_n = normalizar_texto(rol_usuario)
+
+    if "PSICOLOG" in rol_n:
+        especialidad = "Área de Psicología - USAER 02-E"
+    elif "COMUNICACI" in rol_n:
+        especialidad = "Área de Comunicación - USAER 02-E"
+    elif "TRABAJO" in rol_n:
+        especialidad = "Área de Trabajo Social - USAER 02-E"
+    else:
+        especialidad = rol_usuario or "USAER 02-E"
+
+    # ---------------------------------------------------------
+    # VALIDACIÓN FINAL DE SEGURIDAD
+    # ---------------------------------------------------------
+
+    if escuela_seleccionada not in escuelas_permitidas:
+        st.error(
+            "Acceso denegado: esta escuela no está asignada "
+            "a tu usuario."
+        )
+        return
+
+    motivos = motivos_izq + motivos_der
+    motivos_completos = ", ".join(motivos)
+
+    # ---------------------------------------------------------
+    # GUARDAR EN REGISTRO_VISITAS
+    # ---------------------------------------------------------
+
+    try:
+        id_visita = repo.save_visita({
+            "Fecha": fecha_visita.strftime("%d/%m/%Y"),
+            "Escuela": escuela_seleccionada,
+            "Personal": nombre_usuario,
+            "Motivo": motivos_completos,
+            "Observaciones": descripcion_actividad,
+            "Evidencia": detalles_motivos,
+            "Estatus": "GENERADA",
+        })
+
+    except Exception as ex:
+        st.error(
+            f"No fue posible guardar la visita en la plataforma: {ex}"
+        )
+        return
+
+    # ---------------------------------------------------------
+    # FUNCIONES PARA MARCAR LAS OPCIONES
+    # ---------------------------------------------------------
+
+    def marca(opcion):
+        return (
+            "( X )"
+            if opcion in motivos
+            else "(    )"
+        )
+
+    def detalle(opcion, linea="________________________"):
+        if detalles_motivos and opcion in motivos:
+            return f"<b>{detalles_motivos}</b>"
+        return linea
+
+    # ---------------------------------------------------------
+    # CONSTANCIA OFICIAL
+    # ---------------------------------------------------------
+
+    descripcion_html = (
+        descripcion_actividad
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\n", "<br>")
+        if descripcion_actividad
+        else "<br><br><br><br>"
+    )
+
+    html_constancia = f"""
+<div style="
+    background-color:white;
+    color:black;
+    padding:40px;
+    font-family:Arial,sans-serif;
+    max-width:800px;
+    margin:auto;
+">
+
+<h3 style="
+    text-align:center;
+    font-weight:bold;
+    text-decoration:underline;
+    margin-bottom:25px;
+">
+    Constancia de visita
+</h3>
+
+<div style="font-size:14px;margin-bottom:8px;">
+    Servicio de educación especial que realiza la visita:
+    <u>{especialidad}</u>
+</div>
+
+<div style="font-size:14px;margin-bottom:8px;">
+    Curso escolar:
+    <u>{SCHOOL_YEAR}</u>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    Fecha de la visita:
+    <u>{fecha_visita.strftime("%d/%m/%Y")}</u>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    Hora:
+    <u>de 7:00 a 12:00 hrs</u>
+</div>
+
+<div style="font-size:14px;margin-bottom:20px;">
+    Escuela:
+    <u>{escuela_seleccionada}</u>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    Localidad:
+    <u>MÉRIDA</u>
+</div>
+
+<div style="font-size:14px;margin-bottom:5px;">
+    <b>Motivo de la visita:</b>
+</div>
+
+<table style="
+    width:100%;
+    font-size:13px;
+    margin-bottom:20px;
+    border-collapse:collapse;
+">
+
+<tr>
+
+<td style="
+    width:50%;
+    vertical-align:top;
+    border:1px dashed #ccc;
+    padding:6px;
+    line-height:1.6;
+">
+
+{marca("Observación en grupo")}
+Observación en grupo<br>
+
+{marca("Entrevista con...")}
+Entrevista con... {detalle("Entrevista con...")}<br>
+
+{marca("Trabajo interdisciplinario")}
+Trabajo interdisciplinario<br>
+
+{marca("Sugerencias a Maestra(o)")}
+Sugerencias a Maestra(o) {detalle("Sugerencias a Maestra(o)")}<br>
+
+{marca("Sugerencias a Padres de...")}
+Sugerencias a Padres de... {detalle("Sugerencias a Padres de...")}<br>
+
+{marca("Valoración a...")}
+Valoración a... {detalle("Valoración a...")}<br>
+
+{marca("Revaloración de sugerencias con...")}
+Revaloración de sugerencias con... {detalle("Revaloración de sugerencias con...")}<br>
+
+{marca("Elaboración o actualización de EPP")}
+Elaboración o actualización de EPP
+
+</td>
+
+<td style="
+    width:50%;
+    vertical-align:top;
+    border:1px dashed #ccc;
+    padding:6px;
+    line-height:1.6;
+">
+
+{marca("Intervención en Grupo")}
+Intervención en Grupo<br>
+
+{marca("Apoyo individual en aula")}
+Apoyo individual en aula<br>
+
+{marca("Elaboración del Plan de Intervención")}
+Elaboración del Plan de Intervención<br>
+
+{marca("Consejo Técnico Escolar")}
+Consejo Técnico Escolar<br>
+
+{marca("Junta del Servicio de Apoyo")}
+Junta del Servicio de Apoyo<br>
+
+{marca("Junta Académica del Servicio de Apoyo")}
+Junta Académica del Servicio de Apoyo<br>
+
+{marca("Otros")}
+Otros: {detalle("Otros")}
+
+</td>
+
+</tr>
+</table>
+
+<div style="
+    font-size:14px;
+    margin-bottom:10px;
+">
+    <b>Breve descripción de las actividades desarrolladas:</b>
+</div>
+
+<div style="
+    font-size:14px;
+    min-height:120px;
+    line-height:1.6;
+">
+    {descripcion_html}
+</div>
+
+<table style="
+    width:100%;
+    font-size:12px;
+    text-align:center;
+    margin-top:50px;
+">
+
+<tr>
+
+<td style="
+    width:50%;
+    padding-bottom:40px;
+    padding-right:20px;
+">
+
+___________________________<br>
+
+<b>{datos_escuela["director"]}</b><br>
+
+Directora(or) de la primaria
+
+</td>
+
+<td style="
+    width:50%;
+    padding-bottom:40px;
+    padding-left:20px;
+">
+
+___________________________<br>
+
+<b>{datos_escuela["apoyo"]}</b><br>
+
+Maestra(o) de apoyo
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="
+    width:50%;
+    padding-right:20px;
+">
+
+___________________________<br>
+
+<b>Psic. Edgar Adrián Yam Briceño MD</b><br>
+
+Director de la USAER 02-E
+
+</td>
+
+<td style="
+    width:50%;
+    padding-left:20px;
+">
+
+___________________________<br>
+
+<b>{nombre_usuario}</b><br>
+
+{especialidad}
+
+</td>
+
+</tr>
+
+</table>
+
+</div>
+"""
+
+    html_impresion = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<title>
+Constancia de Visita - {escuela_seleccionada}
+</title>
+
+<style>
+
+@media print {{
+
+    @page {{
+        margin:1cm;
+    }}
+
+    body {{
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
+    }}
+
+    table td {{
+        border:1px dashed #ccc !important;
+    }}
+
+}}
+
+</style>
+
+</head>
+
+<body
+    onload="window.print()"
+    style="
+        padding:0;
+        margin:0;
+        display:flex;
+        justify-content:center;
+    "
+>
+
+{html_constancia}
+
+</body>
+</html>
+"""
+
+    st.success(
+        f"Constancia generada correctamente. Folio: {id_visita}"
+    )
+
+    st.markdown(
+        html_constancia,
+        unsafe_allow_html=True
+    )
+
+    st.download_button(
+        label="🖨️ Descargar Constancia para Imprimir",
+        data=html_impresion,
+        file_name=(
+            f"Constancia_Visita_"
+            f"{escuela_seleccionada.replace(' ', '_')}_"
+            f"{fecha_visita.strftime('%Y%m%d')}.html"
+        ),
+        mime="text/html",
+        use_container_width=True,
+    )
+
+    st.caption(
+        "La constancia también quedó registrada en "
+        "Registro_Visitas."
+    )
