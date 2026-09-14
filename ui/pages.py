@@ -960,34 +960,42 @@ def visitas_page(df):
     directorio_firmas = {
         "Damián Carmona": {
             "director": "Mtra. Maribel Vargas Arana",
+            "cargo_director": "Directora",
             "apoyo": "Mtra. Cindy Mayanín Burgos González",
         },
         "Ichcaanziho": {
             "director": "Mtra. Rennaty Maribel Puga Jimenez",
+            "cargo_director": "Directora",
             "apoyo": "Mtra. Marycruz Caamal Coral",
         },
         "Gregorio Torres Quintero": {
             "director": "Mtro. Elmer Ariel Ontiveros Requena",
+            "cargo_director": "Director",
             "apoyo": "Mtra. Dolores Eugenia Cortázar Navarrete",
         },
         "Remigio Aguilar Sosa": {
             "director": "Mtro. Carlos Esteban Heredia GCantón",
+            "cargo_director": "Director",
             "apoyo": "Mtra. Dianely de Sugeidy Caamal Tamay",
         },
         "Elvira Parra Ávila": {
             "director": "Mtro. Manuel Jesús Alcocer Vázquez",
+            "cargo_director": "Director",
             "apoyo": "Mtro. Luis Jorge García Herrera",
         },
         "Manuel Sarrado": {
             "director": "Mtro. José Alberto Reyna Martínez",
+            "cargo_director": "Director",
             "apoyo": "Mtra. María del Rosario Pérez Vitorin",
         },
         "Domingo Solís Rodríguez": {
             "director": "Mtra. Erika Basto Ek",
+            "cargo_director": "Directora",
             "apoyo": "Mtra. Zuemmy del Carmen Pérez Basto",
         },
         "Quintana Roo": {
             "director": "Mtro. Jorge Adrián Cetina Cach",
+            "cargo_director": "Director",
             "apoyo": "Mtro. Pedro Manuel Torres May",
         },
     }
@@ -1250,7 +1258,7 @@ ___________________________<br>
 
 <b>{datos_escuela["director"]}</b><br>
 
-Directora(or) de la primaria
+{datos_escuela["cargo_director"]} de la primaria
 
 </td>
 
