@@ -1,7 +1,7 @@
 import streamlit as st
 
-PAGE_TITLE = "USAE | Gestión Integral"
-SERVICE_NAME = "USAE 02-E"
+PAGE_TITLE = "USAER | Gestión Integral"
+SERVICE_NAME = "USAER 02E"
 SCHOOL_YEAR = "2026 – 2027"
 FOLDER_ID_MAESTRO = "1btFuNK8l9BI5C2s3-Q0_RZBZkUOBhvtr"
 URL_SPREADSHEET_MAESTRO = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
