@@ -1330,6 +1330,7 @@ Constancia de Visita - {escuela_seleccionada}
 @media print {{
 
     @page {{
+        size: letter portrait;
         margin:0.65cm;
     }}
 
