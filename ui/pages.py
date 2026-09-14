@@ -11,6 +11,7 @@ from ai.engine import generar_sugerencias
 from documents.anexos import anexo4_html, anexo5_html
 from ui.components import hero, card
 from utils.ids import expediente_id
+from utils.text import normalizar_texto
 
 
 def inicio(df):
@@ -103,7 +104,16 @@ def bap_page(df):
         key="bap_modo"
     )
 
-    opciones_escuela = escuelas_del_usuario()
+        opciones_escuela = escuelas_asignadas(
+        st.session_state.get("nombre", ""),
+        st.session_state.get("rol", "")
+    )
+
+    if not opciones_escuela:
+        st.error(
+            "No tienes escuelas asignadas para realizar esta evaluación."
+        )
+        return
 
     if modo.startswith("Individual"):
         escuela = st.selectbox(
