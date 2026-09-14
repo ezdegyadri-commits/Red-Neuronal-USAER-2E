@@ -13,7 +13,10 @@ if not st.session_state.get("autenticado"):
     login()
     st.stop()
 
-logout()
+cabecera_izquierda, cabecera_derecha = st.columns([5, 1])
+with cabecera_derecha:
+    logout("cerrar_sesion_principal")
+
 rol=st.session_state.get("rol","")
 escuelas=st.session_state.get("escuelas_permitidas","")
 
