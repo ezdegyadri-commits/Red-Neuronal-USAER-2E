@@ -196,8 +196,16 @@ def alta_page(df):
         try:
             archivo.seek(0)
             libro = pd.ExcelFile(archivo)
+            hojas_usaer = [
+                hoja for hoja in libro.sheet_names
+                if "USAER" in normalizar_texto(str(hoja))
+            ]
+            hojas_a_revisar = hojas_usaer or [
+                hoja for hoja in libro.sheet_names
+                if "CAM" not in normalizar_texto(str(hoja))
+            ]
             candidato = None
-            for hoja in libro.sheet_names:
+            for hoja in hojas_a_revisar:
                 bruto = pd.read_excel(libro, sheet_name=hoja, header=None, nrows=80)
                 for indice, fila in bruto.iterrows():
                     etiquetas = [
