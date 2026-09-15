@@ -45,6 +45,23 @@ def _yes(value):
     return _norm(value) in {"SI", "S", "YES", "TRUE", "1"}
 
 
+
+def _edad_al_primero_de_septiembre(curp):
+    curp = _text(curp).upper()
+    try:
+        year_two_digits = int(curp[4:6])
+        nacimiento = date(
+            2000 + year_two_digits if year_two_digits <= 26 else 1900 + year_two_digits,
+            int(curp[6:8]),
+            int(curp[8:10]),
+        )
+    except (ValueError, IndexError):
+        return ""
+    corte = date(2026, 9, 1)
+    return corte.year - nacimiento.year - (
+        (corte.month, corte.day) < (nacimiento.month, nacimiento.day)
+    )
+
 def _school_index(escuelas):
     if escuelas is None or escuelas.empty:
         return {}
@@ -236,15 +253,15 @@ def generar_padron_usaer(alumnos, escuelas):
             2: SERVICE["zona"],
             3: SERVICE["numero"],
             4: SERVICE["cct"],
-            5: _value(school, "Nombre_Escuela", default=student.get("ID_Escuela", "")),
-            6: _value(school, "Turno"),
-            7: _value(school, "CCT"),
-            8: _value(school, "Direccion", "Dirección"),
-            9: _value(school, "Localidad"),
-            10: _value(school, "Municipio"),
+            5: _value(student, "Nombre_Escuela", default=_value(school, "Nombre_Escuela", default=student.get("ID_Escuela", ""))),
+            6: _value(student, "Turno_Escuela", default=_value(school, "Turno")),
+            7: _value(student, "CCT_Escuela", default=_value(school, "CCT")),
+            8: _value(student, "Direccion_Escuela", default=_value(school, "Direccion", "Dirección")),
+            9: _value(student, "Localidad_Escuela", default=_value(school, "Localidad")),
+            10: _value(student, "Municipio_Escuela", default=_value(school, "Municipio")),
             11: _value(student, "Nombre_Completo"),
             12: _value(student, "CURP"),
-            13: _value(student, "Edad_1_Septiembre"),
+            13: _edad_al_primero_de_septiembre(student.get("CURP", "")),
             14: _value(student, "Sexo"),
             15: _value(student, "Condicion_Discapacidad"),
             19: _value(student, "Situacion_Alumno"),
