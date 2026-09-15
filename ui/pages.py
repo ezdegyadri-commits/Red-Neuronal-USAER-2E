@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from datetime import date
 import pandas as pd
 import streamlit as st
@@ -175,6 +176,158 @@ def alta_page(df):
             "Migrante": migrante,
         })
         st.success(f"Expediente creado: {expediente_id(id_a)}")
+
+    st.divider()
+    st.markdown("### Carga masiva de alumnos")
+    st.caption(
+        "Carga un archivo Excel con alumnos de tus escuelas asignadas. "
+        "Se validan CURP, escuela y registros duplicados antes de guardar."
+    )
+    plantilla = pd.DataFrame([{
+        "Nombre_Completo": "APELLIDO PATERNO APELLIDO MATERNO NOMBRE",
+        "CURP": "ABCD010101HYNXXX01",
+        "Escuela": escuelas_disponibles[0],
+        "Edad_1_Septiembre": 10,
+        "Sexo": "H",
+        "Situacion_Alumno": "NI",
+        "Nivel_Educativo": "Primaria",
+        "Grado": "4°",
+        "Grupo": "A",
+        "Condicion_Discapacidad": "APRENDIZAJE",
+        "Tipo_Atencion": "Individual",
+        "Lengua_Indigena_Mayahablante": "No",
+        "Afrodescendiente": "No",
+        "Migrante": "No",
+    }])
+    plantilla_bytes = BytesIO()
+    plantilla.to_excel(plantilla_bytes, index=False)
+    st.download_button(
+        "Descargar plantilla de carga masiva",
+        data=plantilla_bytes.getvalue(),
+        file_name="Plantilla_alumnos_USAER_02E.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="plantilla_carga_alumnos",
+    )
+    archivo = st.file_uploader(
+        "Selecciona el archivo Excel",
+        type=["xlsx", "xls"],
+        key="carga_masiva_alumnos",
+    )
+
+    if archivo is not None:
+        try:
+            tabla = pd.read_excel(archivo)
+        except Exception as ex:
+            st.error(f"No fue posible leer el archivo: {ex}")
+            return
+
+        if tabla.empty:
+            st.warning("El archivo no contiene alumnos.")
+            return
+
+        columnas = {
+            normalizar_texto(columna).replace(" ", "_"): columna
+            for columna in tabla.columns
+        }
+
+        def dato(fila, *nombres, default=""):
+            for nombre_columna in nombres:
+                columna = columnas.get(nombre_columna)
+                if columna is not None and pd.notna(fila.get(columna)):
+                    return str(fila.get(columna)).strip()
+            return default
+
+        codigos_escuela = {
+            normalizar_texto(nombre): codigo
+            for nombre, codigo in ESCUELAS_USAER.items()
+            if nombre in escuelas_disponibles
+        }
+        codigos_escuela.update({
+            normalizar_texto(codigo): codigo
+            for nombre, codigo in ESCUELAS_USAER.items()
+            if nombre in escuelas_disponibles
+        })
+        existentes = set()
+        try:
+            actuales = repo.alumnos()
+            if not actuales.empty and "CURP" in actuales.columns:
+                existentes = {
+                    str(valor).strip().upper()
+                    for valor in actuales["CURP"].dropna()
+                    if str(valor).strip()
+                }
+        except Exception:
+            pass
+
+        preparados, errores, curps_archivo = [], [], set()
+        for numero, (_, fila) in enumerate(tabla.iterrows(), start=2):
+            nombre_archivo = dato(fila, "NOMBRE_COMPLETO", "NOMBRE")
+            curp_archivo = dato(fila, "CURP").upper()
+            escuela_archivo = dato(
+                fila, "ESCUELA", "NOMBRE_ESCUELA", "ID_ESCUELA"
+            )
+            codigo_escuela = codigos_escuela.get(normalizar_texto(escuela_archivo))
+            if not nombre_archivo:
+                errores.append(f"Fila {numero}: falta el nombre completo.")
+                continue
+            if len(curp_archivo) != 18 or not curp_archivo.isalnum():
+                errores.append(f"Fila {numero}: CURP inválida.")
+                continue
+            if not codigo_escuela:
+                errores.append(
+                    f"Fila {numero}: la escuela no existe o no está asignada a tu cuenta."
+                )
+                continue
+            if curp_archivo in existentes or curp_archivo in curps_archivo:
+                errores.append(f"Fila {numero}: CURP duplicada.")
+                continue
+            curps_archivo.add(curp_archivo)
+            edad = dato(fila, "EDAD_1_SEPTIEMBRE", "EDAD", default="")
+            try:
+                edad = int(float(edad)) if edad != "" else ""
+            except ValueError:
+                errores.append(f"Fila {numero}: edad inválida.")
+                continue
+            preparados.append({
+                "Nombre_Completo": nombre_archivo,
+                "CURP": curp_archivo,
+                "Edad_1_Septiembre": edad,
+                "Sexo": dato(fila, "SEXO"),
+                "Situacion_Alumno": dato(fila, "SITUACION_ALUMNO", default="NI"),
+                "Nivel_Educativo": dato(fila, "NIVEL_EDUCATIVO", default="Primaria"),
+                "Grado": dato(fila, "GRADO"),
+                "Grupo": dato(fila, "GRUPO"),
+                "ID_Escuela": codigo_escuela,
+                "Maestra de Apoyo": st.session_state.get("nombre", ""),
+                "ID_Maestro_Regular": dato(fila, "DOCENTE_REGULAR", "ID_MAESTRO_REGULAR"),
+                "Condicion_Discapacidad": dato(fila, "CONDICION_DISCAPACIDAD", "DISCAPACIDAD_O_CONDICION"),
+                "Estatus": "Activo",
+                "Tipo_Atencion": dato(fila, "TIPO_ATENCION", default="Individual"),
+                "Lengua_Indigena_Mayahablante": dato(fila, "LENGUA_INDIGENA_MAYAHABLANTE", default="No"),
+                "Afrodescendiente": dato(fila, "AFRODESCENDIENTE", default="No"),
+                "Migrante": dato(fila, "MIGRANTE", default="No"),
+            })
+
+        st.write(f"Registros listos para cargar: {len(preparados)}")
+        if errores:
+            st.warning("Se encontraron observaciones. Corrige el archivo o carga los registros válidos.")
+            st.dataframe(pd.DataFrame({"Observaciones": errores}), use_container_width=True, hide_index=True)
+        if preparados:
+            st.dataframe(
+                pd.DataFrame(preparados)[["Nombre_Completo", "CURP", "ID_Escuela", "Grado", "Grupo"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+            if st.button(
+                f"Cargar {len(preparados)} alumno(s) válido(s)",
+                type="primary",
+                key="confirmar_carga_masiva",
+            ):
+                try:
+                    ids = repo.save_alumnos(preparados)
+                    st.success(f"Se registraron {len(ids)} alumno(s) correctamente.")
+                except Exception as ex:
+                    st.error(f"No fue posible guardar la carga masiva: {ex}")
 
 
 def bap_page(df):
