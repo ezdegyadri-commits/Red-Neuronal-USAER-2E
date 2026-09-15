@@ -316,7 +316,7 @@ def alta_page(df):
         except Exception:
             pass
 
-        preparados, correcciones, errores, curps_archivo = [], [], set()
+        preparados, correcciones, errores, curps_archivo = [], [], [], set()
         for numero, (_, fila) in enumerate(tabla.iterrows(), start=encabezado + 2):
             nombre_archivo = dato(fila, "APELLIDO", "NOMBRE_COMPLETO", "NOMBRE")
             curp_archivo = dato(fila, "CURP").upper()
