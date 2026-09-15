@@ -6,7 +6,7 @@ BASE_HEADERS={
 'Escuelas':['ID_Escuela','CCT','Nombre_Escuela','Nivel','Turno'],
 'Personal':['ID_Personal','Nombre_Completo','Rol','Email','Telefono'],
 'Asignaciones':['ID_Asignacion','ID_Personal','ID_Escuela'],
-'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion'],
+'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante'],
 'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA'],
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
 'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento'],
@@ -27,6 +27,7 @@ def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
 
 def save_alumno(data):
+ ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
  data=dict(data); data.setdefault('ID_Alumno',next_numeric_id('Alumnos','ID_Alumno','ALU')); append_dict('Alumnos',data); return data['ID_Alumno']
 def save_anexo3(data):
  data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
