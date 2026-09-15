@@ -1,6 +1,7 @@
 import json, random, time
 import gspread
 import streamlit as st
+import pandas as pd
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -57,7 +58,7 @@ def read_sheet(name):
 
     def operation():
 
-        ws = sheet.worksheet(name)
+        ws = connections()[0].worksheet(name)
 
         valores = ws.get_all_values()
 
