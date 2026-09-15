@@ -299,6 +299,7 @@ def alta_page(df):
         if not escuela_predeterminada and len(escuelas_disponibles) == 1:
             escuela_predeterminada = ESCUELAS_USAER[escuelas_disponibles[0]]
         existentes = set()
+        nombres_existentes = {}
         try:
             actuales = repo.alumnos()
             if not actuales.empty and "CURP" in actuales.columns:
@@ -307,12 +308,17 @@ def alta_page(df):
                     for valor in actuales["CURP"].dropna()
                     if str(valor).strip()
                 }
+                nombres_existentes = {
+                    str(fila.get("CURP", "")).strip().upper():
+                    str(fila.get("Nombre_Completo", "")).strip()
+                    for _, fila in actuales.iterrows()
+                }
         except Exception:
             pass
 
-        preparados, errores, curps_archivo = [], [], set()
+        preparados, correcciones, errores, curps_archivo = [], [], set()
         for numero, (_, fila) in enumerate(tabla.iterrows(), start=encabezado + 2):
-            nombre_archivo = dato(fila, "NOMBRE_COMPLETO", "NOMBRE")
+            nombre_archivo = dato(fila, "APELLIDO", "NOMBRE_COMPLETO", "NOMBRE")
             curp_archivo = dato(fila, "CURP").upper()
             escuela_archivo = dato(
                 fila, "NOMBRE_ESCUELA", "ESCUELA", "ID_ESCUELA"
@@ -331,8 +337,26 @@ def alta_page(df):
                     f"Fila {numero}: la escuela no existe o no está asignada a tu cuenta."
                 )
                 continue
-            if curp_archivo in existentes or curp_archivo in curps_archivo:
-                errores.append(f"Fila {numero}: CURP duplicada; no se reemplazará.")
+            if curp_archivo in curps_archivo:
+                errores.append(f"Fila {numero}: CURP duplicada en el mismo archivo.")
+                continue
+            if curp_archivo in existentes:
+                nombre_guardado = normalizar_texto(
+                    nombres_existentes.get(curp_archivo, "")
+                )
+                es_nombre_de_escuela = any(
+                    nombre_guardado == normalizar_texto(escuela)
+                    for escuela in escuelas_disponibles
+                )
+                if es_nombre_de_escuela:
+                    correcciones.append({
+                        "CURP": curp_archivo,
+                        "Nombre_Completo": nombre_archivo,
+                    })
+                else:
+                    errores.append(
+                        f"Fila {numero}: CURP duplicada; no se reemplazará."
+                    )
                 continue
             curps_archivo.add(curp_archivo)
             edad = dato(fila, "EDAD_1_SEPTIEMBRE", "EDAD", default="")
@@ -362,6 +386,11 @@ def alta_page(df):
             })
 
         st.write(f"Registros nuevos listos para guardar: {len(preparados)}")
+        if correcciones:
+            st.info(
+                f"Se detectaron {len(correcciones)} nombre(s) de alumno a corregir "
+                "sin crear duplicados."
+            )
         if errores:
             st.warning(
                 "Los registros con observaciones no se cargarán ni reemplazarán "
@@ -380,16 +409,18 @@ def alta_page(df):
                 use_container_width=True,
                 hide_index=True,
             )
+        if preparados or correcciones:
             if st.button(
-                f"Guardar {len(preparados)} alumno(s) en la base central",
+                f"Guardar {len(preparados)} alumno(s) y aplicar {len(correcciones)} corrección(es)",
                 type="primary",
                 key="confirmar_carga_masiva",
             ):
                 try:
                     ids = repo.save_alumnos(preparados)
+                    corregidos = repo.repair_nombres_alumnos(correcciones)
                     st.success(
-                        f"Se agregaron {len(ids)} alumno(s) a la hoja central "
-                        "sin eliminar registros anteriores."
+                        f"Se agregaron {len(ids)} alumno(s) y se corrigieron "
+                        f"{corregidos} nombre(s) en la hoja central."
                     )
                 except Exception as ex:
                     st.error(f"No fue posible guardar la carga masiva: {ex}")
