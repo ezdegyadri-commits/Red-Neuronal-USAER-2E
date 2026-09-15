@@ -1,5 +1,5 @@
 from datetime import date
-from data.google import df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id
+from data.google import clear_cache, df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id, worksheet
 from config.settings import ANEXO4_FIELDS
 
 BASE_HEADERS={
@@ -49,6 +49,32 @@ def save_alumnos(rows):
   prepared.append(data)
  google_append_rows_raw('Alumnos', prepared)
  return [row['ID_Alumno'] for row in prepared]
+def repair_nombres_alumnos(rows):
+ """Corrige solo nombres cuando un padrón previo guardó el nombre de la escuela."""
+ if not rows:
+  return 0
+ ws = worksheet('Alumnos')
+ headers = ws.row_values(1)
+ if 'CURP' not in headers or 'Nombre_Completo' not in headers:
+  return 0
+ col_curp = headers.index('CURP') + 1
+ col_nombre = headers.index('Nombre_Completo') + 1
+ filas_por_curp = {
+  str(valor).strip().upper(): indice
+  for indice, valor in enumerate(ws.col_values(col_curp), start=1)
+  if indice > 1 and str(valor).strip()
+ }
+ corregidos = 0
+ for registro in rows:
+  fila = filas_por_curp.get(str(registro.get('CURP', '')).strip().upper())
+  nombre = str(registro.get('Nombre_Completo', '')).strip()
+  if fila and nombre:
+   ws.update_cell(fila, col_nombre, nombre)
+   corregidos += 1
+ if corregidos:
+  clear_cache('Alumnos')
+ return corregidos
+
 def save_anexo3(data):
  data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
 def save_anexo4(data):
