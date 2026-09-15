@@ -316,7 +316,20 @@ def alta_page(df):
         except Exception:
             pass
 
-        preparados, correcciones, errores, curps_archivo = [], [], [], set()
+        def edad_al_primero_de_septiembre(curp):
+            try:
+                ano = int(curp[4:6])
+                mes = int(curp[6:8])
+                dia = int(curp[8:10])
+                nacimiento = date(2000 + ano if ano <= 26 else 1900 + ano, mes, dia)
+                corte = date(2026, 9, 1)
+                return corte.year - nacimiento.year - (
+                    (corte.month, corte.day) < (nacimiento.month, nacimiento.day)
+                )
+            except (ValueError, IndexError):
+                return ""
+
+        preparados, errores, curps_archivo = [], [], set()
         for numero, (_, fila) in enumerate(tabla.iterrows(), start=encabezado + 2):
             nombre_archivo = dato(fila, "APELLIDO", "NOMBRE_COMPLETO", "NOMBRE")
             curp_archivo = dato(fila, "CURP").upper()
@@ -340,31 +353,12 @@ def alta_page(df):
             if curp_archivo in curps_archivo:
                 errores.append(f"Fila {numero}: CURP duplicada en el mismo archivo.")
                 continue
-            if curp_archivo in existentes:
-                nombre_guardado = normalizar_texto(
-                    nombres_existentes.get(curp_archivo, "")
-                )
-                es_nombre_de_escuela = any(
-                    nombre_guardado == normalizar_texto(escuela)
-                    for escuela in escuelas_disponibles
-                )
-                if es_nombre_de_escuela:
-                    correcciones.append({
-                        "CURP": curp_archivo,
-                        "Nombre_Completo": nombre_archivo,
-                    })
-                else:
-                    errores.append(
-                        f"Fila {numero}: CURP duplicada; no se reemplazará."
-                    )
-                continue
             curps_archivo.add(curp_archivo)
             edad = dato(fila, "EDAD_1_SEPTIEMBRE", "EDAD", default="")
             try:
-                edad = int(float(edad)) if edad != "" else ""
+                edad = int(float(edad)) if edad != "" else edad_al_primero_de_septiembre(curp_archivo)
             except ValueError:
-                errores.append(f"Fila {numero}: edad inválida.")
-                continue
+                edad = edad_al_primero_de_septiembre(curp_archivo)
             preparados.append({
                 "Nombre_Completo": nombre_archivo,
                 "CURP": curp_archivo,
@@ -383,18 +377,19 @@ def alta_page(df):
                 "Lengua_Indigena_Mayahablante": dato(fila, "LENGUA_INDIGENA_MAYAHABLANTE", default="No"),
                 "Afrodescendiente": dato(fila, "AFRODESCENDIENTE", default="No"),
                 "Migrante": dato(fila, "MIGRANTE", default="No"),
+                "Nombre_Escuela": escuela_archivo,
+                "Turno_Escuela": dato(fila, "TURNO"),
+                "CCT_Escuela": dato(fila, "CCT_DE_LA_ESCUELA", "CCT"),
+                "Direccion_Escuela": dato(fila, "DIRECCION"),
+                "Localidad_Escuela": dato(fila, "LOCALIDAD"),
+                "Municipio_Escuela": dato(fila, "MUNICIPIO"),
             })
 
-        st.write(f"Registros nuevos listos para guardar: {len(preparados)}")
-        if correcciones:
-            st.info(
-                f"Se detectaron {len(correcciones)} nombre(s) de alumno a corregir "
-                "sin crear duplicados."
-            )
+        st.write(f"Registros del padrón listos para consolidar: {len(preparados)}")
         if errores:
             st.warning(
-                "Los registros con observaciones no se cargarán ni reemplazarán "
-                "datos previamente guardados."
+                "Los registros con observaciones no se cargarán. Los demás se "
+                "consolidarán sin borrar ni duplicar información central."
             )
             st.dataframe(
                 pd.DataFrame({"Observaciones": errores}),
@@ -404,26 +399,24 @@ def alta_page(df):
         if preparados:
             st.dataframe(
                 pd.DataFrame(preparados)[
-                    ["Nombre_Completo", "CURP", "ID_Escuela", "Grado", "Grupo"]
+                    ["Nombre_Completo", "CURP", "Edad_1_Septiembre", "ID_Escuela", "Grado", "Grupo"]
                 ],
                 use_container_width=True,
                 hide_index=True,
             )
-        if preparados or correcciones:
             if st.button(
-                f"Guardar {len(preparados)} alumno(s) y aplicar {len(correcciones)} corrección(es)",
+                f"Consolidar {len(preparados)} alumno(s) en la base central",
                 type="primary",
                 key="confirmar_carga_masiva",
             ):
                 try:
-                    ids = repo.save_alumnos(preparados)
-                    corregidos = repo.repair_nombres_alumnos(correcciones)
+                    nuevos, actualizados = repo.upsert_alumnos(preparados)
                     st.success(
-                        f"Se agregaron {len(ids)} alumno(s) y se corrigieron "
-                        f"{corregidos} nombre(s) en la hoja central."
+                        f"Consolidación terminada: {nuevos} alumno(s) nuevo(s) y "
+                        f"{actualizados} expediente(s) completado(s), sin duplicados."
                     )
                 except Exception as ex:
-                    st.error(f"No fue posible guardar la carga masiva: {ex}")
+                    st.error(f"No fue posible consolidar el padrón: {ex}")
 
 
 def bap_page(df):
