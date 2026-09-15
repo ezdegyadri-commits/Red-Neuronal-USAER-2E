@@ -266,6 +266,30 @@ def alta_page(df):
             for nombre, codigo in ESCUELAS_USAER.items()
             if nombre in escuelas_disponibles
         })
+
+        def resolver_escuela(texto):
+            normalizado = normalizar_texto(str(texto or ""))
+            if normalizado in codigos_escuela:
+                return codigos_escuela[normalizado]
+            for nombre, codigo in ESCUELAS_USAER.items():
+                if nombre not in escuelas_disponibles:
+                    continue
+                nombre_normalizado = normalizar_texto(nombre)
+                palabras = [
+                    palabra for palabra in nombre_normalizado.split()
+                    if len(palabra) >= 5
+                ]
+                if (
+                    nombre_normalizado in normalizado
+                    or any(palabra in normalizado for palabra in palabras)
+                ):
+                    return codigo
+            return ""
+
+        referencia_archivo = f"{archivo.name} {hoja}"
+        escuela_predeterminada = resolver_escuela(referencia_archivo)
+        if not escuela_predeterminada and len(escuelas_disponibles) == 1:
+            escuela_predeterminada = ESCUELAS_USAER[escuelas_disponibles[0]]
         existentes = set()
         try:
             actuales = repo.alumnos()
@@ -285,8 +309,9 @@ def alta_page(df):
             escuela_archivo = dato(
                 fila, "NOMBRE_ESCUELA", "ESCUELA", "ID_ESCUELA"
             )
-            codigo_escuela = codigos_escuela.get(
-                normalizar_texto(escuela_archivo)
+            codigo_escuela = (
+                resolver_escuela(escuela_archivo)
+                or escuela_predeterminada
             )
             if not nombre_archivo:
                 continue
