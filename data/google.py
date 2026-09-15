@@ -45,12 +45,98 @@ def retry_google(operation, attempts=6):
 
 @st.cache_data(ttl=120, show_spinner=False)
 def read_sheet(name):
-    sheet, _ = connections()
-    return retry_google(lambda: sheet.worksheet(name).get_all_records())
+    """
+    Lee una hoja de Google Sheets de forma tolerante.
+
+    Evita get_all_records(), ya que falla cuando existen
+    encabezados duplicados o vacíos.
+
+    NO elimina información.
+    NO modifica la hoja.
+    """
+
+    def operation():
+
+        ws = sheet.worksheet(name)
+
+        valores = ws.get_all_values()
+
+        if not valores:
+            return []
+
+        encabezados_originales = valores[0]
+        filas = valores[1:]
+
+        encabezados = []
+        usados = {}
+
+        for i, encabezado in enumerate(encabezados_originales):
+
+            encabezado = str(encabezado).strip()
+
+            # Si una columna no tiene encabezado,
+            # generar uno interno.
+            if not encabezado:
+                encabezado = f"Columna_{i + 1}"
+
+            base = encabezado
+
+            # Si el encabezado se repite,
+            # conservar ambas columnas haciéndolas únicas.
+            if base in usados:
+
+                usados[base] += 1
+
+                encabezado = (
+                    f"{base}_{usados[base]}"
+                )
+
+            else:
+
+                usados[base] = 1
+
+            encabezados.append(encabezado)
+
+        registros = []
+
+        for fila in filas:
+
+            # Completar filas cortas
+            if len(fila) < len(encabezados):
+
+                fila = fila + [""] * (
+                    len(encabezados)
+                    - len(fila)
+                )
+
+            # Ignorar valores que excedan
+            # la cantidad de encabezados
+            fila = fila[:len(encabezados)]
+
+            # Ignorar solamente filas completamente vacías
+            if not any(
+                str(valor).strip()
+                for valor in fila
+            ):
+                continue
+
+            registros.append(
+                dict(
+                    zip(
+                        encabezados,
+                        fila
+                    )
+                )
+            )
+
+        return registros
+
+    return retry_google(operation)
 
 def df_sheet(name):
-    import pandas as pd
-    return pd.DataFrame(read_sheet(name))
+    return pd.DataFrame(
+        read_sheet(name)
+    )
 
 def clear_cache(name=None):
     if name: read_sheet.clear(name)
