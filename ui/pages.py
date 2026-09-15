@@ -195,22 +195,36 @@ def alta_page(df):
     if archivo is not None:
         try:
             archivo.seek(0)
-            bruto = pd.read_excel(archivo, header=None)
-            encabezado = next(
-                (
-                    indice for indice, fila in bruto.head(12).iterrows()
-                    if any("CURP" in normalizar_texto(str(valor)) for valor in fila)
-                    and any("NOMBRE" in normalizar_texto(valor) for valor in fila)
-                ),
-                None,
-            )
-            if encabezado is None:
+            libro = pd.ExcelFile(archivo)
+            candidato = None
+            for hoja in libro.sheet_names:
+                bruto = pd.read_excel(libro, sheet_name=hoja, header=None, nrows=80)
+                for indice, fila in bruto.iterrows():
+                    etiquetas = [
+                        normalizar_texto(str(valor))
+                        for valor in fila
+                        if pd.notna(valor)
+                    ]
+                    tiene_curp = any("CURP" in valor for valor in etiquetas)
+                    tiene_nombre = any(
+                        "NOMBRE" in valor or "APELLIDO" in valor
+                        for valor in etiquetas
+                    )
+                    if tiene_curp and tiene_nombre:
+                        candidato = (hoja, indice)
+                        break
+                if candidato:
+                    break
+            if candidato is None:
                 st.error(
-                    "No se identificaron las columnas de nombre y CURP en el Excel."
+                    "No se localizó una fila de encabezados con CURP y nombre "
+                    "en ninguna hoja del Excel."
                 )
                 return
-            archivo.seek(0)
-            tabla = pd.read_excel(archivo, header=encabezado).dropna(how="all")
+            hoja, encabezado = candidato
+            tabla = pd.read_excel(
+                libro, sheet_name=hoja, header=encabezado
+            ).dropna(how="all")
         except Exception as ex:
             st.error(f"No fue posible leer el archivo: {ex}")
             return
