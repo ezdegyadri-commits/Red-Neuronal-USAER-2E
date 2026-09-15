@@ -1,5 +1,5 @@
 from datetime import date
-from data.google import clear_cache, df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id, worksheet
+from data.google import clear_cache, df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id, retry_google, worksheet
 from config.settings import ANEXO4_FIELDS
 
 BASE_HEADERS={
@@ -56,8 +56,8 @@ def upsert_alumnos(rows):
  if not rows:
   return 0, 0
  ws = worksheet('Alumnos')
- headers = ws.row_values(1)
- values = ws.get_all_values()
+ values = retry_google(ws.get_all_values)
+ headers = values[0] if values else []
  if 'CURP' not in headers:
   raise ValueError("La hoja central no tiene la columna CURP.")
  curp_col = headers.index('CURP')
@@ -66,9 +66,16 @@ def upsert_alumnos(rows):
   for index, row in enumerate(values[1:], start=2)
   if len(row) > curp_col and str(row[curp_col]).strip()
  }
- next_id = next_numeric_id('Alumnos', 'ID_Alumno', 'ALU')
- next_number = int(next_id.split('-')[-1])
- nuevos, actualizados, append_rows = 0, 0, []
+ id_col = headers.index('ID_Alumno') if 'ID_Alumno' in headers else -1
+ numbers = []
+ for row in values[1:]:
+  if id_col >= 0 and len(row) > id_col:
+   try:
+    numbers.append(int(str(row[id_col]).split('-')[-1]))
+   except (TypeError, ValueError):
+    pass
+ next_number = max(numbers) + 1 if numbers else 1
+ nuevos, actualizados, append_rows, updates = 0, 0, [], []
  for registro in rows:
   data = dict(registro)
   curp = str(data.get('CURP', '')).strip().upper()
@@ -86,13 +93,15 @@ def upsert_alumnos(rows):
      cambio = True
    if cambio:
     final_col = chr(64 + len(headers))
-    ws.update(f'A{fila}:{final_col}{fila}', [actual[:len(headers)]])
+    updates.append({"range": f'A{fila}:{final_col}{fila}', "values": [actual[:len(headers)]]})
     actualizados += 1
   else:
    data['ID_Alumno'] = f"ALU-{next_number:03d}"
    next_number += 1
    append_rows.append(data)
    nuevos += 1
+ if updates:
+  retry_google(lambda: ws.batch_update(updates, value_input_option='USER_ENTERED'))
  if append_rows:
   google_append_rows_raw('Alumnos', append_rows)
  if actualizados:
