@@ -354,11 +354,12 @@ def alta_page(df):
                 errores.append(f"Fila {numero}: CURP duplicada en el mismo archivo.")
                 continue
             curps_archivo.add(curp_archivo)
-            edad = dato(fila, "EDAD_1_SEPTIEMBRE", "EDAD", default="")
+            edad_calculada = edad_al_primero_de_septiembre(curp_archivo)
+            edad_archivo = dato(fila, "EDAD_1_SEPTIEMBRE", "EDAD", default="")
             try:
-                edad = int(float(edad)) if edad != "" else edad_al_primero_de_septiembre(curp_archivo)
+                edad = edad_calculada if edad_calculada != "" else int(float(edad_archivo))
             except ValueError:
-                edad = edad_al_primero_de_septiembre(curp_archivo)
+                edad = ""
             preparados.append({
                 "Nombre_Completo": nombre_archivo,
                 "CURP": curp_archivo,
