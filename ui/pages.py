@@ -298,24 +298,6 @@ def alta_page(df):
         escuela_predeterminada = resolver_escuela(referencia_archivo)
         if not escuela_predeterminada and len(escuelas_disponibles) == 1:
             escuela_predeterminada = ESCUELAS_USAER[escuelas_disponibles[0]]
-        existentes = set()
-        nombres_existentes = {}
-        try:
-            actuales = repo.alumnos()
-            if not actuales.empty and "CURP" in actuales.columns:
-                existentes = {
-                    str(valor).strip().upper()
-                    for valor in actuales["CURP"].dropna()
-                    if str(valor).strip()
-                }
-                nombres_existentes = {
-                    str(fila.get("CURP", "")).strip().upper():
-                    str(fila.get("Nombre_Completo", "")).strip()
-                    for _, fila in actuales.iterrows()
-                }
-        except Exception:
-            pass
-
         def edad_al_primero_de_septiembre(curp):
             try:
                 ano = int(curp[4:6])
