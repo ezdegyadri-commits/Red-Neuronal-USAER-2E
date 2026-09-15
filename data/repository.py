@@ -1,5 +1,5 @@
 from datetime import date
-from data.google import df_sheet, append_dict, ensure_sheet, next_numeric_id
+from data.google import df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id
 from config.settings import ANEXO4_FIELDS
 
 BASE_HEADERS={
@@ -31,6 +31,24 @@ def visitas(): return read('Registro_Visitas')
 def save_alumno(data):
  ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
  data=dict(data); data.setdefault('ID_Alumno',next_numeric_id('Alumnos','ID_Alumno','ALU')); append_dict('Alumnos',data); return data['ID_Alumno']
+
+def save_alumnos(rows):
+ ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
+ existing = alumnos()
+ numbers = []
+ if not existing.empty and 'ID_Alumno' in existing.columns:
+  for value in existing['ID_Alumno'].astype(str):
+   try: numbers.append(int(value.split('-')[-1]))
+   except Exception: pass
+ next_number = max(numbers) + 1 if numbers else 1
+ prepared = []
+ for row in rows:
+  data = dict(row)
+  data.setdefault('ID_Alumno', f"ALU-{next_number:03d}")
+  next_number += 1
+  prepared.append(data)
+ google_append_rows_raw('Alumnos', prepared)
+ return [row['ID_Alumno'] for row in prepared]
 def save_anexo3(data):
  data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
 def save_anexo4(data):
