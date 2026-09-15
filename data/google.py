@@ -138,9 +138,14 @@ def df_sheet(name):
         read_sheet(name)
     )
 
-def clear_cache(name=None):
-    if name: read_sheet.clear(name)
-    else: read_sheet.clear()
+def clear_sheet_cache():
+    """
+    Limpia el caché de lectura de Google Sheets.
+
+    Debe llamarse después de modificar datos.
+    """
+
+    read_sheet.clear()
 
 def worksheet(name): return retry_google(lambda: connections()[0].worksheet(name))
 
