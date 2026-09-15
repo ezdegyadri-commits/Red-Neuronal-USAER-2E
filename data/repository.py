@@ -6,7 +6,7 @@ BASE_HEADERS={
 'Escuelas':['ID_Escuela','CCT','Nombre_Escuela','Nivel','Turno'],
 'Personal':['ID_Personal','Nombre_Completo','Rol','Email','Telefono'],
 'Asignaciones':['ID_Asignacion','ID_Personal','ID_Escuela'],
-'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante'],
+'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante','Nombre_Escuela','Turno_Escuela','CCT_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela'],
 'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA'],
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
 'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento'],
@@ -49,6 +49,56 @@ def save_alumnos(rows):
   prepared.append(data)
  google_append_rows_raw('Alumnos', prepared)
  return [row['ID_Alumno'] for row in prepared]
+
+def upsert_alumnos(rows):
+ """Consolida padrones por CURP: agrega nuevos y completa únicamente campos vacíos."""
+ ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
+ if not rows:
+  return 0, 0
+ ws = worksheet('Alumnos')
+ headers = ws.row_values(1)
+ values = ws.get_all_values()
+ if 'CURP' not in headers:
+  raise ValueError("La hoja central no tiene la columna CURP.")
+ curp_col = headers.index('CURP')
+ existing = {
+  str(row[curp_col]).strip().upper(): index
+  for index, row in enumerate(values[1:], start=2)
+  if len(row) > curp_col and str(row[curp_col]).strip()
+ }
+ next_id = next_numeric_id('Alumnos', 'ID_Alumno', 'ALU')
+ next_number = int(next_id.split('-')[-1])
+ nuevos, actualizados, append_rows = 0, 0, []
+ for registro in rows:
+  data = dict(registro)
+  curp = str(data.get('CURP', '')).strip().upper()
+  fila = existing.get(curp)
+  if fila:
+   actual = values[fila - 1] + [''] * max(0, len(headers) - len(values[fila - 1]))
+   nombre_actual = str(actual[headers.index('Nombre_Completo')]).strip() if 'Nombre_Completo' in headers else ''
+   escuela_importada = str(data.get('Nombre_Escuela', '')).strip()
+   cambio = False
+   for col, header in enumerate(headers):
+    nuevo = str(data.get(header, '')).strip()
+    debe_reparar_nombre = header == 'Nombre_Completo' and nombre_actual and nombre_actual == escuela_importada
+    if nuevo and (not str(actual[col]).strip() or debe_reparar_nombre):
+     actual[col] = nuevo
+     cambio = True
+   if cambio:
+    final_col = chr(64 + len(headers))
+    ws.update(f'A{fila}:{final_col}{fila}', [actual[:len(headers)]])
+    actualizados += 1
+  else:
+   data['ID_Alumno'] = f"ALU-{next_number:03d}"
+   next_number += 1
+   append_rows.append(data)
+   nuevos += 1
+ if append_rows:
+  google_append_rows_raw('Alumnos', append_rows)
+ if actualizados:
+  clear_cache('Alumnos')
+ return nuevos, actualizados
+
 def repair_nombres_alumnos(rows):
  """Corrige solo nombres cuando un padrón previo guardó el nombre de la escuela."""
  if not rows:
