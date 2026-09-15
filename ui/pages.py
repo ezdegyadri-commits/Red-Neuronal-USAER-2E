@@ -66,7 +66,10 @@ def expedientes_page(df):
 
 
 def alta_page(df):
-    hero("Alta de alumnos", "Registra nuevos expedientes sin duplicar información.")
+    hero(
+        "Alta de alumnos",
+        "Registra la información requerida para el padrón USAER 2026–2027."
+    )
     escuelas_disponibles = escuelas_asignadas(
         st.session_state.get("nombre", ""),
         st.session_state.get("rol", ""),
@@ -75,21 +78,101 @@ def alta_page(df):
         st.error("No tienes escuelas asignadas para registrar alumnos.")
         return
 
+    condiciones_padron = [
+        "INTELECTUAL", "BAJA VISIÓN", "CEGUERA", "HIPOACUSIA", "SORDERA",
+        "MOTORA", "MÚLTIPLE", "SORDOCEGUERA", "TEA", "PSICOSOCIAL", "AS",
+        "TDA/TDAH", "APRENDIZAJE", "COMUNICACIÓN", "CONDUCTA",
+    ]
+
     with st.form("alta"):
-        nombre=st.text_input("Nombre completo")
-        curp=st.text_input("CURP",max_chars=18)
-        c1,c2=st.columns(2)
-        with c1: grado=st.selectbox("Grado",["1ro","2do","3ro","4to","5to","6to"])
-        with c2: grupo=st.selectbox("Grupo",["A","B","C","D"])
-        escuela=st.selectbox("Escuela",escuelas_disponibles)
-        apoyo=st.text_input("Maestra/o de apoyo",st.session_state.get("nombre",""))
-        regular=st.text_input("Docente regular")
-        condicion=st.selectbox("Condición / discapacidad",["Intelectual","Auditiva","Visual","Motora","TEA","TDAH","Aptitudes Sobresalientes","Dificultades severas de aprendizaje","Dificultades severas de conducta","Dificultades severas de comunicación","Ninguna"])
-        tipo=st.selectbox("Tipo de atención",["Individual","Grupal"])
-        save=st.form_submit_button("Crear expediente",type="primary")
+        st.caption(
+            "Captura el nombre con apellido paterno, apellido materno y nombre(s), "
+            "como lo requiere el padrón."
+        )
+        nombre = st.text_input("Nombre completo del alumno")
+        curp = st.text_input(
+            "CURP (18 caracteres)", max_chars=18,
+            help="Verifica que la CURP tenga los 18 caracteres."
+        )
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            edad = st.number_input(
+                "Edad al 1 de septiembre", min_value=0, max_value=99, step=1
+            )
+        with c2:
+            sexo = st.selectbox("Sexo", ["H", "M"])
+        with c3:
+            situacion = st.selectbox(
+                "Situación del alumno", ["NI", "RI"],
+                help="NI: nuevo ingreso. RI: reinscripción."
+            )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            nivel = st.selectbox(
+                "Nivel educativo", ["Preescolar", "Primaria", "Secundaria"]
+            )
+        with c2:
+            grado = st.selectbox(
+                "Grado", ["1°", "2°", "3°", "4°", "5°", "6°"]
+            )
+
+        escuela = st.selectbox("Escuela atendida", escuelas_disponibles)
+        apoyo = st.text_input(
+            "Maestra/o de apoyo", st.session_state.get("nombre", "")
+        )
+        regular = st.text_input("Docente regular")
+        condicion = st.selectbox(
+            "Discapacidad o condición", condiciones_padron
+        )
+        tipo = st.selectbox(
+            "Tipo de atención", ["Individual", "Grupal"],
+            help=(
+                "Individual: cuenta con EPP y plan de intervención. "
+                "Grupal: derivado o en lista de espera."
+            )
+        )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            lengua = st.selectbox(
+                "Lengua indígena / mayahablante", ["No", "Sí"]
+            )
+        with c2:
+            afrodescendiente = st.selectbox("Afrodescendiente", ["No", "Sí"])
+        with c3:
+            migrante = st.selectbox("Migrante", ["No", "Sí"])
+
+        save = st.form_submit_button("Crear expediente", type="primary")
+
     if save:
-        if not nombre.strip() or not curp.strip(): st.error("Nombre y CURP son obligatorios."); return
-        id_a=repo.save_alumno({"Nombre_Completo":nombre.strip(),"CURP":curp.strip().upper(),"Grado":grado,"Grupo":grupo,"ID_Escuela":ESCUELAS_USAER[escuela],"Maestra de Apoyo":apoyo,"ID_Maestro_Regular":regular,"Condicion_Discapacidad":condicion,"Estatus":"Activo","Tipo_Atencion":tipo})
+        curp_limpia = curp.strip().upper()
+        if not nombre.strip():
+            st.error("El nombre completo es obligatorio.")
+            return
+        if len(curp_limpia) != 18 or not curp_limpia.isalnum():
+            st.error("La CURP debe contener exactamente 18 caracteres alfanuméricos.")
+            return
+
+        id_a = repo.save_alumno({
+            "Nombre_Completo": nombre.strip(),
+            "CURP": curp_limpia,
+            "Edad_1_Septiembre": int(edad),
+            "Sexo": sexo,
+            "Situacion_Alumno": situacion,
+            "Nivel_Educativo": nivel,
+            "Grado": grado,
+            "Grupo": "",
+            "ID_Escuela": ESCUELAS_USAER[escuela],
+            "Maestra de Apoyo": apoyo.strip(),
+            "ID_Maestro_Regular": regular.strip(),
+            "Condicion_Discapacidad": condicion,
+            "Estatus": "Activo",
+            "Tipo_Atencion": tipo,
+            "Lengua_Indigena_Mayahablante": lengua,
+            "Afrodescendiente": afrodescendiente,
+            "Migrante": migrante,
+        })
         st.success(f"Expediente creado: {expediente_id(id_a)}")
 
 
