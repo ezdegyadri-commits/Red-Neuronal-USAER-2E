@@ -49,6 +49,19 @@ def ensure_sheet(name,headers):
     except gspread.WorksheetNotFound:
         ws=sheet.add_worksheet(title=name,rows=2000,cols=max(10,len(headers))); ws.append_row(headers,value_input_option='USER_ENTERED'); clear_cache(name); return ws
 
+def ensure_headers(name, headers):
+    """Agrega columnas faltantes sin modificar registros existentes."""
+    ws = ensure_sheet(name, headers)
+    actuales = ws.row_values(1)
+    faltantes = [header for header in headers if header not in actuales]
+    if not faltantes:
+        return ws
+    ws.add_cols(len(faltantes))
+    for posicion, header in enumerate(faltantes, start=len(actuales) + 1):
+        ws.update_cell(1, posicion, header)
+    clear_cache(name)
+    return ws
+
 def append_dict(sheet_name,data):
     ws=worksheet(sheet_name); headers=ws.row_values(1); ws.append_row([data.get(h,'') for h in headers],value_input_option='USER_ENTERED'); clear_cache(sheet_name)
 
