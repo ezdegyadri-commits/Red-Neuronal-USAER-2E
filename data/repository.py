@@ -19,6 +19,8 @@ INTEGRATED_HEADERS={
 
 def read(name): return df_sheet(name)
 def alumnos(): return read('Alumnos')
+def personal(): return read('Personal')
+def asignaciones(): return read('Asignaciones')
 def usuarios(): return read('Usuarios')
 def anexo3(): return read('Anexo3_Deteccion')
 def anexo4(): return read('Anexo4_Sugerencias')
