@@ -397,9 +397,27 @@ def alta_page(df):
                 hide_index=True,
             )
         if preparados:
+            st.caption(
+                "Vista previa para supervisión: incluye escuela, turno, CCT, ubicación, "
+                "edad al 1 de septiembre de 2026, nivel, grado y grupo cuando estén disponibles."
+            )
+            vista_supervision = pd.DataFrame(preparados).rename(columns={
+                "Nombre_Completo": "Alumno",
+                "Edad_1_Septiembre": "Edad (1 Sept)",
+                "Nombre_Escuela": "Escuela",
+                "Turno_Escuela": "Turno",
+                "CCT_Escuela": "CCT",
+                "Direccion_Escuela": "Dirección",
+                "Localidad_Escuela": "Localidad",
+                "Municipio_Escuela": "Municipio",
+                "Nivel_Educativo": "Nivel",
+            })
             st.dataframe(
-                pd.DataFrame(preparados)[
-                    ["Nombre_Completo", "CURP", "Edad_1_Septiembre", "ID_Escuela", "Grado", "Grupo"]
+                vista_supervision[
+                    [
+                        "Alumno", "CURP", "Edad (1 Sept)", "Escuela", "Turno", "CCT",
+                        "Localidad", "Municipio", "Nivel", "Grado", "Grupo",
+                    ]
                 ],
                 use_container_width=True,
                 hide_index=True,
