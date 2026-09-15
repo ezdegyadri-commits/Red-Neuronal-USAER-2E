@@ -1,5 +1,4 @@
 import json
-from io import BytesIO
 from datetime import date
 import pandas as pd
 import streamlit as st
@@ -178,45 +177,40 @@ def alta_page(df):
         st.success(f"Expediente creado: {expediente_id(id_a)}")
 
     st.divider()
-    st.markdown("### Carga masiva de alumnos")
+    st.markdown("### Subir Excel a la base central de alumnos")
     st.caption(
-        "Carga un archivo Excel con alumnos de tus escuelas asignadas. "
-        "Se validan CURP, escuela y registros duplicados antes de guardar."
-    )
-    plantilla = pd.DataFrame([{
-        "Nombre_Completo": "APELLIDO PATERNO APELLIDO MATERNO NOMBRE",
-        "CURP": "ABCD010101HYNXXX01",
-        "Escuela": escuelas_disponibles[0],
-        "Edad_1_Septiembre": 10,
-        "Sexo": "H",
-        "Situacion_Alumno": "NI",
-        "Nivel_Educativo": "Primaria",
-        "Grado": "4°",
-        "Grupo": "A",
-        "Condicion_Discapacidad": "APRENDIZAJE",
-        "Tipo_Atencion": "Individual",
-        "Lengua_Indigena_Mayahablante": "No",
-        "Afrodescendiente": "No",
-        "Migrante": "No",
-    }])
-    plantilla_bytes = BytesIO()
-    plantilla.to_excel(plantilla_bytes, index=False)
-    st.download_button(
-        "Descargar plantilla de carga masiva",
-        data=plantilla_bytes.getvalue(),
-        file_name="Plantilla_alumnos_USAER_02E.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="plantilla_carga_alumnos",
+        "El archivo se valida y sus registros nuevos se agregan a la hoja "
+        "central del proyecto. No se eliminan alumnos ya guardados."
     )
     archivo = st.file_uploader(
-        "Selecciona el archivo Excel",
+        "Subir Excel de alumnos",
         type=["xlsx", "xls"],
         key="carga_masiva_alumnos",
+        help=(
+            "Puedes subir la plantilla anterior del padrón USAER o un Excel "
+            "con las columnas de nombre, CURP y escuela."
+        ),
     )
 
     if archivo is not None:
         try:
-            tabla = pd.read_excel(archivo)
+            archivo.seek(0)
+            bruto = pd.read_excel(archivo, header=None)
+            encabezado = next(
+                (
+                    indice for indice, fila in bruto.head(12).iterrows()
+                    if any("CURP" in normalizar_texto(str(valor)) for valor in fila)
+                    and any("NOMBRE" in normalizar_texto(valor) for valor in fila)
+                ),
+                None,
+            )
+            if encabezado is None:
+                st.error(
+                    "No se identificaron las columnas de nombre y CURP en el Excel."
+                )
+                return
+            archivo.seek(0)
+            tabla = pd.read_excel(archivo, header=encabezado).dropna(how="all")
         except Exception as ex:
             st.error(f"No fue posible leer el archivo: {ex}")
             return
@@ -230,11 +224,22 @@ def alta_page(df):
             for columna in tabla.columns
         }
 
-        def dato(fila, *nombres, default=""):
+        def columna(*nombres):
             for nombre_columna in nombres:
-                columna = columnas.get(nombre_columna)
-                if columna is not None and pd.notna(fila.get(columna)):
-                    return str(fila.get(columna)).strip()
+                clave = normalizar_texto(nombre_columna).replace(" ", "_")
+                if clave in columnas:
+                    return columnas[clave]
+            for nombre_columna in nombres:
+                clave = normalizar_texto(nombre_columna).replace(" ", "_")
+                for normalizada, original in columnas.items():
+                    if clave in normalizada:
+                        return original
+            return None
+
+        def dato(fila, *nombres, default=""):
+            campo = columna(*nombres)
+            if campo is not None and pd.notna(fila.get(campo)):
+                return str(fila.get(campo)).strip()
             return default
 
         codigos_escuela = {
@@ -260,15 +265,16 @@ def alta_page(df):
             pass
 
         preparados, errores, curps_archivo = [], [], set()
-        for numero, (_, fila) in enumerate(tabla.iterrows(), start=2):
+        for numero, (_, fila) in enumerate(tabla.iterrows(), start=encabezado + 2):
             nombre_archivo = dato(fila, "NOMBRE_COMPLETO", "NOMBRE")
             curp_archivo = dato(fila, "CURP").upper()
             escuela_archivo = dato(
-                fila, "ESCUELA", "NOMBRE_ESCUELA", "ID_ESCUELA"
+                fila, "NOMBRE_ESCUELA", "ESCUELA", "ID_ESCUELA"
             )
-            codigo_escuela = codigos_escuela.get(normalizar_texto(escuela_archivo))
+            codigo_escuela = codigos_escuela.get(
+                normalizar_texto(escuela_archivo)
+            )
             if not nombre_archivo:
-                errores.append(f"Fila {numero}: falta el nombre completo.")
                 continue
             if len(curp_archivo) != 18 or not curp_archivo.isalnum():
                 errores.append(f"Fila {numero}: CURP inválida.")
@@ -279,7 +285,7 @@ def alta_page(df):
                 )
                 continue
             if curp_archivo in existentes or curp_archivo in curps_archivo:
-                errores.append(f"Fila {numero}: CURP duplicada.")
+                errores.append(f"Fila {numero}: CURP duplicada; no se reemplazará.")
                 continue
             curps_archivo.add(curp_archivo)
             edad = dato(fila, "EDAD_1_SEPTIEMBRE", "EDAD", default="")
@@ -294,13 +300,13 @@ def alta_page(df):
                 "Edad_1_Septiembre": edad,
                 "Sexo": dato(fila, "SEXO"),
                 "Situacion_Alumno": dato(fila, "SITUACION_ALUMNO", default="NI"),
-                "Nivel_Educativo": dato(fila, "NIVEL_EDUCATIVO", default="Primaria"),
+                "Nivel_Educativo": dato(fila, "NIVEL_EDUCATIVO", "NIVEL", default="Primaria"),
                 "Grado": dato(fila, "GRADO"),
                 "Grupo": dato(fila, "GRUPO"),
                 "ID_Escuela": codigo_escuela,
                 "Maestra de Apoyo": st.session_state.get("nombre", ""),
                 "ID_Maestro_Regular": dato(fila, "DOCENTE_REGULAR", "ID_MAESTRO_REGULAR"),
-                "Condicion_Discapacidad": dato(fila, "CONDICION_DISCAPACIDAD", "DISCAPACIDAD_O_CONDICION"),
+                "Condicion_Discapacidad": dato(fila, "CONDICION_DISCAPACIDAD", "DISCAPACIDAD"),
                 "Estatus": "Activo",
                 "Tipo_Atencion": dato(fila, "TIPO_ATENCION", default="Individual"),
                 "Lengua_Indigena_Mayahablante": dato(fila, "LENGUA_INDIGENA_MAYAHABLANTE", default="No"),
@@ -308,24 +314,36 @@ def alta_page(df):
                 "Migrante": dato(fila, "MIGRANTE", default="No"),
             })
 
-        st.write(f"Registros listos para cargar: {len(preparados)}")
+        st.write(f"Registros nuevos listos para guardar: {len(preparados)}")
         if errores:
-            st.warning("Se encontraron observaciones. Corrige el archivo o carga los registros válidos.")
-            st.dataframe(pd.DataFrame({"Observaciones": errores}), use_container_width=True, hide_index=True)
+            st.warning(
+                "Los registros con observaciones no se cargarán ni reemplazarán "
+                "datos previamente guardados."
+            )
+            st.dataframe(
+                pd.DataFrame({"Observaciones": errores}),
+                use_container_width=True,
+                hide_index=True,
+            )
         if preparados:
             st.dataframe(
-                pd.DataFrame(preparados)[["Nombre_Completo", "CURP", "ID_Escuela", "Grado", "Grupo"]],
+                pd.DataFrame(preparados)[
+                    ["Nombre_Completo", "CURP", "ID_Escuela", "Grado", "Grupo"]
+                ],
                 use_container_width=True,
                 hide_index=True,
             )
             if st.button(
-                f"Cargar {len(preparados)} alumno(s) válido(s)",
+                f"Guardar {len(preparados)} alumno(s) en la base central",
                 type="primary",
                 key="confirmar_carga_masiva",
             ):
                 try:
                     ids = repo.save_alumnos(preparados)
-                    st.success(f"Se registraron {len(ids)} alumno(s) correctamente.")
+                    st.success(
+                        f"Se agregaron {len(ids)} alumno(s) a la hoja central "
+                        "sin eliminar registros anteriores."
+                    )
                 except Exception as ex:
                     st.error(f"No fue posible guardar la carga masiva: {ex}")
 
