@@ -1,4 +1,4 @@
-import json, time
+import json, random, time
 import gspread
 import streamlit as st
 from google.oauth2.credentials import Credentials
@@ -22,16 +22,31 @@ def connections():
     if creds.expired and creds.refresh_token: creds.refresh(Request())
     return sheet, build('drive','v3',credentials=creds)
 
+def retry_google(operation, attempts=6):
+    """Reintenta solo límites transitorios de Google con espera progresiva."""
+    last = None
+    for attempt in range(attempts):
+        try:
+            return operation()
+        except Exception as exc:
+            last = exc
+            message = str(exc).lower()
+            is_quota = (
+                "429" in message
+                or "quota exceeded" in message
+                or "resource_exhausted" in message
+                or "read requests" in message
+            )
+            if not is_quota or attempt == attempts - 1:
+                raise
+            time.sleep(min(30, 2 ** attempt) + random.uniform(0, 0.75))
+    raise last
+
+
 @st.cache_data(ttl=120, show_spinner=False)
 def read_sheet(name):
-    sheet,_ = connections(); last=None
-    for attempt in range(4):
-        try: return sheet.worksheet(name).get_all_records()
-        except Exception as exc:
-            last=exc; msg=str(exc)
-            if '429' not in msg and 'Quota exceeded' not in msg: raise
-            if attempt < 3: time.sleep(1.5*(2**attempt))
-    raise last
+    sheet, _ = connections()
+    return retry_google(lambda: sheet.worksheet(name).get_all_records())
 
 def df_sheet(name):
     import pandas as pd
@@ -41,7 +56,7 @@ def clear_cache(name=None):
     if name: read_sheet.clear(name)
     else: read_sheet.clear()
 
-def worksheet(name): return connections()[0].worksheet(name)
+def worksheet(name): return retry_google(lambda: connections()[0].worksheet(name))
 
 def ensure_sheet(name,headers):
     sheet,_=connections()
@@ -52,32 +67,32 @@ def ensure_sheet(name,headers):
 def ensure_headers(name, headers):
     """Agrega columnas faltantes sin modificar registros existentes."""
     ws = ensure_sheet(name, headers)
-    actuales = ws.row_values(1)
+    actuales = retry_google(lambda: ws.row_values(1))
     faltantes = [header for header in headers if header not in actuales]
     if not faltantes:
         return ws
-    ws.add_cols(len(faltantes))
+    retry_google(lambda: ws.add_cols(len(faltantes)))
     for posicion, header in enumerate(faltantes, start=len(actuales) + 1):
-        ws.update_cell(1, posicion, header)
+        retry_google(lambda: ws.update_cell(1, posicion, header))
     clear_cache(name)
     return ws
 
 def append_dict(sheet_name,data):
-    ws=worksheet(sheet_name); headers=ws.row_values(1); ws.append_row([data.get(h,'') for h in headers],value_input_option='USER_ENTERED'); clear_cache(sheet_name)
+    ws=worksheet(sheet_name); headers=retry_google(lambda: ws.row_values(1)); retry_google(lambda: ws.append_row([data.get(h,'') for h in headers],value_input_option='USER_ENTERED')); clear_cache(sheet_name)
 
 def google_append_rows_raw(sheet_name, rows):
     if not rows:
         return
     ws = worksheet(sheet_name)
-    headers = ws.row_values(1)
-    ws.append_rows([[row.get(h, '') for h in headers] for row in rows], value_input_option='USER_ENTERED')
+    headers = retry_google(lambda: ws.row_values(1))
+    retry_google(lambda: ws.append_rows([[row.get(h, '') for h in headers] for row in rows], value_input_option='USER_ENTERED'))
     clear_cache(sheet_name)
 
 
 def google_append_raw(sheet_name, data):
     ws = worksheet(sheet_name)
-    headers = ws.row_values(1)
-    ws.append_row([data.get(h, '') for h in headers], value_input_option='USER_ENTERED')
+    headers = retry_google(lambda: ws.row_values(1))
+    retry_google(lambda: ws.append_row([data.get(h, '') for h in headers], value_input_option='USER_ENTERED'))
     clear_cache(sheet_name)
 
 
