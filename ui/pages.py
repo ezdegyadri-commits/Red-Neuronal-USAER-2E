@@ -10,6 +10,7 @@ from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
 from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
 from ai.engine import fallback, generar_sugerencias
 from documents.anexos import anexo3_html, anexo4_html, anexo5_html, header_b64
+from documents.reportes import generar_formato_personal, generar_padron_usaer
 from ui.components import hero, card
 from utils.ids import expediente_id
 from utils.text import normalizar_texto
@@ -920,15 +921,94 @@ def documentos_page(df):
             )
 
 def direccion_page(df):
-    hero("Panel de Dirección", "Indicadores para gestionar la red, no solo consultar registros.")
-    a3,a4,a5=repo.anexo3(),repo.anexo4(),repo.anexo5()
-    c=st.columns(4)
-    for box,title,val in zip(c,["Alumnos","Anexo 3","Anexo 4","Eventos"],[len(df),len(a3),len(a4),len(a5)]):
-        with box: card(title,val)
+    hero(
+        "Panel de Dirección",
+        "Indicadores y reportes oficiales para la gestión de USAER 02E."
+    )
+    a3, a4, a5 = repo.anexo3(), repo.anexo4(), repo.anexo5()
+    c = st.columns(4)
+    for box, title, val in zip(
+        c,
+        ["Alumnos", "Anexo 3", "Anexo 4", "Eventos"],
+        [len(df), len(a3), len(a4), len(a5)],
+    ):
+        with box:
+            card(title, val)
+
     if not a4.empty and "Nivel_Cumplimiento_Resultados" in a4.columns:
         st.markdown("### Estado de sugerencias")
-        st.dataframe(a4["Nivel_Cumplimiento_Resultados"].value_counts().rename_axis("Estado").reset_index(name="Cantidad"),use_container_width=True,hide_index=True)
+        st.dataframe(
+            a4["Nivel_Cumplimiento_Resultados"]
+            .value_counts()
+            .rename_axis("Estado")
+            .reset_index(name="Cantidad"),
+            use_container_width=True,
+            hide_index=True,
+        )
 
+    st.divider()
+    st.markdown("### Reportes oficiales para supervisión")
+    st.caption(
+        "Los formatos se crean con la información vigente de alumnos, "
+        "personal, escuelas y asignaciones."
+    )
+
+    try:
+        alumnos = repo.alumnos()
+        escuelas = repo.escuelas()
+        personal = repo.personal()
+        asignaciones = repo.asignaciones()
+    except Exception as ex:
+        st.error(f"No fue posible preparar los datos para exportar: {ex}")
+        return
+
+    col_padron, col_personal = st.columns(2)
+
+    with col_padron:
+        st.markdown("#### Padrón de alumnos USAER")
+        if alumnos.empty:
+            st.info("Aún no hay alumnos registrados para generar el padrón.")
+        else:
+            try:
+                padron = generar_padron_usaer(alumnos, escuelas)
+                st.download_button(
+                    "Generar y descargar padrón",
+                    data=padron,
+                    file_name="Padron_USAER_02E_2026_2027.xlsx",
+                    mime=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "spreadsheetml.sheet"
+                    ),
+                    use_container_width=True,
+                    type="primary",
+                    key="descargar_padron_usaer",
+                )
+            except Exception as ex:
+                st.error(f"No se pudo generar el padrón: {ex}")
+
+    with col_personal:
+        st.markdown("#### Formato de personal USAER")
+        if personal.empty:
+            st.info("Aún no hay personal registrado para generar el formato.")
+        else:
+            try:
+                formato = generar_formato_personal(
+                    personal, escuelas, alumnos, asignaciones
+                )
+                st.download_button(
+                    "Generar y descargar formato de personal",
+                    data=formato,
+                    file_name="Personal_USAER_02E_2026_2027.xlsx",
+                    mime=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "spreadsheetml.sheet"
+                    ),
+                    use_container_width=True,
+                    type="primary",
+                    key="descargar_personal_usaer",
+                )
+            except Exception as ex:
+                st.error(f"No se pudo generar el formato de personal: {ex}")
 
 def visitas_page(df):
     hero(
