@@ -17,7 +17,7 @@ from utils.text import normalizar_texto
 
 
 def inicio(df):
-    hero("Centro de gestión USAE", "Una sola plataforma para capturar, decidir, intervenir y dar seguimiento.")
+    hero("Centro de gestión USAER 02-E", "Una sola plataforma para capturar, decidir, intervenir y dar seguimiento.")
     c1,c2,c3,c4=st.columns(4)
     with c1: card("Alumnos visibles",len(df))
     with c2: card("Anexos 3",len(repo.anexo3()))
@@ -381,27 +381,55 @@ def alta_page(df):
             )
         if preparados:
             st.caption(
-                "Vista previa para supervisión: incluye escuela, turno, CCT, ubicación, "
-                "edad al 1 de septiembre de 2026, nivel, grado y grupo cuando estén disponibles."
+                "Vista previa con las 19 columnas solicitadas por supervisión. "
+                "Los datos técnicos internos se conservan en la base central para los anexos."
             )
-            vista_supervision = pd.DataFrame(preparados).rename(columns={
-                "Nombre_Completo": "Alumno",
-                "Edad_1_Septiembre": "Edad (1 Sept)",
-                "Nombre_Escuela": "Escuela",
-                "Turno_Escuela": "Turno",
-                "CCT_Escuela": "CCT",
-                "Direccion_Escuela": "Dirección",
-                "Localidad_Escuela": "Localidad",
-                "Municipio_Escuela": "Municipio",
-                "Nivel_Educativo": "Nivel",
+            datos_padron = pd.DataFrame(preparados).fillna("")
+
+            def tiene_condicion(valor):
+                return normalizar_texto(str(valor)) in {"SI", "S", "TRUE", "1"}
+
+            def condiciones_padron(fila):
+                condiciones = []
+                if tiene_condicion(fila.get("Lengua_Indigena_Mayahablante", "")):
+                    condiciones.append("Lengua indígena/mayahablante")
+                if tiene_condicion(fila.get("Afrodescendiente", "")):
+                    condiciones.append("Afrodescendiente")
+                if tiene_condicion(fila.get("Migrante", "")):
+                    condiciones.append("Migrante")
+                return ", ".join(condiciones)
+
+            nivel_grado = datos_padron.apply(
+                lambda fila: " - ".join(
+                    str(fila.get(campo, "")).strip()
+                    for campo in ("Nivel_Educativo", "Grado")
+                    if str(fila.get(campo, "")).strip()
+                ),
+                axis=1,
+            )
+            vista_supervision = pd.DataFrame({
+                "1.- N°": range(1, len(datos_padron) + 1),
+                "2.- ZONA": "001",
+                "3.- USAER": "USAER 02-E",
+                "4.- CLAVE DE USAER": "31FUA0002Y",
+                "5.- NOMBRE DE LA ESCUELA PREESCOLAR, PRIMARIA Y/O SECUNDARIA ATENDIDA": datos_padron["Nombre_Escuela"],
+                "6.- TURNO": datos_padron["Turno_Escuela"],
+                "7.- CCT DE LA ESCUELA ATENDIDA": datos_padron["CCT_Escuela"],
+                "8.- DIRECCIÓN DE LA ESCUELA ATENDIDA": datos_padron["Direccion_Escuela"],
+                "9.- LOCALIDAD DONDE ESTÁ UBICADA LA ESCUELA": datos_padron["Localidad_Escuela"],
+                "10.- MUNICIPIO DONDE ESTÁ UBICADA LA ESCUELA": datos_padron["Municipio_Escuela"],
+                "11.- APELLIDO PATERNO, MATERNO Y NOMBRE(S) COMPLETO DEL ALUMNO": datos_padron["Nombre_Completo"],
+                "12.- CURP (18 DÍGITOS)": datos_padron["CURP"],
+                "13.- EDAD (1 Sept)": datos_padron["Edad_1_Septiembre"],
+                "14.- SEXO": datos_padron["Sexo"],
+                "15.- DISCAPACIDAD O CONDICIÓN": datos_padron["Condicion_Discapacidad"],
+                "16- NIVEL Y GRADO AL QUE ESTA INSCRITO": nivel_grado,
+                "17.- SITUACIÓN DEL ALUMNO": datos_padron["Situacion_Alumno"],
+                "18.- TIPO DE ATENCIÓN": datos_padron["Tipo_Atencion"],
+                "Presenta alguna de las siguientes condiciones": datos_padron.apply(condiciones_padron, axis=1),
             })
             st.dataframe(
-                vista_supervision[
-                    [
-                        "Alumno", "CURP", "Edad (1 Sept)", "Escuela", "Turno", "CCT",
-                        "Localidad", "Municipio", "Nivel", "Grado", "Grupo",
-                    ]
-                ],
+                vista_supervision,
                 use_container_width=True,
                 hide_index=True,
             )
