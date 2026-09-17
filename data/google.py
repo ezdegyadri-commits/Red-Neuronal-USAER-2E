@@ -35,7 +35,7 @@ def drive_service():
         creds.refresh(Request())
     return build('drive', 'v3', credentials=creds)
 
-def retry_google(operation, attempts=6):
+def retry_google(operation, attempts=3):
     """Reintenta solo límites transitorios de Google con espera progresiva."""
     last = None
     for attempt in range(attempts):
@@ -52,11 +52,11 @@ def retry_google(operation, attempts=6):
             )
             if not is_quota or attempt == attempts - 1:
                 raise
-            time.sleep(min(30, 2 ** attempt) + random.uniform(0, 0.75))
+            time.sleep(min(4, 0.75 * (2 ** attempt)) + random.uniform(0, 0.25))
     raise last
 
 
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def read_sheet(name):
     """
     Lee una hoja de Google Sheets de forma tolerante.
