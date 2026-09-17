@@ -261,7 +261,7 @@ def generar_padron_usaer(alumnos, escuelas):
             10: _value(student, "Municipio_Escuela", default=_value(school, "Municipio")),
             11: _value(student, "Nombre_Completo"),
             12: _value(student, "CURP"),
-            13: _edad_al_primero_de_septiembre(student.get("CURP", "")),
+            13: _value(student, "Edad_1_Septiembre", default=_edad_al_primero_de_septiembre(student.get("CURP", ""))),
             14: _value(student, "Sexo"),
             15: _value(student, "Condicion_Discapacidad"),
             19: _value(student, "Situacion_Alumno"),
