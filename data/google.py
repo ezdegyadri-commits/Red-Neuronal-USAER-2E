@@ -16,12 +16,24 @@ def _secret_dict(name):
 
 @st.cache_resource(show_spinner=False)
 def connections():
+    """Conexión esencial para Google Sheets.
+
+    No solicita ni refresca Drive: un token de Drive vencido no puede impedir
+    el inicio de sesión ni la lectura de la base central.
+    """
     gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'))
     sheet = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
+    return sheet, None
+
+
+@st.cache_resource(show_spinner=False)
+def drive_service():
+    """Conexión opcional de Drive, usada solo por funciones que realmente la requieren."""
     token = _secret_dict('token_json')
     creds = Credentials.from_authorized_user_info(token, ['https://www.googleapis.com/auth/drive'])
-    if creds.expired and creds.refresh_token: creds.refresh(Request())
-    return sheet, build('drive','v3',credentials=creds)
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    return build('drive', 'v3', credentials=creds)
 
 def retry_google(operation, attempts=6):
     """Reintenta solo límites transitorios de Google con espera progresiva."""
