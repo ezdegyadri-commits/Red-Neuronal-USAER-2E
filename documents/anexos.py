@@ -148,20 +148,21 @@ def anexo7_pdf(registro):
     pdf.add_page()
     pdf.set_y(50)
 
-    escuela = str(registro.get("Escuela", "")).strip()
-    fecha = str(registro.get("Fecha", "")).strip()
-    docente = str(registro.get("Docente_Regular", "")).strip()
+    # La hoja se entrega vacía: la completa manualmente el docente regular.
+    escuela = ""
+    fecha = ""
+    docente = ""
 
     x, y, w, h = 12, pdf.get_y(), 192, 43
     pdf.rect(x, y, w, h)
     pdf.set_font("Helvetica", "", 9)
     lineas = [
         f"Nombre del alumno: _______________________________________    Fecha de nacimiento: ______________",
-        f"Escuela: {escuela[:55]:<55}    Edad: ____  Grado: ____  Grupo: ____",
+        "Escuela: _________________________________________________    Edad: ____  Grado: ____  Grupo: ____",
         "Inscrito a la escuela desde: ____________  Atendido por usted desde: ___________________________",
         "Ha repetido algún curso escolar: ________  ¿Cuál? ______________________________________________",
-        f"Nombre del docente: {docente[:67]}",
-        f"Fecha de aplicación: {fecha:<25}  Curso escolar: ______________________________________________",
+        "Nombre del docente: ______________________________________________________________________",
+        "Fecha de aplicación: _________________________  Curso escolar: _______________________________",
     ]
     for linea in lineas:
         pdf.set_x(x + 2)
@@ -193,7 +194,7 @@ def anexo7_pdf(registro):
     pdf.set_font("Helvetica", "", 7.3)
     for indice, respuesta in enumerate(respuestas, start=1):
         pregunta = str(respuesta.get("pregunta", "")).strip()
-        valor = str(respuesta.get("valor", "")).strip()
+        valor = ""
         lineas_pregunta = max(1, int(pdf.get_string_width(pregunta) / (ancho_indicador - 3)) + 1)
         altura = max(6.2, lineas_pregunta * 3.5)
         if pdf.get_y() + altura > 263:
