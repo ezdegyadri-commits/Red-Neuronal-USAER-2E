@@ -6,7 +6,7 @@ BASE_HEADERS={
 'Escuelas':['ID_Escuela','CCT','Nombre_Escuela','Nivel','Turno'],
 'Personal':['ID_Personal','Nombre_Completo','Rol','Email','Telefono'],
 'Asignaciones':['ID_Asignacion','ID_Personal','ID_Escuela'],
-'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante','Nombre_Escuela','Turno_Escuela','CCT_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela'],
+'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante','Nombre_Escuela','Turno_Escuela','CCT_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela','Condiciones_Adicionales'],
 'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA'],
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
 'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento'],
@@ -28,9 +28,30 @@ def anexo5(): return read('Anexo5_Eventos')
 def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
 
+PADRON_FIELDS = {
+ 'Nombre_Completo', 'CURP', 'Edad_1_Septiembre', 'Sexo', 'Situacion_Alumno',
+ 'Nivel_Educativo', 'Grado', 'Grupo', 'ID_Escuela', 'Maestra de Apoyo',
+ 'ID_Maestro_Regular', 'Condicion_Discapacidad', 'Estatus', 'Tipo_Atencion',
+ 'Lengua_Indigena_Mayahablante', 'Afrodescendiente', 'Migrante',
+ 'Nombre_Escuela', 'Turno_Escuela', 'CCT_Escuela', 'Direccion_Escuela',
+ 'Localidad_Escuela', 'Municipio_Escuela', 'Condiciones_Adicionales',
+}
+
+
+def _a1_column(number):
+ """Convierte un número de columna de base 1 a referencia A1."""
+ result = ""
+ while number:
+  number, remainder = divmod(number - 1, 26)
+  result = chr(65 + remainder) + result
+ return result
+
+
 def save_alumno(data):
- ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
- data=dict(data); data.setdefault('ID_Alumno',next_numeric_id('Alumnos','ID_Alumno','ALU')); append_dict('Alumnos',data); return data['ID_Alumno']
+ """Registra o actualiza un alumno por CURP sin duplicar su expediente."""
+ _, _, ids = upsert_alumnos([data], return_ids=True)
+ return ids[0] if ids else ""
+
 
 def save_alumnos(rows):
  ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
@@ -50,23 +71,32 @@ def save_alumnos(rows):
  google_append_rows_raw('Alumnos', prepared)
  return [row['ID_Alumno'] for row in prepared]
 
-def upsert_alumnos(rows):
- """Consolida padrones por CURP: agrega nuevos y completa únicamente campos vacíos."""
+
+def upsert_alumnos(rows, return_ids=False):
+ """Consolida padrones por CURP.
+
+ Los valores no vacíos del padrón que se está cargando son la fuente de verdad
+ para los datos del alumno. Se conservan el ID y todos los campos que el
+ archivo no aporta, por lo que no se eliminan expedientes ni información útil.
+ """
  ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
  if not rows:
-  return 0, 0
+  return (0, 0, []) if return_ids else (0, 0)
+
  ws = worksheet('Alumnos')
  values = retry_google(ws.get_all_values)
  headers = values[0] if values else []
  if 'CURP' not in headers:
   raise ValueError("La hoja central no tiene la columna CURP.")
+
  curp_col = headers.index('CURP')
+ id_col = headers.index('ID_Alumno') if 'ID_Alumno' in headers else -1
  existing = {
   str(row[curp_col]).strip().upper(): index
   for index, row in enumerate(values[1:], start=2)
   if len(row) > curp_col and str(row[curp_col]).strip()
  }
- id_col = headers.index('ID_Alumno') if 'ID_Alumno' in headers else -1
+
  numbers = []
  for row in values[1:]:
   if id_col >= 0 and len(row) > id_col:
@@ -75,38 +105,47 @@ def upsert_alumnos(rows):
    except (TypeError, ValueError):
     pass
  next_number = max(numbers) + 1 if numbers else 1
- nuevos, actualizados, append_rows, updates = 0, 0, [], []
+
+ nuevos, actualizados, append_rows, updates, ids = 0, 0, [], [], []
  for registro in rows:
   data = dict(registro)
   curp = str(data.get('CURP', '')).strip().upper()
+  if not curp:
+   continue
+  data['CURP'] = curp
   fila = existing.get(curp)
+
   if fila:
    actual = values[fila - 1] + [''] * max(0, len(headers) - len(values[fila - 1]))
-   nombre_actual = str(actual[headers.index('Nombre_Completo')]).strip() if 'Nombre_Completo' in headers else ''
-   escuela_importada = str(data.get('Nombre_Escuela', '')).strip()
+   student_id = str(actual[id_col]).strip() if id_col >= 0 else ""
    cambio = False
    for col, header in enumerate(headers):
     nuevo = str(data.get(header, '')).strip()
-    debe_reparar_nombre = header == 'Nombre_Completo' and nombre_actual and nombre_actual == escuela_importada
-    if nuevo and (not str(actual[col]).strip() or debe_reparar_nombre):
-     actual[col] = nuevo
+    if header in PADRON_FIELDS and nuevo and nuevo != str(actual[col]).strip():
+     updates.append({
+      "range": f"{_a1_column(col + 1)}{fila}",
+      "values": [[nuevo]],
+     })
      cambio = True
    if cambio:
-    final_col = chr(64 + len(headers))
-    updates.append({"range": f'A{fila}:{final_col}{fila}', "values": [actual[:len(headers)]]})
     actualizados += 1
+   ids.append(student_id)
   else:
    data['ID_Alumno'] = f"ALU-{next_number:03d}"
    next_number += 1
    append_rows.append(data)
+   ids.append(data['ID_Alumno'])
    nuevos += 1
+
  if updates:
   retry_google(lambda: ws.batch_update(updates, value_input_option='USER_ENTERED'))
  if append_rows:
   google_append_rows_raw('Alumnos', append_rows)
- if actualizados:
+ if actualizados or append_rows:
   clear_cache('Alumnos')
- return nuevos, actualizados
+
+ result = (nuevos, actualizados)
+ return (*result, ids) if return_ids else result
 
 def repair_nombres_alumnos(rows):
  """Corrige solo nombres cuando un padrón previo guardó el nombre de la escuela."""
