@@ -236,8 +236,8 @@ def anexo7_pdf(registro):
         pdf.set_xy(x_fila, y_fila + altura)
 
         if pdf.get_y() > 225:
-        pdf.add_page()
-        pdf.set_y(50)
+            pdf.add_page()
+            pdf.set_y(50)
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 9)
