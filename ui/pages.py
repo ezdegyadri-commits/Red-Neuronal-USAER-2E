@@ -79,6 +79,31 @@ def alta_page(df):
         st.error("No tienes escuelas asignadas para registrar alumnos.")
         return
 
+    try:
+        catalogo_escuelas = repo.escuelas().fillna("")
+    except Exception:
+        catalogo_escuelas = pd.DataFrame()
+
+    def datos_escuela(nombre):
+        if catalogo_escuelas.empty:
+            return {}
+        for _, registro in catalogo_escuelas.iterrows():
+            registro = registro.to_dict()
+            if normalizar_texto(registro.get("Nombre_Escuela", "")) == normalizar_texto(nombre):
+                return registro
+            if normalizar_texto(registro.get("ID_Escuela", "")) == normalizar_texto(
+                ESCUELAS_USAER.get(nombre, "")
+            ):
+                return registro
+        return {}
+
+    def dato_escuela(registro, *campos):
+        for campo in campos:
+            valor = str(registro.get(campo, "")).strip()
+            if valor:
+                return valor
+        return ""
+
     condiciones_padron = [
         "INTELECTUAL", "BAJA VISIÓN", "CEGUERA", "HIPOACUSIA", "SORDERA",
         "MOTORA", "MÚLTIPLE", "SORDOCEGUERA", "TEA", "PSICOSOCIAL", "AS",
@@ -108,7 +133,7 @@ def alta_page(df):
                 help="NI: nuevo ingreso. RI: reinscripción."
             )
 
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
             nivel = st.selectbox(
                 "Nivel educativo", ["Preescolar", "Primaria", "Secundaria"]
@@ -117,8 +142,40 @@ def alta_page(df):
             grado = st.selectbox(
                 "Grado", ["1°", "2°", "3°", "4°", "5°", "6°"]
             )
+        with c3:
+            grupo = st.text_input("Grupo", max_chars=8)
 
         escuela = st.selectbox("Escuela atendida", escuelas_disponibles)
+        datos_de_escuela = datos_escuela(escuela)
+        st.caption("Datos de la escuela que también se incluirán en el padrón.")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            turno_escuela = st.text_input(
+                "Turno de la escuela",
+                dato_escuela(datos_de_escuela, "Turno"),
+            )
+        with c2:
+            cct_escuela = st.text_input(
+                "CCT de la escuela",
+                dato_escuela(datos_de_escuela, "CCT"),
+            )
+        with c3:
+            localidad_escuela = st.text_input(
+                "Localidad",
+                dato_escuela(datos_de_escuela, "Localidad"),
+            )
+        c1, c2 = st.columns(2)
+        with c1:
+            direccion_escuela = st.text_input(
+                "Dirección de la escuela",
+                dato_escuela(datos_de_escuela, "Direccion", "Dirección"),
+            )
+        with c2:
+            municipio_escuela = st.text_input(
+                "Municipio",
+                dato_escuela(datos_de_escuela, "Municipio"),
+            )
+
         apoyo = st.text_input(
             "Maestra/o de apoyo", st.session_state.get("nombre", "")
         )
@@ -143,6 +200,9 @@ def alta_page(df):
             afrodescendiente = st.selectbox("Afrodescendiente", ["No", "Sí"])
         with c3:
             migrante = st.selectbox("Migrante", ["No", "Sí"])
+        condiciones_adicionales = st.text_input(
+            "Otras condiciones reportadas en el padrón (opcional)"
+        )
 
         save = st.form_submit_button("Crear expediente", type="primary")
 
@@ -163,7 +223,7 @@ def alta_page(df):
             "Situacion_Alumno": situacion,
             "Nivel_Educativo": nivel,
             "Grado": grado,
-            "Grupo": "",
+            "Grupo": grupo.strip(),
             "ID_Escuela": ESCUELAS_USAER[escuela],
             "Maestra de Apoyo": apoyo.strip(),
             "ID_Maestro_Regular": regular.strip(),
@@ -173,14 +233,21 @@ def alta_page(df):
             "Lengua_Indigena_Mayahablante": lengua,
             "Afrodescendiente": afrodescendiente,
             "Migrante": migrante,
+            "Nombre_Escuela": escuela,
+            "Turno_Escuela": turno_escuela.strip(),
+            "CCT_Escuela": cct_escuela.strip(),
+            "Direccion_Escuela": direccion_escuela.strip(),
+            "Localidad_Escuela": localidad_escuela.strip(),
+            "Municipio_Escuela": municipio_escuela.strip(),
+            "Condiciones_Adicionales": condiciones_adicionales.strip(),
         })
         st.success(f"Expediente creado: {expediente_id(id_a)}")
 
     st.divider()
     st.markdown("### Subir Excel a la base central de alumnos")
     st.caption(
-        "El archivo se valida y sus registros nuevos se agregan a la hoja "
-        "central del proyecto. No se eliminan alumnos ya guardados."
+        "El padrón original es la fuente de verdad: por CURP se conservan los "
+        "expedientes y se actualizan únicamente los campos no vacíos que aporte el archivo."
     )
     archivo = st.file_uploader(
         "Subir Excel de alumnos",
@@ -336,36 +403,81 @@ def alta_page(df):
                 errores.append(f"Fila {numero}: CURP duplicada en el mismo archivo.")
                 continue
             curps_archivo.add(curp_archivo)
-            edad_calculada = edad_al_primero_de_septiembre(curp_archivo)
-            edad_archivo = dato(fila, "EDAD_1_SEPTIEMBRE", "EDAD", default="")
+            edad_archivo = dato(
+                fila,
+                "EDAD_1_SEPTIEMBRE",
+                "EDAD_1_SEPT",
+                "EDAD_(1_SEPT)",
+                "EDAD_(1_SEPTIEMBRE)",
+                "EDAD",
+                default="",
+            )
             try:
-                edad = edad_calculada if edad_calculada != "" else int(float(edad_archivo))
+                edad = int(float(edad_archivo)) if edad_archivo != "" else edad_al_primero_de_septiembre(curp_archivo)
             except ValueError:
-                edad = ""
+                edad = edad_al_primero_de_septiembre(curp_archivo)
+
+            condiciones_archivo = dato(
+                fila,
+                "PRESENTA_ALGUNA_DE_LAS_SIGUIENTES_CONDICIONES",
+                "CONDICIONES_ADICIONALES",
+                "CONDICIONES",
+                default="",
+            )
+            condiciones_normalizadas = normalizar_texto(condiciones_archivo)
+            lengua_archivo = dato(fila, "LENGUA_INDIGENA_MAYAHABLANTE", default="")
+            afro_archivo = dato(fila, "AFRODESCENDIENTE", default="")
+            migrante_archivo = dato(fila, "MIGRANTE", default="")
+            if not lengua_archivo and ("LENGUA" in condiciones_normalizadas or "MAYA" in condiciones_normalizadas):
+                lengua_archivo = "Sí"
+            if not afro_archivo and "AFRO" in condiciones_normalizadas:
+                afro_archivo = "Sí"
+            if not migrante_archivo and "MIGR" in condiciones_normalizadas:
+                migrante_archivo = "Sí"
+
+            nombre_escuela_resuelto = escuela_archivo
+            if not nombre_escuela_resuelto or normalizar_texto(nombre_escuela_resuelto) == normalizar_texto(codigo_escuela):
+                nombre_escuela_resuelto = next(
+                    (
+                        nombre for nombre, codigo in ESCUELAS_USAER.items()
+                        if codigo == codigo_escuela
+                    ),
+                    escuela_archivo,
+                )
+
             preparados.append({
                 "Nombre_Completo": nombre_archivo,
                 "CURP": curp_archivo,
                 "Edad_1_Septiembre": edad,
                 "Sexo": dato(fila, "SEXO"),
-                "Situacion_Alumno": dato(fila, "SITUACION_ALUMNO", default="NI"),
-                "Nivel_Educativo": dato(fila, "NIVEL_EDUCATIVO", "NIVEL", default="Primaria"),
-                "Grado": dato(fila, "GRADO"),
+                "Situacion_Alumno": dato(
+                    fila, "SITUACION_ALUMNO", "SITUACION_DEL_ALUMNO", "SITUACION"
+                ),
+                "Nivel_Educativo": dato(fila, "NIVEL_EDUCATIVO", "NIVEL"),
+                "Grado": dato(fila, "GRADO", "NIVEL_Y_GRADO_AL_QUE_ESTA_INSCRITO"),
                 "Grupo": dato(fila, "GRUPO"),
                 "ID_Escuela": codigo_escuela,
-                "Maestra de Apoyo": st.session_state.get("nombre", ""),
+                "Maestra de Apoyo": dato(
+                    fila, "MAESTRA_DE_APOYO", "MAESTRO_DE_APOYO",
+                    default=st.session_state.get("nombre", ""),
+                ),
                 "ID_Maestro_Regular": dato(fila, "DOCENTE_REGULAR", "ID_MAESTRO_REGULAR"),
-                "Condicion_Discapacidad": dato(fila, "CONDICION_DISCAPACIDAD", "DISCAPACIDAD"),
-                "Estatus": "Activo",
-                "Tipo_Atencion": dato(fila, "TIPO_ATENCION", default="Individual"),
-                "Lengua_Indigena_Mayahablante": dato(fila, "LENGUA_INDIGENA_MAYAHABLANTE", default="No"),
-                "Afrodescendiente": dato(fila, "AFRODESCENDIENTE", default="No"),
-                "Migrante": dato(fila, "MIGRANTE", default="No"),
-                "Nombre_Escuela": escuela_archivo,
+                "Condicion_Discapacidad": dato(
+                    fila, "CONDICION_DISCAPACIDAD", "DISCAPACIDAD_O_CONDICION",
+                    "DISCAPACIDAD", "CONDICION"
+                ),
+                "Estatus": dato(fila, "ESTATUS", default="Activo"),
+                "Tipo_Atencion": dato(fila, "TIPO_ATENCION", "TIPO_DE_ATENCION"),
+                "Lengua_Indigena_Mayahablante": lengua_archivo,
+                "Afrodescendiente": afro_archivo,
+                "Migrante": migrante_archivo,
+                "Nombre_Escuela": nombre_escuela_resuelto,
                 "Turno_Escuela": dato(fila, "TURNO"),
                 "CCT_Escuela": dato(fila, "CCT_DE_LA_ESCUELA", "CCT"),
                 "Direccion_Escuela": dato(fila, "DIRECCION"),
                 "Localidad_Escuela": dato(fila, "LOCALIDAD"),
                 "Municipio_Escuela": dato(fila, "MUNICIPIO"),
+                "Condiciones_Adicionales": condiciones_archivo,
             })
 
         st.write(f"Registros del padrón listos para consolidar: {len(preparados)}")
@@ -397,6 +509,9 @@ def alta_page(df):
                     condiciones.append("Afrodescendiente")
                 if tiene_condicion(fila.get("Migrante", "")):
                     condiciones.append("Migrante")
+                adicionales = str(fila.get("Condiciones_Adicionales", "")).strip()
+                if adicionales:
+                    condiciones.append(adicionales)
                 return ", ".join(condiciones)
 
             nivel_grado = datos_padron.apply(
@@ -442,7 +557,7 @@ def alta_page(df):
                     nuevos, actualizados = repo.upsert_alumnos(preparados)
                     st.success(
                         f"Consolidación terminada: {nuevos} alumno(s) nuevo(s) y "
-                        f"{actualizados} expediente(s) completado(s), sin duplicados."
+                        f"{actualizados} expediente(s) actualizado(s) con los datos del padrón, sin duplicados."
                     )
                 except Exception as ex:
                     st.error(f"No fue posible consolidar el padrón: {ex}")
