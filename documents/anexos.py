@@ -253,18 +253,9 @@ pdf.cell(
 pdf.set_font("Helvetica", "", 8)
 
 complementos = [
-    (
-        "Condición de salud y especificación",
-        str(registro.get("Salud", "")),
-    ),
-    (
-        "Seguimiento médico familiar",
-        str(registro.get("Seguimiento_Medico", "")),
-    ),
-    (
-        "Aspecto relevante no contemplado",
-        str(registro.get("Aspecto_Relevante", "")),
-    ),
+    ("Condición de salud y especificación", str(registro.get("Salud", ""))),
+    ("Seguimiento médico familiar", str(registro.get("Seguimiento_Medico", ""))),
+    ("Aspecto relevante no contemplado", str(registro.get("Aspecto_Relevante", ""))),
 ]
 
 for etiqueta, valor in complementos:
