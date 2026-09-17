@@ -210,12 +210,23 @@ def anexo7_pdf(registro):
             pdf.set_y(50)
             encabezado_tabla()
             pdf.set_font("Helvetica", "", 7.3)
+        y_fila = pdf.get_y()
+        x_fila = 12
+        pdf.set_xy(x_fila, y_fila)
         pdf.cell(ancho_numero, altura, str(indice), border=1, align="C")
-        inicio_x, inicio_y = pdf.get_x(), pdf.get_y()
-        pdf.multi_cell(ancho_indicador, 3.5, pregunta, border=1, align="L", max_line_height=3.5, new_x="RIGHT", new_y="TOP")
-        for opcion in ["Siempre", "Muchas veces", "Algunas veces", "Nunca"]:
-            pdf.cell(ancho_escala, altura, "X" if valor == opcion else "", border=1, align="C")
-        pdf.set_y(inicio_y + altura)
+        pdf.set_xy(x_fila + ancho_numero, y_fila)
+        pdf.multi_cell(
+            ancho_indicador, 3.5, pregunta, border=1, align="L",
+            max_line_height=3.5,
+        )
+        x_escala = x_fila + ancho_numero + ancho_indicador
+        for posicion, opcion in enumerate(["Siempre", "Muchas veces", "Algunas veces", "Nunca"]):
+            pdf.set_xy(x_escala + posicion * ancho_escala, y_fila)
+            pdf.cell(
+                ancho_escala, altura, "X" if valor == opcion else "",
+                border=1, align="C",
+            )
+        pdf.set_xy(x_fila, y_fila + altura)
 
     if pdf.get_y() > 225:
         pdf.add_page()
