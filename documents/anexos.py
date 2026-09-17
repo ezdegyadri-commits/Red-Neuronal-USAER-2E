@@ -241,7 +241,12 @@ def anexo7_pdf(registro):
         ("Aspecto relevante no contemplado", str(registro.get("Aspecto_Relevante", ""))),
     ]
     for etiqueta, valor in complementos:
-        pdf.multi_cell(192, 5, f"{etiqueta}: {valor or '____________________________________________________________'}", border=1)
+        pdf.multi_cell(
+    192,
+    5,
+    f"{etiqueta}: {valor or '________________________________________'}",
+    border=1
+)
     pdf.ln(12)
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(0, 5, "____________________________________________", align="C", new_x="LMARGIN", new_y="NEXT")
