@@ -11,7 +11,8 @@ BASE_HEADERS={
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
 'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento'],
 'Usuarios':['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas'],
-'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus']}
+'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus'],
+'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado']}
 INTEGRATED_HEADERS={
 'Expedientes':['ID_Expediente','ID_Alumno','Estatus','Fecha_Apertura','Ultima_Actualizacion'],
 'Relaciones_Expediente':['ID_Relacion','ID_Expediente','ID_Alumno','Tipo_Registro','ID_Registro','Fecha','Estado'],
@@ -27,6 +28,7 @@ def anexo4(): return read('Anexo4_Sugerencias')
 def anexo5(): return read('Anexo5_Eventos')
 def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
+def oficios_comision(): return read('Oficios_Comision')
 
 PADRON_FIELDS = {
  'Nombre_Completo', 'CURP', 'Edad_1_Septiembre', 'Sexo', 'Situacion_Alumno',
@@ -146,6 +148,44 @@ def upsert_alumnos(rows, return_ids=False):
 
  result = (nuevos, actualizados)
  return (*result, ids) if return_ids else result
+
+
+
+def guardar_oficio_comision(data):
+ """Guarda una emisión por clave única y asigna un folio consecutivo."""
+ headers = BASE_HEADERS['Oficios_Comision']
+ ensure_headers('Oficios_Comision', headers)
+ ws = worksheet('Oficios_Comision')
+ values = retry_google(ws.get_all_values)
+ actuales = values[1:] if values else []
+ indice_clave = headers.index('Clave_Operacion')
+ indice_id = headers.index('ID_Oficio')
+ indice_folio = headers.index('Folio')
+
+ clave = str(data.get('Clave_Operacion', '')).strip()
+ for fila in actuales:
+  fila = fila + [''] * max(0, len(headers) - len(fila))
+  if clave and str(fila[indice_clave]).strip() == clave:
+   return {
+    'ID_Oficio': fila[indice_id],
+    'Folio': fila[indice_folio],
+    **data,
+   }
+
+ folios = []
+ for fila in actuales:
+  try:
+   folios.append(int(str(fila[indice_folio]).strip()))
+  except (ValueError, IndexError):
+   pass
+ folio = max(folios) + 1 if folios else 1
+ registro = dict(data)
+ registro['ID_Oficio'] = f"OFI-{folio:03d}"
+ registro['Folio'] = folio
+ registro.setdefault('Estado', 'GENERADO')
+ google_append_rows_raw('Oficios_Comision', [registro])
+ clear_cache('Oficios_Comision')
+ return registro
 
 def repair_nombres_alumnos(rows):
  """Corrige solo nombres cuando un padrón previo guardó el nombre de la escuela."""
