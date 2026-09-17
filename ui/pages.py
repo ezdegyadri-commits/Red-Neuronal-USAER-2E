@@ -11,6 +11,7 @@ from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asigna
 from ai.engine import fallback, generar_sugerencias
 from documents.anexos import anexo3_html, anexo4_html, anexo5_html, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
+from documents.oficios import generar_oficio_comision
 from ui.components import hero, card
 from utils.ids import expediente_id
 from utils.text import normalizar_texto
@@ -1306,17 +1307,121 @@ def documentos_page(df):
                 key=f"descargar_a5_{archivo_base}",
             )
 
+
+def oficios_comision_page():
+    hero(
+        "Oficios de comisión",
+        "Genera tu oficio para las escuelas que tienes asignadas. La emisión se registra para seguimiento de Dirección."
+    )
+    rol = st.session_state.get("rol", "")
+    nombre = st.session_state.get("nombre", "").strip()
+    if "APOYO" not in normalizar_texto(rol):
+        st.error("Este módulo está disponible únicamente para maestras y maestros de apoyo.")
+        return
+
+    escuelas_permitidas = escuelas_asignadas(nombre, rol)
+    if not escuelas_permitidas:
+        st.error("Tu cuenta no tiene escuelas asignadas para generar oficios.")
+        return
+
+    try:
+        escuelas_catalogo = repo.escuelas().fillna("")
+    except Exception:
+        escuelas_catalogo = pd.DataFrame()
+
+    def datos_de_escuela(nombre_escuela):
+        codigo = ESCUELAS_USAER.get(nombre_escuela, "")
+        if escuelas_catalogo.empty:
+            return {}
+        for _, fila in escuelas_catalogo.iterrows():
+            registro = fila.to_dict()
+            if (
+                normalizar_texto(registro.get("Nombre_Escuela", "")) == normalizar_texto(nombre_escuela)
+                or normalizar_texto(registro.get("ID_Escuela", "")) == normalizar_texto(codigo)
+            ):
+                return registro
+        return {}
+
+    with st.form("oficio_comision"):
+        escuela = st.selectbox("Escuela asignada", escuelas_permitidas)
+        fecha_comision = st.date_input("Fecha de la comisión", value=date.today())
+        asunto = st.selectbox(
+            "Asunto",
+            ["COMISIÓN DE SERVICIO", "JUNTA ACADÉMICA", "REUNIÓN DE TRABAJO", "CAPACITACIÓN"],
+        )
+        destino = st.text_input(
+            "Destino o actividad de la comisión",
+            placeholder="Ejemplo: Junta académica convocada por la Dirección de la USAER 02-E",
+        )
+        horario = st.text_input(
+            "Horario o indicación",
+            value="en su horario laboral",
+        )
+        generar = st.form_submit_button("Generar oficio de comisión", type="primary")
+
+    clave_sesion = f"oficio_generado_{normalizar_texto(nombre)}"
+    if generar:
+        if not destino.strip():
+            st.error("Indica el destino o actividad de la comisión.")
+            return
+        datos_escuela = datos_de_escuela(escuela)
+        director = str(
+            datos_escuela.get("Director", datos_escuela.get("Directora", ""))
+        ).strip()
+        clave = json.dumps(
+            [nombre, escuela, str(fecha_comision), asunto, destino.strip(), horario.strip()],
+            ensure_ascii=False,
+        )
+        try:
+            registro = repo.guardar_oficio_comision({
+                "Clave_Operacion": clave,
+                "Fecha_Emision": str(date.today()),
+                "Fecha_Comision": str(fecha_comision),
+                "Escuela": escuela,
+                "ID_Escuela": ESCUELAS_USAER.get(escuela, ""),
+                "Maestra_Apoyo": nombre,
+                "Director_Escuela": director,
+                "Asunto": asunto,
+                "Destino": destino.strip(),
+                "Horario": horario.strip(),
+                "Estado": "GENERADO",
+            })
+            st.session_state[clave_sesion] = registro
+            st.success(f"Oficio registrado con folio {int(registro['Folio']):03d}.")
+        except Exception as ex:
+            st.error(f"No fue posible registrar el oficio: {ex}")
+            return
+
+    registro = st.session_state.get(clave_sesion)
+    if registro:
+        try:
+            pdf = generar_oficio_comision(registro)
+            st.download_button(
+                f"Descargar oficio PDF (folio {int(registro['Folio']):03d})",
+                data=pdf,
+                file_name=f"Oficio_Comision_{int(registro['Folio']):03d}.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True,
+            )
+        except Exception as ex:
+            st.error(f"No fue posible generar el PDF: {ex}")
+
 def direccion_page(df):
     hero(
         "Panel de Dirección",
         "Indicadores y reportes oficiales para la gestión de USAER 02E."
     )
     a3, a4, a5 = repo.anexo3(), repo.anexo4(), repo.anexo5()
-    c = st.columns(4)
+    try:
+        oficios = repo.oficios_comision()
+    except Exception:
+        oficios = pd.DataFrame()
+    c = st.columns(5)
     for box, title, val in zip(
         c,
-        ["Alumnos", "Anexo 3", "Anexo 4", "Eventos"],
-        [len(df), len(a3), len(a4), len(a5)],
+        ["Alumnos", "Anexo 3", "Anexo 4", "Eventos", "Oficios"],
+        [len(df), len(a3), len(a4), len(a5), len(oficios)],
     ):
         with box:
             card(title, val)
@@ -1395,6 +1500,33 @@ def direccion_page(df):
                 )
             except Exception as ex:
                 st.error(f"No se pudo generar el formato de personal: {ex}")
+
+
+    st.divider()
+    st.markdown("### Control de oficios de comisión")
+    st.caption(
+        "Registro central de los oficios emitidos por maestras y maestros de apoyo. "
+        "Permite supervisar folios, fechas y escuelas sin pedir reportes adicionales."
+    )
+    if oficios.empty:
+        st.info("Aún no se han generado oficios de comisión.")
+    else:
+        columnas_control = [
+            "Folio", "Fecha_Emision", "Fecha_Comision", "Maestra_Apoyo",
+            "Escuela", "Asunto", "Destino", "Horario", "Estado",
+        ]
+        disponibles = [columna for columna in columnas_control if columna in oficios.columns]
+        control = oficios[disponibles].copy()
+        if "Fecha_Emision" in control.columns:
+            control = control.sort_values("Fecha_Emision", ascending=False)
+        st.dataframe(control, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Descargar concentrado de oficios (CSV)",
+            data=control.to_csv(index=False).encode("utf-8-sig"),
+            file_name="Control_oficios_comision_USAER_02E.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
 def visitas_page(df):
     hero(
