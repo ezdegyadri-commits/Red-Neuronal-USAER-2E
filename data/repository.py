@@ -32,8 +32,12 @@ def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
 def oficios_comision(): return read('Oficios_Comision')
 def configuracion_oficios():
- ensure_headers('Configuracion_Oficios', BASE_HEADERS['Configuracion_Oficios'])
- return read('Configuracion_Oficios')
+ """Lee la configuración sin validar la hoja en cada navegación."""
+ try:
+  return read('Configuracion_Oficios')
+ except Exception:
+  ensure_headers('Configuracion_Oficios', BASE_HEADERS['Configuracion_Oficios'])
+  return read('Configuracion_Oficios')
 def configuracion_oficios_actual():
  configuracion = configuracion_oficios()
  return configuracion.tail(1).iloc[0].to_dict() if not configuracion.empty else {}
