@@ -172,7 +172,7 @@ def anexo7_pdf(registro):
     pdf.set_font("Helvetica", "", 9)
     pdf.multi_cell(
         0, 4.5,
-        "Marca con una paloma (✓) la frecuencia con la que el alumno se desempeña en cada uno de los siguientes aspectos.",
+        "Marca con una X la frecuencia con la que el alumno se desempeña en cada uno de los siguientes aspectos.",
     )
     pdf.ln(1)
 
