@@ -235,57 +235,57 @@ def anexo7_pdf(registro):
             )
         pdf.set_xy(x_fila, y_fila + altura)
 
-    if pdf.get_y() > 225:
+        if pdf.get_y() > 225:
         pdf.add_page()
         pdf.set_y(50)
 
-pdf.ln(4)
-pdf.set_font("Helvetica", "B", 9)
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 9)
 
-pdf.cell(
-    0,
-    5,
-    "Datos complementarios",
-    new_x="LMARGIN",
-    new_y="NEXT",
-)
-
-pdf.set_font("Helvetica", "", 8)
-
-complementos = [
-    ("Condición de salud y especificación", str(registro.get("Salud", ""))),
-    ("Seguimiento médico familiar", str(registro.get("Seguimiento_Medico", ""))),
-    ("Aspecto relevante no contemplado", str(registro.get("Aspecto_Relevante", ""))),
-]
-
-for etiqueta, valor in complementos:
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(
-        192,
+    pdf.cell(
+        0,
         5,
-        f"{etiqueta}: {valor or '________________________________________'}",
-        border=1,
+        "Datos complementarios",
         new_x="LMARGIN",
         new_y="NEXT",
     )
 
-pdf.ln(12)
-pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("Helvetica", "", 8)
 
-pdf.cell(
-    0,
-    5,
-    "____________________________________________",
-    align="C",
-    new_x="LMARGIN",
-    new_y="NEXT",
-)
+    complementos = [
+        ("Condición de salud y especificación", str(registro.get("Salud", ""))),
+        ("Seguimiento médico familiar", str(registro.get("Seguimiento_Medico", ""))),
+        ("Aspecto relevante no contemplado", str(registro.get("Aspecto_Relevante", ""))),
+    ]
 
-pdf.cell(
-    0,
-    5,
-    "Docente de grupo regular - Nombre y firma",
-    align="C",
-)
+    for etiqueta, valor in complementos:
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(
+            192,
+            5,
+            f"{etiqueta}: {valor or '________________________________________'}",
+            border=1,
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
 
-return bytes(pdf.output())
+    pdf.ln(12)
+    pdf.set_font("Helvetica", "", 9)
+
+    pdf.cell(
+        0,
+        5,
+        "____________________________________________",
+        align="C",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+
+    pdf.cell(
+        0,
+        5,
+        "Docente de grupo regular - Nombre y firma",
+        align="C",
+    )
+
+    return bytes(pdf.output())
