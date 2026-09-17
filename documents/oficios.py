@@ -1,5 +1,6 @@
 from datetime import date
 from pathlib import Path
+import unicodedata
 
 from fpdf import FPDF
 
@@ -9,6 +10,85 @@ MESES = (
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 )
 RAIZ = Path(__file__).resolve().parents[1]
+
+
+DIRECTORIO_OFICIOS = {
+    "DAMIAN CARMONA": {
+        "Director_Escuela": "Mtra. Maribel Vargas Arana",
+        "Nivel_Escuela": "primaria",
+    },
+    "ICHCAANZIHO": {
+        "Director_Escuela": "Mtra. Rennaty Maribel Puga Jiménez",
+        "Nivel_Escuela": "primaria",
+    },
+    "GREGORIO TORRES QUINTERO": {
+        "Director_Escuela": "Mtro. Elmer Ariel Ontiveros Requena",
+        "Nivel_Escuela": "primaria",
+    },
+    "REMIGIO AGUILAR SOSA": {
+        "Director_Escuela": "Mtro. Carlos Esteban Heredia G. Cantón",
+        "Nivel_Escuela": "primaria",
+    },
+    "ELVIRA PARRA AVILA": {
+        "Director_Escuela": "Mtro. Manuel Jesús Alcocer Vázquez",
+        "Nivel_Escuela": "primaria",
+    },
+    "MANUEL SARRADO": {
+        "Director_Escuela": "Mtro. José Alberto Reyna Martínez",
+        "Nivel_Escuela": "primaria",
+    },
+    "DOMINGO SOLIS RODRIGUEZ": {
+        "Director_Escuela": "Mtra. Erika Basto Ek",
+        "Nivel_Escuela": "primaria",
+    },
+    "QUINTANA ROO": {
+        "Director_Escuela": "Mtro. Jorge Adrián Cetina Cach",
+        "Nivel_Escuela": "primaria",
+    },
+}
+
+
+def _normalizar(nombre):
+    texto = unicodedata.normalize("NFD", str(nombre or ""))
+    texto = "".join(caracter for caracter in texto if unicodedata.category(caracter) != "Mn")
+    return " ".join(texto.upper().replace("0", "O").split())
+
+
+def datos_oficio_escuela(nombre_escuela, catalogo=None):
+    """Combina el directorio institucional y, si existe, el catálogo de escuelas."""
+    datos = dict(DIRECTORIO_OFICIOS.get(_normalizar(nombre_escuela), {}))
+    if catalogo:
+        datos.update({clave: valor for clave, valor in catalogo.items() if str(valor).strip()})
+    return datos
+
+
+def es_mujer(nombre):
+    texto = _normalizar(nombre)
+    if any(marca in texto for marca in ("MTRA", "MAESTRA", "PROFRA", "LICDA")):
+        return True
+    nombres = (
+        "MARIBEL", "RENNATY", "ERIKA", "CINDY", "MARYCRUZ", "MARIA",
+        "CECILIA", "DOLORES", "DIANELY", "ZUEMMY", "ELMY", "ABRIL",
+    )
+    return any(f" {nombre}" in f" {texto}" for nombre in nombres)
+
+
+def cargo_direccion(nombre):
+    return "Directora" if es_mujer(nombre) else "Director"
+
+
+def cargo_apoyo(nombre):
+    return "maestra" if es_mujer(nombre) else "maestro"
+
+
+def nombre_con_tratamiento(nombre):
+    nombre = str(nombre or "").strip()
+    if not nombre:
+        return ""
+    titulo = _normalizar(nombre)
+    if any(marca in titulo for marca in ("MTRA", "MTRO", "MAESTRA", "MAESTRO", "PSIC", "LIC", "PROF")):
+        return nombre
+    return f"{'Mtra.' if es_mujer(nombre) else 'Mtro.'} {nombre}"
 
 
 def _fecha_larga(fecha):
@@ -23,11 +103,6 @@ def _fecha_larga(fecha):
 def _archivo(nombre):
     ruta = RAIZ / nombre
     return str(ruta) if ruta.exists() else None
-
-
-def cargo_direccion(nombre):
-    nombre = str(nombre or "").upper()
-    return "Directora" if "MTRA" in nombre or "MAESTRA" in nombre else "Director"
 
 
 class OficioInstitucional(FPDF):
@@ -58,10 +133,12 @@ def generar_oficio_comision(registro):
     fecha_comision = registro.get("Fecha_Comision", "")
     folio = int(registro.get("Folio", 0) or 0)
     escuela = str(registro.get("Escuela", "")).strip()
-    directora = str(registro.get("Director_Escuela", "")).strip()
-    if not directora:
-        directora = f"{cargo_direccion('')} de la escuela"
-    responsable = str(registro.get("Maestra_Apoyo", "")).upper()
+    director = str(registro.get("Director_Escuela", "")).strip()
+    if not director:
+        director = "Dirección de la escuela"
+    nivel = str(registro.get("Nivel_Escuela", "primaria")).strip().lower() or "primaria"
+    responsable = nombre_con_tratamiento(registro.get("Maestra_Apoyo", ""))
+    articulo_responsable = "la" if es_mujer(responsable) else "el"
     asunto = str(registro.get("Asunto", "COMISIÓN")).upper()
     destino = str(registro.get("Destino", "")).strip()
     horario = str(registro.get("Horario", "")).strip() or "en su horario laboral"
@@ -78,9 +155,9 @@ def generar_oficio_comision(registro):
     pdf.set_font("Helvetica", style="B", size=11)
     pdf.cell(0, 6, f"Asunto: {asunto}", align="R", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
-    pdf.cell(0, 6, directora, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, director, new_x="LMARGIN", new_y="NEXT")
     pdf.cell(
-        0, 6, f"{cargo_direccion(directora)} de la escuela primaria",
+        0, 6, f"{cargo_direccion(director)} de la escuela {nivel}",
         new_x="LMARGIN", new_y="NEXT",
     )
     pdf.cell(0, 6, f'"{escuela}"', new_x="LMARGIN", new_y="NEXT")
@@ -89,7 +166,7 @@ def generar_oficio_comision(registro):
 
     pdf.set_font("Helvetica", size=11)
     texto = (
-        f"Por este medio le comunico que la maestra de apoyo {responsable} "
+        f"Por este medio le comunico que {articulo_responsable} {cargo_apoyo(responsable)} de apoyo {responsable} "
         f"ha sido comisionada para {destino} el día {_fecha_larga(fecha_comision)}, "
         f"{horario}. La comisión se realiza para atender actividades propias del "
         "servicio de apoyo de la USAER 02-E en la escuela a su cargo.\n\n"
