@@ -172,17 +172,18 @@ def anexo7_pdf(registro):
     pdf.cell(
     0,
     5,
-    "Instrucción:",
+    "Datos Complementarios:",
     new_x="LMARGIN",
     new_y="NEXT"
 )
     pdf.set_font("Helvetica", "", 9)
     pdf.multi_cell(
-        0, 4.5,
-        "Marca con una X la frecuencia con la que el alumno se desempeña en cada uno de los siguientes aspectos.",
-    )
-    pdf.ln(1)
-
+    0,
+    4.5,
+    "Marca con una X la frecuencia con la que el alumno se desempeña en cada uno de los siguientes aspectos.",
+    new_x="LMARGIN",
+    new_y="NEXT",
+)
     escala = ["Siempre", "Muchas\nveces", "Algunas\nveces", "Nunca"]
     ancho_numero, ancho_indicador = 8, 92
     ancho_escala = (192 - ancho_numero - ancho_indicador) / 4
@@ -240,13 +241,16 @@ def anexo7_pdf(registro):
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(
-    0,
-    5,
-    "Datos complementarios",
-    new_x="LMARGIN",
-    new_y="NEXT"
-)
-    pdf.set_font("Helvetica", "", 8)
+    for etiqueta, valor in complementos:
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(
+        192,
+        5,
+        f"{etiqueta}: {valor or '________________________________________'}",
+        border=1,
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
     complementos = [
         ("Condición de salud y especificación", str(registro.get("Salud", ""))),
         ("Seguimiento médico familiar", str(registro.get("Seguimiento_Medico", ""))),
