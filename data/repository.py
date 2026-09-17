@@ -12,7 +12,8 @@ BASE_HEADERS={
 'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento'],
 'Usuarios':['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas'],
 'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus'],
-'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado']}
+'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado'],
+'Anexo7_Derivacion':['ID_Anexo7','Fecha','ID_Alumno','Escuela','Docente_Regular','Fecha_Nacimiento','Respuestas_JSON','Salud','Seguimiento_Medico','Aspecto_Relevante','Elaborado_Por']}
 INTEGRATED_HEADERS={
 'Expedientes':['ID_Expediente','ID_Alumno','Estatus','Fecha_Apertura','Ultima_Actualizacion'],
 'Relaciones_Expediente':['ID_Relacion','ID_Expediente','ID_Alumno','Tipo_Registro','ID_Registro','Fecha','Estado'],
@@ -29,6 +30,7 @@ def anexo5(): return read('Anexo5_Eventos')
 def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
 def oficios_comision(): return read('Oficios_Comision')
+def anexo7(): return read('Anexo7_Derivacion')
 
 PADRON_FIELDS = {
  'Nombre_Completo', 'CURP', 'Edad_1_Septiembre', 'Sexo', 'Situacion_Alumno',
@@ -219,6 +221,9 @@ def save_anexo4(data):
  data=dict(data); data.setdefault('ID_Anexo4',next_numeric_id('Anexo4_Sugerencias','ID_Anexo4','AN4')); append_dict('Anexo4_Sugerencias',data); return data['ID_Anexo4']
 def save_anexo5(data):
  data=dict(data); data.setdefault('ID_Evento',next_numeric_id('Anexo5_Eventos','ID_Evento','AN5')); append_dict('Anexo5_Eventos',data); return data['ID_Evento']
+def save_anexo7(data):
+ ensure_headers('Anexo7_Derivacion', BASE_HEADERS['Anexo7_Derivacion'])
+ data=dict(data); data.setdefault('ID_Anexo7',next_numeric_id('Anexo7_Derivacion','ID_Anexo7','AN7')); append_dict('Anexo7_Derivacion',data); return data['ID_Anexo7']
 def save_visita(data):
  data=dict(data); data.setdefault('ID_Visita',next_numeric_id('Registro_Visitas','ID_Visita','VIS')); append_dict('Registro_Visitas',data); return data['ID_Visita']
 
