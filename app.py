@@ -4,7 +4,7 @@ from data import repository as repo
 from services.expedientes import alumnos_visibles
 from ui.theme import inject
 from ui.auth import login, logout
-from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page, documentos_page, direccion_page, visitas_page, oficios_comision_page
+from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page, documentos_page, direccion_page, visitas_page, oficios_comision_page, derivacion_page
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -28,8 +28,8 @@ with st.sidebar:
     st.divider()
     menu=["Inicio","Expedientes","Evaluación BAP","Eventos significativos","Documentos"]
     if "DIRECTOR" in rol.upper(): menu += ["Panel de Dirección","Constancias de visita","Alta de alumnos"]
-    elif "APOYO" in rol.upper(): menu += ["Alta de alumnos", "Oficios de comisión"]
-    else: menu += ["Constancias de visita"]
+    elif "APOYO" in rol.upper(): menu += ["Alta de alumnos", "Oficios de comisión", "Anexo VII Derivación"]
+    else: menu += ["Constancias de visita", "Anexo VII Derivación"]
     page=st.radio("Navegación",menu,label_visibility="collapsed")
 
 try:
@@ -46,3 +46,4 @@ elif page=="Panel de Dirección": direccion_page(authorized)
 elif page=="Constancias de visita": visitas_page(authorized)
 elif page=="Alta de alumnos": alta_page(authorized)
 elif page=="Oficios de comisión": oficios_comision_page()
+elif page=="Anexo VII Derivación": derivacion_page(authorized)
