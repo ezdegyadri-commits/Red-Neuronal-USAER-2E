@@ -9,7 +9,7 @@ from services.expedientes import alumnos_visibles, expediente, alumno
 from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
 from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
 from ai.engine import fallback, generar_sugerencias
-from documents.anexos import anexo3_html, anexo4_html, anexo5_html, anexo7_html, header_b64
+from documents.anexos import anexo3_html, anexo4_html, anexo5_html, anexo7_html, anexo7_pdf, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from documents.oficios import generar_oficio_comision
 from ui.components import hero, card
@@ -1450,7 +1450,12 @@ def derivacion_page(df):
             folio = repo.save_anexo7(registro)
             st.success(f"Anexo VII guardado: {folio}")
             nombre_archivo = escuela_seleccionada.replace(" ", "_")
-            st.download_button("Descargar Anexo VII imprimible", anexo7_html(plantilla_vacia, registro), f"Anexo_VII_{nombre_archivo}.html", "text/html")
+            st.download_button(
+                "Descargar Anexo VII oficial en PDF (carta)",
+                anexo7_pdf(registro),
+                f"Anexo_VII_{nombre_archivo}.pdf",
+                "application/pdf",
+            )
         except Exception as ex:
             st.error(f"No fue posible guardar el Anexo VII: {ex}")
 
