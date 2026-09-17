@@ -1,7 +1,9 @@
 import html
 import base64
 import json
+from io import BytesIO
 from pathlib import Path
+from fpdf import FPDF
 from config.settings import SERVICE_NAME, SCHOOL_YEAR
 
 
@@ -108,3 +110,120 @@ def anexo7_html(alumno, registro):
     <table><tr><th>No.</th><th>Preguntas</th><th>Frecuencia</th></tr>{tabla}</table>
     <p><b>Condición de salud:</b> {html.escape(str(registro.get('Salud','')))}<br><b>Seguimiento médico:</b> {html.escape(str(registro.get('Seguimiento_Medico','')))}<br><b>Aspecto relevante:</b> {html.escape(str(registro.get('Aspecto_Relevante','')))}</p>
     <div class='firma'>_________________________________<br>Docente de grupo regular<br>Nombre y firma</div></body></html>"""
+
+
+def anexo7_pdf(registro):
+    """Genera el Anexo VII oficial en PDF carta vertical para impresión."""
+    try:
+        respuestas = json.loads(str(registro.get("Respuestas_JSON", "[]")) or "[]")
+    except (TypeError, json.JSONDecodeError):
+        respuestas = []
+
+    class AnexoVII(FPDF):
+        def header(self):
+            encabezado = header_b64()
+            if encabezado:
+                try:
+                    contenido = encabezado.split(",", 1)[1]
+                    self.image(
+                        BytesIO(base64.b64decode(contenido)),
+                        x=12, y=8, w=192,
+                    )
+                except Exception:
+                    pass
+            self.set_y(38)
+            self.set_font("Helvetica", "B", 14)
+            self.set_text_color(247, 127, 35)
+            self.cell(0, 7, "Anexo VII. Hoja de Derivación.", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.set_text_color(0, 0, 0)
+
+        def footer(self):
+            self.set_y(-10)
+            self.set_font("Helvetica", "", 7)
+            self.cell(0, 4, "USAER 02E - Anexo VII. Hoja de Derivación", align="C")
+
+    pdf = AnexoVII(orientation="P", unit="mm", format="letter")
+    pdf.set_margins(12, 12, 12)
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+    pdf.set_y(50)
+
+    escuela = str(registro.get("Escuela", "")).strip()
+    fecha = str(registro.get("Fecha", "")).strip()
+    docente = str(registro.get("Docente_Regular", "")).strip()
+
+    x, y, w, h = 12, pdf.get_y(), 192, 43
+    pdf.rect(x, y, w, h)
+    pdf.set_font("Helvetica", "", 9)
+    lineas = [
+        f"Nombre del alumno: _______________________________________    Fecha de nacimiento: ______________",
+        f"Escuela: {escuela[:55]:<55}    Edad: ____  Grado: ____  Grupo: ____",
+        "Inscrito a la escuela desde: ____________  Atendido por usted desde: ___________________________",
+        "Ha repetido algún curso escolar: ________  ¿Cuál? ______________________________________________",
+        f"Nombre del docente: {docente[:67]}",
+        f"Fecha de aplicación: {fecha:<25}  Curso escolar: ______________________________________________",
+    ]
+    for linea in lineas:
+        pdf.set_x(x + 2)
+        pdf.cell(w - 4, 6.5, linea, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_y(y + h + 3)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 5, "Instrucción:")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(
+        0, 4.5,
+        "Marca con una paloma (✓) la frecuencia con la que el alumno se desempeña en cada uno de los siguientes aspectos.",
+    )
+    pdf.ln(1)
+
+    escala = ["Siempre", "Muchas\nveces", "Algunas\nveces", "Nunca"]
+    ancho_numero, ancho_indicador = 8, 92
+    ancho_escala = (192 - ancho_numero - ancho_indicador) / 4
+
+    def encabezado_tabla():
+        pdf.set_font("Helvetica", "B", 8)
+        altura = 9
+        pdf.cell(ancho_numero, altura, "No.", border=1, align="C")
+        pdf.cell(ancho_indicador, altura, "Aspectos a observar", border=1, align="C")
+        for opcion in escala:
+            pdf.multi_cell(ancho_escala, altura / 2, opcion, border=1, align="C", max_line_height=altura / 2, new_x="RIGHT", new_y="TOP")
+        pdf.ln(altura)
+
+    encabezado_tabla()
+    pdf.set_font("Helvetica", "", 7.3)
+    for indice, respuesta in enumerate(respuestas, start=1):
+        pregunta = str(respuesta.get("pregunta", "")).strip()
+        valor = str(respuesta.get("valor", "")).strip()
+        lineas_pregunta = max(1, int(pdf.get_string_width(pregunta) / (ancho_indicador - 3)) + 1)
+        altura = max(6.2, lineas_pregunta * 3.5)
+        if pdf.get_y() + altura > 263:
+            pdf.add_page()
+            pdf.set_y(50)
+            encabezado_tabla()
+            pdf.set_font("Helvetica", "", 7.3)
+        pdf.cell(ancho_numero, altura, str(indice), border=1, align="C")
+        inicio_x, inicio_y = pdf.get_x(), pdf.get_y()
+        pdf.multi_cell(ancho_indicador, 3.5, pregunta, border=1, align="L", max_line_height=3.5, new_x="RIGHT", new_y="TOP")
+        for opcion in ["Siempre", "Muchas veces", "Algunas veces", "Nunca"]:
+            pdf.cell(ancho_escala, altura, "X" if valor == opcion else "", border=1, align="C")
+        pdf.set_y(inicio_y + altura)
+
+    if pdf.get_y() > 225:
+        pdf.add_page()
+        pdf.set_y(50)
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(0, 5, "Datos complementarios")
+    pdf.set_font("Helvetica", "", 8)
+    complementos = [
+        ("Condición de salud y especificación", str(registro.get("Salud", ""))),
+        ("Seguimiento médico familiar", str(registro.get("Seguimiento_Medico", ""))),
+        ("Aspecto relevante no contemplado", str(registro.get("Aspecto_Relevante", ""))),
+    ]
+    for etiqueta, valor in complementos:
+        pdf.multi_cell(192, 5, f"{etiqueta}: {valor or '____________________________________________________________'}", border=1)
+    pdf.ln(12)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 5, "____________________________________________", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, "Docente de grupo regular - Nombre y firma", align="C")
+    return bytes(pdf.output())
