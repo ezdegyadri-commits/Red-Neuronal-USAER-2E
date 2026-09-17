@@ -4,7 +4,9 @@ from data import repository as repo
 from services.expedientes import alumnos_visibles
 from ui.theme import inject
 from ui.auth import login, logout
-from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page, documentos_page, direccion_page, visitas_page, oficios_comision_page, derivacion_page
+from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page, documentos_page, direccion_page, visitas_page, derivacion_page
+from ui.oficios import oficios_comision_page
+from ui.direccion_oficios import configuracion_oficios_direccion
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -42,7 +44,9 @@ elif page=="Expedientes": expedientes_page(authorized)
 elif page=="Evaluación BAP": bap_page(authorized)
 elif page=="Eventos significativos": eventos_page(authorized)
 elif page=="Documentos": documentos_page(authorized)
-elif page=="Panel de Dirección": direccion_page(authorized)
+elif page=="Panel de Dirección":
+    direccion_page(authorized)
+    configuracion_oficios_direccion()
 elif page=="Constancias de visita": visitas_page(authorized)
 elif page=="Alta de alumnos": alta_page(authorized)
 elif page=="Oficios de comisión": oficios_comision_page()
