@@ -185,14 +185,18 @@ def anexo7_pdf(registro):
         pdf.set_font("Helvetica", "B", 8)
         altura = 9
         y_inicio = pdf.get_y()
+        x_inicio = 12
+        pdf.set_xy(x_inicio, y_inicio)
         pdf.cell(ancho_numero, altura, "No.", border=1, align="C")
         pdf.cell(ancho_indicador, altura, "Aspectos a observar", border=1, align="C")
-        for opcion in escala:
+        x_escala = x_inicio + ancho_numero + ancho_indicador
+        for indice, opcion in enumerate(escala):
+            pdf.set_xy(x_escala + indice * ancho_escala, y_inicio)
             pdf.multi_cell(
                 ancho_escala, altura / 2, opcion, border=1, align="C",
-                max_line_height=altura / 2, new_x="RIGHT", new_y="TOP",
+                max_line_height=altura / 2,
             )
-        pdf.set_xy(12, y_inicio + altura)
+        pdf.set_xy(x_inicio, y_inicio + altura)
 
     encabezado_tabla()
     pdf.set_font("Helvetica", "", 7.3)
