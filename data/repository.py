@@ -13,6 +13,7 @@ BASE_HEADERS={
 'Usuarios':['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas'],
 'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus'],
 'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado'],
+'Configuracion_Oficios':['ID_Configuracion','Fecha_Comision','Asunto','Destino','Horario','Actualizado_Por','Actualizado_En'],
 'Anexo7_Derivacion':['ID_Anexo7','Fecha','ID_Alumno','Escuela','Docente_Regular','Fecha_Nacimiento','Respuestas_JSON','Salud','Seguimiento_Medico','Aspecto_Relevante','Elaborado_Por']}
 INTEGRATED_HEADERS={
 'Expedientes':['ID_Expediente','ID_Alumno','Estatus','Fecha_Apertura','Ultima_Actualizacion'],
@@ -30,6 +31,12 @@ def anexo5(): return read('Anexo5_Eventos')
 def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
 def oficios_comision(): return read('Oficios_Comision')
+def configuracion_oficios():
+ ensure_headers('Configuracion_Oficios', BASE_HEADERS['Configuracion_Oficios'])
+ return read('Configuracion_Oficios')
+def configuracion_oficios_actual():
+ configuracion = configuracion_oficios()
+ return configuracion.tail(1).iloc[0].to_dict() if not configuracion.empty else {}
 def anexo7(): return read('Anexo7_Derivacion')
 
 PADRON_FIELDS = {
@@ -152,6 +159,20 @@ def upsert_alumnos(rows, return_ids=False):
  return (*result, ids) if return_ids else result
 
 
+
+
+def guardar_configuracion_oficios(data):
+ """Registra la configuración vigente definida exclusivamente por Dirección."""
+ headers = BASE_HEADERS['Configuracion_Oficios']
+ ensure_headers('Configuracion_Oficios', headers)
+ registro = dict(data)
+ registro.setdefault(
+  'ID_Configuracion',
+  next_numeric_id('Configuracion_Oficios', 'ID_Configuracion', 'CFG-OFI')
+ )
+ append_dict('Configuracion_Oficios', registro)
+ clear_cache('Configuracion_Oficios')
+ return registro
 
 def guardar_oficio_comision(data):
  """Guarda una emisión por clave única y asigna un folio consecutivo."""
