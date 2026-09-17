@@ -82,3 +82,29 @@ def anexo3_html(alumno, rows):
         out.append("</table></section><div style='page-break-after:always'></div>")
     out.append("</body></html>")
     return "".join(out)
+
+
+def anexo7_html(alumno, registro):
+    """Hoja de derivación imprimible con los indicadores capturados."""
+    respuestas = json.loads(str(registro.get("Respuestas_JSON", "[]")) or "[]")
+    filas = []
+    for indice, respuesta in enumerate(respuestas, start=1):
+        pregunta = html.escape(str(respuesta.get("pregunta", "")))
+        valor = html.escape(str(respuesta.get("valor", "")))
+        filas.append(f"<tr><td>{indice}</td><td>{pregunta}</td><td>{valor}</td></tr>")
+    tabla = "".join(filas)
+    head = header_b64()
+    return f"""<html><head><meta charset='UTF-8'><style>
+    @page{{size:letter portrait;margin:14mm}} body{{font-family:Arial,sans-serif;color:#111;font-size:10pt}}
+    img{{max-width:100%}} h2{{text-align:center}} table{{width:100%;border-collapse:collapse}}
+    th,td{{border:1px solid #111;padding:5px;vertical-align:top}} th{{text-align:center}}
+    .datos td{{border:0;padding:2px}} .firma{{margin-top:28px;text-align:right}}
+    </style></head><body><div style='text-align:center'><img src='{head}'></div>
+    <h2>Anexo VII. Hoja de Derivación.</h2>
+    <table class='datos'><tr><td><b>Nombre del alumno:</b> {html.escape(str(alumno.get('Nombre_Completo','')))}</td><td><b>Fecha de nacimiento:</b> {html.escape(str(registro.get('Fecha_Nacimiento','')))}</td></tr>
+    <tr><td><b>Escuela:</b> {html.escape(str(registro.get('Escuela','')))}</td><td><b>Edad:</b> {html.escape(str(alumno.get('Edad_1_Septiembre','')))} &nbsp; <b>Grado:</b> {html.escape(str(alumno.get('Grado','')))} &nbsp; <b>Grupo:</b> {html.escape(str(alumno.get('Grupo','')))}</td></tr>
+    <tr><td><b>Docente:</b> {html.escape(str(registro.get('Docente_Regular','')))}</td><td><b>Fecha de aplicación:</b> {html.escape(str(registro.get('Fecha','')))}</td></tr></table>
+    <p><b>Instrucción:</b> Marca la frecuencia con la que el alumno se desempeña en cada indicador.</p>
+    <table><tr><th>No.</th><th>Preguntas</th><th>Frecuencia</th></tr>{tabla}</table>
+    <p><b>Condición de salud:</b> {html.escape(str(registro.get('Salud','')))}<br><b>Seguimiento médico:</b> {html.escape(str(registro.get('Seguimiento_Medico','')))}<br><b>Aspecto relevante:</b> {html.escape(str(registro.get('Aspecto_Relevante','')))}</p>
+    <div class='firma'>_________________________________<br>Docente de grupo regular<br>Nombre y firma</div></body></html>"""
