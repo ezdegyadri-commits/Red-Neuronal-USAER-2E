@@ -1414,16 +1414,23 @@ def derivacion_page(df):
     if not any(clave in rol for clave in ("APOYO", "PSICOLOG", "COMUNICACI", "TRABAJO")):
         st.error("Este formato está disponible para maestras de apoyo y equipo de apoyo.")
         return
-    if df.empty:
-        st.warning("No hay alumnos disponibles en tu ámbito de atención.")
+    nombre_usuario = st.session_state.get("nombre", "")
+    escuelas_permitidas = escuelas_asignadas(
+        nombre_usuario, st.session_state.get("rol", "")
+    )
+    if not escuelas_permitidas:
+        st.error("No tienes escuelas asignadas para preparar esta hoja de derivación.")
         return
+
+    st.caption("Selecciona la escuela atendida. El formato queda en blanco para que el docente regular lo complete a mano.")
+    escuela_seleccionada = st.selectbox(
+        "Escuela", escuelas_permitidas, key="anexo7_escuela"
+    )
+
     items = [
         "Interactúa con las personas de acuerdo con las normas de convivencia social", "Respeta turnos en conversaciones, juegos y tareas", "Colabora de manera proactiva en tareas de equipo", "Tiene iniciativa y trabaja organizadamente", "Mantiene la calma ante la frustración", "Cumple con trabajos y tareas", "Sigue el ritmo de trabajo de sus compañeros", "Mejora su desempeño ante situaciones diversas", "Inicia, desarrolla y termina la tarea", "Mantiene la atención durante una actividad", "Retiene información con facilidad", "Da soluciones a situaciones o problemas", "Propone ideas diferentes", "Elabora tareas de manera minuciosa", "Resuelve problemas cotidianos", "Lee conforme al grado que cursa", "Escribe conforme al grado que cursa", "Maneja competencia matemática conforme al grado", "Asiste puntualmente", "Asiste limpio y arreglado", "Cumple con tarea para casa", "Cuenta con materiales escolares", "La familia asiste cuando se le solicita", "La familia sigue indicaciones", "Habla con claridad", "Comunica lo que quiere o necesita", "Entiende instrucciones verbales", "Utiliza vocabulario acorde con su edad", "Utiliza vocabulario superior al esperado", "Estructura lenguaje acorde a su edad", "Estructura lenguaje superior a lo esperado", "Tiene desempeño sobresaliente", "Realiza motricidad gruesa acorde a su edad", "Presenta actividad motora excesiva", "Realiza motricidad fina acorde a su edad", "Se ubica en el espacio", "Asiste regularmente a la escuela",
     ]
-    opciones = df[["ID_Alumno","Nombre_Completo"]].drop_duplicates().sort_values("Nombre_Completo")
     with st.form("anexo7_form"):
-        etiqueta = st.selectbox("Alumno", opciones["Nombre_Completo"].tolist())
-        alumno_registro = opciones.loc[opciones["Nombre_Completo"] == etiqueta].iloc[0].to_dict()
         fecha = st.date_input("Fecha de aplicación", value=date.today())
         docente = st.text_input("Docente de grupo regular")
         respuestas = []
@@ -1434,12 +1441,16 @@ def derivacion_page(df):
         aspecto = st.text_area("Aspecto relevante no contemplado")
         guardar = st.form_submit_button("Guardar y preparar Anexo VII", type="primary")
     if guardar:
-        escuela = str(alumno_registro.get("Nombre_Escuela") or alumno_registro.get("ID_Escuela") or "")
-        registro = {"Fecha":str(fecha),"ID_Alumno":alumno_registro["ID_Alumno"],"Escuela":escuela,"Docente_Regular":docente,"Fecha_Nacimiento":"","Respuestas_JSON":json.dumps(respuestas,ensure_ascii=False),"Salud":salud,"Seguimiento_Medico":seguimiento,"Aspecto_Relevante":aspecto,"Elaborado_Por":st.session_state.get("nombre","")}
+        registro = {"Fecha":str(fecha),"ID_Alumno":"","Escuela":escuela_seleccionada,"Docente_Regular":docente,"Fecha_Nacimiento":"","Respuestas_JSON":json.dumps(respuestas,ensure_ascii=False),"Salud":salud,"Seguimiento_Medico":seguimiento,"Aspecto_Relevante":aspecto,"Elaborado_Por":st.session_state.get("nombre","")}
+        plantilla_vacia = {
+            "Nombre_Completo": "", "Edad_1_Septiembre": "",
+            "Grado": "", "Grupo": ""
+        }
         try:
             folio = repo.save_anexo7(registro)
             st.success(f"Anexo VII guardado: {folio}")
-            st.download_button("Descargar Anexo VII imprimible", anexo7_html(alumno_registro, registro), f"Anexo_VII_{alumno_registro['ID_Alumno']}.html", "text/html")
+            nombre_archivo = escuela_seleccionada.replace(" ", "_")
+            st.download_button("Descargar Anexo VII imprimible", anexo7_html(plantilla_vacia, registro), f"Anexo_VII_{nombre_archivo}.html", "text/html")
         except Exception as ex:
             st.error(f"No fue posible guardar el Anexo VII: {ex}")
 
