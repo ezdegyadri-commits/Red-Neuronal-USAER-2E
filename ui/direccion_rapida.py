@@ -2,6 +2,7 @@ import streamlit as st
 
 from data import repository as repo
 from documents.reportes import generar_formato_personal, generar_padron_usaer
+from services.padron_oficial import vista_padron_oficial
 from ui.components import hero, card
 
 
@@ -20,6 +21,9 @@ def direccion_page_rapida(_df=None):
                 alumnos = repo.alumnos()
                 escuelas = repo.escuelas()
                 st.session_state["padron_usaer_archivo"] = generar_padron_usaer(
+                    alumnos, escuelas
+                )
+                st.session_state["padron_usaer_vista"] = vista_padron_oficial(
                     alumnos, escuelas
                 )
             except Exception as ex:
@@ -45,6 +49,16 @@ def direccion_page_rapida(_df=None):
 
     padron = st.session_state.get("padron_usaer_archivo")
     if padron:
+        st.markdown("### Padrón que se entregará a la zona")
+        st.caption(
+            "La vista contiene únicamente los campos del formato oficial; "
+            "la información interna de los expedientes se conserva sin cambios."
+        )
+        st.dataframe(
+            st.session_state.get("padron_usaer_vista"),
+            use_container_width=True,
+            hide_index=True,
+        )
         st.download_button(
             "Descargar padrón USAER",
             data=padron,

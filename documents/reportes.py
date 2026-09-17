@@ -7,6 +7,7 @@ import unicodedata
 import pandas as pd
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from services.padron_oficial import vista_padron_oficial
 
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "assets" / "plantillas"
@@ -237,45 +238,26 @@ def generar_padron_usaer(alumnos, escuelas):
     """Genera el padrón USAER en la plantilla oficial de supervisión."""
     workbook = _workbook_from_template(PADRON_TEMPLATE)
     worksheet = workbook["ALUMNOS USAER"]
-    registros = [] if alumnos is None else alumnos.fillna("").to_dict("records")
-    catalogo = _school_index(escuelas)
+    registros = vista_padron_oficial(alumnos, escuelas).fillna("").to_dict("records")
     first_row = 8
     _prepare_rows(worksheet, first_row, len(registros), first_row, 30)
 
     for number, student in enumerate(registros, start=1):
         row = first_row + number - 1
-        school = catalogo.get(_norm(student.get("ID_Escuela", "")), {})
-        level = _value(student, "Nivel_Educativo", default=_value(school, "Nivel"))
-        grade = _value(student, "Grado")
-        level_norm = _norm(level)
         values = {
             1: number,
-            2: SERVICE["zona"],
-            3: SERVICE["numero"],
-            4: SERVICE["cct"],
-            5: _value(student, "Nombre_Escuela", default=_value(school, "Nombre_Escuela", default=student.get("ID_Escuela", ""))),
-            6: _value(student, "Turno_Escuela", default=_value(school, "Turno")),
-            7: _value(student, "CCT_Escuela", default=_value(school, "CCT")),
-            8: _value(student, "Direccion_Escuela", default=_value(school, "Direccion", "Dirección")),
-            9: _value(student, "Localidad_Escuela", default=_value(school, "Localidad")),
-            10: _value(student, "Municipio_Escuela", default=_value(school, "Municipio")),
-            11: _value(student, "Nombre_Completo"),
-            12: _value(student, "CURP"),
-            13: _value(student, "Edad_1_Septiembre", default=_edad_al_primero_de_septiembre(student.get("CURP", ""))),
-            14: _value(student, "Sexo"),
-            15: _value(student, "Condicion_Discapacidad"),
-            19: _value(student, "Situacion_Alumno"),
-            20: _value(student, "Tipo_Atencion"),
-            21: _value(student, "Lengua_Indigena_Mayahablante"),
-            22: _value(student, "Afrodescendiente"),
-            23: _value(student, "Migrante"),
+            2: student["ZONA"], 3: student["USAER"], 4: student["CLAVE DE USAER"],
+            5: student["ESCUELA ATENDIDA"], 6: student["TURNO"],
+            7: student["CCT DE LA ESCUELA"], 8: student["DIRECCIÓN DE LA ESCUELA"],
+            9: student["LOCALIDAD"], 10: student["MUNICIPIO"],
+            11: student["NOMBRE COMPLETO DEL ALUMNO"], 12: student["CURP"],
+            13: student["EDAD AL 1 DE SEPTIEMBRE"], 14: student["SEXO"],
+            15: student["DISCAPACIDAD O CONDICIÓN"], 16: student["PREESCOLAR"],
+            17: student["PRIMARIA"], 18: student["SECUNDARIA"],
+            19: student["SITUACIÓN DEL ALUMNO"], 20: student["TIPO DE ATENCIÓN"],
+            21: student["MAYA HABLANTE"], 22: student["MIGRANTE"],
+            23: student["AFRODESCENDIENTE"],
         }
-        if "PREESCOLAR" in level_norm:
-            values[16] = grade
-        elif "SECUNDARIA" in level_norm:
-            values[18] = grade
-        else:
-            values[17] = grade
         for column, value in values.items():
             worksheet.cell(row, column).value = _text(value)
         worksheet.cell(row, 2).number_format = "@"

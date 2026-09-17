@@ -21,7 +21,18 @@ INTEGRATED_HEADERS={
 'Linea_Tiempo':['ID_Evento_Timeline','ID_Expediente','ID_Alumno','Fecha','Tipo','Titulo','Descripcion','Usuario']}
 
 def read(name): return df_sheet(name)
-def alumnos(): return read('Alumnos')
+def alumnos():
+ """Lee solo la base interna vigente y omite columnas duplicadas heredadas."""
+ frame = read('Alumnos')
+ columnas = [col for col in BASE_HEADERS['Alumnos'] if col in frame.columns]
+ frame = frame[columnas].copy() if columnas else frame
+ if {'Nombre_Completo', 'CURP'}.issubset(frame.columns):
+  con_alumno = (
+   frame['Nombre_Completo'].fillna('').astype(str).str.strip().ne('')
+   | frame['CURP'].fillna('').astype(str).str.strip().ne('')
+  )
+  frame = frame.loc[con_alumno].reset_index(drop=True)
+ return frame
 def personal(): return read('Personal')
 def asignaciones(): return read('Asignaciones')
 def usuarios(): return read('Usuarios')
