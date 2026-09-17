@@ -169,7 +169,13 @@ def anexo7_pdf(registro):
         pdf.cell(w - 4, 6.5, linea, new_x="LMARGIN", new_y="NEXT")
     pdf.set_y(y + h + 3)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 5, "Instrucción:")
+    pdf.cell(
+    0,
+    5,
+    "Instrucción:",
+    new_x="LMARGIN",
+    new_y="NEXT"
+)
     pdf.set_font("Helvetica", "", 9)
     pdf.multi_cell(
         0, 4.5,
@@ -233,7 +239,13 @@ def anexo7_pdf(registro):
         pdf.set_y(50)
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 5, "Datos complementarios")
+    pdf.cell(
+    0,
+    5,
+    "Datos complementarios",
+    new_x="LMARGIN",
+    new_y="NEXT"
+)
     pdf.set_font("Helvetica", "", 8)
     complementos = [
         ("Condición de salud y especificación", str(registro.get("Salud", ""))),
