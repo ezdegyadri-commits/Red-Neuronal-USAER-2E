@@ -255,6 +255,33 @@ def save_anexo3(data):
  data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
 def save_anexo4(data):
  data=dict(data); data.setdefault('ID_Anexo4',next_numeric_id('Anexo4_Sugerencias','ID_Anexo4','AN4')); append_dict('Anexo4_Sugerencias',data); return data['ID_Anexo4']
+
+def update_anexo4(id_anexo4, cambios):
+ """Actualiza un Anexo IV existente sin borrar columnas ni crear duplicados."""
+ ws=worksheet('Anexo4_Sugerencias')
+ headers=retry_google(lambda: ws.row_values(1))
+ if 'ID_Anexo4' not in headers:
+  raise ValueError('La hoja Anexo4_Sugerencias no contiene ID_Anexo4.')
+ id_col=headers.index('ID_Anexo4')+1
+ ids=retry_google(lambda: ws.col_values(id_col))
+ fila=next((i for i,v in enumerate(ids,start=1) if str(v).strip()==str(id_anexo4).strip()),None)
+ if not fila:
+  raise ValueError(f'No se encontró el Anexo IV {id_anexo4}.')
+ actual=retry_google(lambda: ws.row_values(fila))
+ actual += [''] * (len(headers)-len(actual))
+ for campo,valor in dict(cambios).items():
+  if campo in headers and campo!='ID_Anexo4':
+   actual[headers.index(campo)]=valor
+ def columna(numero):
+  letras=''
+  while numero:
+   numero,resto=divmod(numero-1,26)
+   letras=chr(65+resto)+letras
+  return letras
+ rango=f"A{fila}:{columna(len(headers))}{fila}"
+ retry_google(lambda: ws.update(range_name=rango,values=[actual[:len(headers)]]))
+ clear_cache('Anexo4_Sugerencias')
+ return str(id_anexo4)
 def save_anexo5(data):
  data=dict(data); data.setdefault('ID_Evento',next_numeric_id('Anexo5_Eventos','ID_Evento','AN5')); append_dict('Anexo5_Eventos',data); return data['ID_Evento']
 def save_anexo7(data):
