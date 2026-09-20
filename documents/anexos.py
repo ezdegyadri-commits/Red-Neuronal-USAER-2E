@@ -199,7 +199,7 @@ def anexo3_html(alumno, rows):
             f"<b>Fecha:</b> {html.escape(str(r.get('Fecha', '')))}<br>"
             f"<b>Personal:</b> {html.escape(str(r.get('ID_Personal', '')))}</p>"
             "<table><tr><th>Indicador observado</th><th>Frecuencia</th>"
-            "<th>Requiere orientación</th></tr>"
+            "<th>Observación específica</th><th>Requiere orientación</th></tr>"
         )
         for respuesta in respuestas.values():
             if not isinstance(respuesta, dict):
