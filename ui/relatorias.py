@@ -59,7 +59,7 @@ def _procesar_openai(ruta, prompt, progreso):
     from openai import OpenAI
 
     cliente = OpenAI(api_key=api_key, timeout=900.0, max_retries=2)
-    limite = 24 * 1024 * 1024
+    limite = 24_000_000
     directorio = None
     try:
         if os.path.getsize(ruta) <= limite:
