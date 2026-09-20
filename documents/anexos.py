@@ -1,6 +1,7 @@
 import html
 import base64
 import json
+import pandas as pd
 from io import BytesIO
 from pathlib import Path
 from fpdf import FPDF
@@ -163,12 +164,22 @@ def anexo4_pdf(alumno, rows):
 
 
 def anexo5_html(alumno, rows):
+    """Una sola hoja por alumno con todas las anotaciones en orden cronológico."""
     head = header_b64()
-    out = ["<html><head><meta charset='UTF-8'><style>body{font-family:Arial,sans-serif;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #111;padding:8px;vertical-align:top}</style></head><body>"]
-    out.append(f"<div style='text-align:center'><img src='{head}' style='max-width:100%'></div><h2 style='text-align:center;text-decoration:underline'>Anexo V. Eventos significativos.</h2><p><b>Nombre del alumno:</b> {html.escape(str(alumno.get('Nombre_Completo','')))}</p><table><tr><th>Fecha</th><th>Evento</th><th>Especialista, firma, fecha.</th></tr>")
+    rows = rows.copy()
+    if not rows.empty and "Fecha" in rows.columns:
+        rows["_orden_cronologico"] = pd.to_datetime(
+            rows["Fecha"], errors="coerce", dayfirst=True
+        )
+        rows = (
+            rows.sort_values("_orden_cronologico", na_position="last", kind="stable")
+            .drop(columns="_orden_cronologico")
+        )
+    out = ["<html><head><meta charset='UTF-8'><style>@page{size:letter portrait;margin:15mm}body{font-family:Arial,sans-serif;color:#111;margin:0}table{width:100%;border-collapse:collapse}thead{display:table-header-group}tr{page-break-inside:avoid}th,td{border:1px solid #111;padding:8px;vertical-align:top}</style></head><body>"]
+    out.append(f"<div style='text-align:center'><img src='{head}' style='max-width:100%'></div><h2 style='text-align:center;text-decoration:underline'>Anexo V. Eventos significativos.</h2><p><b>Nombre del alumno:</b> {html.escape(str(alumno.get('Nombre_Completo','')))}</p><table><thead><tr><th>Fecha</th><th>Evento</th><th>Especialista / docente, firma y fecha</th></tr></thead><tbody>")
     for _, r in rows.iterrows():
         out.append(f"<tr><td>{html.escape(str(r.get('Fecha','')))}</td><td>{html.escape(str(r.get('Evento',''))).replace(chr(10),'<br>')}</td><td style='text-align:center'><br><br>_____________________<br>{html.escape(str(r.get('Especialista','')))}</td></tr>")
-    out.append("</table></body></html>")
+    out.append("</tbody></table></body></html>")
     return "".join(out)
 
 
