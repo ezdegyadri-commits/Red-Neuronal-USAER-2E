@@ -52,9 +52,12 @@ def expediente(id_alumno):
     if not a4.empty and "Nombre_Alumno" in a4.columns:
         a4 = a4[a4["Nombre_Alumno"].astype(str).str.strip() == str(alum.get("Nombre_Completo", "")).strip()].copy()
     else: a4 = pd.DataFrame()
-    if not a5.empty and "Nombre_Alumno" in a5.columns:
-        a5 = a5[a5["Nombre_Alumno"].astype(str).str.strip() == str(alum.get("Nombre_Completo", "")).strip()].copy()
-    else: a5 = pd.DataFrame()
+    grado_grupo_alumno = f"{alum.get('Grado', '')} {alum.get('Grupo', '')}".strip()
+    a5 = repo.eventos_alumno(
+        id_alumno,
+        str(alum.get("Nombre_Completo", "")),
+        grado_grupo_alumno,
+    )
     timeline_df = pd.DataFrame()
     try:
         timeline_df = df_sheet("Linea_Tiempo")
