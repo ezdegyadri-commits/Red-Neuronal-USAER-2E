@@ -1053,6 +1053,13 @@ def eventos_page(df):
             eventos_todos["Nombre_Alumno"].astype(str) == objetivo
         ].copy()
 
+    eventos_historial = eventos_registrados.copy()
+    if "Estado" in eventos_registrados.columns:
+        estados = eventos_registrados["Estado"].fillna("").astype(str).str.strip().str.upper()
+        eventos_registrados = eventos_registrados.loc[
+            ~estados.isin({"ANULADO", "DUPLICADO"})
+        ].copy()
+
     if not eventos_registrados.empty and "Fecha" in eventos_registrados.columns:
         eventos_registrados["_orden"] = pd.to_datetime(
             eventos_registrados["Fecha"],
@@ -1067,8 +1074,83 @@ def eventos_page(df):
 
     st.caption(
         f"Hoja de eventos de {objetivo}. "
-        f"Registros guardados: {len(eventos_registrados)}."
+        f"Registros activos: {len(eventos_registrados)}."
     )
+
+    with st.expander("Corregir un evento o marcar un duplicado", expanded=False):
+        if eventos_historial.empty or "ID_Evento" not in eventos_historial.columns:
+            st.info("Aún no hay eventos con identificador para corregir.")
+        else:
+            historial = eventos_historial.copy()
+            historial["ID_Evento"] = historial["ID_Evento"].astype(str)
+            opciones_evento = historial["ID_Evento"].tolist()
+            id_editar = st.selectbox(
+                "Registro del historial",
+                opciones_evento,
+                format_func=lambda eid: (
+                    f"{eid} — "
+                    f"{historial.loc[historial['ID_Evento'] == eid, 'Fecha'].iloc[0] if 'Fecha' in historial.columns else ''} — "
+                    f"{str(historial.loc[historial['ID_Evento'] == eid, 'Evento'].iloc[0])[:90] if 'Evento' in historial.columns else ''}"
+                ),
+                key=f"editar_evento_id_{id_alumno}",
+            )
+            registro = historial.loc[historial["ID_Evento"] == id_editar].iloc[0]
+            fecha_actual = pd.to_datetime(
+                registro.get("Fecha", date.today()), errors="coerce", dayfirst=True
+            )
+            if pd.isna(fecha_actual):
+                fecha_actual = pd.Timestamp(date.today())
+            fecha_corregida = st.date_input(
+                "Fecha corregida",
+                fecha_actual.date(),
+                key=f"editar_evento_fecha_{id_alumno}",
+            )
+            texto_corregido = st.text_area(
+                "Descripción corregida",
+                str(registro.get("Evento", "")),
+                height=130,
+                key=f"editar_evento_texto_{id_alumno}",
+            )
+            especialista_corregido = st.text_input(
+                "Quien registró",
+                str(registro.get("Especialista", "")),
+                key=f"editar_evento_especialista_{id_alumno}",
+            )
+            col_guardar, col_duplicado = st.columns(2)
+            with col_guardar:
+                corregir = st.button(
+                    "Guardar corrección",
+                    key=f"corregir_evento_{id_alumno}",
+                    width="stretch",
+                )
+            with col_duplicado:
+                marcar_duplicado = st.button(
+                    "Marcar como duplicado (conservar registro)",
+                    key=f"duplicar_evento_{id_alumno}",
+                    width="stretch",
+                )
+            if corregir:
+                try:
+                    repo.update_anexo5(
+                        id_editar,
+                        {
+                            "Fecha": str(fecha_corregida),
+                            "Evento": texto_corregido.strip(),
+                            "Especialista": especialista_corregido.strip(),
+                            "Estado": "ACTIVO",
+                        },
+                    )
+                    st.success("Corrección guardada; el registro original sigue en el historial.")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"No fue posible corregir el evento: {ex}")
+            if marcar_duplicado:
+                try:
+                    repo.update_anexo5(id_editar, {"Estado": "DUPLICADO"})
+                    st.success("Marcado como duplicado y excluido de la vista activa; no se borró.")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"No fue posible marcar el duplicado: {ex}")
 
     fecha = st.date_input(
         "Fecha del evento",
@@ -1127,6 +1209,28 @@ def eventos_page(df):
         st.error("Describe el evento antes de guardarlo.")
         return
 
+    if "ID_Evento" in eventos_registrados.columns:
+        fecha_existente = pd.to_datetime(
+            eventos_registrados.get("Fecha", pd.Series(dtype=str)),
+            errors="coerce",
+            dayfirst=True,
+        ).dt.date
+        evento_normalizado = normalizar_texto(borrador["Evento"])
+        if (
+            "Evento" in eventos_registrados.columns
+            and any(
+                fecha_existente.iloc[i] == fecha
+                and normalizar_texto(eventos_registrados.iloc[i].get("Evento", "")) == evento_normalizado
+                for i in range(len(eventos_registrados))
+            )
+        ):
+            st.error(
+                "Ya existe un evento igual para esta fecha. Revisa el historial y "
+                "corrige o marca el registro duplicado antes de volver a capturarlo."
+            )
+            return
+
+    borrador["Estado"] = "ACTIVO"
     try:
         id_evento = repo.save_anexo5(borrador)
         repo.ensure_expediente(expediente_id(id_alumno), id_alumno)
