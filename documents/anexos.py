@@ -20,16 +20,146 @@ def header_b64(path="encabezado.png"):
 
 
 def anexo4_html(alumno, rows):
+    """Vista previa imprimible del Anexo IV con espacio amplio y firmas apiladas."""
     head = header_b64()
-    out = ["<html><head><meta charset='UTF-8'><style>body{font-family:Arial,sans-serif;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #111;padding:8px;vertical-align:top}.header{text-align:center}.page{margin-bottom:40px;page-break-after:always}</style></head><body>"]
+    nombre = html.escape(str(alumno.get("Nombre_Completo", "Alumno / grupo")))
+    out = [
+        "<html><head><meta charset='UTF-8'><style>"
+        "@page{size:letter portrait;margin:15mm}"
+        "body{font-family:Arial,sans-serif;color:#111;font-size:10pt}"
+        "img{max-width:100%}.header{text-align:center;margin-bottom:12px}"
+        ".hoja{page-break-after:always}.meta{margin:10px 0 14px}"
+        ".campo{border:1px solid #222;padding:8px;margin:5px 0 12px;white-space:pre-wrap}"
+        ".sugerencias{min-height:150px}.resultados{min-height:45px}"
+        ".firmas{width:72%;margin:22px auto 0;text-align:center}"
+        ".firma{min-height:58px;border:1px solid #222;padding:12px;margin:8px 0}"
+        "@media print{.hoja:last-child{page-break-after:auto}}"
+        "</style></head><body>"
+    ]
     for _, r in rows.iterrows():
         sugerencias = html.escape(str(r.get("Sugerencias", ""))).replace("\n", "<br>")
-        out.append(f"""<div class='page'><div class='header'><img src='{head}' style='max-width:100%'></div><h2 style='text-align:center;text-decoration:underline'>Anexo IV. Hoja de Sugerencias.</h2>
-<p><b>Nombre del alumno:</b> {html.escape(str(alumno.get('Nombre_Completo','')))}<br><b>Grado y grupo:</b> {html.escape(str(r.get('Grado_Grupo','')))}<br><b>Escuela:</b> {html.escape(str(r.get('Escuela','')))}<br><b>Servicio de EE:</b> {SERVICE_NAME}</p>
-<p><b>Sugerencias del área:</b> {html.escape(str(r.get('Sugerencias_Area','Aprendizaje')))}<br><b>Fecha de elaboración:</b> {html.escape(str(r.get('Fecha_Elaboracion','')))}<br><b>Motivo:</b> {html.escape(str(r.get('Motivo','')))}<br><b>Fecha de seguimiento:</b> {html.escape(str(r.get('Fecha_Seguimiento','')))}</p>
-<table><tr><th>Sugerencias</th><th>Indique el nivel de cumplimiento y describa los resultados</th><th>Nombre y firma de quien recibe</th><th>Nombre y firma de quien brinda</th></tr><tr><td style='width:40%'>{sugerencias}</td><td style='width:20%'>{html.escape(str(r.get('Nivel_Cumplimiento_Resultados','')))}</td><td style='text-align:center'><br><br>_____________________<br>Maestro(a) de Grupo</td><td style='text-align:center'><br><br>_____________________<br>{html.escape(str(r.get('Quien_Brinda_Sugerencias','')))}</td></tr></table></div>""")
+        resultados = html.escape(
+            str(r.get("Nivel_Cumplimiento_Resultados", ""))
+        ).replace("\n", "<br>")
+        motivo = html.escape(str(r.get("Motivo", "")))
+        area = html.escape(str(r.get("Sugerencias_Area", "Aprendizaje")))
+        seguimiento = html.escape(str(r.get("Fecha_Seguimiento", "")))
+        fecha = html.escape(str(r.get("Fecha_Elaboracion", "")))
+        quien_brinda = html.escape(str(r.get("Quien_Brinda_Sugerencias", "")))
+        escuela = html.escape(str(r.get("Escuela", "")))
+        grado_grupo = html.escape(str(r.get("Grado_Grupo", "")))
+        out.append(
+            f"<section class='hoja'><div class='header'><img src='{head}'></div>"
+            "<h2 style='text-align:center;text-decoration:underline'>"
+            "Anexo IV. Hoja de sugerencias"
+            "</h2>"
+            f"<div class='meta'><b>Alumno / grupo:</b> {nombre}<br>"
+            f"<b>Grado y grupo:</b> {grado_grupo}<br>"
+            f"<b>Escuela:</b> {escuela}<br><b>Servicio:</b> {SERVICE_NAME}<br>"
+            f"<b>Área:</b> {area}<br><b>Fecha:</b> {fecha}<br>"
+            f"<b>Motivo:</b> {motivo}<br><b>Seguimiento:</b> {seguimiento}</div>"
+            "<b>Sugerencias</b>"
+            f"<div class='campo sugerencias'>{sugerencias or '&nbsp;'}</div>"
+            "<b>Nivel de cumplimiento y resultados</b>"
+            f"<div class='campo resultados'>{resultados or '&nbsp;'}</div>"
+            "<div class='firmas'><b>Firmas</b>"
+            "<div class='firma'>______________________________<br>"
+            "Nombre y firma de quien recibe</div>"
+            f"<div class='firma'>______________________________<br>"
+            f"Nombre y firma de quien brinda<br>{quien_brinda}</div>"
+            "</div></section>"
+        )
     out.append("</body></html>")
     return "".join(out)
+
+
+def anexo4_pdf(alumno, rows):
+    """Genera el Anexo IV en PDF carta vertical con sugerencias amplias y firmas en una columna."""
+    pdf = FPDF(orientation="P", unit="mm", format="letter")
+    pdf.set_margins(15, 15, 15)
+    pdf.set_auto_page_break(auto=True, margin=15)
+    disponible = 180
+
+    for _, registro in rows.iterrows():
+        pdf.add_page()
+        head = header_b64()
+        if head:
+            try:
+                pdf.image(
+                    BytesIO(base64.b64decode(head.split(",", 1)[1])),
+                    x=15, y=8, w=180,
+                )
+            except Exception:
+                pass
+        pdf.set_y(38)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(247, 127, 35)
+        pdf.cell(
+            0, 8, "Anexo IV. Hoja de sugerencias",
+            align="C", new_x="LMARGIN", new_y="NEXT",
+        )
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(3)
+        pdf.set_font("Helvetica", "", 9)
+        metadatos = (
+            f"Alumno / grupo: {alumno.get('Nombre_Completo', 'Alumno / grupo')}\n"
+            f"Grado y grupo: {registro.get('Grado_Grupo', '')}\n"
+            f"Escuela: {registro.get('Escuela', '')}\n"
+            f"Servicio: {SERVICE_NAME}\n"
+            f"Área: {registro.get('Sugerencias_Area', 'Aprendizaje')}    "
+            f"Fecha: {registro.get('Fecha_Elaboracion', '')}\n"
+            f"Motivo: {registro.get('Motivo', '')}\n"
+            f"Seguimiento: {registro.get('Fecha_Seguimiento', '')}"
+        )
+        pdf.multi_cell(0, 5, metadatos)
+        pdf.ln(3)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(
+            0, 6, "Sugerencias", new_x="LMARGIN", new_y="NEXT",
+        )
+        pdf.set_font("Helvetica", "", 10)
+        sugerencias = str(registro.get("Sugerencias", "") or " ")
+        pdf.multi_cell(
+            disponible, 5, sugerencias + "\n\n\n\n",
+            border=1, new_x="LMARGIN", new_y="NEXT",
+        )
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(
+            0, 5, "Nivel de cumplimiento y resultados",
+            new_x="LMARGIN", new_y="NEXT",
+        )
+        pdf.set_font("Helvetica", "", 9)
+        pdf.multi_cell(
+            disponible, 5,
+            str(registro.get("Nivel_Cumplimiento_Resultados", "") or " "),
+            border=1, new_x="LMARGIN", new_y="NEXT",
+        )
+        pdf.ln(5)
+        ancho_firmas = 132
+        x_firmas = 15 + (disponible - ancho_firmas) / 2
+        pdf.set_x(x_firmas)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(
+            ancho_firmas, 5, "Firmas",
+            align="C", new_x="LMARGIN", new_y="NEXT",
+        )
+        pdf.set_x(x_firmas)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(
+            ancho_firmas, 15,
+            "______________________________\nNombre y firma de quien recibe",
+            border=1, align="C", new_x="LMARGIN", new_y="NEXT",
+        )
+        pdf.set_x(x_firmas)
+        pdf.cell(
+            ancho_firmas, 17,
+            "______________________________\nNombre y firma de quien brinda\n"
+            + str(registro.get("Quien_Brinda_Sugerencias", "")),
+            border=1, align="C", new_x="LMARGIN", new_y="NEXT",
+        )
+
+    return bytes(pdf.output())
 
 
 def anexo5_html(alumno, rows):
