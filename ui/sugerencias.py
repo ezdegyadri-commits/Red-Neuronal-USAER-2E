@@ -4,6 +4,7 @@ from datetime import date
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from config.settings import ESCUELAS_USAER, SERVICE_NAME
 from data import repository as repo
@@ -124,71 +125,90 @@ def anexo4_page(df):
     st.caption(f"{grado_grupo or 'Grado/grupo no capturado'} · {escuela_alumno} · {len(activas)} sugerencia(s) activa(s)")
     if any(str(valor).strip().startswith("Grupo ") for valor in activas.get("Nombre_Alumno", pd.Series(dtype=str)).fillna("")):
         st.caption("Las sugerencias de contexto grupal se comparten con los alumnos del mismo grupo y escuela; una corrección se reflejará en esas hojas.")
-    if activas.empty:
-        st.info("Aún no hay sugerencias para este alumno. La primera puede generarse al completar el instrumento BAP o agregarse aquí.")
-    else:
-        st.dataframe(activas, use_container_width=True, hide_index=True)
-        documento = anexo4_html(fila_alumno.to_dict(), activas)
-        with st.expander("Vista previa de la hoja cronológica", expanded=False):
-            st.html(documento)
-        st.download_button(
-            "Descargar hoja de sugerencias en PDF carta",
-            anexo4_pdf(fila_alumno.to_dict(), activas),
-            f"Anexo_IV_{id_alumno}.pdf",
-            "application/pdf",
-            type="primary",
-            key=f"anexo4_pdf_{id_alumno}",
-            width="stretch",
-        )
-        st.download_button(
-            "Descargar versión imprimible HTML",
-            documento,
-            f"Anexo_IV_{id_alumno}.html",
-            "text/html",
-            key=f"anexo4_html_{id_alumno}",
-            width="stretch",
-        )
+    key_prefix = f"anexo4_nueva_{id_alumno}"
+    if st.session_state.pop(f"{key_prefix}_reset", False):
+        for suffix, value in (("area", ""), ("motivo", ""), ("texto", ""), ("seguimiento", "")):
+            st.session_state[f"{key_prefix}_{suffix}"] = value
+        st.session_state[f"{key_prefix}_fecha"] = date.today()
 
     with st.expander("Añadir sugerencia del equipo", expanded=not bool(activas.shape[0])):
-        with st.form(f"anexo4_nueva_{id_alumno}", clear_on_submit=True):
-            area = st.text_input("Área / especialidad", placeholder="Aprendizaje, comunicación, psicología, trabajo social…")
-            motivo = st.text_area("Motivo de la sugerencia")
-            texto = st.text_area("Sugerencias", height=220)
-            fecha = st.date_input("Fecha", value=date.today())
-            seguimiento = st.text_input("Plazo o fecha de seguimiento")
-            guardar = st.form_submit_button("Añadir a la hoja del alumno", type="primary")
-        if guardar:
-            if not texto.strip():
-                st.error("Escribe al menos una sugerencia antes de guardar.")
-            else:
-                registro = {
-                    "ID_Alumno": id_alumno,
-                    "Nombre_Alumno": nombre_alumno,
-                    "Grado_Grupo": grado_grupo,
-                    "Escuela": escuela_alumno,
-                    "Servicio_EE": SERVICE_NAME,
-                    "Sugerencias_Area": area.strip(),
-                    "Fecha_Elaboracion": str(fecha),
-                    "Motivo": motivo.strip(),
-                    "Fecha_Seguimiento": seguimiento.strip(),
-                    "Sugerencias": texto.strip(),
-                    "Nivel_Cumplimiento_Resultados": "Pendiente de revisión",
-                    "Quien_Brinda_Sugerencias": nombre_usuario,
-                    "Estado": "ACTIVO",
-                }
+        area = st.text_input(
+            "Área / especialidad",
+            placeholder="Aprendizaje, comunicación, psicología, trabajo social…",
+            key=f"{key_prefix}_area",
+        )
+        motivo = st.text_area("Motivo de la sugerencia", key=f"{key_prefix}_motivo")
+        texto = st.text_area("Sugerencias", height=180, key=f"{key_prefix}_texto")
+        fecha = st.date_input("Fecha", value=date.today(), key=f"{key_prefix}_fecha")
+        seguimiento = st.text_input("Plazo o fecha de seguimiento", key=f"{key_prefix}_seguimiento")
+        guardar = st.button("Añadir a la hoja del alumno", type="primary", key=f"{key_prefix}_guardar")
+
+    registro_borrador = {
+        "ID_Alumno": id_alumno,
+        "Nombre_Alumno": nombre_alumno,
+        "Grado_Grupo": grado_grupo,
+        "Escuela": escuela_alumno,
+        "Servicio_EE": SERVICE_NAME,
+        "Sugerencias_Area": area.strip(),
+        "Fecha_Elaboracion": str(fecha),
+        "Motivo": motivo.strip(),
+        "Fecha_Seguimiento": seguimiento.strip(),
+        "Sugerencias": texto.strip(),
+        "Nivel_Cumplimiento_Resultados": "Pendiente de revisión",
+        "Quien_Brinda_Sugerencias": nombre_usuario,
+        "Estado": "ACTIVO",
+    }
+    hay_borrador = any((area.strip(), motivo.strip(), texto.strip(), seguimiento.strip()))
+    if guardar:
+        if not texto.strip():
+            st.error("Escribe al menos una sugerencia antes de guardarla.")
+        else:
+            try:
+                nuevo_id = repo.save_anexo4(registro_borrador)
                 try:
-                    nuevo_id = repo.save_anexo4(registro)
-                    try:
-                        from utils.ids import expediente_id
-                        repo.ensure_expediente(expediente_id(id_alumno), id_alumno)
-                        repo.link_record(expediente_id(id_alumno), id_alumno, "ANEXO4", nuevo_id, str(fecha))
-                        repo.timeline(expediente_id(id_alumno), id_alumno, str(fecha), "SUGERENCIA", "Sugerencia añadida al Anexo IV", texto.strip(), nombre_usuario)
-                    except Exception as ex:
-                        st.warning(f"Sugerencia guardada; falta completar su vínculo al expediente: {ex}")
-                    st.success("Sugerencia añadida a la misma hoja cronológica del alumno.")
-                    st.rerun()
+                    from utils.ids import expediente_id
+                    repo.ensure_expediente(expediente_id(id_alumno), id_alumno)
+                    repo.link_record(expediente_id(id_alumno), id_alumno, "ANEXO4", nuevo_id, str(fecha))
+                    repo.timeline(expediente_id(id_alumno), id_alumno, str(fecha), "SUGERENCIA", "Sugerencia añadida al Anexo IV", texto.strip(), nombre_usuario)
                 except Exception as ex:
-                    st.error(f"No fue posible guardar la sugerencia: {ex}")
+                    st.warning(f"Sugerencia guardada; falta completar su vínculo al expediente: {ex}")
+                st.session_state[f"{key_prefix}_reset"] = True
+                st.success("Sugerencia añadida a la hoja cronológica del alumno.")
+                st.rerun()
+            except Exception as ex:
+                st.error(f"No fue posible guardar la sugerencia: {ex}")
+
+    if activas.empty:
+        st.info("Aún no hay sugerencias guardadas. Puedes generar la primera desde el BAP o añadirla aquí.")
+    else:
+        st.dataframe(activas, use_container_width=True, hide_index=True)
+
+    filas_vista = activas.copy()
+    if hay_borrador:
+        filas_vista = pd.concat([filas_vista, pd.DataFrame([registro_borrador])], ignore_index=True)
+    filas_vista = _sort_suggestions(filas_vista)
+    documento = anexo4_html(fila_alumno.to_dict(), filas_vista)
+    st.markdown("### Vista previa oficial · Anexo IV SEGEY")
+    if hay_borrador:
+        st.caption("La vista incluye el borrador actual. Pulsa «Añadir a la hoja del alumno» para guardarlo en la base central.")
+    components.html(documento, height=860, scrolling=True)
+    st.download_button(
+        "Descargar PDF carta para imprimir",
+        anexo4_pdf(fila_alumno.to_dict(), filas_vista),
+        f"Anexo_IV_{id_alumno}.pdf",
+        "application/pdf",
+        type="primary",
+        key=f"anexo4_pdf_{id_alumno}",
+        width="stretch",
+    )
+    st.download_button(
+        "Descargar versión imprimible HTML",
+        documento,
+        f"Anexo_IV_{id_alumno}.html",
+        "text/html",
+        key=f"anexo4_html_{id_alumno}",
+        width="stretch",
+    )
 
     if not historial.empty and "ID_Anexo4" in historial.columns:
         st.markdown("### Corregir o retirar una sugerencia")

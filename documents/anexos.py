@@ -22,6 +22,8 @@ def header_b64(path="encabezado.png"):
 
 def anexo4_html(alumno, rows):
     """Vista previa imprimible del Anexo IV con espacio amplio y firmas apiladas."""
+    if rows is None or rows.empty:
+        rows = pd.DataFrame([{}])
     head = header_b64()
     nombre = html.escape(str(alumno.get("Nombre_Completo", "Alumno / grupo")))
     out = [
@@ -76,6 +78,8 @@ def anexo4_html(alumno, rows):
 
 def anexo4_pdf(alumno, rows):
     """Genera el Anexo IV en PDF carta vertical con sugerencias amplias y firmas en una columna."""
+    if rows is None or rows.empty:
+        rows = pd.DataFrame([{}])
     pdf = FPDF(orientation="P", unit="mm", format="letter")
     pdf.set_margins(15, 15, 15)
     pdf.set_auto_page_break(auto=True, margin=15)
