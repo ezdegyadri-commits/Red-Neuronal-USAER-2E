@@ -39,6 +39,62 @@ def usuarios(): return read('Usuarios')
 def anexo3(): return read('Anexo3_Deteccion')
 def anexo4(): return read('Anexo4_Sugerencias')
 def anexo5(): return read('Anexo5_Eventos')
+
+def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
+ """Reúne eventos del expediente y eventos históricos sin modificar sus filas."""
+ eventos = anexo5()
+ if eventos.empty or "ID_Evento" not in eventos.columns:
+  return eventos.iloc[0:0].copy() if not eventos.empty else eventos
+
+ ligados = set()
+ ids_ligados = set()
+ try:
+  relaciones = read("Relaciones_Expediente")
+  if not relaciones.empty and {"Tipo_Registro", "ID_Registro"}.issubset(relaciones.columns):
+   rel_anexo5 = relaciones[
+    relaciones["Tipo_Registro"].fillna("").astype(str).str.upper().eq("ANEXO5")
+   ].copy()
+   ids_ligados = set(rel_anexo5["ID_Registro"].dropna().astype(str).str.strip())
+   if "ID_Alumno" in rel_anexo5.columns:
+    ligados = set(
+     rel_anexo5.loc[
+      rel_anexo5["ID_Alumno"].astype(str).str.strip().eq(str(id_alumno).strip()),
+      "ID_Registro",
+     ].dropna().astype(str).str.strip()
+    )
+ except Exception:
+  pass
+
+ ids_evento = eventos["ID_Evento"].fillna("").astype(str).str.strip()
+ precisos = eventos.loc[ids_evento.isin(ligados)].copy() if ligados else eventos.iloc[0:0].copy()
+ legados = eventos.iloc[0:0].copy()
+ if nombre and "Nombre_Alumno" in eventos.columns:
+  nombre_normal = str(nombre).strip().casefold()
+  coincide = eventos["Nombre_Alumno"].fillna("").astype(str).map(
+   lambda valor: valor.strip().casefold() == nombre_normal
+  )
+  sin_vinculo = ~ids_evento.isin(ids_ligados)
+  if grado_grupo and "Grado_Grupo" in eventos.columns:
+   grado_normal = " ".join(str(grado_grupo).split()).casefold()
+   grado_evento = eventos["Grado_Grupo"].fillna("").astype(str).map(
+    lambda valor: " ".join(valor.split()).casefold()
+   )
+   coincide &= grado_evento.eq("") | grado_evento.eq(grado_normal)
+  legados = eventos.loc[coincide & sin_vinculo].copy()
+
+ resultado = pd.concat([precisos, legados], ignore_index=True)
+ if "ID_Evento" in resultado.columns:
+  resultado = resultado.drop_duplicates(subset=["ID_Evento"], keep="first")
+ if not resultado.empty and "Fecha" in resultado.columns:
+  resultado["_orden_cronologico"] = pd.to_datetime(
+   resultado["Fecha"], errors="coerce", dayfirst=True
+  )
+  resultado = (
+   resultado.sort_values("_orden_cronologico", na_position="last", kind="stable")
+   .drop(columns="_orden_cronologico")
+   .reset_index(drop=True)
+  )
+ return resultado
 def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
 def oficios_comision(): return read('Oficios_Comision')
