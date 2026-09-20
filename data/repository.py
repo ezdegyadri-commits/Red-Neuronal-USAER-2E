@@ -9,7 +9,7 @@ BASE_HEADERS={
 'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante','Nombre_Escuela','Turno_Escuela','CCT_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela','Condiciones_Adicionales'],
 'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA'],
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
-'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento'],
+'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento','Estado'],
 'Usuarios':['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas'],
 'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus'],
 'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado'],
@@ -284,6 +284,33 @@ def update_anexo4(id_anexo4, cambios):
  return str(id_anexo4)
 def save_anexo5(data):
  data=dict(data); data.setdefault('ID_Evento',next_numeric_id('Anexo5_Eventos','ID_Evento','AN5')); append_dict('Anexo5_Eventos',data); return data['ID_Evento']
+
+def update_anexo5(id_evento, cambios):
+ """Corrige un evento o lo marca como duplicado sin borrar la fila."""
+ ws=ensure_headers('Anexo5_Eventos', BASE_HEADERS['Anexo5_Eventos'])
+ headers=retry_google(lambda: ws.row_values(1))
+ if 'ID_Evento' not in headers:
+  raise ValueError('La hoja Anexo5_Eventos no contiene ID_Evento.')
+ id_col=headers.index('ID_Evento')+1
+ ids=retry_google(lambda: ws.col_values(id_col))
+ fila=next((i for i,v in enumerate(ids,start=1) if str(v).strip()==str(id_evento).strip()),None)
+ if not fila:
+  raise ValueError(f'No se encontró el evento {id_evento}.')
+ actual=retry_google(lambda: ws.row_values(fila))
+ actual += [''] * (len(headers)-len(actual))
+ for campo,valor in dict(cambios).items():
+  if campo in headers and campo!='ID_Evento':
+   actual[headers.index(campo)]=valor
+ def columna(numero):
+  letras=''
+  while numero:
+   numero,resto=divmod(numero-1,26)
+   letras=chr(65+resto)+letras
+  return letras
+ rango=f"A{fila}:{columna(len(headers))}{fila}"
+ retry_google(lambda: ws.update(range_name=rango,values=[actual[:len(headers)]]))
+ clear_cache('Anexo5_Eventos')
+ return str(id_evento)
 def save_anexo7(data):
  ensure_headers('Anexo7_Derivacion', BASE_HEADERS['Anexo7_Derivacion'])
  data=dict(data); data.setdefault('ID_Anexo7',next_numeric_id('Anexo7_Derivacion','ID_Anexo7','AN7')); append_dict('Anexo7_Derivacion',data); return data['ID_Anexo7']
