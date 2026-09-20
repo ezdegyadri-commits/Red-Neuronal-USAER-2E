@@ -4,6 +4,7 @@ from data import repository as repo
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from services.padron_oficial import vista_padron_oficial
 from ui.components import hero, card
+from ui.relatorias import generador_relatorias_director
 
 
 def direccion_page_rapida(_df=None):
@@ -108,3 +109,6 @@ def direccion_page_rapida(_df=None):
                 file_name="Control_oficios_comision_USAER_02E.csv",
                 mime="text/csv",
             )
+
+
+    generador_relatorias_director()
