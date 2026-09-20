@@ -2,6 +2,7 @@ from copy import copy
 from datetime import date
 from io import BytesIO
 from pathlib import Path
+import re
 import unicodedata
 
 import pandas as pd
@@ -109,7 +110,10 @@ def _prepare_rows(
         _copy_row_style(worksheet, source_row, row)
     for row in range(first_row, required_last + 1):
         for column in range(1, worksheet.max_column + 1):
-            worksheet.cell(row, column).value = None
+            cell = worksheet.cell(row, column)
+            if cell.data_type != "f":
+                cell.value = None
+            cell.hyperlink = None
 
 
 def _style_header(cell, fill):
@@ -270,14 +274,18 @@ def _students_for_school(alumnos, school_id):
     target = _norm(school_id)
     return [
         row for row in alumnos.fillna("").to_dict("records")
-        if _norm(row.get("ID_Escuela", "")) == target
+        if target and target in {
+            _norm(row.get("ID_Escuela", "")),
+            _norm(row.get("CCT_Escuela", "")),
+            _norm(row.get("Nombre_Escuela", "")),
+        }
     ]
 
 
 def _sex_count(records, predicate=lambda record: True):
     selected = [row for row in records if predicate(row)]
-    men = sum(_norm(row.get("Sexo", "")) == "H" for row in selected)
-    women = sum(_norm(row.get("Sexo", "")) == "M" for row in selected)
+    men = sum(_norm(row.get("Sexo", "")) in {"H", "HOMBRE", "MASCULINO"} for row in selected)
+    women = sum(_norm(row.get("Sexo", "")) in {"M", "MUJER", "FEMENINO"} for row in selected)
     return men, women
 
 
@@ -313,6 +321,81 @@ def _write_condition_counts(worksheet, row, students):
         worksheet.cell(row, column + 1).value = women
 
 
+_SCHOOL_ORDER = {
+    "DAMIAN CARMONA": 1,
+    "ICHCAANZIHO": 2,
+    "GREGORIO TORRES QUINTERO": 3,
+    "REMIGIO AGUILAR SOSA": 4,
+    "ELVIRA PARRA AVILA": 5,
+    "MANUEL SARRADO": 6,
+    "DOMINGO SOLIS RODRIGUEZ": 7,
+    "QUINTANA ROO": 8,
+}
+
+
+def _school_names(value):
+    text = _text(value).strip().strip('"')
+    if not text:
+        return []
+    parts = re.split(r"\s*(?:;|,|\by\b)\s*", text, flags=re.IGNORECASE)
+    canonical = {
+        "DAMIAN CAMONA": "Damián Carmona",
+        "DAMIAN CARMONA": "Damián Carmona",
+        "ICHC AANZIHO": "Ichcaanzihó",
+        "ICHCAANZIHO": "Ichcaanzihó",
+        "IHCAANZIHO": "Ichcaanzihó",
+        "IHC AANZIHO": "Ichcaanzihó",
+        "GREGORIO TORRES QUINTERO": "Gregorio Torres Quintero",
+        "REMIGIO AGUILAR SOSA": "Remigio Aguilar Sosa",
+        "ELVIRA PARRA AVILA": "Elvira Parra Ávila",
+        "MANUEL SARRADO": "Manuel Sarrado",
+        "DOMINGO SOLIS": "Domingo Solís Rodríguez",
+        "DOMINGO SOLIS RODRIGUEZ": "Domingo Solís Rodríguez",
+        "QUINTANA RO0": "Quintana Roo",
+        "QUINTANA ROO": "Quintana Roo",
+    }
+    result = []
+    seen = set()
+    for part in parts:
+        name = part.strip().strip('"').rstrip(".")
+        if not name:
+            continue
+        normalized = _norm(name)
+        name = canonical.get(normalized, name)
+        key = _norm(name)
+        if key not in seen:
+            result.append(name)
+            seen.add(key)
+    return result
+
+
+def _ordered_schools(names):
+    return sorted(
+        names,
+        key=lambda name: (
+            _SCHOOL_ORDER.get(_norm(name), 99),
+            _norm(name),
+        ),
+    )
+
+
+def _role_order(person):
+    role = _norm(person.get("Rol", ""))
+    if "DIRECTOR" in role:
+        return 0
+    if "ADMINISTRATIVO" in role:
+        return 1
+    if "MAESTRO DE APOYO" in role:
+        return 2
+    if "COMUNICACION" in role:
+        return 3
+    if "PSICOLOG" in role:
+        return 4
+    if "SOCIAL" in role:
+        return 5
+    return 6
+
+
 def _assignment_rows(personal, asignaciones):
     people = [] if personal is None else personal.fillna("").to_dict("records")
     assignments = [] if asignaciones is None else asignaciones.fillna("").to_dict("records")
@@ -323,17 +406,73 @@ def _assignment_rows(personal, asignaciones):
         )
     rows = []
     for person in people:
+        if person.get("Fuente_Formulario"):
+            schools_for_person = _school_names(person.get("Escuelas_Atendidas", ""))
+            if _role_order(person) == 2 and len(schools_for_person) > 1:
+                for school_name in _ordered_schools(schools_for_person):
+                    person_row = dict(person)
+                    person_row["Escuela_Asignada"] = school_name
+                    for field in (
+                        "CCT_Escuela", "Nivel_Escuela", "Modalidad_Escuela",
+                        "Horario_Escuela", "Grupos_Escuela", "Direccion_Escuela",
+                        "Localidad_Escuela", "Municipio_Escuela",
+                    ):
+                        person_row[field] = ""
+                    rows.append((person_row, school_name))
+            else:
+                rows.append((person, _text(person.get("Escuela_Asignada", ""))))
+            continue
         assigned = by_person.get(_norm(person.get("ID_Personal", "")), [""])
         for school_id in assigned or [""]:
             rows.append((person, school_id))
+    if any(person.get("Fuente_Formulario") for person, _ in rows):
+        rows.sort(
+            key=lambda item: (
+                _role_order(item[0]),
+                _SCHOOL_ORDER.get(_norm(item[1]), 99),
+                _norm(item[0].get("Nombre_Completo", "")),
+            )
+        )
     return rows
+
+
+def _students_for_person(alumnos, person, school, school_id):
+    if not person.get("Fuente_Formulario"):
+        return _students_for_school(alumnos, school_id)
+    if "ADMINISTRATIVO" in _norm(person.get("Rol", "")):
+        return []
+    names = _school_names(person.get("Escuelas_Atendidas", ""))
+    assigned_name = _text(person.get("Escuela_Asignada", ""))
+    if assigned_name:
+        names = [assigned_name]
+    keys = {_norm(value) for value in names if _text(value)}
+    cct = _text(person.get("CCT_Escuela", ""))
+    if cct:
+        keys.add(_norm(cct))
+    if not keys or alumnos is None or alumnos.empty:
+        return []
+    selected = []
+    seen = set()
+    for student in alumnos.fillna("").to_dict("records"):
+        if not keys.intersection({
+            _norm(student.get("ID_Escuela", "")),
+            _norm(student.get("CCT_Escuela", "")),
+            _norm(student.get("Nombre_Escuela", "")),
+        }):
+            continue
+        unique = _norm(student.get("ID_Alumno", "") or student.get("CURP", ""))
+        unique = unique or str(len(selected))
+        if unique not in seen:
+            seen.add(unique)
+            selected.append(student)
+    return selected
 
 
 def generar_formato_personal(personal, escuelas, alumnos, asignaciones):
     """Genera la sábana de personal usando la plantilla de supervisión."""
     workbook = _workbook_from_template(PERSONAL_TEMPLATE)
     worksheet = workbook["1. SÁBANA DE PERSONAL DE USAER"]
-    worksheet["B5"] = date.today().strftime("%d/%m/%Y")
+    worksheet["D5"] = date.today().strftime("%d/%m/%Y")
     rows = _assignment_rows(personal, asignaciones)
     schools = _school_index(escuelas)
     first_row = 10
@@ -341,8 +480,32 @@ def generar_formato_personal(personal, escuelas, alumnos, asignaciones):
 
     for number, (person, school_id) in enumerate(rows, start=1):
         row = first_row + number - 1
-        school = schools.get(_norm(school_id), {})
-        students = _students_for_school(alumnos, school_id)
+        formulario = bool(person.get("Fuente_Formulario"))
+        school_names = _school_names(person.get("Escuelas_Atendidas", "")) if formulario else []
+        role = _norm(person.get("Rol", ""))
+        if formulario and "ADMINISTRATIVO" in role:
+            school = {}
+            school_number = "SEDE"
+            school_name = "USAER 02E"
+        elif formulario and _role_order(person) >= 3:
+            school = {}
+            ordered = _ordered_schools(school_names)
+            school_number = ", ".join(
+                str(_SCHOOL_ORDER.get(_norm(name), "")) for name in ordered
+            ).strip(", ")
+            school_name = "; ".join(ordered)
+        elif formulario:
+            school = person
+            assigned = _text(person.get("Escuela_Asignada", "")) or (
+                school_names[0] if school_names else ""
+            )
+            school_number = _SCHOOL_ORDER.get(_norm(assigned), "")
+            school_name = assigned
+        else:
+            school = schools.get(_norm(school_id), {})
+            school_number = _value(school, "Numero_Escuela")
+            school_name = _value(school, "Nombre_Escuela")
+        students = _students_for_person(alumnos, person, school, school_id)
         group_count = sum(
             _norm(student.get("Tipo_Atencion", "")) == "GRUPAL"
             for student in students
@@ -353,10 +516,10 @@ def generar_formato_personal(personal, escuelas, alumnos, asignaciones):
         )
         values = {
             1: number,
-            2: SERVICE["zona"],
-            3: SERVICE["numero"],
-            4: SERVICE["cct"],
-            5: SERVICE["turno"],
+            2: _value(person, "Zona", default=SERVICE["zona"]),
+            3: _value(person, "Numero_USAER", default=SERVICE["numero"]),
+            4: _value(person, "CCT_USAER", default=SERVICE["cct"]).replace("-", "").replace(" ", ""),
+            5: _value(person, "Turno_USAER", default=SERVICE["turno"]),
             6: _value(person, "Nombre_Completo", "Nombre"),
             7: _value(person, "Sexo"),
             8: _value(person, "Rol", "Funcion"),
@@ -368,16 +531,16 @@ def generar_formato_personal(personal, escuelas, alumnos, asignaciones):
             14: _value(person, "Horario"),
             15: _value(person, "Discapacidad"),
             16: _value(person, "Maya_Hablante", default="No"),
-            17: _value(school, "Numero_Escuela"),
-            18: _value(school, "Nombre_Escuela"),
-            19: _value(school, "CCT"),
-            20: _value(school, "Nivel"),
-            21: _value(school, "Modalidad"),
-            22: _value(school, "Horario"),
-            23: _value(school, "Total_Grupos"),
-            24: _value(school, "Direccion", "Dirección"),
-            25: _value(school, "Localidad"),
-            26: _value(school, "Municipio"),
+            17: school_number,
+            18: school_name,
+            19: _value(school, "CCT", "CCT_Escuela"),
+            20: _value(school, "Nivel", "Nivel_Escuela"),
+            21: _value(school, "Modalidad", "Modalidad_Escuela"),
+            22: _value(school, "Horario", "Horario_Escuela"),
+            23: _value(school, "Total_Grupos", "Grupos_Escuela"),
+            24: _value(school, "Direccion", "Dirección", "Direccion_Escuela"),
+            25: _value(school, "Localidad", "Localidad_Escuela"),
+            26: _value(school, "Municipio", "Municipio_Escuela"),
             27: _value(school, "Director"),
             28: _value(school, "Telefono_Director"),
             29: _value(school, "Supervisor"),
@@ -395,6 +558,14 @@ def generar_formato_personal(personal, escuelas, alumnos, asignaciones):
         for column, value in values.items():
             worksheet.cell(row, column).value = value
         worksheet.cell(row, 2).number_format = "@"
+        if formulario and _role_order(person) >= 3:
+            for column in (17, 18):
+                cell = worksheet.cell(row, column)
+                cell.alignment = copy(cell.alignment)
+                cell.alignment = cell.alignment.copy(wrap_text=True, vertical="center")
+            worksheet.row_dimensions[row].height = max(
+                worksheet.row_dimensions[row].height or 0, 72
+            )
 
         _write_condition_counts(worksheet, row, students)
         men, women = _sex_count(students)

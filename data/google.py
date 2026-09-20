@@ -5,7 +5,11 @@ import pandas as pd
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-from config.settings import URL_SPREADSHEET_MAESTRO
+from config.settings import (
+    HOJA_RESPUESTAS_PERSONAL,
+    URL_SPREADSHEET_MAESTRO,
+    URL_SPREADSHEET_RESPUESTAS_PERSONAL,
+)
 
 def _secret_dict(name):
     value = st.secrets[name]
@@ -24,6 +28,32 @@ def connections():
     gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'))
     sheet = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
     return sheet, None
+
+
+@st.cache_resource(show_spinner=False)
+def personal_responses_connection():
+    """Abre en solo lectura la hoja vinculada al formulario de personal."""
+    gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'))
+    return gc.open_by_url(URL_SPREADSHEET_RESPUESTAS_PERSONAL)
+
+
+def _records_from_values(valores):
+    if not valores:
+        return []
+
+    encabezados = []
+    usados = {}
+    for i, encabezado in enumerate(valores[0]):
+        base = str(encabezado).strip() or f"Columna_{i + 1}"
+        usados[base] = usados.get(base, 0) + 1
+        encabezados.append(base if usados[base] == 1 else f"{base}_{usados[base]}")
+
+    registros = []
+    for fila in valores[1:]:
+        fila = (list(fila) + [""] * len(encabezados))[:len(encabezados)]
+        if any(str(valor).strip() for valor in fila):
+            registros.append(dict(zip(encabezados, fila)))
+    return registros
 
 
 @st.cache_resource(show_spinner=False)
@@ -74,75 +104,17 @@ def read_sheet(name):
 
         valores = ws.get_all_values()
 
-        if not valores:
-            return []
+        return _records_from_values(valores)
 
-        encabezados_originales = valores[0]
-        filas = valores[1:]
+    return retry_google(operation)
 
-        encabezados = []
-        usados = {}
 
-        for i, encabezado in enumerate(encabezados_originales):
-
-            encabezado = str(encabezado).strip()
-
-            # Si una columna no tiene encabezado,
-            # generar uno interno.
-            if not encabezado:
-                encabezado = f"Columna_{i + 1}"
-
-            base = encabezado
-
-            # Si el encabezado se repite,
-            # conservar ambas columnas haciéndolas únicas.
-            if base in usados:
-
-                usados[base] += 1
-
-                encabezado = (
-                    f"{base}_{usados[base]}"
-                )
-
-            else:
-
-                usados[base] = 1
-
-            encabezados.append(encabezado)
-
-        registros = []
-
-        for fila in filas:
-
-            # Completar filas cortas
-            if len(fila) < len(encabezados):
-
-                fila = fila + [""] * (
-                    len(encabezados)
-                    - len(fila)
-                )
-
-            # Ignorar valores que excedan
-            # la cantidad de encabezados
-            fila = fila[:len(encabezados)]
-
-            # Ignorar solamente filas completamente vacías
-            if not any(
-                str(valor).strip()
-                for valor in fila
-            ):
-                continue
-
-            registros.append(
-                dict(
-                    zip(
-                        encabezados,
-                        fila
-                    )
-                )
-            )
-
-        return registros
+@st.cache_data(ttl=300, show_spinner=False)
+def read_personal_responses():
+    """Lee respuestas recientes del formulario sin escribir en Google Sheets."""
+    def operation():
+        ws = personal_responses_connection().worksheet(HOJA_RESPUESTAS_PERSONAL)
+        return _records_from_values(ws.get_all_values())
 
     return retry_google(operation)
 

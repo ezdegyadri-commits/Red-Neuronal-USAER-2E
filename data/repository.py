@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import date
-from data.google import clear_cache, df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id, retry_google, worksheet
+from data.google import clear_cache, df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id, read_personal_responses, retry_google, worksheet
 from config.settings import ANEXO4_FIELDS
 
 BASE_HEADERS={
@@ -35,6 +35,77 @@ def alumnos():
   frame = frame.loc[con_alumno].reset_index(drop=True)
  return frame
 def personal(): return read('Personal')
+
+
+def personal_para_formato():
+ """Obtiene personal del formulario; usa la hoja central como respaldo."""
+ respuestas = pd.DataFrame(read_personal_responses())
+ if respuestas.empty:
+  return personal()
+
+ def normalizar(texto):
+  import re
+  import unicodedata
+  texto = unicodedata.normalize('NFD', str(texto)).encode('ascii', 'ignore').decode('ascii')
+  return re.sub(r'[^a-z0-9]+', ' ', texto.lower()).strip()
+
+ encabezados = {normalizar(columna): columna for columna in respuestas.columns}
+ aliases = {
+  'ID_Personal': ('direccion de correo electronico',),
+  'Nombre_Completo': ('nombre del docente de apoyo paradocentes',),
+  'Rol': ('funcion que desempena',),
+  'Email': ('direccion de correo electronico',),
+  'Telefono': ('telefono 10 digitos',),
+  'Sexo': ('sexo',),
+  'Base_Contrato': ('base contrato',),
+  'Sostenimiento': ('sostenimiento',),
+  'Presenta_Discapacidad': ('presenta alguna discapacidad',),
+  'Horario': ('horario de trabajo',),
+  'Discapacidad': ('elija la categoria de discapacidad',),
+  'Maya_Hablante': ('es usted maya hablante',),
+  'Zona': ('zona',),
+  'Numero_USAER': ('n usaer',),
+  'CCT_USAER': ('clave de centro de trabajo de la usaer',),
+  'Turno_USAER': ('turno',),
+  'Numero_Escuelas': ('numero de escuelas',),
+  'Escuelas_Atendidas': ('nombre de la escuela que atiende',),
+  'CCT_Escuela': ('clave de centro de trabajo de la escuela regular',),
+  'Nivel_Escuela': ('nivel educativo de la escuela regular',),
+  'Modalidad_Escuela': ('modalidad general indigena',),
+  'Horario_Escuela': ('horario en el que la escuela regular permanece abierta',),
+  'Grupos_Escuela': ('total de grupos que tiene la escuela',),
+  'Direccion_Escuela': ('direccion de la escuela calle numero',),
+  'Localidad_Escuela': ('localidad de la escuela regular',),
+  'Municipio_Escuela': ('municipio de la escuela regular',),
+ }
+ columnas = {}
+ for destino, candidatos in aliases.items():
+  for encabezado, original in encabezados.items():
+   if any(candidato in encabezado for candidato in candidatos):
+    columnas[destino] = original
+    break
+
+ requeridas = {'Nombre_Completo', 'Rol', 'Email'}
+ faltantes = requeridas - set(columnas)
+ if faltantes:
+  raise ValueError(
+   'La hoja de respuestas no contiene los encabezados requeridos: '
+   + ', '.join(sorted(faltantes))
+  )
+
+ personal_formulario = pd.DataFrame(index=respuestas.index)
+ for destino, origen in columnas.items():
+  personal_formulario[destino] = respuestas[origen].fillna('').astype(str).str.strip()
+ if 'Telefono' in personal_formulario.columns:
+  def limpiar_telefono(valor):
+   import re
+   digitos = re.sub(r'\D', '', valor)
+   return digitos if len(digitos) == 10 else valor
+  personal_formulario['Telefono'] = personal_formulario['Telefono'].map(limpiar_telefono)
+ personal_formulario['Fuente_Formulario'] = True
+ personal_formulario['Escuela_Asignada'] = personal_formulario.get('Escuelas_Atendidas', '')
+ personal_formulario['Fuente_Fecha'] = respuestas.get('Marca temporal', '')
+ return personal_formulario.reset_index(drop=True)
 def asignaciones(): return read('Asignaciones')
 def usuarios(): return read('Usuarios')
 def anexo3(): return read('Anexo3_Deteccion')

@@ -37,13 +37,27 @@ def direccion_page_rapida(_df=None):
     with col_personal:
         if st.button("Generar formato oficial de personal", type="primary", width="stretch"):
             try:
+                st.session_state.pop("personal_usaer_archivo", None)
+                st.session_state.pop("personal_usaer_total", None)
                 alumnos = repo.alumnos()
                 escuelas = repo.escuelas()
-                personal = repo.personal()
-                asignaciones = repo.asignaciones()
-                st.session_state["personal_usaer_archivo"] = generar_formato_personal(
-                    personal, escuelas, alumnos, asignaciones
-                )
+                personal = repo.personal_para_formato()
+                if personal.empty:
+                    st.error(
+                        "No hay respuestas en la hoja del formulario de personal "
+                        "ni registros en la base central."
+                    )
+                else:
+                    asignaciones = repo.asignaciones()
+                    st.session_state["personal_usaer_archivo"] = generar_formato_personal(
+                        personal, escuelas, alumnos, asignaciones
+                    )
+                    st.session_state["personal_usaer_total"] = len(personal)
+                    if not personal["Rol"].map(lambda rol: "DIRECTOR" in str(rol).upper()).any():
+                        st.warning(
+                            "La hoja de respuestas no incluye el registro del Director; "
+                            "el formato se generó con los registros disponibles."
+                        )
             except Exception as ex:
                 st.error(f"No se pudo preparar el formato de personal: {ex}")
     with col_control:
