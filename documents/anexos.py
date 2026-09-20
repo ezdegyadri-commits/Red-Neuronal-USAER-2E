@@ -49,8 +49,11 @@ def anexo4_html(alumno, rows):
         seguimiento = html.escape(str(r.get("Fecha_Seguimiento", "")))
         fecha = html.escape(str(r.get("Fecha_Elaboracion", "")))
         quien_brinda = html.escape(str(r.get("Quien_Brinda_Sugerencias", "")))
-        escuela = html.escape(str(r.get("Escuela", "")))
-        grado_grupo = html.escape(str(r.get("Grado_Grupo", "")))
+        escuela = html.escape(str(r.get("Escuela", "") or alumno.get("Nombre_Escuela", "")))
+        grado_grupo = html.escape(str(
+            r.get("Grado_Grupo", "")
+            or f"{alumno.get('Grado', '')} {alumno.get('Grupo', '')}".strip()
+        ))
         out.append(
             f"<section class='hoja'><div class='header'><img src='{head}'></div>"
             "<h2 style='text-align:center;text-decoration:underline'>"
@@ -106,10 +109,14 @@ def anexo4_pdf(alumno, rows):
         pdf.set_text_color(0, 0, 0)
         pdf.ln(3)
         pdf.set_font("Helvetica", "", 9)
+        grado_grupo = registro.get("Grado_Grupo", "") or (
+            f"{alumno.get('Grado', '')} {alumno.get('Grupo', '')}".strip()
+        )
+        escuela_registro = registro.get("Escuela", "") or alumno.get("Nombre_Escuela", "")
         metadatos = (
             f"Alumno / grupo: {alumno.get('Nombre_Completo', 'Alumno / grupo')}\n"
-            f"Grado y grupo: {registro.get('Grado_Grupo', '')}\n"
-            f"Escuela: {registro.get('Escuela', '')}\n"
+            f"Grado y grupo: {grado_grupo}\n"
+            f"Escuela: {escuela_registro}\n"
             f"Servicio: {SERVICE_NAME}\n"
             f"Área: {registro.get('Sugerencias_Area', 'Aprendizaje')}    "
             f"Fecha: {registro.get('Fecha_Elaboracion', '')}\n"

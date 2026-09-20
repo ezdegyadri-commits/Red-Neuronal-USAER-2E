@@ -187,14 +187,15 @@ def anexo4_page(df):
     if hay_borrador:
         filas_vista = pd.concat([filas_vista, pd.DataFrame([registro_borrador])], ignore_index=True)
     filas_vista = _sort_suggestions(filas_vista)
-    documento = anexo4_html(fila_alumno.to_dict(), filas_vista)
+    alumno_vista = {**fila_alumno.to_dict(), "Nombre_Escuela": escuela_alumno}
+    documento = anexo4_html(alumno_vista, filas_vista)
     st.markdown("### Vista previa oficial · Anexo IV SEGEY")
     if hay_borrador:
         st.caption("La vista incluye el borrador actual. Pulsa «Añadir a la hoja del alumno» para guardarlo en la base central.")
     components.html(documento, height=860, scrolling=True)
     st.download_button(
         "Descargar PDF carta para imprimir",
-        anexo4_pdf(fila_alumno.to_dict(), filas_vista),
+        anexo4_pdf(alumno_vista, filas_vista),
         f"Anexo_IV_{id_alumno}.pdf",
         "application/pdf",
         type="primary",
