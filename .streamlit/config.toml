@@ -1,3 +1,6 @@
 [server]
 # Conserva la sesión 24 horas si el navegador pierde temporalmente la conexión.
 disconnectedSessionTTL = 86400
+# Relatorías de reuniones pueden usar archivos de hasta 400 MB.
+maxUploadSize = 400
+maxMessageSize = 400
