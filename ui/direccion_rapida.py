@@ -16,20 +16,25 @@ def direccion_page_rapida(_df=None):
 
     col_padron, col_personal, col_control = st.columns(3)
     with col_padron:
-        if st.button("Preparar padrón de alumnos", use_container_width=True):
+        if st.button("Generar padrón oficial de alumnos USAER", type="primary", width="stretch"):
             try:
-                alumnos = repo.alumnos()
-                escuelas = repo.escuelas()
-                st.session_state["padron_usaer_archivo"] = generar_padron_usaer(
-                    alumnos, escuelas
-                )
-                st.session_state["padron_usaer_vista"] = vista_padron_oficial(
-                    alumnos, escuelas
-                )
+                with st.spinner("Leyendo la base central y preparando el padrón oficial..."):
+                    alumnos = repo.alumnos()
+                    escuelas = repo.escuelas()
+                    if alumnos.empty:
+                        st.error("La base central no contiene alumnos para el padrón.")
+                    else:
+                        st.session_state["padron_usaer_archivo"] = generar_padron_usaer(
+                            alumnos, escuelas
+                        )
+                        st.session_state["padron_usaer_vista"] = vista_padron_oficial(
+                            alumnos, escuelas
+                        )
+                        st.session_state["padron_usaer_total"] = len(alumnos)
             except Exception as ex:
-                st.error(f"No se pudo preparar el padrón: {ex}")
+                st.error(f"No se pudo generar el padrón oficial: {ex}")
     with col_personal:
-        if st.button("Preparar formato de personal", use_container_width=True):
+        if st.button("Generar formato oficial de personal", type="primary", width="stretch"):
             try:
                 alumnos = repo.alumnos()
                 escuelas = repo.escuelas()
@@ -41,7 +46,7 @@ def direccion_page_rapida(_df=None):
             except Exception as ex:
                 st.error(f"No se pudo preparar el formato de personal: {ex}")
     with col_control:
-        if st.button("Cargar control de oficios", use_container_width=True):
+        if st.button("Cargar control de oficios", width="stretch"):
             try:
                 st.session_state["control_oficios_usaer"] = repo.oficios_comision()
             except Exception as ex:
@@ -49,7 +54,7 @@ def direccion_page_rapida(_df=None):
 
     padron = st.session_state.get("padron_usaer_archivo")
     if padron:
-        st.markdown("### Padrón que se entregará a la zona")
+        st.markdown("### Padrón oficial que se entregará a la zona")
         st.caption(
             "La vista contiene únicamente los campos del formato oficial; "
             "la información interna de los expedientes se conserva sin cambios."
@@ -69,6 +74,10 @@ def direccion_page_rapida(_df=None):
 
     personal = st.session_state.get("personal_usaer_archivo")
     if personal:
+        st.success(
+            f"Formato de personal listo con "
+            f"{st.session_state.get('personal_usaer_total', 0)} registros."
+        )
         st.download_button(
             "Descargar formato de personal",
             data=personal,
