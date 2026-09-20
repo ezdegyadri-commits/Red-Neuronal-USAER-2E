@@ -1,3 +1,4 @@
+import pandas as pd
 from datetime import date
 from data.google import clear_cache, df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id, retry_google, worksheet
 from config.settings import ANEXO4_FIELDS
