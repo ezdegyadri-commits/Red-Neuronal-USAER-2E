@@ -9,7 +9,7 @@ from services.expedientes import alumnos_visibles, expediente, alumno
 from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
 from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
 from ai.engine import fallback, generar_sugerencias
-from documents.anexos import anexo3_html, anexo4_html, anexo5_html, anexo7_pdf, header_b64
+from documents.anexos import anexo3_html, anexo4_html, anexo4_pdf, anexo5_html, anexo7_pdf, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from documents.oficios import generar_oficio_comision
 from ui.components import hero, card
@@ -46,7 +46,7 @@ def expedientes_page(df):
     with c[1]: card("Grado / grupo",f"{a.get('Grado','')} {a.get('Grupo','')}")
     with c[2]: card("Condición",a.get("Condicion_Discapacidad",""))
     with c[3]: card("Estatus",a.get("Estatus",""))
-    tabs=st.tabs(["Resumen","Anexo 3","Anexo 4","Anexo 5","Línea de tiempo"])
+    tabs=st.tabs(["Resumen","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Línea de tiempo"])
     with tabs[0]:
         st.write({k:a.get(k,"") for k in ["Nombre_Completo","CURP","Grado","Grupo","ID_Escuela","Maestra de Apoyo","ID_Maestro_Regular","Condicion_Discapacidad","Tipo_Atencion","Estatus"]})
     with tabs[1]: st.dataframe(exp["anexo3"],use_container_width=True,hide_index=True)
@@ -566,7 +566,7 @@ def alta_page(df):
 
 def bap_page(df):
     hero(
-        "Evaluación BAP → intervención",
+        "Anexo III BAP → intervención",
         "La captura estructurada alimenta la IA; la decisión profesional queda en tus manos."
     )
 
@@ -673,7 +673,7 @@ def bap_page(df):
             "escuela": escuela
         }
 
-    st.markdown("### Instrumento de Observación — Anexo III")
+    st.markdown("### Anexo III BAP — Instrumento de observación")
 
     with st.form("bap_form_integrado", clear_on_submit=False):
         respuestas = {}
@@ -696,10 +696,17 @@ def bap_page(df):
                     key=f"bap_ori_{modo}_{id_a}_{i}"
                 )
 
+            observacion_item = st.text_area(
+                "Observación específica (opcional)",
+                height=70,
+                key=f"bap_obs_item_{modo}_{id_a}_{i}",
+            )
+
             respuestas[f"Item_{i}"] = {
                 "pregunta": pregunta,
                 "frecuencia": frecuencia,
-                "orientacion": orientacion
+                "orientacion": orientacion,
+                "observacion": observacion_item,
             }
 
         observaciones = st.text_area(
@@ -745,70 +752,63 @@ def bap_page(df):
                     "Se preparó una propuesta base que puedes editar y aprobar."
                 )
             st.session_state["ai_context"] = contexto
+            propuesta = st.session_state["ai_draft"]
+            st.session_state[f"draft_area_{id_a}"] = propuesta.get("area", "Aprendizaje")
+            st.session_state[f"draft_motivo_{id_a}"] = propuesta.get("motivo", "Resultados del Anexo III BAP: barreras identificadas")
+            st.session_state[f"draft_sug_{id_a}"] = propuesta.get("sugerencias", "")
+            st.session_state[f"draft_follow_{id_a}"] = propuesta.get("seguimiento", "")
+            st.session_state["bap_auto_guardar"] = True
 
     draft = st.session_state.get("ai_draft")
+    contexto_draft = st.session_state.get("ai_context", {})
+    if draft and contexto_draft.get("expediente") != expediente_id(id_a):
+        draft = None
 
     if not draft:
         return
 
     st.markdown("### Propuesta de IA")
     st.caption(
-        "La IA propone; el profesional decide. "
-        "Nada se incorpora al expediente hasta que lo apruebes."
+        "La propuesta se incorpora al Anexo IV al terminar el análisis. "
+        "Puedes revisarla aquí y editarla después desde Documentos."
     )
 
     area = st.text_input(
         "Sugerencias del área",
-        draft.get("area", "Aprendizaje"),
-        key="draft_area"
+        key=f"draft_area_{id_a}",
     )
 
     motivo = st.text_area(
         "Motivo por el que se brindan las sugerencias",
-        draft.get(
-            "motivo",
-            "Resultados del Anexo 3: Barreras identificadas en el contexto áulico"
-        ),
-        key="draft_motivo"
+        key=f"draft_motivo_{id_a}",
     )
 
     sugerencias = st.text_area(
         "Sugerencias",
-        draft.get("sugerencias", ""),
         height=300,
-        key="draft_sug"
+        key=f"draft_sug_{id_a}",
     )
 
     seguimiento = st.text_input(
         "Fecha / plazo de seguimiento",
-        draft.get("seguimiento", ""),
-        key="draft_follow"
+        key=f"draft_follow_{id_a}",
     )
 
-    if st.button(
-        "Aprobar → generar Anexo 3 y Anexo 4",
+    auto_guardar = bool(st.session_state.pop("bap_auto_guardar", False))
+    guardar_cambios = st.button(
+        "Guardar cambios del Anexo IV",
         type="primary",
-        key="approve_bap"
-    ):
+        key="approve_bap",
+    )
+
+    if auto_guardar or guardar_cambios:
         hoy = str(date.today())
         contexto = st.session_state.get("ai_context", {})
         respuestas_json = json.dumps(
             contexto.get("bap", {}),
-            ensure_ascii=False
+            ensure_ascii=False,
         )
-
-        a3 = repo.save_anexo3({
-            "Fecha": hoy,
-            "ID_Alumno": id_a,
-            "ID_Personal": st.session_state.get("nombre", ""),
-            "BAP_Fisicas": respuestas_json,
-            "BAP_Actitudinales": "",
-            "BAP_Pedagogicas": "",
-            "BAP_Organizativas": "",
-            "Estatus_IA": "Procesado"
-        })
-
-        a4 = repo.save_anexo4({
+        registro_a4 = {
             "Nombre_Alumno": objetivo,
             "Grado_Grupo": grado_grupo,
             "Escuela": escuela_nombre,
@@ -819,39 +819,57 @@ def bap_page(df):
             "Fecha_Seguimiento": seguimiento,
             "Sugerencias": sugerencias,
             "Nivel_Cumplimiento_Resultados": "Pendiente de revisión",
-            "Quien_Brinda_Sugerencias": st.session_state.get("nombre", "")
-        })
-
-        try:
-            repo.ensure_expediente(expediente_id(id_a), id_a)
-            repo.link_record(expediente_id(id_a), id_a, "ANEXO3", a3, hoy)
-            repo.link_record(expediente_id(id_a), id_a, "ANEXO4", a4, hoy)
-            repo.timeline(
-                expediente_id(id_a),
-                id_a,
-                hoy,
-                "SUGERENCIA",
-                "Anexo 4 aprobado",
-                sugerencias,
-                st.session_state.get("nombre", "")
-            )
-        except Exception as ex:
-            st.warning(
-                "Los formatos se guardaron. La vinculación adicional "
-                f"no pudo completarse: {ex}"
-            )
-
-        st.session_state["last_anexo4"] = {
-            "id": a4,
-            "id_alumno": id_a,
-            "nombre": objetivo,
-            "sugerencias": sugerencias
+            "Quien_Brinda_Sugerencias": st.session_state.get("nombre", ""),
         }
-        st.session_state.pop("ai_draft", None)
-
-        st.success(
-            "Anexo 3 y Anexo 4 generados y vinculados al expediente."
-        )
+        guardado = st.session_state.get("bap_guardado_anexo4", {})
+        mismo_objetivo = guardado.get("id_alumno") == id_a
+        try:
+            if mismo_objetivo and guardado.get("id"):
+                a4 = repo.update_anexo4(guardado["id"], registro_a4)
+                mensaje = "Los cambios del Anexo IV se guardaron correctamente."
+            else:
+                a3 = repo.save_anexo3({
+                    "Fecha": hoy,
+                    "ID_Alumno": id_a,
+                    "ID_Personal": st.session_state.get("nombre", ""),
+                    "BAP_Fisicas": respuestas_json,
+                    "BAP_Actitudinales": "",
+                    "BAP_Pedagogicas": "",
+                    "BAP_Organizativas": "",
+                    "Estatus_IA": "Procesado",
+                })
+                a4 = repo.save_anexo4(registro_a4)
+                st.session_state["bap_guardado_anexo4"] = {
+                    "id": a4,
+                    "id_alumno": id_a,
+                }
+                try:
+                    repo.ensure_expediente(expediente_id(id_a), id_a)
+                    repo.link_record(expediente_id(id_a), id_a, "ANEXO3", a3, hoy)
+                    repo.link_record(expediente_id(id_a), id_a, "ANEXO4", a4, hoy)
+                    repo.timeline(
+                        expediente_id(id_a), id_a, hoy, "SUGERENCIA",
+                        "Anexo IV generado desde el análisis BAP",
+                        sugerencias, st.session_state.get("nombre", ""),
+                    )
+                except Exception as ex:
+                    st.warning(
+                        "Los formatos se guardaron. La vinculación adicional "
+                        f"no pudo completarse: {ex}"
+                    )
+                mensaje = (
+                    "Anexo III BAP y Anexo IV generados automáticamente. "
+                    "Ya están disponibles en Documentos."
+                )
+            st.session_state["last_anexo4"] = {
+                "id": a4,
+                "id_alumno": id_a,
+                "nombre": objetivo,
+                "sugerencias": sugerencias,
+            }
+            st.success(mensaje)
+        except Exception as ex:
+            st.error(f"No fue posible guardar el Anexo IV: {ex}")
 
     last = st.session_state.get("last_anexo4")
 
@@ -1221,6 +1239,22 @@ def documentos_page(df):
                         and grupo_permitido(str(valor))
                     )
                 )
+        if not a3_todos.empty and "ID_Alumno" in a3_todos.columns:
+            for id_registro in a3_todos["ID_Alumno"].dropna().astype(str):
+                for nombre_escuela, codigo_escuela in ESCUELAS_USAER.items():
+                    prefijo = f"GRUPO-{codigo_escuela}-"
+                    if not id_registro.startswith(prefijo):
+                        continue
+                    grado_y_grupo = id_registro[len(prefijo):].rsplit("-", 1)
+                    if len(grado_y_grupo) != 2:
+                        continue
+                    nombre_grupo = (
+                        f"Grupo {grado_y_grupo[0]} {grado_y_grupo[1]} "
+                        f"de la escuela {nombre_escuela}"
+                    )
+                    if grupo_permitido(nombre_grupo):
+                        grupos.add(nombre_grupo)
+
         grupos = sorted(grupos)
         if not grupos:
             st.info("Aún no hay anexos generados para grupos.")
@@ -1248,22 +1282,42 @@ def documentos_page(df):
         archivo_base = etiqueta.replace(" ", "_")
         alumno_documento = {"Nombre_Completo": etiqueta}
 
+        escuela_grupo = ""
+        grado_grupo_partes = []
+        id_grupo = None
         if not a4.empty:
             fila_grupo = a4.iloc[0]
-            escuela = str(fila_grupo.get("Escuela", ""))
-            grado_grupo = str(fila_grupo.get("Grado_Grupo", "")).split()
-            codigo = ESCUELAS_USAER.get(escuela, "")
-            if codigo and len(grado_grupo) >= 2 and not a3_todos.empty:
-                id_grupo = (
-                    f"GRUPO-{codigo}-{grado_grupo[0]}-{grado_grupo[1]}"
-                )
-                if "ID_Alumno" in a3_todos.columns:
-                    a3 = a3_todos[
-                        a3_todos["ID_Alumno"].astype(str) == id_grupo
-                    ].copy()
+            escuela_grupo = str(fila_grupo.get("Escuela", ""))
+            grado_grupo_partes = str(
+                fila_grupo.get("Grado_Grupo", "")
+            ).split()
+        else:
+            for nombre_escuela in escuelas_disponibles:
+                sufijo = f" de la escuela {nombre_escuela}"
+                if etiqueta.endswith(sufijo):
+                    escuela_grupo = nombre_escuela
+                    grado_grupo_partes = etiqueta[
+                        len("Grupo "):-len(sufijo)
+                    ].split()
+                    break
+
+        codigo = ESCUELAS_USAER.get(escuela_grupo, "")
+        if (
+            codigo
+            and len(grado_grupo_partes) >= 2
+            and not a3_todos.empty
+            and "ID_Alumno" in a3_todos.columns
+        ):
+            id_grupo = (
+                f"GRUPO-{codigo}-"
+                f"{grado_grupo_partes[0]}-{grado_grupo_partes[1]}"
+            )
+            a3 = a3_todos[
+                a3_todos["ID_Alumno"].astype(str) == id_grupo
+            ].copy()
 
     st.markdown(f"### Documentos de {etiqueta}")
-    tabs = st.tabs(["Anexo III", "Anexo IV", "Anexo V"])
+    tabs = st.tabs(["Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos"])
 
     with tabs[0]:
         if a3.empty:
@@ -1282,16 +1336,181 @@ def documentos_page(df):
     with tabs[1]:
         if a4.empty:
             st.info("Todavía no hay un Anexo IV para este expediente.")
+            if not a3.empty:
+                st.caption(
+                    "Se encontró el instrumento BAP guardado. Puedes crear "
+                    "su hoja de sugerencias sin volver a capturar el instrumento."
+                )
+                if st.button(
+                    "Generar Anexo IV desde el Anexo III BAP guardado",
+                    type="primary",
+                    width="stretch",
+                    key=f"recuperar_a4_{archivo_base}",
+                ):
+                    ultima_bap = a3.iloc[-1]
+                    try:
+                        respuestas_guardadas = json.loads(
+                            str(ultima_bap.get("BAP_Fisicas", "{}")) or "{}"
+                        )
+                    except (TypeError, json.JSONDecodeError):
+                        respuestas_guardadas = {}
+
+                    if tipo == "Alumno individual":
+                        id_objetivo = id_alumno
+                        escuela_objetivo = str(
+                            alumno_documento.get("Nombre_Escuela", "")
+                        )
+                        if not escuela_objetivo:
+                            codigo_objetivo = str(
+                                alumno_documento.get("ID_Escuela", "")
+                            )
+                            escuela_objetivo = next(
+                                (
+                                    nombre_escuela
+                                    for nombre_escuela, codigo in ESCUELAS_USAER.items()
+                                    if str(codigo) == codigo_objetivo
+                                ),
+                                "",
+                            )
+                        grado_objetivo = (
+                            f"{alumno_documento.get('Grado', '')} "
+                            f"{alumno_documento.get('Grupo', '')}"
+                        ).strip()
+                        tipo_objetivo = "Individual"
+                    else:
+                        id_objetivo = id_grupo
+                        escuela_objetivo = escuela_grupo
+                        grado_objetivo = " ".join(grado_grupo_partes)
+                        tipo_objetivo = "Grupal"
+
+                    contexto_recuperado = {
+                        "tipo": tipo_objetivo,
+                        "objetivo": etiqueta,
+                        "escuela": escuela_objetivo,
+                        "grado_grupo": grado_objetivo,
+                        "bap": respuestas_guardadas,
+                        "barreras_detectadas": [
+                            valor
+                            for valor in respuestas_guardadas.values()
+                            if isinstance(valor, dict)
+                            and (
+                                valor.get("frecuencia") in ["Nunca", "Pocas veces"]
+                                or valor.get("orientacion")
+                            )
+                        ],
+                    }
+                    with st.spinner("Preparando sugerencias para el Anexo IV..."):
+                        try:
+                            propuesta = generar_sugerencias(contexto_recuperado)
+                        except RuntimeError:
+                            propuesta = fallback()
+                        nuevo_anexo4 = repo.save_anexo4({
+                            "Nombre_Alumno": etiqueta,
+                            "Grado_Grupo": grado_objetivo,
+                            "Escuela": escuela_objetivo,
+                            "Servicio_EE": SERVICE_NAME,
+                            "Sugerencias_Area": propuesta.get(
+                                "area", "Aprendizaje"
+                            ),
+                            "Fecha_Elaboracion": str(date.today()),
+                            "Motivo": propuesta.get("motivo", ""),
+                            "Fecha_Seguimiento": propuesta.get("seguimiento", ""),
+                            "Sugerencias": propuesta.get("sugerencias", ""),
+                            "Nivel_Cumplimiento_Resultados": "Pendiente de revisión",
+                            "Quien_Brinda_Sugerencias": st.session_state.get(
+                                "nombre", ""
+                            ),
+                        })
+                        try:
+                            repo.ensure_expediente(
+                                expediente_id(id_objetivo), id_objetivo
+                            )
+                            repo.link_record(
+                                expediente_id(id_objetivo), id_objetivo,
+                                "ANEXO4", nuevo_anexo4, str(date.today()),
+                            )
+                        except Exception:
+                            pass
+                    st.success("Anexo IV creado y guardado en Documentos.")
+                    st.rerun()
         else:
             st.dataframe(a4, use_container_width=True, hide_index=True)
+            vista_anexo4 = anexo4_html(alumno_documento, a4)
+            with st.expander("Vista previa del Anexo IV", expanded=True):
+                st.html(vista_anexo4)
+
             st.download_button(
-                "Descargar Anexo IV",
-                anexo4_html(alumno_documento, a4),
-                f"Anexo_IV_{archivo_base}.html",
-                "text/html",
+                "Descargar Anexo IV en PDF carta",
+                data=anexo4_pdf(alumno_documento, a4),
+                file_name=f"Anexo_IV_Hoja_de_sugerencias_{archivo_base}.pdf",
+                mime="application/pdf",
                 use_container_width=True,
+                type="primary",
                 key=f"descargar_a4_{archivo_base}",
             )
+
+            st.download_button(
+                "Descargar versión imprimible HTML",
+                data=vista_anexo4,
+                file_name=f"Anexo_IV_Hoja_de_sugerencias_{archivo_base}.html",
+                mime="text/html",
+                use_container_width=True,
+                key=f"descargar_a4_html_{archivo_base}",
+            )
+
+            ids_anexo4 = a4["ID_Anexo4"].astype(str).tolist()
+            id_anexo4 = st.selectbox(
+                "Anexo IV que deseas editar",
+                ids_anexo4,
+                key=f"editar_a4_id_{archivo_base}",
+            )
+            fila_anexo4 = a4[
+                a4["ID_Anexo4"].astype(str) == str(id_anexo4)
+            ].iloc[0]
+            with st.form(f"editar_a4_{archivo_base}_{id_anexo4}"):
+                area_editada = st.text_input(
+                    "Sugerencias del área",
+                    str(fila_anexo4.get("Sugerencias_Area", "")),
+                )
+                motivo_editado = st.text_area(
+                    "Motivo",
+                    str(fila_anexo4.get("Motivo", "")),
+                )
+                sugerencias_editadas = st.text_area(
+                    "Sugerencias individuales o grupales",
+                    str(fila_anexo4.get("Sugerencias", "")),
+                    height=320,
+                )
+                seguimiento_editado = st.text_input(
+                    "Fecha o plazo de seguimiento",
+                    str(fila_anexo4.get("Fecha_Seguimiento", "")),
+                )
+                resultados_editados = st.text_area(
+                    "Nivel de cumplimiento y resultados",
+                    str(fila_anexo4.get("Nivel_Cumplimiento_Resultados", "")),
+                    height=100,
+                )
+                guardar_edicion = st.form_submit_button(
+                    "Guardar cambios del Anexo IV",
+                    type="primary",
+                    use_container_width=True,
+                )
+            if guardar_edicion:
+                try:
+                    repo.update_anexo4(
+                        id_anexo4,
+                        {
+                            "Sugerencias_Area": area_editada,
+                            "Motivo": motivo_editado,
+                            "Sugerencias": sugerencias_editadas,
+                            "Fecha_Seguimiento": seguimiento_editado,
+                            "Nivel_Cumplimiento_Resultados": resultados_editados,
+                        },
+                    )
+                    st.success("Anexo IV actualizado; la vista previa y PDF usarán los cambios.")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"No fue posible actualizar el Anexo IV: {ex}")
 
     with tabs[2]:
         if a5.empty:
