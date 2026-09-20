@@ -1,0 +1,3 @@
+[server]
+# Conserva la sesión 24 horas si el navegador pierde temporalmente la conexión.
+disconnectedSessionTTL = 86400
