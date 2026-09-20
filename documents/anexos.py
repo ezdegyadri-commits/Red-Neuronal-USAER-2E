@@ -144,16 +144,16 @@ def anexo4_pdf(alumno, rows):
             ancho_firmas, 5, "Firmas",
             align="C", new_x="LMARGIN", new_y="NEXT",
         )
-        pdf.set_x(x_firmas)
+        pdf.set_xy(x_firmas, pdf.get_y())
         pdf.set_font("Helvetica", "", 9)
-        pdf.cell(
-            ancho_firmas, 15,
+        pdf.multi_cell(
+            ancho_firmas, 5,
             "______________________________\nNombre y firma de quien recibe",
             border=1, align="C", new_x="LMARGIN", new_y="NEXT",
         )
-        pdf.set_x(x_firmas)
-        pdf.cell(
-            ancho_firmas, 17,
+        pdf.set_xy(x_firmas, pdf.get_y())
+        pdf.multi_cell(
+            ancho_firmas, 5,
             "______________________________\nNombre y firma de quien brinda\n"
             + str(registro.get("Quien_Brinda_Sugerencias", "")),
             border=1, align="C", new_x="LMARGIN", new_y="NEXT",
@@ -165,7 +165,7 @@ def anexo4_pdf(alumno, rows):
 def anexo5_html(alumno, rows):
     head = header_b64()
     out = ["<html><head><meta charset='UTF-8'><style>body{font-family:Arial,sans-serif;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #111;padding:8px;vertical-align:top}</style></head><body>"]
-    out.append(f"<div style='text-align:center'><img src='{head}' style='max-width:100%'></div><h2 style='text-align:center;text-decoration:underline'>Anexo V. Hoja de Eventos Significativos.</h2><p><b>Nombre del alumno:</b> {html.escape(str(alumno.get('Nombre_Completo','')))}</p><table><tr><th>Fecha</th><th>Evento</th><th>Especialista, firma, fecha.</th></tr>")
+    out.append(f"<div style='text-align:center'><img src='{head}' style='max-width:100%'></div><h2 style='text-align:center;text-decoration:underline'>Anexo V. Eventos significativos.</h2><p><b>Nombre del alumno:</b> {html.escape(str(alumno.get('Nombre_Completo','')))}</p><table><tr><th>Fecha</th><th>Evento</th><th>Especialista, firma, fecha.</th></tr>")
     for _, r in rows.iterrows():
         out.append(f"<tr><td>{html.escape(str(r.get('Fecha','')))}</td><td>{html.escape(str(r.get('Evento',''))).replace(chr(10),'<br>')}</td><td style='text-align:center'><br><br>_____________________<br>{html.escape(str(r.get('Especialista','')))}</td></tr>")
     out.append("</table></body></html>")
@@ -193,7 +193,7 @@ def anexo3_html(alumno, rows):
         out.append(
             f"<section><div class='header'><img src='{head}' style='max-width:100%'></div>"
             "<h2 style='text-align:center;text-decoration:underline'>"
-            "Anexo III. Instrumento de observación de barreras para el aprendizaje y la participación"
+            "Anexo III. BAP — Instrumento de observación de barreras para el aprendizaje y la participación"
             "</h2>"
             f"<p><b>Alumno o grupo:</b> {nombre}<br>"
             f"<b>Fecha:</b> {html.escape(str(r.get('Fecha', '')))}<br>"
@@ -209,6 +209,7 @@ def anexo3_html(alumno, rows):
             orientacion = "Sí" if respuesta.get("orientacion") else "No"
             out.append(
                 f"<tr><td>{pregunta}</td><td>{frecuencia}</td>"
+                f"<td>{html.escape(str(respuesta.get('observacion', ''))).replace(chr(10), '<br>')}</td>"
                 f"<td>{orientacion}</td></tr>"
             )
         out.append("</table></section><div style='page-break-after:always'></div>")
