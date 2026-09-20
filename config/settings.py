@@ -47,7 +47,10 @@ BAP_FRECUENCIAS = ["Nunca", "Pocas veces", "Muchas veces", "Siempre"]
 ANEXO4_FIELDS = [
     "ID_Anexo4", "Nombre_Alumno", "Grado_Grupo", "Escuela", "Servicio_EE",
     "Sugerencias_Area", "Fecha_Elaboracion", "Motivo", "Fecha_Seguimiento",
-    "Sugerencias", "Nivel_Cumplimiento_Resultados", "Quien_Brinda_Sugerencias"
+    "Sugerencias", "Nivel_Cumplimiento_Resultados", "Quien_Brinda_Sugerencias",
+    # Additive keys: existing rows and columns are preserved; these fields
+    # link suggestions to a unique student and allow reversible removal.
+    "ID_Alumno", "Estado"
 ]
 
 WORKFLOW = [

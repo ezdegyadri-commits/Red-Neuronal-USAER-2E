@@ -50,8 +50,32 @@ def expediente(id_alumno):
         a3 = a3[a3["ID_Alumno"].astype(str) == str(id_alumno)].copy()
     else: a3 = pd.DataFrame()
     if not a4.empty and "Nombre_Alumno" in a4.columns:
-        a4 = a4[a4["Nombre_Alumno"].astype(str).str.strip() == str(alum.get("Nombre_Completo", "")).strip()].copy()
-    else: a4 = pd.DataFrame()
+        nombres = a4["Nombre_Alumno"].fillna("").astype(str).str.strip()
+        if "ID_Alumno" in a4.columns:
+            mask = a4["ID_Alumno"].fillna("").astype(str).str.strip().eq(str(id_alumno))
+        else:
+            mask = pd.Series(False, index=a4.index)
+        escuela = str(alum.get("Nombre_Escuela", "")).strip()
+        if not escuela:
+            codigo = str(alum.get("ID_Escuela", "")).strip()
+            from config.settings import ESCUELAS_USAER
+            escuela = next((name for name, value in ESCUELAS_USAER.items() if str(value) == codigo), "")
+        if "Escuela" in a4.columns and escuela:
+            misma_escuela = a4["Escuela"].fillna("").astype(str).str.strip().map(normalizar_texto).eq(normalizar_texto(escuela))
+            # Historic individual entries did not have ID_Alumno. Preserve
+            # those by matching both exact name and school.
+            mask |= nombres.eq(str(alum.get("Nombre_Completo", "")).strip()) & misma_escuela
+            # Group BAP suggestions are shared with the matching class.
+            grade_group = f"{alum.get('Grado', '')} {alum.get('Grupo', '')}".strip()
+            if grade_group and "Grado_Grupo" in a4.columns:
+                same_grade_group = a4["Grado_Grupo"].fillna("").astype(str).str.strip().map(normalizar_texto).eq(normalizar_texto(grade_group))
+                mask |= nombres.str.startswith("Grupo ", na=False) & same_grade_group & misma_escuela
+        a4 = a4[mask].copy()
+    elif not a4.empty:
+        a4 = pd.DataFrame()
+    if not a4.empty and "Estado" in a4.columns:
+        estados = a4["Estado"].fillna("").astype(str).str.strip().str.upper()
+        a4 = a4.loc[~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO"})].copy()
     grado_grupo_alumno = f"{alum.get('Grado', '')} {alum.get('Grupo', '')}".strip()
     a5 = repo.eventos_alumno(
         id_alumno,

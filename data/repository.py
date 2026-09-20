@@ -382,10 +382,12 @@ def repair_nombres_alumnos(rows):
 def save_anexo3(data):
  data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
 def save_anexo4(data):
- data=dict(data); data.setdefault('ID_Anexo4',next_numeric_id('Anexo4_Sugerencias','ID_Anexo4','AN4')); append_dict('Anexo4_Sugerencias',data); return data['ID_Anexo4']
+ ensure_headers('Anexo4_Sugerencias', BASE_HEADERS['Anexo4_Sugerencias'])
+ data=dict(data); data.setdefault('ID_Anexo4',next_numeric_id('Anexo4_Sugerencias','ID_Anexo4','AN4')); data.setdefault('Estado','ACTIVO'); append_dict('Anexo4_Sugerencias',data); return data['ID_Anexo4']
 
 def update_anexo4(id_anexo4, cambios):
  """Actualiza un Anexo IV existente sin borrar columnas ni crear duplicados."""
+ ensure_headers('Anexo4_Sugerencias', BASE_HEADERS['Anexo4_Sugerencias'])
  ws=worksheet('Anexo4_Sugerencias')
  headers=retry_google(lambda: ws.row_values(1))
  if 'ID_Anexo4' not in headers:
@@ -410,6 +412,10 @@ def update_anexo4(id_anexo4, cambios):
  retry_google(lambda: ws.update(range_name=rango,values=[actual[:len(headers)]]))
  clear_cache('Anexo4_Sugerencias')
  return str(id_anexo4)
+
+def delete_anexo4(id_anexo4):
+ """Retira una sugerencia de la vista activa sin borrar su historial."""
+ return update_anexo4(id_anexo4, {'Estado': 'ANULADO'})
 def save_anexo5(data):
  data=dict(data); data.setdefault('ID_Evento',next_numeric_id('Anexo5_Eventos','ID_Evento','AN5')); append_dict('Anexo5_Eventos',data); return data['ID_Evento']
 

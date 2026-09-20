@@ -8,6 +8,8 @@ from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page
 from ui.oficios import oficios_comision_page
 from ui.direccion_oficios import configuracion_oficios_direccion
 from ui.direccion_rapida import direccion_page_rapida
+from ui.sugerencias import anexo4_page
+from ui.estadisticas import estadisticas_page
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -27,14 +29,14 @@ with st.sidebar:
     st.markdown("<div class='brand'><h1>USAER 02E</h1><p>Gestión integral de intervención educativa</p></div>",unsafe_allow_html=True)
     st.caption(f"Sesión: {st.session_state.get('nombre','')}")
     st.divider()
-    menu=["Inicio","Expedientes","Anexo III BAP","Anexo V Eventos significativos","Documentos"]
+    menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos"]
     if "DIRECTOR" in rol.upper(): menu += ["Panel de Dirección","Constancias de visita","Alta de alumnos"]
     elif "APOYO" in rol.upper(): menu += ["Alta de alumnos", "Oficios de comisión", "Anexo VII Derivación"]
     else: menu += ["Constancias de visita", "Anexo VII Derivación"]
     page=st.radio("Navegación",menu,label_visibility="collapsed")
 
 # No se lee el padrón central en módulos que no lo necesitan.
-if page in {"Inicio", "Expedientes", "Anexo III BAP", "Anexo V Eventos significativos", "Documentos", "Alta de alumnos"}:
+if page in {"Inicio", "Expedientes", "Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos", "Estadística", "Documentos", "Alta de alumnos"}:
     authorized = alumnos_visibles(rol, escuelas)
 else:
     authorized = None
@@ -42,7 +44,9 @@ else:
 if page=="Inicio": inicio(authorized)
 elif page=="Expedientes": expedientes_page(authorized)
 elif page=="Anexo III BAP": bap_page(authorized)
+elif page=="Anexo IV Hoja de sugerencias": anexo4_page(authorized)
 elif page=="Anexo V Eventos significativos": eventos_page(authorized)
+elif page=="Estadística": estadisticas_page(authorized)
 elif page=="Documentos": documentos_page(authorized)
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
