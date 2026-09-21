@@ -3,7 +3,7 @@
 import pandas as pd
 import streamlit as st
 
-from config.settings import ESCUELAS_USAER
+from services.escuelas import indice_escuelas, nombre_escuela_canonico
 from services.alumnos import alumnos_de_escuela
 from services.asignaciones import es_direccion, escuelas_asignadas
 from ui.components import hero
@@ -95,13 +95,20 @@ def estadisticas_page(df):
 
     if seleccion == "Toda la USAER" and es_direccion(rol):
         st.markdown("### Alumnos por escuela")
-        escuela_values = _serie(muestra, "Nombre_Escuela", "").copy()
-        if "ID_Escuela" in muestra.columns:
-            codes_to_names = {normalizar_texto(code): name for name, code in ESCUELAS_USAER.items()}
-            ids = _serie(muestra, "ID_Escuela", "")
-            escuela_values = escuela_values.where(
-                escuela_values.ne(""), ids.map(lambda value: codes_to_names.get(normalizar_texto(value), value))
-            )
+        school_index = indice_escuelas(alumnos=muestra)
+        escuela_values = pd.Series(
+            [
+                nombre_escuela_canonico(
+                    row.get("Nombre_Escuela", ""),
+                    row.get("ID_Escuela", ""),
+                    row.get("CCT_Escuela", ""),
+                    school_index,
+                )
+                for row in muestra.to_dict("records")
+            ],
+            index=muestra.index,
+            dtype="object",
+        ).replace("", "(Sin dato)")
         escuelas = _tabla_frecuencias(escuela_values, total)
         st.dataframe(escuelas, hide_index=True, use_container_width=True)
         st.bar_chart(escuelas.set_index("Categoría")[["Alumnos"]])

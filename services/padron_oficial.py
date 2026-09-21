@@ -2,6 +2,8 @@
 
 import pandas as pd
 
+from services.escuelas import indice_escuelas, nombre_escuela_canonico
+
 
 COLUMNAS_PADRON_OFICIAL = [
     "N°", "ZONA", "USAER", "CLAVE DE USAER", "ESCUELA ATENDIDA",
@@ -37,6 +39,7 @@ def vista_padron_oficial(alumnos, escuelas=None):
     if alumnos is None or alumnos.empty:
         return pd.DataFrame(columns=COLUMNAS_PADRON_OFICIAL)
     catalogo = _indice_escuelas(escuelas)
+    school_index = indice_escuelas(alumnos=alumnos, escuelas=escuelas)
     alumnos = alumnos.copy()
     curp = alumnos.get("CURP", pd.Series("", index=alumnos.index)).fillna("")
     alumnos["_curp_padron"] = curp.astype(str).str.strip().str.upper()
@@ -58,6 +61,12 @@ def vista_padron_oficial(alumnos, escuelas=None):
                     return valor
             return ""
 
+        nombre_escuela = nombre_escuela_canonico(
+            alumno.get("Nombre_Escuela", ""),
+            alumno.get("ID_Escuela", ""),
+            alumno.get("CCT_Escuela", ""),
+            school_index,
+        )
         nivel = dato("Nivel_Educativo", "Nivel").upper()
         grado = dato("Grado")
         salida.append({
@@ -65,7 +74,7 @@ def vista_padron_oficial(alumnos, escuelas=None):
             "ZONA": "ZONA 001",
             "USAER": "USAER 02-E",
             "CLAVE DE USAER": "31FUA0002Y",
-            "ESCUELA ATENDIDA": dato("Nombre_Escuela", "Nombre_Escuela") or dato("ID_Escuela"),
+            "ESCUELA ATENDIDA": nombre_escuela or dato("Nombre_Escuela", "Nombre_Escuela") or dato("ID_Escuela"),
             "TURNO": dato("Turno_Escuela", "Turno"),
             "CCT DE LA ESCUELA": dato("CCT_Escuela", "CCT"),
             "DIRECCIÓN DE LA ESCUELA": dato("Direccion_Escuela", "Direccion", "Dirección"),
