@@ -17,6 +17,48 @@ from utils.ids import expediente_id
 from utils.text import normalizar_texto
 
 
+def _opciones_alumno(df):
+    """Crea opciones únicas por ID y etiquetas que distinguen homónimos."""
+    requeridas = {"ID_Alumno", "Nombre_Completo"}
+    if df is None or df.empty or not requeridas.issubset(df.columns):
+        return pd.DataFrame(columns=["ID_Alumno", "Nombre_Completo", "_etiqueta"])
+    opciones = df.copy()
+    opciones["ID_Alumno"] = opciones["ID_Alumno"].fillna("").astype(str).str.strip()
+    opciones = opciones.loc[opciones["ID_Alumno"].ne("")].drop_duplicates(
+        subset=["ID_Alumno"], keep="first"
+    ).copy()
+
+    def etiqueta(fila):
+        partes = [str(fila.get("Nombre_Completo", "")).strip()]
+        grado_grupo = f"{fila.get('Grado', '')} {fila.get('Grupo', '')}".strip()
+        if grado_grupo:
+            partes.append(grado_grupo)
+        partes.append(str(fila.get("ID_Alumno", "")).strip())
+        return " · ".join(parte for parte in partes if parte)
+
+    opciones["_etiqueta"] = opciones.apply(etiqueta, axis=1)
+    return opciones
+
+
+def _seleccionar_alumno(df, etiqueta, key):
+    opciones = _opciones_alumno(df)
+    if opciones.empty:
+        return "", None
+    ids = opciones["ID_Alumno"].tolist()
+    # Migrate old widget state, which stored a name instead of the student ID.
+    if key in st.session_state and str(st.session_state[key]) not in ids:
+        st.session_state.pop(key, None)
+    id_alumno = st.selectbox(
+        etiqueta,
+        ids,
+        format_func=lambda ident: opciones.loc[
+            opciones["ID_Alumno"].eq(ident), "_etiqueta"
+        ].iloc[0],
+        key=key,
+    )
+    return id_alumno, opciones.loc[opciones["ID_Alumno"].eq(id_alumno)].iloc[0]
+
+
 def inicio(df):
     hero("Centro de gestión USAER 02-E", "Una sola plataforma para capturar, decidir, intervenir y dar seguimiento.")
     c1,c2,c3,c4=st.columns(4)
@@ -35,9 +77,10 @@ def inicio(df):
 def expedientes_page(df):
     hero("Expedientes únicos", "Selecciona un alumno para consultar toda su trazabilidad.")
     if df.empty: st.warning("No hay alumnos disponibles para tu ámbito de acceso."); return
-    options=df[["ID_Alumno","Nombre_Completo"]].drop_duplicates().sort_values("Nombre_Completo")
-    label=st.selectbox("Alumno", options["Nombre_Completo"].tolist(), key="exp_alumno")
-    id_alumno=options.loc[options["Nombre_Completo"]==label,"ID_Alumno"].iloc[0]
+    id_alumno, selected = _seleccionar_alumno(df, "Alumno", "exp_alumno")
+    if selected is None:
+        st.warning("No hay alumnos con identificador para abrir un expediente.")
+        return
     st.session_state["selected_alumno"]=id_alumno
     exp=expediente(id_alumno)
     a=exp["alumno"]
@@ -620,18 +663,14 @@ def bap_page(df):
             )
             return
 
-        alumno_nombre = st.selectbox(
-            "2. Alumno",
-            escuela_df["Nombre_Completo"].astype(str).tolist(),
-            key="bap_alumno_ind"
+        id_a, fila = _seleccionar_alumno(
+            escuela_df, "2. Alumno", "bap_alumno_ind"
         )
-
-        fila = escuela_df[
-            escuela_df["Nombre_Completo"].astype(str) == alumno_nombre
-        ].iloc[0]
-
-        id_a = str(fila["ID_Alumno"])
-        objetivo = alumno_nombre
+        if fila is None:
+            st.warning("La escuela no tiene alumnos con identificador en el padrón central.")
+            return
+        id_a = str(id_a)
+        objetivo = str(fila.get("Nombre_Completo", ""))
 
         grado_grupo = (
             f"{fila.get('Grado', '')} "
@@ -814,6 +853,7 @@ def bap_page(df):
             ensure_ascii=False,
         )
         registro_a4 = {
+            "ID_Alumno": str(id_a),
             "Nombre_Alumno": objetivo,
             "Grado_Grupo": grado_grupo,
             "Escuela": escuela_nombre,
@@ -899,6 +939,7 @@ def bap_page(df):
 
             eid = repo.save_anexo5({
                 "Fecha": str(date.today()),
+                "ID_Alumno": str(last["id_alumno"]),
                 "Nombre_Alumno": last["nombre"],
                 "Grado_Grupo": (
                     f"{a.get('Grado', '')} {a.get('Grupo', '')}".strip()
@@ -934,9 +975,11 @@ def bap_page(df):
 def seguimiento_page(df):
     hero("Seguimiento y eventos", "Convierte una sugerencia aprobada en una acción documentada.")
     if df.empty: return
-    opts=df[["ID_Alumno","Nombre_Completo"]].drop_duplicates().sort_values("Nombre_Completo")
-    nombre=st.selectbox("Alumno",opts["Nombre_Completo"].tolist(),key="evt_alumno")
-    id_a=opts.loc[opts["Nombre_Completo"]==nombre,"ID_Alumno"].iloc[0]; a=alumno(df,id_a)
+    id_a, selected = _seleccionar_alumno(df, "Alumno", "evt_alumno")
+    if selected is None:
+        st.warning("No hay alumnos con identificador para consultar seguimiento.")
+        return
+    a=alumno(df,id_a)
     e=expediente(id_a)
     if e["anexo4"].empty: st.info("No hay sugerencias para convertir en seguimiento."); return
     st.dataframe(e["anexo4"][[c for c in ["ID_Anexo4","Fecha_Elaboracion","Sugerencias","Nivel_Cumplimiento_Resultados"] if c in e["anexo4"].columns]],use_container_width=True,hide_index=True)
@@ -946,7 +989,7 @@ def seguimiento_page(df):
         especialista=st.text_input("Especialista",st.session_state.get("nombre",""))
         save=st.form_submit_button("Registrar evento",type="primary")
     if save:
-        eid=repo.save_anexo5({"Fecha":str(fecha),"Nombre_Alumno":a.get("Nombre_Completo",""),"Grado_Grupo":f"{a.get('Grado','')} {a.get('Grupo','')}".strip(),"Especialista":especialista,"Evento":evento})
+        eid=repo.save_anexo5({"Fecha":str(fecha),"ID_Alumno":str(id_a),"Nombre_Alumno":a.get("Nombre_Completo",""),"Grado_Grupo":f"{a.get('Grado','')} {a.get('Grupo','')}".strip(),"Especialista":especialista,"Evento":evento})
         try:
             repo.link_record(expediente_id(id_a),id_a,"ANEXO5",eid,str(fecha))
             repo.timeline(expediente_id(id_a),id_a,str(fecha),"SEGUIMIENTO","Evento registrado",evento,especialista)
@@ -1000,24 +1043,14 @@ def eventos_page(df):
             st.info("No hay alumnos registrados para la escuela seleccionada.")
             return
 
-        opciones = (
-            alumnos_disponibles[["ID_Alumno", "Nombre_Completo"]]
-            .drop_duplicates()
-            .sort_values("Nombre_Completo")
+        id_alumno, selected = _seleccionar_alumno(
+            alumnos_disponibles, "Alumno", "evento_alumno"
         )
-        nombre = st.selectbox(
-            "Alumno",
-            opciones["Nombre_Completo"].astype(str).tolist(),
-            key="evento_alumno",
-        )
-        id_alumno = str(
-            opciones.loc[
-                opciones["Nombre_Completo"].astype(str) == str(nombre),
-                "ID_Alumno",
-            ].iloc[0]
-        )
+        if selected is None:
+            st.warning("No hay alumnos con identificador en el padrón central.")
+            return
         datos = alumno(alumnos_disponibles, id_alumno) or {}
-        objetivo = str(datos.get("Nombre_Completo", nombre))
+        objetivo = str(datos.get("Nombre_Completo", ""))
         grado_grupo = (
             f"{datos.get('Grado', '')} {datos.get('Grupo', '')}".strip()
         )
@@ -1047,16 +1080,9 @@ def eventos_page(df):
         objetivo = f"Grupo {grado_grupo} de la escuela {escuela}"
         datos = {"Nombre_Completo": objetivo}
 
-    eventos_todos = repo.anexo5()
-    if (
-        eventos_todos.empty
-        or "Nombre_Alumno" not in eventos_todos.columns
-    ):
-        eventos_registrados = pd.DataFrame()
-    else:
-        eventos_registrados = eventos_todos[
-            eventos_todos["Nombre_Alumno"].astype(str) == objetivo
-        ].copy()
+    eventos_registrados = repo.eventos_alumno(
+        id_alumno, objetivo, grado_grupo
+    )
 
     eventos_historial = eventos_registrados.copy()
     if "Estado" in eventos_registrados.columns:
@@ -1179,6 +1205,7 @@ def eventos_page(df):
 
     borrador = {
         "Fecha": str(fecha),
+        "ID_Alumno": str(id_alumno),
         "Nombre_Alumno": objetivo,
         "Grado_Grupo": grado_grupo,
         "Especialista": especialista.strip() or nombre_usuario,
@@ -1289,22 +1316,10 @@ def documentos_page(df):
         if df.empty:
             st.info("No hay alumnos disponibles en tus escuelas asignadas.")
             return
-        opciones = (
-            df[["ID_Alumno", "Nombre_Completo"]]
-            .drop_duplicates()
-            .sort_values("Nombre_Completo")
-        )
-        nombre = st.selectbox(
-            "Alumno",
-            opciones["Nombre_Completo"].astype(str).tolist(),
-            key="doc_alumno",
-        )
-        id_alumno = str(
-            opciones.loc[
-                opciones["Nombre_Completo"].astype(str) == str(nombre),
-                "ID_Alumno",
-            ].iloc[0]
-        )
+        id_alumno, selected = _seleccionar_alumno(df, "Alumno", "doc_alumno")
+        if selected is None:
+            st.warning("No hay alumnos con identificador para consultar documentos.")
+            return
         expediente_actual = expediente(id_alumno)
         if not expediente_actual:
             st.info("Aún no hay documentos para este alumno.")
@@ -1313,7 +1328,7 @@ def documentos_page(df):
         a3 = expediente_actual["anexo3"]
         a4 = expediente_actual["anexo4"]
         a5 = expediente_actual["anexo5"]
-        etiqueta = str(alumno_documento.get("Nombre_Completo", nombre))
+        etiqueta = str(alumno_documento.get("Nombre_Completo", ""))
         archivo_base = id_alumno
     else:
         a3_todos = repo.anexo3()
@@ -2521,3 +2536,4 @@ Constancia de Visita - {escuela_seleccionada}
         "La constancia también quedó registrada en "
         "Registro_Visitas."
     )
+

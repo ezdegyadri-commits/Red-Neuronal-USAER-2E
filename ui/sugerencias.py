@@ -11,6 +11,7 @@ from data import repository as repo
 from documents.anexos import anexo4_html, anexo4_pdf
 from services.alumnos import alumnos_de_escuela
 from services.asignaciones import es_direccion, escuelas_asignadas
+from services.expedientes import sugerencias_de_alumno
 from ui.components import hero
 from utils.text import normalizar_texto
 
@@ -29,6 +30,17 @@ def _sort_suggestions(frame):
     result = frame.copy()
     result["_fecha_orden"] = pd.to_datetime(
         result["Fecha_Elaboracion"], errors="coerce", dayfirst=True
+    )
+
+
+def _etiqueta_alumno(opciones, id_alumno):
+    fila = opciones.loc[
+        opciones["ID_Alumno"].astype(str).eq(str(id_alumno))
+    ].iloc[0]
+    nombre = str(fila.get("Nombre_Completo", "")).strip()
+    grado_grupo = f"{fila.get('Grado', '')} {fila.get('Grupo', '')}".strip()
+    return " · ".join(
+        parte for parte in (nombre, grado_grupo, str(id_alumno)) if parte
     )
     return (
         result.sort_values("_fecha_orden", kind="stable", na_position="last")
@@ -72,7 +84,7 @@ def anexo4_page(df):
     ids = opciones["ID_Alumno"].astype(str).tolist()
     id_alumno = st.selectbox(
         "Alumno", ids,
-        format_func=lambda ident: str(opciones.loc[opciones["ID_Alumno"].astype(str) == ident, "Nombre_Completo"].iloc[0]),
+        format_func=lambda ident: _etiqueta_alumno(opciones, ident),
         key=f"anexo4_alumno_{_school_code(escuela) or 'usaer'}",
     )
     fila_alumno = alumnos.loc[alumnos["ID_Alumno"].astype(str) == id_alumno].iloc[0]
@@ -87,38 +99,12 @@ def anexo4_page(df):
     grado_grupo = f"{fila_alumno.get('Grado', '')} {fila_alumno.get('Grupo', '')}".strip()
 
     todos = repo.anexo4()
-    if todos.empty:
-        sugerencias = pd.DataFrame()
-    else:
-        if "ID_Alumno" in todos.columns:
-            exacto = todos["ID_Alumno"].fillna("").astype(str).str.strip().eq(id_alumno)
-        else:
-            exacto = pd.Series(False, index=todos.index)
-        # Compatibility for historic BAP rows created before student IDs were
-        # stored: match the exact student name and school, never a substring.
-        legacy = todos.get("Nombre_Alumno", pd.Series("", index=todos.index)).fillna("").astype(str).str.strip().eq(nombre_alumno)
-        if "Escuela" in todos.columns:
-            misma_escuela = todos["Escuela"].fillna("").astype(str).str.strip().map(normalizar_texto).eq(normalizar_texto(escuela_alumno))
-            legacy &= misma_escuela
-            # Include suggestions produced by a group BAP in every child sheet
-            # for the matching class, without creating a copy per child.
-            nombre_registro = todos.get("Nombre_Alumno", pd.Series("", index=todos.index)).fillna("").astype(str).str.strip()
-            grado_registro = todos.get("Grado_Grupo", pd.Series("", index=todos.index)).fillna("").astype(str).str.strip()
-            grupo_compartido = (
-                nombre_registro.str.startswith("Grupo ", na=False)
-                & grado_registro.map(normalizar_texto).eq(normalizar_texto(grado_grupo))
-                & misma_escuela
-            )
-        else:
-            grupo_compartido = pd.Series(False, index=todos.index)
-        sugerencias = todos.loc[exacto | legacy | grupo_compartido].copy()
+    sugerencias = sugerencias_de_alumno(
+        todos, fila_alumno, escuela_fallback=escuela_alumno
+    )
 
     historial = sugerencias.copy()
-    if "Estado" in sugerencias.columns:
-        estado = sugerencias["Estado"].fillna("").astype(str).str.strip().str.upper()
-        activas = sugerencias.loc[~estado.isin({"ANULADO", "ELIMINADO", "DUPLICADO"})].copy()
-    else:
-        activas = sugerencias.copy()
+    activas = sugerencias.copy()
     activas = _sort_suggestions(activas)
 
     st.markdown(f"### Hoja de {nombre_alumno}")
@@ -271,3 +257,4 @@ def anexo4_page(df):
                 st.rerun()
             except Exception as ex:
                 st.error(f"No fue posible reactivar la sugerencia: {ex}")
+

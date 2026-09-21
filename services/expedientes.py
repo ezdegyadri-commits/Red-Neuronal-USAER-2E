@@ -30,6 +30,61 @@ def alumno(df, id_alumno):
     return rows.iloc[0].to_dict() if not rows.empty else None
 
 
+def sugerencias_de_alumno(registros, alumno_registro, escuela_fallback=""):
+    """Filtra Anexo IV por ID; usa nombre/escuela solo para filas históricas sin ID."""
+    if registros is None or registros.empty or "Nombre_Alumno" not in registros.columns:
+        return pd.DataFrame() if registros is None else registros.iloc[0:0].copy()
+
+    id_alumno = str(alumno_registro.get("ID_Alumno", "")).strip()
+    nombre_alumno = str(alumno_registro.get("Nombre_Completo", "")).strip()
+    escuela = str(
+        alumno_registro.get("Nombre_Escuela", "") or escuela_fallback
+    ).strip()
+    if not escuela:
+        codigo = str(alumno_registro.get("ID_Escuela", "")).strip()
+        from config.settings import ESCUELAS_USAER
+        escuela = next(
+            (name for name, value in ESCUELAS_USAER.items() if str(value) == codigo),
+            "",
+        )
+
+    nombres = registros["Nombre_Alumno"].fillna("").astype(str).str.strip()
+    if "ID_Alumno" in registros.columns:
+        ids = registros["ID_Alumno"].fillna("").astype(str).str.strip()
+        directas = ids.eq(id_alumno) if id_alumno else pd.Series(False, index=registros.index)
+        sin_id = ids.eq("")
+    else:
+        directas = pd.Series(False, index=registros.index)
+        sin_id = pd.Series(True, index=registros.index)
+
+    if "Escuela" in registros.columns and escuela:
+        misma_escuela = (
+            registros["Escuela"].fillna("").astype(str).str.strip()
+            .map(normalizar_texto).eq(normalizar_texto(escuela))
+        )
+    else:
+        misma_escuela = pd.Series(False, index=registros.index)
+
+    legado = sin_id & nombres.eq(nombre_alumno) & misma_escuela
+    grado_grupo = f"{alumno_registro.get('Grado', '')} {alumno_registro.get('Grupo', '')}".strip()
+    if grado_grupo and "Grado_Grupo" in registros.columns:
+        mismo_grupo = (
+            registros["Grado_Grupo"].fillna("").astype(str).str.strip()
+            .map(normalizar_texto).eq(normalizar_texto(grado_grupo))
+        )
+        grupo = nombres.str.startswith("Grupo ", na=False) & mismo_grupo & misma_escuela
+    else:
+        grupo = pd.Series(False, index=registros.index)
+
+    resultado = registros.loc[directas | legado | grupo].copy()
+    if "Estado" in resultado.columns:
+        estados = resultado["Estado"].fillna("").astype(str).str.strip().str.upper()
+        resultado = resultado.loc[
+            ~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO"})
+        ].copy()
+    return resultado
+
+
 def expediente(id_alumno):
     alum = alumno(repo.alumnos(), id_alumno)
     if not alum:
@@ -45,33 +100,10 @@ def expediente(id_alumno):
     if not a3.empty and "ID_Alumno" in a3.columns:
         a3 = a3[a3["ID_Alumno"].astype(str) == str(id_alumno)].copy()
     else: a3 = pd.DataFrame()
-    if not a4.empty and "Nombre_Alumno" in a4.columns:
-        nombres = a4["Nombre_Alumno"].fillna("").astype(str).str.strip()
-        if "ID_Alumno" in a4.columns:
-            mask = a4["ID_Alumno"].fillna("").astype(str).str.strip().eq(str(id_alumno))
-        else:
-            mask = pd.Series(False, index=a4.index)
-        escuela = str(alum.get("Nombre_Escuela", "")).strip()
-        if not escuela:
-            codigo = str(alum.get("ID_Escuela", "")).strip()
-            from config.settings import ESCUELAS_USAER
-            escuela = next((name for name, value in ESCUELAS_USAER.items() if str(value) == codigo), "")
-        if "Escuela" in a4.columns and escuela:
-            misma_escuela = a4["Escuela"].fillna("").astype(str).str.strip().map(normalizar_texto).eq(normalizar_texto(escuela))
-            # Historic individual entries did not have ID_Alumno. Preserve
-            # those by matching both exact name and school.
-            mask |= nombres.eq(str(alum.get("Nombre_Completo", "")).strip()) & misma_escuela
-            # Group BAP suggestions are shared with the matching class.
-            grade_group = f"{alum.get('Grado', '')} {alum.get('Grupo', '')}".strip()
-            if grade_group and "Grado_Grupo" in a4.columns:
-                same_grade_group = a4["Grado_Grupo"].fillna("").astype(str).str.strip().map(normalizar_texto).eq(normalizar_texto(grade_group))
-                mask |= nombres.str.startswith("Grupo ", na=False) & same_grade_group & misma_escuela
-        a4 = a4[mask].copy()
+    if not a4.empty:
+        a4 = sugerencias_de_alumno(a4, alum)
     elif not a4.empty:
         a4 = pd.DataFrame()
-    if not a4.empty and "Estado" in a4.columns:
-        estados = a4["Estado"].fillna("").astype(str).str.strip().str.upper()
-        a4 = a4.loc[~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO"})].copy()
     grado_grupo_alumno = f"{alum.get('Grado', '')} {alum.get('Grupo', '')}".strip()
     a5 = repo.eventos_alumno(
         id_alumno,

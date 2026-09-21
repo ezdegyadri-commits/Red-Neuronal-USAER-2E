@@ -10,7 +10,7 @@ BASE_HEADERS={
 'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante','Nombre_Escuela','Turno_Escuela','CCT_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela','Condiciones_Adicionales'],
 'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA'],
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
-'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento','Estado'],
+'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento','Estado','ID_Alumno'],
 'Usuarios':['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas'],
 'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus'],
 'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado'],
@@ -139,6 +139,11 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
 
  ids_evento = eventos["ID_Evento"].fillna("").astype(str).str.strip()
  precisos = eventos.loc[ids_evento.isin(ligados)].copy() if ligados else eventos.iloc[0:0].copy()
+ if "ID_Alumno" in eventos.columns:
+  directos = eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq(
+   str(id_alumno).strip()
+  )
+  precisos = pd.concat([precisos, eventos.loc[directos]], ignore_index=True)
  legados = eventos.iloc[0:0].copy()
  if nombre and "Nombre_Alumno" in eventos.columns:
   nombre_normal = str(nombre).strip().casefold()
@@ -146,6 +151,9 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
    lambda valor: valor.strip().casefold() == nombre_normal
   )
   sin_vinculo = ~ids_evento.isin(ids_ligados)
+  if "ID_Alumno" in eventos.columns:
+   sin_id_directo = eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq("")
+   sin_vinculo &= sin_id_directo
   if grado_grupo and "Grado_Grupo" in eventos.columns:
    grado_normal = " ".join(str(grado_grupo).split()).casefold()
    grado_evento = eventos["Grado_Grupo"].fillna("").astype(str).map(
@@ -230,11 +238,11 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
 
  curp_col = headers.index('CURP')
  id_col = headers.index('ID_Alumno') if 'ID_Alumno' in headers else -1
- existing = {
-  str(row[curp_col]).strip().upper(): index
-  for index, row in enumerate(values[1:], start=2)
-  if len(row) > curp_col and str(row[curp_col]).strip()
- }
+ existing_rows = {}
+ for index, row in enumerate(values[1:], start=2):
+  if len(row) > curp_col and str(row[curp_col]).strip():
+   existing_rows.setdefault(str(row[curp_col]).strip().upper(), []).append(index)
+ existing = {curp: rows[-1] for curp, rows in existing_rows.items()}
 
  numbers = []
  for row in values[1:]:
@@ -259,6 +267,20 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
    )
   seen_input.add(curp)
   data['CURP'] = curp
+  coincidencias = existing_rows.get(curp, [])
+  if len(coincidencias) > 1:
+   ids_ambiguos = []
+   for numero_fila in coincidencias:
+    fila_existente = values[numero_fila - 1]
+    if id_col >= 0 and len(fila_existente) > id_col:
+     valor_id = str(fila_existente[id_col]).strip()
+     if valor_id:
+      ids_ambiguos.append(valor_id)
+   detalle = f" ({', '.join(ids_ambiguos)})" if ids_ambiguos else ""
+   raise ValueError(
+    "No se actualizó este registro porque su CURP aparece en más de un "
+    "expediente de la base central" + detalle + ". Dirección debe revisar cuál es el registro correcto."
+   )
   fila = existing.get(curp)
 
   if fila:
@@ -414,6 +436,7 @@ def delete_anexo4(id_anexo4):
  """Retira una sugerencia de la vista activa sin borrar su historial."""
  return update_anexo4(id_anexo4, {'Estado': 'ANULADO'})
 def save_anexo5(data):
+ ensure_headers('Anexo5_Eventos', BASE_HEADERS['Anexo5_Eventos'])
  data=dict(data); data.setdefault('ID_Evento',next_numeric_id('Anexo5_Eventos','ID_Evento','AN5')); append_dict('Anexo5_Eventos',data); return data['ID_Evento']
 
 def update_anexo5(id_evento, cambios):
@@ -472,3 +495,4 @@ def timeline(id_expediente,id_alumno,fecha,tipo,titulo,descripcion,usuario):
   mask=(df['ID_Expediente'].astype(str)==str(id_expediente))&(df['Tipo'].astype(str)==str(tipo))&(df['Titulo'].astype(str)==str(titulo))&(df['Fecha'].astype(str)==str(fecha))
   if mask.any(): return None
  tid=next_numeric_id('Linea_Tiempo','ID_Evento_Timeline','TL'); append_dict('Linea_Tiempo',{'ID_Evento_Timeline':tid,'ID_Expediente':id_expediente,'ID_Alumno':id_alumno,'Fecha':fecha,'Tipo':tipo,'Titulo':titulo,'Descripcion':descripcion,'Usuario':usuario}); return tid
+
