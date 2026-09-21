@@ -4,6 +4,7 @@ from data import repository as repo
 from data.google import df_sheet
 from utils.ids import expediente_id
 from utils.text import normalizar_texto
+from services.alumnos import filtrar_alumnos_por_escuelas
 
 
 def alumnos_visibles(rol, escuelas_permitidas):
@@ -15,16 +16,11 @@ def alumnos_visibles(rol, escuelas_permitidas):
     if "DIRECTOR" in rol or "TRABAJO" in rol or "TODAS" in escuelas_permitidas:
         return df
     permitidas = [x.strip() for x in str(escuelas_permitidas).split(",") if x.strip()]
-    col = next((c for c in df.columns if "ESCUELA" in normalizar_texto(c)), None)
-    if not col:
-        return df.iloc[0:0]
-    allowed = {normalizar_texto(x) for x in permitidas}
-    from config.settings import ESCUELAS_USAER
-    for name, code in ESCUELAS_USAER.items():
-        if normalizar_texto(code) in allowed:
-            allowed.add(normalizar_texto(name))
-    mask = df[col].astype(str).apply(lambda x: any(a and a in normalizar_texto(x) for a in allowed))
-    return df[mask].drop_duplicates(subset=["ID_Alumno"] if "ID_Alumno" in df.columns else None)
+    if any(normalizar_texto(valor) == "TODAS" for valor in permitidas):
+        return df.drop_duplicates(
+            subset=["ID_Alumno"] if "ID_Alumno" in df.columns else None
+        )
+    return filtrar_alumnos_por_escuelas(df, permitidas)
 
 
 def alumno(df, id_alumno):
@@ -90,3 +86,4 @@ def expediente(id_alumno):
     except Exception:
         pass
     return {"id_expediente": exp, "alumno": alum, "anexo3": a3, "anexo4": a4, "anexo5": a5, "timeline": timeline_df}
+
