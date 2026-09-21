@@ -202,31 +202,16 @@ def _a1_column(number):
 
 
 def save_alumno(data):
- """Registra o actualiza un alumno por CURP sin duplicar su expediente."""
- _, _, ids = upsert_alumnos([data], return_ids=True)
+ """Crea un alumno manual y rechaza CURP que ya existan en la base central."""
+ _, _, ids = upsert_alumnos([data], return_ids=True, reject_existing=True)
  return ids[0] if ids else ""
 
-
 def save_alumnos(rows):
- ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
- existing = alumnos()
- numbers = []
- if not existing.empty and 'ID_Alumno' in existing.columns:
-  for value in existing['ID_Alumno'].astype(str):
-   try: numbers.append(int(value.split('-')[-1]))
-   except Exception: pass
- next_number = max(numbers) + 1 if numbers else 1
- prepared = []
- for row in rows:
-  data = dict(row)
-  data.setdefault('ID_Alumno', f"ALU-{next_number:03d}")
-  next_number += 1
-  prepared.append(data)
- google_append_rows_raw('Alumnos', prepared)
- return [row['ID_Alumno'] for row in prepared]
+ """Guarda altas nuevas solo si sus CURP no existen previamente."""
+ _, _, ids = upsert_alumnos(rows, return_ids=True, reject_existing=True)
+ return ids
 
-
-def upsert_alumnos(rows, return_ids=False):
+def upsert_alumnos(rows, return_ids=False, reject_existing=False):
  """Consolida padrones por CURP.
 
  Los valores no vacíos del padrón que se está cargando son la fuente de verdad
@@ -261,15 +246,27 @@ def upsert_alumnos(rows, return_ids=False):
  next_number = max(numbers) + 1 if numbers else 1
 
  nuevos, actualizados, append_rows, updates, ids = 0, 0, [], [], []
+ seen_input = set()
  for registro in rows:
   data = dict(registro)
   curp = str(data.get('CURP', '')).strip().upper()
   if not curp:
    continue
+  if curp in seen_input:
+   raise ValueError(
+    "El archivo contiene la misma CURP más de una vez. "
+    "Corrige esa duplicación antes de consolidarlo."
+   )
+  seen_input.add(curp)
   data['CURP'] = curp
   fila = existing.get(curp)
 
   if fila:
+   if reject_existing:
+    raise ValueError(
+     "No se creó el alumno: esa CURP ya existe en la base central. "
+     "Verifica la CURP o consulta el expediente existente."
+    )
    actual = values[fila - 1] + [''] * max(0, len(headers) - len(values[fila - 1]))
    student_id = str(actual[id_col]).strip() if id_col >= 0 else ""
    cambio = False

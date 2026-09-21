@@ -216,7 +216,7 @@ def alta_page(df):
             st.error("La CURP debe contener exactamente 18 caracteres alfanuméricos.")
             return
 
-        id_a = repo.save_alumno({
+        datos_nuevo = {
             "Nombre_Completo": nombre.strip(),
             "CURP": curp_limpia,
             "Edad_1_Septiembre": int(edad),
@@ -234,21 +234,27 @@ def alta_page(df):
             "Lengua_Indigena_Mayahablante": lengua,
             "Afrodescendiente": afrodescendiente,
             "Migrante": migrante,
-            "Nombre_Escuela": escuela,
+            "Nombre_Escuela": escuela.strip().upper(),
             "Turno_Escuela": turno_escuela.strip(),
             "CCT_Escuela": cct_escuela.strip(),
             "Direccion_Escuela": direccion_escuela.strip(),
             "Localidad_Escuela": localidad_escuela.strip(),
             "Municipio_Escuela": municipio_escuela.strip(),
             "Condiciones_Adicionales": condiciones_adicionales.strip(),
-        })
+        }
+        try:
+            id_a = repo.save_alumno(datos_nuevo)
+        except ValueError as ex:
+            st.error(str(ex))
+            return
+
         st.success(f"Expediente creado: {expediente_id(id_a)}")
 
     st.divider()
     st.markdown("### Subir Excel a la base central de alumnos")
     st.caption(
-        "El padrón original es la fuente de verdad: por CURP se conservan los "
-        "expedientes y se actualizan únicamente los campos no vacíos que aporte el archivo."
+        "Las CURP que ya existen se actualizan en su expediente, no se agregan "
+        "como alumnos nuevos. Las CURP repetidas dentro del archivo se excluyen."
     )
     archivo = st.file_uploader(
         "Subir Excel de alumnos",
@@ -436,15 +442,14 @@ def alta_page(df):
             if not migrante_archivo and "MIGR" in condiciones_normalizadas:
                 migrante_archivo = "Sí"
 
-            nombre_escuela_resuelto = escuela_archivo
-            if not nombre_escuela_resuelto or normalizar_texto(nombre_escuela_resuelto) == normalizar_texto(codigo_escuela):
-                nombre_escuela_resuelto = next(
-                    (
-                        nombre for nombre, codigo in ESCUELAS_USAER.items()
-                        if codigo == codigo_escuela
-                    ),
-                    escuela_archivo,
-                )
+            nombre_escuela_resuelto = next(
+                (
+                    nombre.upper()
+                    for nombre, codigo in ESCUELAS_USAER.items()
+                    if codigo == codigo_escuela
+                ),
+                str(escuela_archivo).strip().upper(),
+            )
 
             preparados.append({
                 "Nombre_Completo": nombre_archivo,
