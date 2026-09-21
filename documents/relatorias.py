@@ -68,7 +68,27 @@ def _fecha_espanol(fecha):
     return f"Mérida, Yucatán a {valor.day:02d} de {meses[valor.month - 1]} de {valor.year}"
 
 
-def generar_pdf_oficial(contenido_relatoria, num_asistentes, fecha=None, sesion="", tema=""):
+def _frase_apertura(fecha):
+    meses = [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    ]
+    valor = fecha if isinstance(fecha, date) else date.today()
+    return (
+        f"siendo las 7 horas del día {valor.day} del mes de "
+        f"{meses[valor.month - 1]} del año {valor.year},"
+    )
+
+
+def generar_pdf_oficial(
+    contenido_relatoria,
+    num_asistentes,
+    fecha=None,
+    sesion="",
+    tema="",
+    tipo_junta="Junta de USAER",
+    modalidad_junta="Junta Académica",
+):
     """Crea la relatoría oficial carta con membrete, sello y espacios de asistencia."""
     estilos = getSampleStyleSheet()
     fecha_estilo = ParagraphStyle(
@@ -105,12 +125,19 @@ def generar_pdf_oficial(contenido_relatoria, num_asistentes, fecha=None, sesion=
         Paragraph("RELATORÍA", titulo_estilo),
     ]
     meta = []
+    meta.append(f"<b>Tipo de junta:</b> {escape(str(tipo_junta))}")
+    if modalidad_junta:
+        meta.append(f"<b>Modalidad:</b> {escape(str(modalidad_junta))}")
     if sesion:
         meta.append(f"<b>Sesión de CTE:</b> {escape(str(sesion))}")
     if tema:
         meta.append(f"<b>Tema central:</b> {escape(str(tema))}")
     if meta:
         elementos.extend([Paragraph("<br/>".join(meta), meta_estilo), Spacer(1, 10)])
+    elementos.extend([
+        Paragraph(escape(_frase_apertura(fecha)), cuerpo_estilo),
+        Spacer(1, 6),
+    ])
 
     for linea in str(contenido_relatoria or "").splitlines():
         limpio = linea.strip()
@@ -124,31 +151,32 @@ def generar_pdf_oficial(contenido_relatoria, num_asistentes, fecha=None, sesion=
             elementos.append(Paragraph(_texto_parrafo(limpio), cuerpo_estilo))
 
     elementos.append(Spacer(1, 24))
-    columna_firma = [
-        Paragraph("___________________________________", firma_estilo),
-        Paragraph("Psic. Edgar Adrián Yam Briceño MD", firma_negrita),
-        Paragraph("Director de la USAER 02 Estatal", firma_estilo),
-    ]
-    sello_path = ROOT / "sello.png"
-    if sello_path.exists():
-        sello = Image(str(sello_path), width=1.15 * inch, height=1.15 * inch)
-        sello.hAlign = "CENTER"
-    else:
-        sello = Paragraph("", firma_estilo)
-    bloque_direccion = Table(
-        [[columna_firma, sello]],
-        colWidths=[4.6 * inch, 1.8 * inch],
-    )
-    bloque_direccion.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
+    if str(tipo_junta).strip().casefold() != "junta de zona":
+        columna_firma = [
+            Paragraph("___________________________________", firma_estilo),
+            Paragraph("Psic. Edgar Adrián Yam Briceño MD", firma_negrita),
+            Paragraph("Director de la USAER 02 Estatal", firma_estilo),
+        ]
+        sello_path = ROOT / "sello.png"
+        if sello_path.exists():
+            sello = Image(str(sello_path), width=1.15 * inch, height=1.15 * inch)
+            sello.hAlign = "CENTER"
+        else:
+            sello = Paragraph("", firma_estilo)
+        bloque_direccion = Table(
+            [[columna_firma, sello]],
+            colWidths=[4.6 * inch, 1.8 * inch],
+        )
+        bloque_direccion.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        elementos.append(bloque_direccion)
     elementos.extend([
-        bloque_direccion,
         Spacer(1, 20),
         Paragraph("FIRMAS DEL PERSONAL ASISTENTE", seccion_estilo),
         Spacer(1, 6),
