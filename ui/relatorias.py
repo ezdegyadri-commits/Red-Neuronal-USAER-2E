@@ -12,7 +12,13 @@ from config.settings import GEMINI_MODEL
 from documents.relatorias import generar_pdf_oficial
 
 
-def _prompt(sesion, tema, notas):
+MESES_ES = (
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+)
+
+
+def _prompt(sesion, tema, notas, tipo_junta, modalidad_junta, fecha):
     return f"""Actúa como secretario técnico de la USAER 02-E y redacta una relatoría institucional
 de la sesión de Consejo Técnico Escolar indicada. No inventes hechos, acuerdos,
 responsables ni fechas; omite lo que no aparezca en la grabación o notas.
@@ -21,6 +27,9 @@ Estructura el cuerpo en:
 2. Reflexiones y retos pedagógicos.
 3. Acuerdos y compromisos: conserva responsables y plazos solo cuando se mencionen.
 Redacta formal y claro; no incluyas fecha ni título principal.
+Tipo de junta: {tipo_junta}
+Modalidad: {modalidad_junta}
+Fecha de la sesión: {fecha:%d/%m/%Y}
 Sesión: {sesion}
 Tema central: {tema or "No especificado"}
 Notas de Dirección: {notas or "Sin notas adicionales"}"""
@@ -59,7 +68,7 @@ def _procesar_openai(ruta, prompt, progreso):
     from openai import OpenAI
 
     cliente = OpenAI(api_key=api_key, timeout=900.0, max_retries=2)
-    limite = 24_000_000
+    limite = 24 * 1024 * 1024
     directorio = None
     try:
         if os.path.getsize(ruta) <= limite:
@@ -155,13 +164,38 @@ def generador_relatorias_director():
             "Fase Intensiva", "Primera Sesión", "Segunda Sesión", "Tercera Sesión",
             "Cuarta Sesión", "Quinta Sesión", "Sexta Sesión", "Séptima Sesión", "Octava Sesión",
         ]
+        tipo_junta = st.selectbox(
+            "Tipo de junta",
+            ["Junta de USAER", "Junta de Zona"],
+            key="relatoria_tipo_junta",
+        )
+        if tipo_junta == "Junta de USAER":
+            modalidad_junta = st.selectbox(
+                "Modalidad de la junta",
+                ["Junta Académica", "Sesión de CTE"],
+                key="relatoria_modalidad_junta",
+            )
+        else:
+            modalidad_junta = "Junta de Zona"
+            st.info("En las juntas de Zona se omiten automáticamente la firma y el sello de Dirección.")
+
         col1, col2 = st.columns(2)
         with col1:
             sesion = st.selectbox("Sesión de CTE", sesiones, key="relatoria_sesion")
             tema = st.text_input("Tema central", placeholder="Ej. Ajustes razonables, BAP...", key="relatoria_tema")
         with col2:
-            fecha = st.date_input("Fecha de la sesión", value=date.today(), key="relatoria_fecha")
+            fecha = date.today()
+            st.date_input(
+                "Fecha de la sesión (día en curso)",
+                value=fecha,
+                key="relatoria_fecha",
+                disabled=True,
+            )
             asistentes = st.number_input("Renglones para firmas", 1, 30, 6, key="relatoria_asistentes")
+        st.caption(
+            f"La relatoría incluirá: siendo las 7 horas del día {fecha.day} "
+            f"del mes de {MESES_ES[fecha.month - 1]} del año {fecha.year},"
+        )
         notas = st.text_area("Notas de Dirección", height=120, key="relatoria_notas")
         autorizado = st.checkbox(
             "Confirmo que cuento con autorización para procesar esta grabación con el proveedor seleccionado.",
@@ -185,7 +219,7 @@ def generador_relatorias_director():
                         temporal.write(audio.getbuffer())
                         ruta = temporal.name
                     with st.spinner("Transcribiendo y redactando..."):
-                        prompt = _prompt(sesion, tema, notas)
+                        prompt = _prompt(sesion, tema, notas, tipo_junta, modalidad_junta, fecha)
                         callback = lambda valor, mensaje: barra.progress(valor, text=mensaje)
                         if motor == "Gemini (Google)":
                             texto = _procesar_gemini(ruta, prompt)
@@ -194,6 +228,11 @@ def generador_relatorias_director():
                     if not texto:
                         raise RuntimeError("No se generó contenido.")
                     st.session_state["relatoria_texto_generado"] = texto
+                    st.session_state["relatoria_tipo_junta_generado"] = tipo_junta
+                    st.session_state["relatoria_modalidad_generada"] = modalidad_junta
+                    st.session_state["relatoria_fecha_generada"] = fecha
+                    st.session_state["relatoria_sesion_generada"] = sesion
+                    st.session_state["relatoria_tema_generado"] = tema
                     st.session_state.pop("relatoria_texto_editable", None)
                     st.success("Relatoría lista para revisión.")
                 except Exception as exc:
@@ -208,19 +247,34 @@ def generador_relatorias_director():
 
         texto = st.session_state.get("relatoria_texto_generado")
         if texto:
+            st.markdown("#### Relatoría generada")
+            st.caption("Puedes editar el cuerpo antes de guardar o descargar el PDF.")
             texto_editado = st.text_area(
                 "Revisa y edita el cuerpo antes de descargar",
                 value=texto,
                 height=420,
                 key="relatoria_texto_editable",
             )
+            if st.button("Guardar edición", key="guardar_edicion_relatoria", width="content"):
+                st.session_state["relatoria_texto_generado"] = texto_editado
+                st.success("Edición guardada en esta sesión.")
+                texto = texto_editado
+            fecha_generada = st.session_state.get("relatoria_fecha_generada", date.today())
+            tipo_generado = st.session_state.get("relatoria_tipo_junta_generado", "Junta de USAER")
+            modalidad_generada = st.session_state.get("relatoria_modalidad_generada", "Junta Académica")
             pdf = generar_pdf_oficial(
-                texto_editado, asistentes, fecha=fecha, sesion=sesion, tema=tema
+                texto_editado,
+                asistentes,
+                fecha=fecha_generada,
+                sesion=st.session_state.get("relatoria_sesion_generada", sesion),
+                tema=st.session_state.get("relatoria_tema_generado", tema),
+                tipo_junta=tipo_generado,
+                modalidad_junta=modalidad_generada,
             )
             st.download_button(
                 "Descargar relatoría oficial en PDF",
                 data=pdf,
-                file_name=f"Relatoria_CTE_{sesion.replace(' ', '_')}_{fecha:%Y%m%d}.pdf",
+                file_name=f"Relatoria_{tipo_generado.replace(' ', '_')}_{fecha_generada:%Y%m%d}.pdf",
                 mime="application/pdf",
                 type="primary",
                 width="stretch",
