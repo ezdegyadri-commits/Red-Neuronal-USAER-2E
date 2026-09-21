@@ -1,4 +1,4 @@
-"""Vista única del padrón oficial que se entrega a la zona."""
+""Vista única del padrón oficial que se entrega a la zona."""
 
 import pandas as pd
 
@@ -81,6 +81,13 @@ def validar_identidad_padron(alumnos):
 def vista_padron_oficial(alumnos, escuelas=None):
     """Devuelve exclusivamente las 23 columnas físicas del formato de zona."""
     if alumnos is None or alumnos.empty:
+        return pd.DataFrame(columns=COLUMNAS_PADRON_OFICIAL)
+    # La hoja central conserva duplicados y pendientes para auditoría.
+    # La entrega oficial solo incluye alumnos con estatus ACTIVO.
+    if "Estatus" in alumnos.columns:
+        estados = alumnos["Estatus"].fillna("").astype(str).str.strip().str.upper()
+        alumnos = alumnos.loc[estados.eq("ACTIVO")].copy()
+    if alumnos.empty:
         return pd.DataFrame(columns=COLUMNAS_PADRON_OFICIAL)
     validar_identidad_padron(alumnos)
     catalogo = _indice_escuelas(escuelas)
