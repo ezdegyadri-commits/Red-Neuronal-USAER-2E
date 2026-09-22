@@ -8,6 +8,32 @@ from fpdf import FPDF
 from config.settings import SERVICE_NAME, SCHOOL_YEAR
 
 
+def _fpdf_text(value):
+    """Normaliza texto dinámico para las fuentes base Latin-1 de FPDF."""
+    text = "" if value is None else str(value)
+    replacements = str.maketrans(
+        {
+            "\u00a0": " ",
+            "\u2018": "'",
+            "\u2019": "'",
+            "\u201a": "'",
+            "\u201b": "'",
+            "\u201c": '"',
+            "\u201d": '"',
+            "\u201e": '"',
+            "\u201f": '"',
+            "\u2013": "-",
+            "\u2014": "-",
+            "\u2212": "-",
+            "\u2022": "-",
+            "\u2026": "...",
+            "\u2192": "->",
+            "\u2190": "<-",
+        }
+    )
+    return text.translate(replacements).encode("latin-1", "replace").decode("latin-1")
+
+
 def header_b64(path="encabezado.png"):
     """Incrusta el encabezado oficial con una ruta estable en producción."""
     try:
@@ -123,14 +149,14 @@ def anexo4_pdf(alumno, rows):
             f"Motivo: {registro.get('Motivo', '')}\n"
             f"Seguimiento: {registro.get('Fecha_Seguimiento', '')}"
         )
-        pdf.multi_cell(0, 5, metadatos)
+        pdf.multi_cell(0, 5, _fpdf_text(metadatos))
         pdf.ln(3)
         pdf.set_font("Helvetica", "B", 10)
         pdf.cell(
             0, 6, "Sugerencias", new_x="LMARGIN", new_y="NEXT",
         )
         pdf.set_font("Helvetica", "", 10)
-        sugerencias = str(registro.get("Sugerencias", "") or " ")
+        sugerencias = _fpdf_text(registro.get("Sugerencias", "") or " ")
         pdf.multi_cell(
             disponible, 5, sugerencias + "\n\n\n\n",
             border=1, new_x="LMARGIN", new_y="NEXT",
@@ -144,7 +170,7 @@ def anexo4_pdf(alumno, rows):
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(
             disponible, 5,
-            str(registro.get("Nivel_Cumplimiento_Resultados", "") or " "),
+            _fpdf_text(registro.get("Nivel_Cumplimiento_Resultados", "") or " "),
             border=1, new_x="LMARGIN", new_y="NEXT",
         )
         pdf.ln(5)
@@ -167,7 +193,7 @@ def anexo4_pdf(alumno, rows):
         pdf.multi_cell(
             ancho_firmas, 5,
             "______________________________\nNombre y firma de quien brinda\n"
-            + str(registro.get("Quien_Brinda_Sugerencias", "")),
+            + _fpdf_text(registro.get("Quien_Brinda_Sugerencias", "")),
             border=1, align="C", new_x="LMARGIN", new_y="NEXT",
         )
 
