@@ -257,7 +257,8 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
  status_col = headers.index('Estatus') if 'Estatus' in headers else -1
  existing_rows = {}
  for index, row in enumerate(values[1:], start=2):
-  if len(row) > curp_col and str(row[curp_col]).strip():
+  if len(row) > curp_col and str(row[curp_col]).strip():23
+
    if status_col >= 0 and len(row) > status_col:
     estado = str(row[status_col]).strip().upper()
     if estado.startswith('DUPLICADO'):
