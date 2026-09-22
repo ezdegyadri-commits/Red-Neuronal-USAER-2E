@@ -20,7 +20,7 @@ INTEGRATED_HEADERS={
 'Expedientes':['ID_Expediente','ID_Alumno','Estatus','Fecha_Apertura','Ultima_Actualizacion'],
 'Relaciones_Expediente':['ID_Relacion','ID_Expediente','ID_Alumno','Tipo_Registro','ID_Registro','Fecha','Estado'],
 'Linea_Tiempo':['ID_Evento_Timeline','ID_Expediente','ID_Alumno','Fecha','Tipo','Titulo','Descripcion','Usuario']}
--
+
 def read(name): return df_sheet(name)
 def alumnos():
  """Lee la base central y deja una sola fila operativa por CURP.
