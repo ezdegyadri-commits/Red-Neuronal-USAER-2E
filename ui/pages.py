@@ -5,11 +5,11 @@ import streamlit as st
 import streamlit.components.v1 as components
 from config.settings import ESCUELAS_USAER, BAP_ITEMS, BAP_FRECUENCIAS, SERVICE_NAME, SCHOOL_YEAR
 from data import repository as repo
-from services.expedientes import alumnos_visibles, expediente, alumno
+from services.expedientes import alumnos_visibles, baps_de_alumno, expediente, alumno
 from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
 from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
 from ai.engine import fallback, generar_sugerencias
-from documents.anexos import anexo3_html, anexo4_html, anexo4_pdf, anexo5_html, anexo7_pdf, header_b64
+from documents.anexos import anexo3_html, anexo3_pdf, anexo4_html, anexo4_pdf, anexo5_html, anexo7_pdf, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from documents.oficios import generar_oficio_comision
 from ui.components import hero, card
@@ -92,7 +92,30 @@ def expedientes_page(df):
     tabs=st.tabs(["Resumen","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Línea de tiempo"])
     with tabs[0]:
         st.write({k:a.get(k,"") for k in ["Nombre_Completo","CURP","Grado","Grupo","ID_Escuela","Maestra de Apoyo","ID_Maestro_Regular","Condicion_Discapacidad","Tipo_Atencion","Estatus"]})
-    with tabs[1]: st.dataframe(exp["anexo3"],use_container_width=True,hide_index=True)
+    with tabs[1]:
+        if exp["anexo3"].empty:
+            st.info("Todavía no hay un Anexo III para este expediente.")
+        else:
+            st.dataframe(exp["anexo3"], use_container_width=True, hide_index=True)
+            vista_a3 = anexo3_html(a, exp["anexo3"])
+            with st.expander("Vista previa oficial del Anexo III", expanded=True):
+                st.html(vista_a3)
+            st.download_button(
+                "Descargar Anexo III en PDF carta",
+                anexo3_pdf(a, exp["anexo3"]),
+                f"Anexo_III_{id_alumno}.pdf",
+                "application/pdf",
+                width="stretch",
+                key=f"exp_a3_pdf_{id_alumno}",
+            )
+            st.download_button(
+                "Descargar Anexo III en HTML imprimible",
+                vista_a3,
+                f"Anexo_III_{id_alumno}.html",
+                "text/html",
+                width="stretch",
+                key=f"exp_a3_html_{id_alumno}",
+            )
     with tabs[2]:
         st.dataframe(exp["anexo4"],use_container_width=True,hide_index=True)
         if not exp["anexo4"].empty and st.button("Preparar Anexo 4 para impresión",key="prep4"):
@@ -716,6 +739,48 @@ def bap_page(df):
             "objetivo": objetivo,
             "escuela": escuela
         }
+
+    registros_bap = repo.anexo3()
+    if modo.startswith("Individual"):
+        baps_guardadas = baps_de_alumno(registros_bap, fila.to_dict())
+        sujeto_bap = fila.to_dict()
+    else:
+        baps_guardadas = (
+            registros_bap.loc[
+                registros_bap["ID_Alumno"].fillna("").astype(str).eq(id_a)
+            ].copy()
+            if not registros_bap.empty and "ID_Alumno" in registros_bap.columns
+            else pd.DataFrame()
+        )
+        sujeto_bap = {"Nombre_Completo": objetivo}
+
+    if not baps_guardadas.empty:
+        with st.expander(
+            f"BAP guardadas para este expediente ({len(baps_guardadas)})",
+            expanded=True,
+        ):
+            st.caption(
+                "Estas capturas permanecen disponibles; puedes revisarlas o "
+                "descargarlas sin volver a llenar el instrumento."
+            )
+            columnas_resumen = [
+                columna
+                for columna in ("ID_Anexo3", "Fecha", "ID_Personal", "Estatus_IA")
+                if columna in baps_guardadas.columns
+            ]
+            st.dataframe(
+                baps_guardadas[columnas_resumen],
+                hide_index=True,
+                width="stretch",
+            )
+            st.download_button(
+                "Descargar BAP guardadas en PDF oficial",
+                anexo3_pdf(sujeto_bap, baps_guardadas),
+                f"Anexo_III_{id_a}.pdf",
+                "application/pdf",
+                width="stretch",
+                key=f"bap_guardadas_pdf_{id_a}",
+            )
 
     st.markdown("### Anexo III BAP — Instrumento de observación")
 
@@ -1448,13 +1513,24 @@ def documentos_page(df):
             st.info("Todavía no hay un Anexo III para este expediente.")
         else:
             st.dataframe(a3, use_container_width=True, hide_index=True)
+            vista_anexo3 = anexo3_html(alumno_documento, a3)
+            with st.expander("Vista previa oficial del Anexo III", expanded=True):
+                st.html(vista_anexo3)
             st.download_button(
-                "Descargar Anexo III",
-                anexo3_html(alumno_documento, a3),
+                "Descargar Anexo III en PDF carta",
+                anexo3_pdf(alumno_documento, a3),
+                f"Anexo_III_{archivo_base}.pdf",
+                "application/pdf",
+                width="stretch",
+                key=f"descargar_a3_pdf_{archivo_base}",
+            )
+            st.download_button(
+                "Descargar Anexo III en HTML imprimible",
+                vista_anexo3,
                 f"Anexo_III_{archivo_base}.html",
                 "text/html",
-                use_container_width=True,
-                key=f"descargar_a3_{archivo_base}",
+                width="stretch",
+                key=f"descargar_a3_html_{archivo_base}",
             )
 
     with tabs[1]:

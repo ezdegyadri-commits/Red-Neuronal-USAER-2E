@@ -5,7 +5,7 @@ import pandas as pd
 from io import BytesIO
 from pathlib import Path
 from fpdf import FPDF
-from config.settings import SERVICE_NAME, SCHOOL_YEAR
+from config.settings import ESCUELAS_USAER, SERVICE_NAME, SCHOOL_YEAR
 
 
 def _fpdf_text(value):
@@ -223,7 +223,6 @@ def anexo5_html(alumno, rows):
 def anexo3_html(alumno, rows):
     """Genera una vista imprimible de las observaciones BAP guardadas."""
     head = header_b64()
-    nombre = html.escape(str(alumno.get("Nombre_Completo", "")))
     out = [
         "<html><head><meta charset='UTF-8'><style>"
         "body{font-family:Arial,sans-serif;color:#111;margin:28px;}"
@@ -234,6 +233,7 @@ def anexo3_html(alumno, rows):
         "</style></head><body>"
     ]
     for _, r in rows.iterrows():
+        nombre = html.escape(_anexo3_target_label(alumno, r))
         try:
             respuestas = json.loads(str(r.get("BAP_Fisicas", "{}")) or "{}")
         except (TypeError, json.JSONDecodeError):
@@ -263,6 +263,131 @@ def anexo3_html(alumno, rows):
         out.append("</table></section><div style='page-break-after:always'></div>")
     out.append("</body></html>")
     return "".join(out)
+
+
+def _anexo3_target_label(alumno, registro):
+    """Conserva el contexto grupal aunque el Anexo III se vea desde un alumno."""
+    id_objetivo = str(registro.get("ID_Alumno", "")).strip()
+    if id_objetivo.startswith("GRUPO-"):
+        for escuela, codigo in ESCUELAS_USAER.items():
+            prefijo = f"GRUPO-{codigo}-"
+            if id_objetivo.startswith(prefijo):
+                grado_grupo = id_objetivo[len(prefijo):].replace("-", " ")
+                return f"Grupo {grado_grupo} de la escuela {escuela}"
+        return id_objetivo.replace("-", " ")
+    return str(alumno.get("Nombre_Completo", "Alumno"))
+
+
+def anexo3_pdf(alumno, rows):
+    """Genera el Anexo III BAP en PDF carta listo para impresión."""
+    if rows is None or rows.empty:
+        rows = pd.DataFrame([{}])
+
+    class Anexo3PDF(FPDF):
+        registro_actual = {}
+
+        def header(self):
+            registro = self.registro_actual
+            head = header_b64()
+            if head:
+                try:
+                    self.image(
+                        BytesIO(base64.b64decode(head.split(",", 1)[1])),
+                        x=12, y=7, w=255,
+                    )
+                except Exception:
+                    pass
+            self.set_y(35)
+            self.set_font("Helvetica", "B", 12)
+            self.multi_cell(
+                0, 6,
+                "Anexo III. BAP - Instrumento de observacion de barreras para "
+                "el aprendizaje y la participacion",
+                align="C", new_x="LMARGIN", new_y="NEXT",
+            )
+            self.ln(2)
+            self.set_font("Helvetica", "", 9)
+            metadatos = (
+                f"Alumno o grupo: {_anexo3_target_label(alumno, registro)}\n"
+                f"Fecha: {registro.get('Fecha', '')}    "
+                f"Personal: {registro.get('ID_Personal', '')}"
+            )
+            self.multi_cell(
+                0, 5, _fpdf_text(metadatos), border=1,
+                new_x="LMARGIN", new_y="NEXT",
+            )
+            self.ln(2)
+
+    pdf = Anexo3PDF(orientation="L", unit="mm", format="letter")
+    pdf.set_margins(12, 12, 12)
+    # El encabezado de la subclase también se repite si FPDF necesita una
+    # página adicional por una observación extensa.
+    pdf.set_auto_page_break(auto=True, margin=12)
+
+    def agregar_encabezado(registro):
+        pdf.registro_actual = registro
+        pdf.add_page()
+
+    for _, registro in rows.iterrows():
+        try:
+            respuestas = json.loads(
+                str(registro.get("BAP_Fisicas", "{}")) or "{}"
+            )
+        except (TypeError, json.JSONDecodeError):
+            respuestas = {}
+
+        if isinstance(respuestas, dict) and respuestas:
+            respuestas_validas = [
+                respuesta
+                for respuesta in respuestas.values()
+                if isinstance(respuesta, dict)
+            ]
+            # Cuatro reactivos por página dejan margen suficiente incluso
+            # cuando la pregunta y la observación ocupan varias líneas.
+            for inicio in range(0, len(respuestas_validas), 4):
+                agregar_encabezado(registro)
+                bloque = respuestas_validas[inicio:inicio + 4]
+                for indice, respuesta in enumerate(bloque, start=inicio + 1):
+                    pregunta = _fpdf_text(
+                        respuesta.get("pregunta", "Indicador sin descripción")
+                    )
+                    frecuencia = _fpdf_text(respuesta.get("frecuencia", ""))
+                    orientacion = "Si" if respuesta.get("orientacion") else "No"
+                    observacion = _fpdf_text(respuesta.get("observacion", ""))
+
+                    pdf.set_font("Helvetica", "B", 8)
+                    pdf.set_fill_color(238, 243, 247)
+                    pdf.multi_cell(
+                        0, 4.5, f"{indice}. {pregunta}", border=1, fill=True,
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.set_font("Helvetica", "", 8)
+                    detalle = (
+                        f"Frecuencia: {frecuencia}    "
+                        f"Requiere orientacion: {orientacion}"
+                    )
+                    if observacion:
+                        detalle += f"\nObservacion especifica: {observacion}"
+                    pdf.multi_cell(
+                        0, 4.5, detalle, border=1,
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.ln(1)
+        else:
+            agregar_encabezado(registro)
+            pdf.set_font("Helvetica", "", 9)
+            resumen = (
+                f"Barreras fisicas: {registro.get('BAP_Fisicas', '')}\n"
+                f"Barreras actitudinales: {registro.get('BAP_Actitudinales', '')}\n"
+                f"Barreras pedagogicas: {registro.get('BAP_Pedagogicas', '')}\n"
+                f"Barreras organizativas: {registro.get('BAP_Organizativas', '')}"
+            )
+            pdf.multi_cell(
+                0, 5, _fpdf_text(resumen), border=1,
+                new_x="LMARGIN", new_y="NEXT",
+            )
+
+    return bytes(pdf.output())
 
 
 def anexo7_html(alumno, registro):

@@ -1,10 +1,69 @@
+import re
+
 import pandas as pd
 from datetime import date
+from config.settings import ESCUELAS_USAER
 from data import repository as repo
 from data.google import df_sheet
 from utils.ids import expediente_id
 from utils.text import normalizar_texto
 from services.alumnos import filtrar_alumnos_por_escuelas
+
+
+def _grado_grupo(value):
+    """Obtiene grado numérico y grupo de variantes como 4o., 4to A o 4° A."""
+    texto = normalizar_texto(value)
+    coincidencia = re.search(r"\d+", texto)
+    if not coincidencia:
+        return "", ""
+    grado = coincidencia.group(0)
+    tokens = re.findall(r"[A-Z]+", texto[coincidencia.end():])
+    grupo = tokens[-1] if tokens and tokens[-1] in {"A", "B", "C", "D"} else ""
+    return grado, grupo
+
+
+def _codigo_escuela(alumno_registro):
+    codigo = str(alumno_registro.get("ID_Escuela", "")).strip()
+    if codigo:
+        return codigo
+    escuela = normalizar_texto(alumno_registro.get("Nombre_Escuela", ""))
+    return next(
+        (
+            codigo_escuela
+            for nombre, codigo_escuela in ESCUELAS_USAER.items()
+            if normalizar_texto(nombre) == escuela
+        ),
+        "",
+    )
+
+
+def baps_de_alumno(registros, alumno_registro):
+    """Reúne BAP individuales y grupales del grado/escuela del alumno."""
+    if registros is None or registros.empty or "ID_Alumno" not in registros.columns:
+        return pd.DataFrame() if registros is None else registros.iloc[0:0].copy()
+
+    id_alumno = str(alumno_registro.get("ID_Alumno", "")).strip()
+    ids = registros["ID_Alumno"].fillna("").astype(str).str.strip()
+    directas = ids.eq(id_alumno) if id_alumno else pd.Series(False, index=registros.index)
+
+    codigo = _codigo_escuela(alumno_registro)
+    grado_alumno, grupo_alumno = _grado_grupo(
+        f"{alumno_registro.get('Grado', '')} {alumno_registro.get('Grupo', '')}"
+    )
+    prefijo = f"GRUPO-{codigo}-" if codigo else ""
+
+    def coincide_grupo(id_registro):
+        if not prefijo or not str(id_registro).startswith(prefijo):
+            return False
+        grado_registro, grupo_registro = _grado_grupo(
+            str(id_registro)[len(prefijo):].replace("-", " ")
+        )
+        if not grado_alumno or grado_registro != grado_alumno:
+            return False
+        return not grupo_alumno or not grupo_registro or grupo_registro == grupo_alumno
+
+    grupales = ids.map(coincide_grupo)
+    return registros.loc[directas | grupales].copy()
 
 
 def alumnos_visibles(rol, escuelas_permitidas):
@@ -66,11 +125,18 @@ def sugerencias_de_alumno(registros, alumno_registro, escuela_fallback=""):
         misma_escuela = pd.Series(False, index=registros.index)
 
     legado = sin_id & nombres.eq(nombre_alumno) & misma_escuela
-    grado_grupo = f"{alumno_registro.get('Grado', '')} {alumno_registro.get('Grupo', '')}".strip()
-    if grado_grupo and "Grado_Grupo" in registros.columns:
-        mismo_grupo = (
-            registros["Grado_Grupo"].fillna("").astype(str).str.strip()
-            .map(normalizar_texto).eq(normalizar_texto(grado_grupo))
+    grado_alumno, grupo_alumno = _grado_grupo(
+        f"{alumno_registro.get('Grado', '')} {alumno_registro.get('Grupo', '')}"
+    )
+    if grado_alumno and "Grado_Grupo" in registros.columns:
+        def coincide_grado_grupo(value):
+            grado_registro, grupo_registro = _grado_grupo(value)
+            if grado_registro != grado_alumno:
+                return False
+            return not grupo_alumno or not grupo_registro or grupo_registro == grupo_alumno
+
+        mismo_grupo = registros["Grado_Grupo"].fillna("").astype(str).map(
+            coincide_grado_grupo
         )
         grupo = nombres.str.startswith("Grupo ", na=False) & mismo_grupo & misma_escuela
     else:
@@ -97,12 +163,13 @@ def expediente(id_alumno):
     a3 = repo.anexo3()
     a4 = repo.anexo4()
     a5 = repo.anexo5()
-    if not a3.empty and "ID_Alumno" in a3.columns:
-        a3 = a3[a3["ID_Alumno"].astype(str) == str(id_alumno)].copy()
-    else: a3 = pd.DataFrame()
+    if not a3.empty:
+        a3 = baps_de_alumno(a3, alum)
+    else:
+        a3 = pd.DataFrame()
     if not a4.empty:
         a4 = sugerencias_de_alumno(a4, alum)
-    elif not a4.empty:
+    else:
         a4 = pd.DataFrame()
     grado_grupo_alumno = f"{alum.get('Grado', '')} {alum.get('Grupo', '')}".strip()
     a5 = repo.eventos_alumno(
