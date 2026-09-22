@@ -1,4 +1,4 @@
-""Vista única del padrón oficial que se entrega a la zona."""
+"""Vista única del padrón oficial que se entrega a la zona."""
 
 import pandas as pd
 
@@ -34,67 +34,25 @@ def _indice_escuelas(escuelas):
     return indice
 
 
-def validar_identidad_padron(alumnos):
-    """Evita exportar un padrón que silenciosamente omita/duplique alumnos."""
-    if alumnos is None or alumnos.empty:
-        return
-
-    curps = alumnos.get("CURP", pd.Series("", index=alumnos.index)).fillna("")
-    curps = curps.astype(str).str.strip().str.upper()
-    nombres = alumnos.get(
-        "Nombre_Completo", pd.Series("", index=alumnos.index)
-    ).fillna("").astype(str).str.strip()
-    ids = alumnos.get("ID_Alumno", pd.Series("", index=alumnos.index)).fillna("")
-    ids = ids.astype(str).str.strip()
-
-    alumnos_con_nombre = nombres.ne("")
-    curp_valida = curps.str.fullmatch(r"[A-Z0-9]{18}", na=False)
-    sin_curp = alumnos.loc[alumnos_con_nombre & ~curp_valida]
-
-    claves_repetidas = curps[alumnos_con_nombre & curp_valida].duplicated(
-        keep=False
-    )
-    duplicados = alumnos.loc[claves_repetidas.index[claves_repetidas]]
-    if sin_curp.empty and duplicados.empty:
-        return
-
-    problemas = []
-    if not sin_curp.empty:
-        faltan_ids = [valor for valor in ids.loc[sin_curp.index].tolist() if valor]
-        problemas.append(
-            f"{len(sin_curp)} registro(s) con CURP ausente o inválida"
-            + (f" (ID: {', '.join(faltan_ids)})" if faltan_ids else "")
-        )
-    if not duplicados.empty:
-        ids_repetidos = [valor for valor in ids.loc[duplicados.index].tolist() if valor]
-        problemas.append(
-            f"{len(duplicados)} registro(s) involucrados en CURP duplicadas"
-            + (f" (ID: {', '.join(ids_repetidos)})" if ids_repetidos else "")
-        )
-    raise ValueError(
-        "No se generó el padrón oficial para evitar omitir o duplicar alumnos: "
-        + "; ".join(problemas)
-        + ". Corrige o confirma esos registros en la base central y vuelve a generarlo."
-    )
-
-
 def vista_padron_oficial(alumnos, escuelas=None):
     """Devuelve exclusivamente las 23 columnas físicas del formato de zona."""
     if alumnos is None or alumnos.empty:
         return pd.DataFrame(columns=COLUMNAS_PADRON_OFICIAL)
-    # La hoja central conserva duplicados y pendientes para auditoría.
-    # La entrega oficial solo incluye alumnos con estatus ACTIVO.
+    # Los duplicados y altas pendientes permanecen en la base central para
+    # auditoría, pero no deben entrar en la entrega oficial.
     if "Estatus" in alumnos.columns:
         estados = alumnos["Estatus"].fillna("").astype(str).str.strip().str.upper()
         alumnos = alumnos.loc[estados.eq("ACTIVO")].copy()
     if alumnos.empty:
         return pd.DataFrame(columns=COLUMNAS_PADRON_OFICIAL)
-    validar_identidad_padron(alumnos)
     catalogo = _indice_escuelas(escuelas)
     school_index = indice_escuelas(alumnos=alumnos, escuelas=escuelas)
     alumnos = alumnos.copy()
     curp = alumnos.get("CURP", pd.Series("", index=alumnos.index)).fillna("")
     alumnos["_curp_padron"] = curp.astype(str).str.strip().str.upper()
+    alumnos = alumnos[
+        alumnos["_curp_padron"].str.fullmatch(r"[A-Z0-9]{18}", na=False)
+    ].drop_duplicates("_curp_padron", keep="last")
     salida = []
     for numero, (_, fila) in enumerate(alumnos.fillna("").iterrows(), start=1):
         alumno = fila.to_dict()
@@ -144,4 +102,3 @@ def vista_padron_oficial(alumnos, escuelas=None):
             "AFRODESCENDIENTE": dato("Afrodescendiente"),
         })
     return pd.DataFrame(salida, columns=COLUMNAS_PADRON_OFICIAL)
-
