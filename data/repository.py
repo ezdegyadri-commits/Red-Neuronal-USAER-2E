@@ -10,7 +10,7 @@ BASE_HEADERS={
 'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante','Nombre_Escuela','Turno_Escuela','CCT_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela','Condiciones_Adicionales'],
 'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA'],
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
-'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento','Estado','ID_Alumno'],
+'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento','Estado'],
 'Usuarios':['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas'],
 'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus'],
 'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado'],
@@ -23,11 +23,7 @@ INTEGRATED_HEADERS={
 
 def read(name): return df_sheet(name)
 def alumnos():
- """Lee la base central y deja una sola fila operativa por CURP.
-
- La hoja conserva duplicados y pendientes para auditoría, pero los procesos
- de la plataforma trabajan con el registro activo preferente.
- """
+ """Lee solo la base interna vigente y omite columnas duplicadas heredadas."""
  frame = read('Alumnos')
  columnas = [col for col in BASE_HEADERS['Alumnos'] if col in frame.columns]
  frame = frame[columnas].copy() if columnas else frame
@@ -37,6 +33,9 @@ def alumnos():
    | frame['CURP'].fillna('').astype(str).str.strip().ne('')
   )
   frame = frame.loc[con_alumno].reset_index(drop=True)
+  # La hoja central conserva duplicados para auditoría, pero cada flujo
+  # operativo debe trabajar con una sola fila por CURP. Se prioriza Activo y
+  # se conserva el registro original en la hoja, sin eliminar información.
   if 'CURP' in frame.columns and not frame.empty:
    frame['_curp_operativa'] = frame['CURP'].fillna('').astype(str).str.strip().str.upper()
    estado = frame.get('Estatus', pd.Series('', index=frame.index)).fillna('').astype(str).str.strip().str.upper()
@@ -51,20 +50,20 @@ def alumnos():
    )
  return frame
 def personal(): return read('Personal')
--
--
+
+
 def personal_para_formato():
  """Obtiene personal del formulario; usa la hoja central como respaldo."""
  respuestas = pd.DataFrame(read_personal_responses())
  if respuestas.empty:
   return personal()
--
+
  def normalizar(texto):
   import re
   import unicodedata
   texto = unicodedata.normalize('NFD', str(texto)).encode('ascii', 'ignore').decode('ascii')
   return re.sub(r'[^a-z0-9]+', ' ', texto.lower()).strip()
--
+
  encabezados = {normalizar(columna): columna for columna in respuestas.columns}
  aliases = {
   'ID_Personal': ('direccion de correo electronico',),
@@ -100,7 +99,7 @@ def personal_para_formato():
    if any(candidato in encabezado for candidato in candidatos):
     columnas[destino] = original
     break
--
+
  requeridas = {'Nombre_Completo', 'Rol', 'Email'}
  faltantes = requeridas - set(columnas)
  if faltantes:
@@ -108,7 +107,7 @@ def personal_para_formato():
    'La hoja de respuestas no contiene los encabezados requeridos: '
    + ', '.join(sorted(faltantes))
   )
--
+
  personal_formulario = pd.DataFrame(index=respuestas.index)
  for destino, origen in columnas.items():
   personal_formulario[destino] = respuestas[origen].fillna('').astype(str).str.strip()
@@ -127,13 +126,13 @@ def usuarios(): return read('Usuarios')
 def anexo3(): return read('Anexo3_Deteccion')
 def anexo4(): return read('Anexo4_Sugerencias')
 def anexo5(): return read('Anexo5_Eventos')
--
+
 def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
  """Reúne eventos del expediente y eventos históricos sin modificar sus filas."""
  eventos = anexo5()
  if eventos.empty or "ID_Evento" not in eventos.columns:
   return eventos.iloc[0:0].copy() if not eventos.empty else eventos
--
+
  ligados = set()
  ids_ligados = set()
  try:
@@ -152,14 +151,9 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
     )
  except Exception:
   pass
--
+
  ids_evento = eventos["ID_Evento"].fillna("").astype(str).str.strip()
  precisos = eventos.loc[ids_evento.isin(ligados)].copy() if ligados else eventos.iloc[0:0].copy()
- if "ID_Alumno" in eventos.columns:
-  directos = eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq(
-   str(id_alumno).strip()
-  )
-  precisos = pd.concat([precisos, eventos.loc[directos]], ignore_index=True)
  legados = eventos.iloc[0:0].copy()
  if nombre and "Nombre_Alumno" in eventos.columns:
   nombre_normal = str(nombre).strip().casefold()
@@ -167,9 +161,6 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
    lambda valor: valor.strip().casefold() == nombre_normal
   )
   sin_vinculo = ~ids_evento.isin(ids_ligados)
-  if "ID_Alumno" in eventos.columns:
-   sin_id_directo = eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq("")
-   sin_vinculo &= sin_id_directo
   if grado_grupo and "Grado_Grupo" in eventos.columns:
    grado_normal = " ".join(str(grado_grupo).split()).casefold()
    grado_evento = eventos["Grado_Grupo"].fillna("").astype(str).map(
@@ -177,7 +168,7 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
    )
    coincide &= grado_evento.eq("") | grado_evento.eq(grado_normal)
   legados = eventos.loc[coincide & sin_vinculo].copy()
--
+
  resultado = pd.concat([precisos, legados], ignore_index=True)
  if "ID_Evento" in resultado.columns:
   resultado = resultado.drop_duplicates(subset=["ID_Evento"], keep="first")
@@ -205,7 +196,7 @@ def configuracion_oficios_actual():
  configuracion = configuracion_oficios()
  return configuracion.tail(1).iloc[0].to_dict() if not configuracion.empty else {}
 def anexo7(): return read('Anexo7_Derivacion')
--
+
 PADRON_FIELDS = {
  'Nombre_Completo', 'CURP', 'Edad_1_Septiembre', 'Sexo', 'Situacion_Alumno',
  'Nivel_Educativo', 'Grado', 'Grupo', 'ID_Escuela', 'Maestra de Apoyo',
@@ -214,8 +205,8 @@ PADRON_FIELDS = {
  'Nombre_Escuela', 'Turno_Escuela', 'CCT_Escuela', 'Direccion_Escuela',
  'Localidad_Escuela', 'Municipio_Escuela', 'Condiciones_Adicionales',
 }
--
--
+
+
 def _a1_column(number):
  """Convierte un número de columna de base 1 a referencia A1."""
  result = ""
@@ -223,21 +214,21 @@ def _a1_column(number):
   number, remainder = divmod(number - 1, 26)
   result = chr(65 + remainder) + result
  return result
--
--
+
+
 def save_alumno(data):
  """Crea un alumno manual y rechaza CURP que ya existan en la base central."""
  _, _, ids = upsert_alumnos([data], return_ids=True, reject_existing=True)
  return ids[0] if ids else ""
--
+
 def save_alumnos(rows):
  """Guarda altas nuevas solo si sus CURP no existen previamente."""
  _, _, ids = upsert_alumnos(rows, return_ids=True, reject_existing=True)
  return ids
--
+
 def upsert_alumnos(rows, return_ids=False, reject_existing=False):
  """Consolida padrones por CURP.
--
+
  Los valores no vacíos del padrón que se está cargando son la fuente de verdad
  para los datos del alumno. Se conservan el ID y todos los campos que el
  archivo no aporta, por lo que no se eliminan expedientes ni información útil.
@@ -245,26 +236,26 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
  ensure_headers('Alumnos', BASE_HEADERS['Alumnos'])
  if not rows:
   return (0, 0, []) if return_ids else (0, 0)
--
+
  ws = worksheet('Alumnos')
  values = retry_google(ws.get_all_values)
  headers = values[0] if values else []
  if 'CURP' not in headers:
   raise ValueError("La hoja central no tiene la columna CURP.")
--
+
  curp_col = headers.index('CURP')
  id_col = headers.index('ID_Alumno') if 'ID_Alumno' in headers else -1
  status_col = headers.index('Estatus') if 'Estatus' in headers else -1
  existing_rows = {}
  for index, row in enumerate(values[1:], start=2):
-  if len(row) > curp_col and str(row[curp_col]).strip():23
-:   if status_col >= 0 and len(row) > status_col:
+  if len(row) > curp_col and str(row[curp_col]).strip():
+   if status_col >= 0 and len(row) > status_col:
     estado = str(row[status_col]).strip().upper()
     if estado.startswith('DUPLICADO'):
      continue
    existing_rows.setdefault(str(row[curp_col]).strip().upper(), []).append(index)
  existing = {curp: rows[-1] for curp, rows in existing_rows.items()}
--
+
  numbers = []
  for row in values[1:]:
   if id_col >= 0 and len(row) > id_col:
@@ -273,7 +264,7 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
    except (TypeError, ValueError):
     pass
  next_number = max(numbers) + 1 if numbers else 1
--
+
  nuevos, actualizados, append_rows, updates, ids = 0, 0, [], [], []
  seen_input = set()
  for registro in rows:
@@ -303,7 +294,7 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
     "expediente de la base central" + detalle + ". Dirección debe revisar cuál es el registro correcto."
    )
   fila = existing.get(curp)
--
+
   if fila:
    if reject_existing:
     raise ValueError(
@@ -330,20 +321,20 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
    append_rows.append(data)
    ids.append(data['ID_Alumno'])
    nuevos += 1
--
+
  if updates:
   retry_google(lambda: ws.batch_update(updates, value_input_option='USER_ENTERED'))
  if append_rows:
   google_append_rows_raw('Alumnos', append_rows)
  if actualizados or append_rows:
   clear_cache('Alumnos')
--
+
  result = (nuevos, actualizados)
  return (*result, ids) if return_ids else result
--
--
--
--
+
+
+
+
 def guardar_configuracion_oficios(data):
  """Registra la configuración vigente definida exclusivamente por Dirección."""
  headers = BASE_HEADERS['Configuracion_Oficios']
@@ -356,7 +347,7 @@ def guardar_configuracion_oficios(data):
  append_dict('Configuracion_Oficios', registro)
  clear_cache('Configuracion_Oficios')
  return registro
--
+
 def guardar_oficio_comision(data):
  """Guarda una emisión por clave única y asigna un folio consecutivo."""
  headers = BASE_HEADERS['Oficios_Comision']
@@ -367,7 +358,7 @@ def guardar_oficio_comision(data):
  indice_clave = headers.index('Clave_Operacion')
  indice_id = headers.index('ID_Oficio')
  indice_folio = headers.index('Folio')
--
+
  clave = str(data.get('Clave_Operacion', '')).strip()
  for fila in actuales:
   fila = fila + [''] * max(0, len(headers) - len(fila))
@@ -377,7 +368,7 @@ def guardar_oficio_comision(data):
     'Folio': fila[indice_folio],
     **data,
    }
--
+
  folios = []
  for fila in actuales:
   try:
@@ -392,7 +383,7 @@ def guardar_oficio_comision(data):
  google_append_rows_raw('Oficios_Comision', [registro])
  clear_cache('Oficios_Comision')
  return registro
--
+
 def repair_nombres_alumnos(rows):
  """Corrige solo nombres cuando un padrón previo guardó el nombre de la escuela."""
  if not rows:
@@ -418,13 +409,13 @@ def repair_nombres_alumnos(rows):
  if corregidos:
   clear_cache('Alumnos')
  return corregidos
--
+
 def save_anexo3(data):
  data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
 def save_anexo4(data):
  ensure_headers('Anexo4_Sugerencias', BASE_HEADERS['Anexo4_Sugerencias'])
  data=dict(data); data.setdefault('ID_Anexo4',next_numeric_id('Anexo4_Sugerencias','ID_Anexo4','AN4')); data.setdefault('Estado','ACTIVO'); append_dict('Anexo4_Sugerencias',data); return data['ID_Anexo4']
--
+
 def update_anexo4(id_anexo4, cambios):
  """Actualiza un Anexo IV existente sin borrar columnas ni crear duplicados."""
  ensure_headers('Anexo4_Sugerencias', BASE_HEADERS['Anexo4_Sugerencias'])
@@ -452,14 +443,13 @@ def update_anexo4(id_anexo4, cambios):
  retry_google(lambda: ws.update(range_name=rango,values=[actual[:len(headers)]]))
  clear_cache('Anexo4_Sugerencias')
  return str(id_anexo4)
--
+
 def delete_anexo4(id_anexo4):
  """Retira una sugerencia de la vista activa sin borrar su historial."""
  return update_anexo4(id_anexo4, {'Estado': 'ANULADO'})
 def save_anexo5(data):
- ensure_headers('Anexo5_Eventos', BASE_HEADERS['Anexo5_Eventos'])
  data=dict(data); data.setdefault('ID_Evento',next_numeric_id('Anexo5_Eventos','ID_Evento','AN5')); append_dict('Anexo5_Eventos',data); return data['ID_Evento']
--
+
 def update_anexo5(id_evento, cambios):
  """Corrige un evento o lo marca como duplicado sin borrar la fila."""
  ws=ensure_headers('Anexo5_Eventos', BASE_HEADERS['Anexo5_Eventos'])
@@ -491,29 +481,28 @@ def save_anexo7(data):
  data=dict(data); data.setdefault('ID_Anexo7',next_numeric_id('Anexo7_Derivacion','ID_Anexo7','AN7')); append_dict('Anexo7_Derivacion',data); return data['ID_Anexo7']
 def save_visita(data):
  data=dict(data); data.setdefault('ID_Visita',next_numeric_id('Registro_Visitas','ID_Visita','VIS')); append_dict('Registro_Visitas',data); return data['ID_Visita']
--
+
 def ensure_integrated_sheets():
  for name,headers in {**INTEGRATED_HEADERS,'Registro_Visitas':BASE_HEADERS['Registro_Visitas']}.items(): ensure_sheet(name,headers)
--
+
 def ensure_expediente(id_expediente,id_alumno,estatus='ACTIVO'):
  ensure_integrated_sheets(); df=read('Expedientes')
  if not df.empty and 'ID_Expediente' in df.columns and str(id_expediente) in set(df['ID_Expediente'].astype(str)): return False
  hoy=str(date.today()); append_dict('Expedientes',{'ID_Expediente':id_expediente,'ID_Alumno':id_alumno,'Estatus':estatus,'Fecha_Apertura':hoy,'Ultima_Actualizacion':hoy}); return True
--
+
 def existing_relations():
  df=read('Relaciones_Expediente')
  if df.empty: return set()
  return set(zip(df['ID_Expediente'].astype(str),df['Tipo_Registro'].astype(str),df['ID_Registro'].astype(str)))
--
+
 def link_record(id_expediente,id_alumno,tipo,id_registro,fecha,estado='ACTIVO'):
  ensure_integrated_sheets(); key=(str(id_expediente),str(tipo),str(id_registro))
  if key in existing_relations(): return None
  rid=next_numeric_id('Relaciones_Expediente','ID_Relacion','REL'); append_dict('Relaciones_Expediente',{'ID_Relacion':rid,'ID_Expediente':id_expediente,'ID_Alumno':id_alumno,'Tipo_Registro':tipo,'ID_Registro':id_registro,'Fecha':fecha,'Estado':estado}); return rid
--
+
 def timeline(id_expediente,id_alumno,fecha,tipo,titulo,descripcion,usuario):
  ensure_integrated_sheets(); df=read('Linea_Tiempo')
  if not df.empty:
   mask=(df['ID_Expediente'].astype(str)==str(id_expediente))&(df['Tipo'].astype(str)==str(tipo))&(df['Titulo'].astype(str)==str(titulo))&(df['Fecha'].astype(str)==str(fecha))
   if mask.any(): return None
  tid=next_numeric_id('Linea_Tiempo','ID_Evento_Timeline','TL'); append_dict('Linea_Tiempo',{'ID_Evento_Timeline':tid,'ID_Expediente':id_expediente,'ID_Alumno':id_alumno,'Fecha':fecha,'Tipo':tipo,'Titulo':titulo,'Descripcion':descripcion,'Usuario':usuario}); return tid
--
