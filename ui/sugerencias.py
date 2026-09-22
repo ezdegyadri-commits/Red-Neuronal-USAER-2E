@@ -31,6 +31,10 @@ def _sort_suggestions(frame):
     result["_fecha_orden"] = pd.to_datetime(
         result["Fecha_Elaboracion"], errors="coerce", dayfirst=True
     )
+    return (
+        result.sort_values("_fecha_orden", kind="stable", na_position="last")
+        .drop(columns="_fecha_orden")
+    )
 
 
 def _etiqueta_alumno(opciones, id_alumno):
@@ -41,10 +45,6 @@ def _etiqueta_alumno(opciones, id_alumno):
     grado_grupo = f"{fila.get('Grado', '')} {fila.get('Grupo', '')}".strip()
     return " · ".join(
         parte for parte in (nombre, grado_grupo, str(id_alumno)) if parte
-    )
-    return (
-        result.sort_values("_fecha_orden", kind="stable", na_position="last")
-        .drop(columns="_fecha_orden")
     )
 
 
