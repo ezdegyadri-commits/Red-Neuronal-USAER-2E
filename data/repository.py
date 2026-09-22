@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import date
 from data.google import clear_cache, df_sheet, append_dict, ensure_sheet, ensure_headers, google_append_rows_raw, next_numeric_id, read_personal_responses, retry_google, worksheet
 from config.settings import ANEXO4_FIELDS
--
+
 BASE_HEADERS={
 'Escuelas':['ID_Escuela','CCT','Nombre_Escuela','Nivel','Turno'],
 'Personal':['ID_Personal','Nombre_Completo','Rol','Email','Telefono'],
