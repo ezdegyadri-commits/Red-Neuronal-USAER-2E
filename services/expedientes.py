@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 
 import pandas as pd
 from datetime import date
@@ -163,7 +164,8 @@ def sugerencias_de_alumno(
 
 
 def expediente(id_alumno):
-    alum = alumno(repo.alumnos(), id_alumno)
+    padron = repo.alumnos()
+    alum = alumno(padron, id_alumno)
     if not alum:
         return None
     exp = expediente_id(id_alumno)
@@ -187,6 +189,9 @@ def expediente(id_alumno):
         id_alumno,
         str(alum.get("Nombre_Completo", "")),
         grado_grupo_alumno,
+        id_escuela=str(alum.get("ID_Escuela", "")),
+        escuela=str(alum.get("Nombre_Escuela", "")),
+        alumnos_referencia=padron,
     )
     timeline_df = pd.DataFrame()
     try:
@@ -195,5 +200,63 @@ def expediente(id_alumno):
             timeline_df = timeline_df[timeline_df["ID_Expediente"].astype(str) == exp]
     except Exception:
         pass
-    return {"id_expediente": exp, "alumno": alum, "anexo3": a3, "anexo4": a4, "anexo5": a5, "timeline": timeline_df}
+    # Older Anexo V entries may predate the separate timeline integration.
+    # Project them into the expediente timeline at read time; never rewrite or
+    # delete either source sheet. A multiset avoids duplicate display while
+    # preserving genuinely repeated annotations.
+    if not a5.empty:
+        def timeline_key(fecha, descripcion, usuario):
+            texto_fecha = str(fecha).strip()
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", texto_fecha):
+                parsed = pd.to_datetime(texto_fecha, format="%Y-%m-%d", errors="coerce")
+            else:
+                parsed = pd.to_datetime(texto_fecha, errors="coerce", dayfirst=True)
+            fecha_key = parsed.strftime("%Y-%m-%d") if not pd.isna(parsed) else str(fecha).strip()
+            return (
+                fecha_key,
+                normalizar_texto(descripcion),
+                normalizar_texto(usuario),
+            )
+
+        existentes = Counter()
+        if not timeline_df.empty:
+            for _, row in timeline_df.iterrows():
+                existentes[timeline_key(
+                    row.get("Fecha", ""),
+                    row.get("Descripcion", ""),
+                    row.get("Usuario", row.get("Especialista", "")),
+                )] += 1
+
+        faltantes = []
+        for _, row in a5.iterrows():
+            firma = timeline_key(
+                row.get("Fecha", ""),
+                row.get("Evento", ""),
+                row.get("Especialista", ""),
+            )
+            if existentes[firma]:
+                existentes[firma] -= 1
+                continue
+            faltantes.append({
+                "ID_Expediente": exp,
+                "ID_Alumno": str(id_alumno),
+                "Fecha": row.get("Fecha", ""),
+                "Tipo": "EVENTO SIGNIFICATIVO",
+                "Titulo": f"Anexo V {row.get('ID_Evento', '')}".strip(),
+                "Descripcion": row.get("Evento", ""),
+                "Usuario": row.get("Especialista", ""),
+            })
+        if faltantes:
+            timeline_df = pd.concat(
+                [timeline_df, pd.DataFrame(faltantes)], ignore_index=True
+            )
+    return {
+        "id_expediente": exp,
+        "alumno": alum,
+        "anexo3": a3,
+        "anexo4": a4,
+        "anexo5": a5,
+        "timeline": timeline_df,
+        "eventos_ambiguos": a5.attrs.get("eventos_ambiguos", 0),
+    }
 

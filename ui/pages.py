@@ -144,6 +144,11 @@ def expedientes_page(df):
             )
             st.caption("Para añadir, corregir o retirar sugerencias, abre el módulo «Anexo IV Hoja de sugerencias».")
     with tabs[3]:
+        if exp.get("eventos_ambiguos", 0):
+            st.warning(
+                f"Hay {exp['eventos_ambiguos']} evento(s) antiguo(s) con nombre duplicado y sin identificador de alumno. "
+                "Se conservan en la base y no se asignan automáticamente para evitar mezclarlos entre expedientes."
+            )
         if exp["anexo5"].empty:
             st.info("Todavía no hay eventos significativos en este expediente.")
         else:
@@ -1156,6 +1161,8 @@ def bap_page(df):
             eid = repo.save_anexo5({
                 "Fecha": str(date.today()),
                 "ID_Alumno": str(last["id_alumno"]),
+                "ID_Escuela": str(a.get("ID_Escuela", "") if a else ""),
+                "Escuela": str(a.get("Nombre_Escuela", "") if a else ""),
                 "Nombre_Alumno": last["nombre"],
                 "Grado_Grupo": (
                     f"{a.get('Grado', '')} {a.get('Grupo', '')}".strip()
@@ -1205,7 +1212,7 @@ def seguimiento_page(df):
         especialista=st.text_input("Especialista",st.session_state.get("nombre",""))
         save=st.form_submit_button("Registrar evento",type="primary")
     if save:
-        eid=repo.save_anexo5({"Fecha":str(fecha),"ID_Alumno":str(id_a),"Nombre_Alumno":a.get("Nombre_Completo",""),"Grado_Grupo":f"{a.get('Grado','')} {a.get('Grupo','')}".strip(),"Especialista":especialista,"Evento":evento})
+        eid=repo.save_anexo5({"Fecha":str(fecha),"ID_Alumno":str(id_a),"ID_Escuela":str(a.get("ID_Escuela", "")),"Escuela":str(a.get("Nombre_Escuela", "")),"Nombre_Alumno":a.get("Nombre_Completo",""),"Grado_Grupo":f"{a.get('Grado','')} {a.get('Grupo','')}".strip(),"Especialista":especialista,"Evento":evento})
         try:
             repo.link_record(expediente_id(id_a),id_a,"ANEXO5",eid,str(fecha))
             repo.timeline(expediente_id(id_a),id_a,str(fecha),"SEGUIMIENTO","Evento registrado",evento,especialista)
@@ -1294,11 +1301,28 @@ def eventos_page(df):
         grado_grupo = f"{grado} {grupo}"
         id_alumno = f"GRUPO-{ESCUELAS_USAER[escuela]}-{grado}-{grupo}"
         objetivo = f"Grupo {grado_grupo} de la escuela {escuela}"
-        datos = {"Nombre_Completo": objetivo}
+        datos = {
+            "Nombre_Completo": objetivo,
+            "ID_Escuela": str(ESCUELAS_USAER.get(escuela, "")),
+            "Nombre_Escuela": escuela,
+        }
 
     eventos_registrados = repo.eventos_alumno(
-        id_alumno, objetivo, grado_grupo, incluir_inactivos=True
+        id_alumno,
+        objetivo,
+        grado_grupo,
+        incluir_inactivos=True,
+        id_escuela=str(datos.get("ID_Escuela", "")),
+        escuela=str(datos.get("Nombre_Escuela", "")),
+        alumnos_referencia=df,
     )
+
+    eventos_ambiguos = eventos_registrados.attrs.get("eventos_ambiguos", 0)
+    if eventos_ambiguos:
+        st.warning(
+            f"Hay {eventos_ambiguos} evento(s) antiguo(s) con nombre duplicado y sin identificador de alumno. "
+            "Se conservan en la base y requieren verificación para no asignarlos al alumno equivocado."
+        )
 
     eventos_historial = eventos_registrados.copy()
     if "Estado" in eventos_registrados.columns:
@@ -1422,6 +1446,8 @@ def eventos_page(df):
     borrador = {
         "Fecha": str(fecha),
         "ID_Alumno": str(id_alumno),
+        "ID_Escuela": str(datos.get("ID_Escuela", ESCUELAS_USAER.get(escuela, ""))),
+        "Escuela": str(datos.get("Nombre_Escuela", escuela)),
         "Nombre_Alumno": objetivo,
         "Grado_Grupo": grado_grupo,
         "Especialista": especialista.strip() or nombre_usuario,

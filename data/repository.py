@@ -10,7 +10,7 @@ BASE_HEADERS={
 'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante','Nombre_Escuela','Turno_Escuela','CCT_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela','Condiciones_Adicionales'],
 'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA','Estado'],
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
-'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento','Estado'],
+'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento','Estado','ID_Alumno','ID_Escuela','Escuela'],
 'Usuarios':['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas'],
 'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus'],
 'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado'],
@@ -184,7 +184,10 @@ def anexo3(): return read('Anexo3_Deteccion')
 def anexo4(): return read('Anexo4_Sugerencias')
 def anexo5(): return read('Anexo5_Eventos')
 
-def eventos_alumno(id_alumno, nombre="", grado_grupo="", incluir_inactivos=False):
+def eventos_alumno(
+ id_alumno, nombre="", grado_grupo="", incluir_inactivos=False,
+ id_escuela="", escuela="", alumnos_referencia=None,
+):
  """Reúne todas las anotaciones del alumno, aunque falte el vínculo auxiliar."""
  eventos = anexo5()
  if eventos.empty or "ID_Evento" not in eventos.columns:
@@ -220,6 +223,7 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo="", incluir_inactivos=False
  vinculados = eventos.loc[ids_evento.isin(ligados)].copy() if ligados else eventos.iloc[0:0].copy()
  precisos = pd.concat([directos, vinculados], ignore_index=False)
  legados = eventos.iloc[0:0].copy()
+ eventos_ambiguos = 0
  if nombre and "Nombre_Alumno" in eventos.columns:
   from utils.text import normalizar_texto
   nombre_normal = normalizar_texto(nombre)
@@ -229,19 +233,75 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo="", incluir_inactivos=False
    # Solo asociar por nombre los registros legados sin ID; nunca reasignar el
    # evento de un alumno diferente por coincidencia de nombre.
    sin_vinculo &= eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq("")
-  if grado_grupo and "Grado_Grupo" in eventos.columns:
-   grado_normal = normalizar_texto(grado_grupo)
-   grado_evento = eventos["Grado_Grupo"].fillna("").astype(str).map(normalizar_texto)
-   coincide &= grado_evento.eq("") | grado_evento.eq(grado_normal)
-  legados = eventos.loc[coincide & sin_vinculo].copy()
+  # Grado_Grupo describe el contexto cuando se capturó el evento; no es una
+  # clave de identidad estable. Exigir el grado vigente escondía anotaciones
+  # históricas cuando se corregía o avanzaba el grado del alumno.
+  if id_escuela and "ID_Escuela" in eventos.columns:
+   escuelas_evento = eventos["ID_Escuela"].fillna("").astype(str).str.strip()
+   coincide &= escuelas_evento.eq("") | escuelas_evento.eq(str(id_escuela).strip())
+  if escuela:
+   for columna_escuela in ("Escuela", "Nombre_Escuela"):
+    if columna_escuela in eventos.columns:
+     from utils.text import normalizar_texto
+     escuelas_evento = eventos[columna_escuela].fillna("").astype(str).map(normalizar_texto)
+     escuela_normal = normalizar_texto(escuela)
+     coincide &= escuelas_evento.eq("") | escuelas_evento.eq(escuela_normal)
+  candidatos_legados = eventos.loc[coincide & sin_vinculo].copy()
+  padron = alumnos_referencia
+  if padron is None:
+   try:
+    padron = alumnos()
+   except Exception:
+    padron = pd.DataFrame()
+  if (
+   not padron.empty
+   and {"ID_Alumno", "Nombre_Completo"}.issubset(padron.columns)
+  ):
+   mismos_nombres = padron[
+    padron["Nombre_Completo"].fillna("").astype(str).map(normalizar_texto).eq(nombre_normal)
+   ].copy()
+   if id_escuela and "ID_Escuela" in mismos_nombres.columns:
+    por_id = mismos_nombres["ID_Escuela"].fillna("").astype(str).str.strip().eq(str(id_escuela).strip())
+    if "Nombre_Escuela" in mismos_nombres.columns and escuela:
+     por_nombre = mismos_nombres["Nombre_Escuela"].fillna("").astype(str).map(normalizar_texto).eq(normalizar_texto(escuela))
+     por_id |= por_nombre
+    mismos_nombres = mismos_nombres.loc[por_id]
+   elif escuela and "Nombre_Escuela" in mismos_nombres.columns:
+    mismos_nombres = mismos_nombres.loc[
+     mismos_nombres["Nombre_Escuela"].fillna("").astype(str).map(normalizar_texto).eq(normalizar_texto(escuela))
+    ]
+   if len(mismos_nombres["ID_Alumno"].astype(str).str.strip().replace("", pd.NA).dropna().unique()) > 1:
+    # An exact-name legacy row cannot safely be assigned between same-school
+    # homonyms without a stable student ID. Keep it in the database and flag
+    # it for manual review instead of attaching it to both students.
+    activos = candidatos_legados
+    if "Estado" in activos.columns:
+     estados = activos["Estado"].fillna("").astype(str).str.strip().str.upper()
+     activos = activos.loc[~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})]
+    eventos_ambiguos = int(activos["ID_Evento"].astype(str).str.strip().replace("", pd.NA).dropna().nunique())
+   else:
+    legados = candidatos_legados
+  else:
+   legados = candidatos_legados
 
  resultado = pd.concat([precisos, legados], ignore_index=True)
  if "ID_Evento" in resultado.columns:
-  resultado = resultado.drop_duplicates(subset=["ID_Evento"], keep="first")
- if not resultado.empty and "Fecha" in resultado.columns:
-  resultado["_orden_cronologico"] = pd.to_datetime(
-   resultado["Fecha"], errors="coerce", dayfirst=True
+  id_evento = resultado["ID_Evento"].fillna("").astype(str).str.strip()
+  con_id = id_evento.ne("")
+  resultado = pd.concat(
+   [
+    resultado.loc[~con_id],
+    resultado.loc[con_id].drop_duplicates(subset=["ID_Evento"], keep="first"),
+   ],
+   ignore_index=True,
   )
+ if not resultado.empty and "Fecha" in resultado.columns:
+  def ordenar_fecha(valor):
+   texto = str(valor).strip()
+   if len(texto) >= 10 and texto[4:5] == "-" and texto[7:8] == "-":
+    return pd.to_datetime(texto[:10], errors="coerce", format="%Y-%m-%d")
+   return pd.to_datetime(texto, errors="coerce", dayfirst=True)
+  resultado["_orden_cronologico"] = resultado["Fecha"].map(ordenar_fecha)
   resultado = (
    resultado.sort_values("_orden_cronologico", na_position="last", kind="stable")
    .drop(columns="_orden_cronologico")
@@ -252,6 +312,7 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo="", incluir_inactivos=False
   resultado = resultado.loc[
    ~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
   ].copy()
+ resultado.attrs["eventos_ambiguos"] = eventos_ambiguos
  return resultado
 def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
@@ -550,6 +611,7 @@ def delete_anexo4(id_anexo4):
  """Retira una sugerencia de la vista activa sin borrar su historial."""
  return update_anexo4(id_anexo4, {'Estado': 'ANULADO'})
 def save_anexo5(data):
+ ensure_headers('Anexo5_Eventos', BASE_HEADERS['Anexo5_Eventos'])
  data=dict(data); data.setdefault('ID_Evento',next_numeric_id('Anexo5_Eventos','ID_Evento','AN5')); append_dict('Anexo5_Eventos',data); return data['ID_Evento']
 
 def update_anexo5(id_evento, cambios):
