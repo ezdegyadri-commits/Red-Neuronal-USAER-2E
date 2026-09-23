@@ -49,6 +49,63 @@ def alumnos():
     .reset_index(drop=True)
    )
  return frame
+
+def update_alumno(id_alumno, cambios, allowed_ids):
+ """Actualiza campos permitidos de un alumno en la hoja central.
+
+ El ID es inmutable y el llamador debe proporcionar los IDs visibles en su
+ ámbito autorizado. Solo se escriben las celdas editadas, preservando el resto
+ de la fila y cualquier columna adicional de la hoja.
+ """
+ campos_editables = {
+  'Nombre_Completo', 'CURP', 'Edad_1_Septiembre', 'Sexo',
+  'Situacion_Alumno', 'Nivel_Educativo', 'Grado', 'Grupo',
+  'Condicion_Discapacidad', 'Estatus', 'Tipo_Atencion',
+  'Lengua_Indigena_Mayahablante', 'Afrodescendiente', 'Migrante',
+  'Condiciones_Adicionales',
+ }
+ id_alumno = str(id_alumno).strip()
+ if not id_alumno or id_alumno not in {str(value).strip() for value in allowed_ids}:
+  raise PermissionError('El alumno no está dentro del ámbito autorizado para edición.')
+ cambios = {campo: valor for campo, valor in dict(cambios).items() if campo in campos_editables}
+ if not cambios:
+  raise ValueError('No hay campos válidos para actualizar.')
+
+ ws = worksheet('Alumnos')
+ headers = retry_google(lambda: ws.row_values(1))
+ if 'ID_Alumno' not in headers:
+  raise ValueError('La hoja Alumnos no contiene la columna ID_Alumno.')
+ faltantes = sorted(set(cambios) - set(headers))
+ if faltantes:
+  raise ValueError('La hoja central no contiene estas columnas: ' + ', '.join(faltantes))
+ ids = retry_google(lambda: ws.col_values(headers.index('ID_Alumno') + 1))
+ fila = next((i for i, value in enumerate(ids, start=1) if str(value).strip() == id_alumno), None)
+ if not fila:
+  raise ValueError(f'No se encontró el alumno {id_alumno} en la base central.')
+ curp_nuevo = str(cambios.get('CURP', '')).strip().upper()
+ if curp_nuevo and 'CURP' in headers:
+  curps = retry_google(lambda: ws.col_values(headers.index('CURP') + 1))
+  if any(
+   index != fila and str(value).strip().upper() == curp_nuevo
+   for index, value in enumerate(curps, start=1)
+  ):
+   raise ValueError('Ese CURP ya está registrado para otro alumno; no se aplicó ningún cambio.')
+
+ def columna(numero):
+  letras = ''
+  while numero:
+   numero, resto = divmod(numero - 1, 26)
+   letras = chr(65 + resto) + letras
+  return letras
+
+ actualizaciones = [
+  {'range': f"{columna(headers.index(campo) + 1)}{fila}", 'values': [[valor]]}
+  for campo, valor in cambios.items()
+ ]
+ retry_google(lambda: ws.batch_update(actualizaciones, value_input_option='USER_ENTERED'))
+ clear_cache('Alumnos')
+ return id_alumno
+
 def personal(): return read('Personal')
 
 

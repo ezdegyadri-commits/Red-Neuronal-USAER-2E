@@ -98,6 +98,77 @@ def estadisticas_page(df):
         width="stretch",
         key=f"listado_nominal_pdf_{normalizar_texto(seleccion)}",
     )
+    with st.expander("Editar o actualizar datos de un alumno"):
+        st.caption(
+            "Los cambios se guardan en la base central y se reflejan en los demás "
+            "procesos. Por seguridad, aquí solo puedes seleccionar alumnos de tu ámbito; "
+            "la escuela y las asignaciones de personal se administran por separado."
+        )
+        alumnos_editables = listado[
+            listado.get("ID_Alumno", pd.Series(index=listado.index, dtype="object"))
+            .fillna("").astype(str).str.strip().ne("")
+        ].copy()
+        if alumnos_editables.empty:
+            st.info("No hay alumnos con identificador central disponibles para editar.")
+        else:
+            alumnos_editables = alumnos_editables.drop_duplicates("ID_Alumno", keep="first")
+            ids_editables = alumnos_editables["ID_Alumno"].astype(str).tolist()
+            fila_por_id = {
+                str(row["ID_Alumno"]): row
+                for row in alumnos_editables.to_dict("records")
+            }
+            id_edicion = st.selectbox(
+                "Alumno",
+                ids_editables,
+                format_func=lambda alumno_id: (
+                    f"{fila_por_id[alumno_id].get('Nombre_Completo', 'Sin nombre')} · {alumno_id}"
+                ),
+                key=f"alumno_a_editar_{normalizar_texto(seleccion)}",
+            )
+            actual = fila_por_id[id_edicion]
+            campos = [
+                ("Nombre_Completo", "Nombre completo"),
+                ("CURP", "CURP"),
+                ("Edad_1_Septiembre", "Edad al 1 de septiembre"),
+                ("Sexo", "Sexo"),
+                ("Situacion_Alumno", "Situación del alumno"),
+                ("Nivel_Educativo", "Nivel educativo"),
+                ("Grado", "Grado"),
+                ("Grupo", "Grupo"),
+                ("Condicion_Discapacidad", "Discapacidad o condición"),
+                ("Estatus", "Estatus del expediente"),
+                ("Tipo_Atencion", "Tipo de atención"),
+                ("Lengua_Indigena_Mayahablante", "Lengua indígena / maya hablante"),
+                ("Afrodescendiente", "Afrodescendiente"),
+                ("Migrante", "Migrante"),
+                ("Condiciones_Adicionales", "Condiciones adicionales"),
+            ]
+            with st.form(f"editar_alumno_{id_edicion}"):
+                valores = {}
+                columnas = st.columns(2)
+                for indice, (campo, etiqueta) in enumerate(campos):
+                    valor = actual.get(campo, "")
+                    valor = "" if pd.isna(valor) else str(valor)
+                    with columnas[indice % 2]:
+                        valores[campo] = st.text_input(etiqueta, value=valor, key=f"edicion_{id_edicion}_{campo}")
+                guardar = st.form_submit_button("Guardar cambios en la base central", type="primary", width="stretch")
+            if guardar:
+                valores["Nombre_Completo"] = valores["Nombre_Completo"].strip()
+                edad = valores["Edad_1_Septiembre"].strip()
+                if not valores["Nombre_Completo"]:
+                    st.error("El nombre del alumno no puede quedar vacío.")
+                elif edad and not edad.isdigit():
+                    st.error("La edad debe ser un número entero o quedar vacía.")
+                else:
+                    if edad:
+                        valores["Edad_1_Septiembre"] = int(edad)
+                    try:
+                        from data import repository as repo
+                        repo.update_alumno(id_edicion, valores, ids_editables)
+                        st.success("Datos actualizados en la base central. Se recargará la información de la plataforma.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"No se pudo actualizar el alumno: {exc}")
 
     st.markdown("### Distribuciones")
     left, right = st.columns(2)
