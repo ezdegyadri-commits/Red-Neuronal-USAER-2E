@@ -9,7 +9,7 @@ from services.expedientes import alumnos_visibles, baps_de_alumno, expediente, a
 from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
 from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
 from ai.engine import fallback, generar_sugerencias
-from documents.anexos import anexo3_html, anexo3_pdf, anexo4_html, anexo4_pdf, anexo5_html, anexo7_pdf, header_b64
+from documents.anexos import anexo3_html, anexo3_pdf, anexo4_html, anexo4_pdf, anexo5_html, anexo5_pdf, anexo7_pdf, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from documents.oficios import generar_oficio_comision
 from ui.components import hero, card
@@ -96,7 +96,11 @@ def expedientes_page(df):
         if exp["anexo3"].empty:
             st.info("Todavía no hay un Anexo III para este expediente.")
         else:
-            st.dataframe(exp["anexo3"], use_container_width=True, hide_index=True)
+            columnas_resumen = [
+                col for col in ("ID_Anexo3", "Fecha", "ID_Personal", "Estado")
+                if col in exp["anexo3"].columns
+            ]
+            st.dataframe(exp["anexo3"][columnas_resumen], width="stretch", hide_index=True)
             vista_a3 = anexo3_html(a, exp["anexo3"])
             with st.expander("Vista previa oficial del Anexo III", expanded=True):
                 st.html(vista_a3)
@@ -116,14 +120,56 @@ def expedientes_page(df):
                 width="stretch",
                 key=f"exp_a3_html_{id_alumno}",
             )
+            st.caption("Para corregir o retirar un instrumento, abre «Anexo III BAP» y elige la captura guardada del expediente.")
     with tabs[2]:
-        st.dataframe(exp["anexo4"],use_container_width=True,hide_index=True)
-        if not exp["anexo4"].empty and st.button("Preparar Anexo 4 para impresión",key="prep4"):
-            st.download_button("Descargar HTML oficial",anexo4_html(a,exp["anexo4"]),f"Anexo_IV_{id_alumno}.html","text/html")
+        if exp["anexo4"].empty:
+            st.info("Todavía no hay sugerencias en este expediente.")
+        else:
+            columnas_resumen = [
+                col for col in (
+                    "ID_Anexo4", "Fecha_Elaboracion", "Sugerencias_Area",
+                    "Quien_Brinda_Sugerencias", "Estado",
+                ) if col in exp["anexo4"].columns
+            ]
+            st.dataframe(exp["anexo4"][columnas_resumen], width="stretch", hide_index=True)
+            with st.expander("Vista previa oficial del Anexo IV", expanded=True):
+                st.html(anexo4_html(a, exp["anexo4"]))
+            st.download_button(
+                "Descargar Anexo IV en PDF carta",
+                anexo4_pdf(a, exp["anexo4"]),
+                f"Anexo_IV_{id_alumno}.pdf",
+                "application/pdf",
+                width="stretch",
+                key=f"exp_a4_pdf_{id_alumno}",
+            )
+            st.caption("Para añadir, corregir o retirar sugerencias, abre el módulo «Anexo IV Hoja de sugerencias».")
     with tabs[3]:
-        st.dataframe(exp["anexo5"],use_container_width=True,hide_index=True)
-        if not exp["anexo5"].empty and st.button("Preparar Anexo 5 para impresión",key="prep5"):
-            st.download_button("Descargar HTML oficial",anexo5_html(a,exp["anexo5"]),f"Anexo_V_{id_alumno}.html","text/html")
+        if exp["anexo5"].empty:
+            st.info("Todavía no hay eventos significativos en este expediente.")
+        else:
+            columnas_resumen = [
+                col for col in ("ID_Evento", "Fecha", "Especialista", "Evento", "Estado")
+                if col in exp["anexo5"].columns
+            ]
+            st.dataframe(exp["anexo5"][columnas_resumen], width="stretch", hide_index=True)
+            with st.expander("Vista previa oficial del Anexo V", expanded=True):
+                st.html(anexo5_html(a, exp["anexo5"]))
+            st.download_button(
+                "Descargar Anexo V en PDF carta",
+                anexo5_pdf(a, exp["anexo5"]),
+                f"Anexo_V_{id_alumno}.pdf",
+                "application/pdf",
+                width="stretch",
+                key=f"exp_a5_pdf_{id_alumno}",
+            )
+            st.download_button(
+                "Descargar Anexo V imprimible",
+                anexo5_html(a, exp["anexo5"]),
+                f"Anexo_V_{id_alumno}.html",
+                "text/html",
+                width="stretch",
+                key=f"exp_a5_html_{id_alumno}",
+            )
     with tabs[4]:
         tl=exp["timeline"]
         if tl.empty: st.info("El expediente todavía no tiene línea de tiempo integrada.")
@@ -741,8 +787,14 @@ def bap_page(df):
         }
 
     registros_bap = repo.anexo3()
+    incluir_baps_retiradas = st.checkbox(
+        "Incluir BAP retiradas del expediente",
+        key=f"bap_incluir_retiradas_{id_a}",
+    )
     if modo.startswith("Individual"):
-        baps_guardadas = baps_de_alumno(registros_bap, fila.to_dict())
+        baps_guardadas = baps_de_alumno(
+            registros_bap, fila.to_dict(), incluir_inactivos=incluir_baps_retiradas
+        )
         sujeto_bap = fila.to_dict()
     else:
         baps_guardadas = (
@@ -752,12 +804,17 @@ def bap_page(df):
             if not registros_bap.empty and "ID_Alumno" in registros_bap.columns
             else pd.DataFrame()
         )
+        if not incluir_baps_retiradas and not baps_guardadas.empty and "Estado" in baps_guardadas.columns:
+            estados_bap = baps_guardadas["Estado"].fillna("").astype(str).str.strip().str.upper()
+            baps_guardadas = baps_guardadas.loc[
+                ~estados_bap.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
+            ].copy()
         sujeto_bap = {"Nombre_Completo": objetivo}
 
     if not baps_guardadas.empty:
         with st.expander(
             f"BAP guardadas para este expediente ({len(baps_guardadas)})",
-            expanded=True,
+            expanded=False,
         ):
             st.caption(
                 "Estas capturas permanecen disponibles; puedes revisarlas o "
@@ -781,6 +838,100 @@ def bap_page(df):
                 width="stretch",
                 key=f"bap_guardadas_pdf_{id_a}",
             )
+            if "ID_Anexo3" in baps_guardadas.columns:
+                ids_guardados = baps_guardadas["ID_Anexo3"].fillna("").astype(str).tolist()
+                ids_guardados = [valor for valor in ids_guardados if valor]
+            else:
+                ids_guardados = []
+            if ids_guardados:
+                id_bap_editar = st.selectbox(
+                    "BAP que deseas revisar o corregir",
+                    ids_guardados,
+                    key=f"bap_guardada_seleccion_{id_a}",
+                )
+                registro_bap = baps_guardadas.loc[
+                    baps_guardadas["ID_Anexo3"].astype(str).eq(id_bap_editar)
+                ].iloc[0]
+                try:
+                    respuestas_guardadas = json.loads(
+                        str(registro_bap.get("BAP_Fisicas", "{}")) or "{}"
+                    )
+                except (TypeError, json.JSONDecodeError):
+                    respuestas_guardadas = {}
+                respuestas_editadas = {}
+                with st.form(f"editar_bap_guardada_{id_a}_{id_bap_editar}"):
+                    fecha_bap_editada = st.text_input(
+                        "Fecha de aplicación",
+                        str(registro_bap.get("Fecha", "")),
+                    )
+                    for clave, respuesta in respuestas_guardadas.items():
+                        if not isinstance(respuesta, dict):
+                            continue
+                        st.markdown(f"**{respuesta.get('pregunta', clave)}**")
+                        frecuencias = list(BAP_FRECUENCIAS)
+                        frecuencia_actual = str(respuesta.get("frecuencia", ""))
+                        if frecuencia_actual and frecuencia_actual not in frecuencias:
+                            frecuencias.append(frecuencia_actual)
+                        respuestas_editadas[clave] = {
+                            **respuesta,
+                            "frecuencia": st.selectbox(
+                                "Frecuencia", frecuencias,
+                                index=frecuencias.index(frecuencia_actual) if frecuencia_actual else 0,
+                                key=f"bap_frec_{id_bap_editar}_{clave}",
+                            ),
+                            "observacion": st.text_area(
+                                "Observación específica",
+                                str(respuesta.get("observacion", "")),
+                                key=f"bap_obs_{id_bap_editar}_{clave}",
+                            ),
+                            "orientacion": st.checkbox(
+                                "Requiere orientación",
+                                value=bool(respuesta.get("orientacion", False)),
+                                key=f"bap_ori_{id_bap_editar}_{clave}",
+                            ),
+                        }
+                    guardar_bap_editada = st.form_submit_button(
+                        "Guardar cambios del Anexo III", type="primary"
+                    )
+                if guardar_bap_editada:
+                    try:
+                        repo.update_anexo3(
+                            id_bap_editar,
+                            {
+                                "Fecha": fecha_bap_editada,
+                                "BAP_Fisicas": json.dumps(
+                                    respuestas_editadas, ensure_ascii=False
+                                ),
+                            },
+                        )
+                        st.success("Anexo III actualizado en la base central.")
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"No fue posible actualizar el Anexo III: {ex}")
+                estado_bap = str(registro_bap.get("Estado", "ACTIVO")).strip().upper()
+                col_retirar, col_reactivar = st.columns(2)
+                with col_retirar:
+                    if estado_bap not in {"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"} and st.button(
+                        "Retirar BAP de la vista activa",
+                        key=f"retirar_bap_{id_a}_{id_bap_editar}",
+                    ):
+                        try:
+                            repo.delete_anexo3(id_bap_editar)
+                            st.success("BAP retirado de la vista activa; el historial se conservó.")
+                            st.rerun()
+                        except Exception as ex:
+                            st.error(f"No fue posible retirar el BAP: {ex}")
+                with col_reactivar:
+                    if estado_bap in {"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"} and st.button(
+                        "Reactivar BAP",
+                        key=f"reactivar_bap_{id_a}_{id_bap_editar}",
+                    ):
+                        try:
+                            repo.update_anexo3(id_bap_editar, {"Estado": "ACTIVO"})
+                            st.success("BAP reactivado.")
+                            st.rerun()
+                        except Exception as ex:
+                            st.error(f"No fue posible reactivar el BAP: {ex}")
 
     st.markdown("### Anexo III BAP — Instrumento de observación")
 
@@ -1146,14 +1297,14 @@ def eventos_page(df):
         datos = {"Nombre_Completo": objetivo}
 
     eventos_registrados = repo.eventos_alumno(
-        id_alumno, objetivo, grado_grupo
+        id_alumno, objetivo, grado_grupo, incluir_inactivos=True
     )
 
     eventos_historial = eventos_registrados.copy()
     if "Estado" in eventos_registrados.columns:
         estados = eventos_registrados["Estado"].fillna("").astype(str).str.strip().str.upper()
         eventos_registrados = eventos_registrados.loc[
-            ~estados.isin({"ANULADO", "DUPLICADO"})
+            ~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
         ].copy()
 
     if not eventos_registrados.empty and "Fecha" in eventos_registrados.columns:
@@ -1355,19 +1506,27 @@ def eventos_page(df):
         "Evento guardado en su hoja Anexo V y vinculado al expediente concentrador."
     )
     st.download_button(
-        "Descargar Anexo V para imprimir",
+        "Descargar Anexo V en PDF carta",
+        anexo5_pdf(datos, documento_actualizado),
+        f"Anexo_V_{id_alumno}.pdf",
+        "application/pdf",
+        use_container_width=True,
+        key=f"imprimir_anexo5_pdf_{id_alumno}",
+    )
+    st.download_button(
+        "Descargar versión imprimible HTML",
         anexo5_html(datos, documento_actualizado),
         f"Anexo_V_{id_alumno}.html",
         "text/html",
         use_container_width=True,
-        key=f"imprimir_anexo5_{id_alumno}",
+        key=f"imprimir_anexo5_html_{id_alumno}",
     )
 
 def documentos_page(df):
     hero(
         "Expediente documental",
-        "Aquí viven los Anexos III, IV y V generados. Elige un alumno o un grupo "
-        "para consultar y descargar su expediente."
+        "Elige alumno o grupo una sola vez y abre el anexo que necesitas para "
+        "revisarlo, editarlo en su módulo y descargarlo para imprimir."
     )
 
     tipo = st.radio(
@@ -1399,6 +1558,21 @@ def documentos_page(df):
         a3_todos = repo.anexo3()
         a4_todos = repo.anexo4()
         a5_todos = repo.anexo5()
+        if not a3_todos.empty and "Estado" in a3_todos.columns:
+            estado_a3 = a3_todos["Estado"].fillna("").astype(str).str.strip().str.upper()
+            a3_todos = a3_todos.loc[
+                ~estado_a3.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
+            ].copy()
+        if not a4_todos.empty and "Estado" in a4_todos.columns:
+            estado_a4 = a4_todos["Estado"].fillna("").astype(str).str.strip().str.upper()
+            a4_todos = a4_todos.loc[
+                ~estado_a4.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
+            ].copy()
+        if not a5_todos.empty and "Estado" in a5_todos.columns:
+            estado_a5 = a5_todos["Estado"].fillna("").astype(str).str.strip().str.upper()
+            a5_todos = a5_todos.loc[
+                ~estado_a5.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
+            ].copy()
         escuelas_disponibles = escuelas_asignadas(
             st.session_state.get("nombre", ""),
             st.session_state.get("rol", ""),
@@ -1512,7 +1686,11 @@ def documentos_page(df):
         if a3.empty:
             st.info("Todavía no hay un Anexo III para este expediente.")
         else:
-            st.dataframe(a3, use_container_width=True, hide_index=True)
+            columnas_resumen = [
+                col for col in ("ID_Anexo3", "Fecha", "ID_Personal", "Estado")
+                if col in a3.columns
+            ]
+            st.dataframe(a3[columnas_resumen], width="stretch", hide_index=True)
             vista_anexo3 = anexo3_html(alumno_documento, a3)
             with st.expander("Vista previa oficial del Anexo III", expanded=True):
                 st.html(vista_anexo3)
@@ -1532,6 +1710,7 @@ def documentos_page(df):
                 width="stretch",
                 key=f"descargar_a3_html_{archivo_base}",
             )
+            st.caption("Para corregir o retirar un instrumento, abre «Anexo III BAP» y elige la captura guardada del expediente.")
 
     with tabs[1]:
         if a4.empty:
@@ -1634,7 +1813,13 @@ def documentos_page(df):
                     st.success("Anexo IV creado y guardado en Documentos.")
                     st.rerun()
         else:
-            st.dataframe(a4, use_container_width=True, hide_index=True)
+            columnas_resumen = [
+                col for col in (
+                    "ID_Anexo4", "Fecha_Elaboracion", "Sugerencias_Area",
+                    "Quien_Brinda_Sugerencias", "Estado",
+                ) if col in a4.columns
+            ]
+            st.dataframe(a4[columnas_resumen], width="stretch", hide_index=True)
             vista_anexo4 = anexo4_html(alumno_documento, a4)
             with st.expander("Vista previa del Anexo IV", expanded=True):
                 st.html(vista_anexo4)
@@ -1658,73 +1843,173 @@ def documentos_page(df):
                 key=f"descargar_a4_html_{archivo_base}",
             )
 
-            ids_anexo4 = a4["ID_Anexo4"].astype(str).tolist()
-            id_anexo4 = st.selectbox(
-                "Anexo IV que deseas editar",
-                ids_anexo4,
-                key=f"editar_a4_id_{archivo_base}",
-            )
-            fila_anexo4 = a4[
-                a4["ID_Anexo4"].astype(str) == str(id_anexo4)
-            ].iloc[0]
-            with st.form(f"editar_a4_{archivo_base}_{id_anexo4}"):
-                area_editada = st.text_input(
-                    "Sugerencias del área",
-                    str(fila_anexo4.get("Sugerencias_Area", "")),
+            with st.expander("Editar o retirar una hoja de sugerencias"):
+                ids_anexo4 = a4["ID_Anexo4"].astype(str).tolist()
+                id_anexo4 = st.selectbox(
+                    "Hoja que deseas editar",
+                    ids_anexo4,
+                    key=f"editar_a4_id_{archivo_base}",
                 )
-                motivo_editado = st.text_area(
-                    "Motivo",
-                    str(fila_anexo4.get("Motivo", "")),
-                )
-                sugerencias_editadas = st.text_area(
-                    "Sugerencias individuales o grupales",
-                    str(fila_anexo4.get("Sugerencias", "")),
-                    height=320,
-                )
-                seguimiento_editado = st.text_input(
-                    "Fecha o plazo de seguimiento",
-                    str(fila_anexo4.get("Fecha_Seguimiento", "")),
-                )
-                resultados_editados = st.text_area(
-                    "Nivel de cumplimiento y resultados",
-                    str(fila_anexo4.get("Nivel_Cumplimiento_Resultados", "")),
-                    height=100,
-                )
-                guardar_edicion = st.form_submit_button(
-                    "Guardar cambios del Anexo IV",
-                    type="primary",
-                    use_container_width=True,
-                )
-            if guardar_edicion:
-                try:
-                    repo.update_anexo4(
-                        id_anexo4,
-                        {
-                            "Sugerencias_Area": area_editada,
-                            "Motivo": motivo_editado,
-                            "Sugerencias": sugerencias_editadas,
-                            "Fecha_Seguimiento": seguimiento_editado,
-                            "Nivel_Cumplimiento_Resultados": resultados_editados,
-                        },
+                fila_anexo4 = a4[
+                    a4["ID_Anexo4"].astype(str) == str(id_anexo4)
+                ].iloc[0]
+                with st.form(f"editar_a4_{archivo_base}_{id_anexo4}"):
+                    area_editada = st.text_input(
+                        "Sugerencias del área",
+                        str(fila_anexo4.get("Sugerencias_Area", "")),
                     )
-                    st.success("Anexo IV actualizado; la vista previa y PDF usarán los cambios.")
-                    st.rerun()
-                except Exception as ex:
-                    st.error(f"No fue posible actualizar el Anexo IV: {ex}")
-
+                    motivo_editado = st.text_area(
+                        "Motivo",
+                        str(fila_anexo4.get("Motivo", "")),
+                    )
+                    sugerencias_editadas = st.text_area(
+                        "Sugerencias individuales o grupales",
+                        str(fila_anexo4.get("Sugerencias", "")),
+                        height=320,
+                    )
+                    seguimiento_editado = st.text_input(
+                        "Fecha o plazo de seguimiento",
+                        str(fila_anexo4.get("Fecha_Seguimiento", "")),
+                    )
+                    resultados_editados = st.text_area(
+                        "Nivel de cumplimiento y resultados",
+                        str(fila_anexo4.get("Nivel_Cumplimiento_Resultados", "")),
+                        height=100,
+                    )
+                    guardar_edicion = st.form_submit_button(
+                        "Guardar cambios del Anexo IV",
+                        type="primary",
+                        width="stretch",
+                    )
+                if guardar_edicion:
+                    try:
+                        repo.update_anexo4(
+                            id_anexo4,
+                            {
+                                "Sugerencias_Area": area_editada,
+                                "Motivo": motivo_editado,
+                                "Sugerencias": sugerencias_editadas,
+                                "Fecha_Seguimiento": seguimiento_editado,
+                                "Nivel_Cumplimiento_Resultados": resultados_editados,
+                            },
+                        )
+                        st.success("Anexo IV actualizado; la vista previa y PDF usarán los cambios.")
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"No fue posible actualizar el Anexo IV: {ex}")
+                if st.button(
+                    "Retirar esta sugerencia de la vista activa",
+                    key=f"retirar_a4_{archivo_base}_{id_anexo4}",
+                ):
+                    try:
+                        repo.delete_anexo4(id_anexo4)
+                        st.success("Sugerencia retirada; el registro permanece en el historial.")
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"No fue posible retirar el Anexo IV: {ex}")
     with tabs[2]:
         if a5.empty:
             st.info("Todavía no hay un Anexo V para este expediente.")
         else:
-            st.dataframe(a5, use_container_width=True, hide_index=True)
+            columnas_resumen = [
+                col for col in ("ID_Evento", "Fecha", "Especialista", "Evento", "Estado")
+                if col in a5.columns
+            ]
+            st.dataframe(a5[columnas_resumen], width="stretch", hide_index=True)
+            vista_anexo5 = anexo5_html(alumno_documento, a5)
+            with st.expander("Vista previa oficial del Anexo V", expanded=True):
+                st.html(vista_anexo5)
             st.download_button(
-                "Descargar Anexo V",
-                anexo5_html(alumno_documento, a5),
+                "Descargar Anexo V en PDF carta",
+                anexo5_pdf(alumno_documento, a5),
+                f"Anexo_V_{archivo_base}.pdf",
+                "application/pdf",
+                width="stretch",
+                key=f"descargar_a5_pdf_{archivo_base}",
+            )
+            st.download_button(
+                "Descargar Anexo V imprimible",
+                vista_anexo5,
                 f"Anexo_V_{archivo_base}.html",
                 "text/html",
-                use_container_width=True,
+                width="stretch",
                 key=f"descargar_a5_{archivo_base}",
             )
+            if tipo == "Alumno individual" and "ID_Evento" in a5.columns:
+                with st.expander("Corregir o retirar un evento"):
+                    ids_evento_doc = a5["ID_Evento"].fillna("").astype(str).tolist()
+                    ids_evento_doc = [valor for valor in ids_evento_doc if valor]
+                    if ids_evento_doc:
+                        id_evento_doc = st.selectbox(
+                            "Evento", ids_evento_doc,
+                            key=f"doc_a5_editar_{archivo_base}",
+                        )
+                        registro_evento_doc = a5.loc[
+                            a5["ID_Evento"].astype(str).eq(id_evento_doc)
+                        ].iloc[0]
+                        fecha_evento_doc = pd.to_datetime(
+                            registro_evento_doc.get("Fecha", date.today()),
+                            errors="coerce", dayfirst=True,
+                        )
+                        if pd.isna(fecha_evento_doc):
+                            fecha_evento_doc = pd.Timestamp(date.today())
+                        with st.form(f"doc_a5_form_{archivo_base}_{id_evento_doc}"):
+                            fecha_evento_editada = st.date_input(
+                                "Fecha", fecha_evento_doc.date()
+                            )
+                            texto_evento_editado = st.text_area(
+                                "Anotación",
+                                str(registro_evento_doc.get("Evento", "")),
+                                height=160,
+                            )
+                            autor_evento_editado = st.text_input(
+                                "Registró",
+                                str(registro_evento_doc.get("Especialista", "")),
+                            )
+                            guardar_evento_doc = st.form_submit_button(
+                                "Guardar corrección", type="primary", width="stretch"
+                            )
+                        if guardar_evento_doc:
+                            try:
+                                repo.update_anexo5(
+                                    id_evento_doc,
+                                    {
+                                        "Fecha": str(fecha_evento_editada),
+                                        "Evento": texto_evento_editado.strip(),
+                                        "Especialista": autor_evento_editado.strip(),
+                                        "Estado": "ACTIVO",
+                                    },
+                                )
+                                st.success("Anotación corregida en la hoja compartida.")
+                                st.rerun()
+                            except Exception as ex:
+                                st.error(f"No fue posible corregir el evento: {ex}")
+                        estado_evento_doc = str(
+                            registro_evento_doc.get("Estado", "ACTIVO")
+                        ).strip().upper()
+                        col_retirar_evento, col_reactivar_evento = st.columns(2)
+                        with col_retirar_evento:
+                            if estado_evento_doc not in {"ANULADO", "ELIMINADO", "DUPLICADO"} and st.button(
+                                "Retirar de la vista activa",
+                                key=f"doc_a5_retirar_{archivo_base}_{id_evento_doc}",
+                            ):
+                                try:
+                                    repo.update_anexo5(id_evento_doc, {"Estado": "ANULADO"})
+                                    st.success("Evento retirado; el historial se conservó.")
+                                    st.rerun()
+                                except Exception as ex:
+                                    st.error(f"No fue posible retirar el evento: {ex}")
+                        with col_reactivar_evento:
+                            if estado_evento_doc in {"ANULADO", "ELIMINADO", "DUPLICADO"} and st.button(
+                                "Reactivar evento",
+                                key=f"doc_a5_reactivar_{archivo_base}_{id_evento_doc}",
+                            ):
+                                try:
+                                    repo.update_anexo5(id_evento_doc, {"Estado": "ACTIVO"})
+                                    st.success("Evento reactivado en la hoja compartida.")
+                                    st.rerun()
+                                except Exception as ex:
+                                    st.error(f"No fue posible reactivar el evento: {ex}")
 
 
 def oficios_comision_page():

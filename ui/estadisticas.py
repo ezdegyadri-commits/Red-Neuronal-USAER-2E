@@ -6,6 +6,7 @@ import streamlit as st
 from services.escuelas import indice_escuelas, nombre_escuela_canonico
 from services.alumnos import alumnos_de_escuela
 from services.asignaciones import es_direccion, escuelas_asignadas
+from documents.listados import listado_alumnos_html, listado_alumnos_pdf
 from ui.components import hero
 from utils.text import normalizar_texto
 
@@ -79,6 +80,24 @@ def estadisticas_page(df):
     a2.metric("Edad mínima", int(edades_validas.min()) if not edades_validas.empty else "Sin dato")
     a3.metric("Edad máxima", int(edades_validas.max()) if not edades_validas.empty else "Sin dato")
     st.caption(f"Ámbito: {seleccion}. Las edades registradas corresponden al corte del 1 de septiembre indicado en el padrón.")
+
+    st.markdown("### Listado nominal para impresión")
+    st.caption(
+        "El listado incluye nombre, edad, condición y grado. Las maestras ven "
+        "su escuela; el equipo especialista puede elegir una de sus escuelas asignadas."
+    )
+    listado = muestra.copy()
+    vista_listado = listado_alumnos_html(listado, seleccion)
+    with st.expander("Vista previa del formato oficial", expanded=True):
+        st.html(vista_listado)
+    st.download_button(
+        "Descargar listado nominal en PDF carta",
+        data=listado_alumnos_pdf(listado, seleccion),
+        file_name="Listado_nominal_USAER.pdf",
+        mime="application/pdf",
+        width="stretch",
+        key=f"listado_nominal_pdf_{normalizar_texto(seleccion)}",
+    )
 
     st.markdown("### Distribuciones")
     left, right = st.columns(2)

@@ -37,7 +37,14 @@ def _codigo_escuela(alumno_registro):
     )
 
 
-def baps_de_alumno(registros, alumno_registro):
+def _filtrar_estado_activo(registros, incluir_inactivos=False):
+    if incluir_inactivos or registros.empty or "Estado" not in registros.columns:
+        return registros
+    estado = registros["Estado"].fillna("").astype(str).str.strip().str.upper()
+    return registros.loc[~estado.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})].copy()
+
+
+def baps_de_alumno(registros, alumno_registro, incluir_inactivos=False):
     """Reúne BAP individuales y grupales del grado/escuela del alumno."""
     if registros is None or registros.empty or "ID_Alumno" not in registros.columns:
         return pd.DataFrame() if registros is None else registros.iloc[0:0].copy()
@@ -63,7 +70,9 @@ def baps_de_alumno(registros, alumno_registro):
         return not grupo_alumno or not grupo_registro or grupo_registro == grupo_alumno
 
     grupales = ids.map(coincide_grupo)
-    return registros.loc[directas | grupales].copy()
+    return _filtrar_estado_activo(
+        registros.loc[directas | grupales].copy(), incluir_inactivos
+    )
 
 
 def alumnos_visibles(rol, escuelas_permitidas):
@@ -89,7 +98,9 @@ def alumno(df, id_alumno):
     return rows.iloc[0].to_dict() if not rows.empty else None
 
 
-def sugerencias_de_alumno(registros, alumno_registro, escuela_fallback=""):
+def sugerencias_de_alumno(
+    registros, alumno_registro, escuela_fallback="", incluir_inactivos=False
+):
     """Filtra Anexo IV por ID; usa nombre/escuela solo para filas históricas sin ID."""
     if registros is None or registros.empty or "Nombre_Alumno" not in registros.columns:
         return pd.DataFrame() if registros is None else registros.iloc[0:0].copy()
@@ -143,7 +154,7 @@ def sugerencias_de_alumno(registros, alumno_registro, escuela_fallback=""):
         grupo = pd.Series(False, index=registros.index)
 
     resultado = registros.loc[directas | legado | grupo].copy()
-    if "Estado" in resultado.columns:
+    if "Estado" in resultado.columns and not incluir_inactivos:
         estados = resultado["Estado"].fillna("").astype(str).str.strip().str.upper()
         resultado = resultado.loc[
             ~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO"})

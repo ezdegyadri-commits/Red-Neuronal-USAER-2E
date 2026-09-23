@@ -8,7 +8,7 @@ BASE_HEADERS={
 'Personal':['ID_Personal','Nombre_Completo','Rol','Email','Telefono'],
 'Asignaciones':['ID_Asignacion','ID_Personal','ID_Escuela'],
 'Alumnos':['ID_Alumno','Nombre_Completo','CURP','Edad_1_Septiembre','Sexo','Situacion_Alumno','Nivel_Educativo','Grado','Grupo','ID_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Condicion_Discapacidad','Estatus','Tipo_Atencion','Lengua_Indigena_Mayahablante','Afrodescendiente','Migrante','Nombre_Escuela','Turno_Escuela','CCT_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela','Condiciones_Adicionales'],
-'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA'],
+'Anexo3_Deteccion':['ID_Anexo3','Fecha','ID_Alumno','ID_Personal','BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas','Estatus_IA','Estado'],
 'Anexo4_Sugerencias':ANEXO4_FIELDS,
 'Anexo5_Eventos':['ID_Evento','Fecha','Nombre_Alumno','Grado_Grupo','Especialista','Evento','Estado'],
 'Usuarios':['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas'],
@@ -127,8 +127,8 @@ def anexo3(): return read('Anexo3_Deteccion')
 def anexo4(): return read('Anexo4_Sugerencias')
 def anexo5(): return read('Anexo5_Eventos')
 
-def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
- """Reúne eventos del expediente y eventos históricos sin modificar sus filas."""
+def eventos_alumno(id_alumno, nombre="", grado_grupo="", incluir_inactivos=False):
+ """Reúne todas las anotaciones del alumno, aunque falte el vínculo auxiliar."""
  eventos = anexo5()
  if eventos.empty or "ID_Evento" not in eventos.columns:
   return eventos.iloc[0:0].copy() if not eventos.empty else eventos
@@ -153,19 +153,28 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
   pass
 
  ids_evento = eventos["ID_Evento"].fillna("").astype(str).str.strip()
- precisos = eventos.loc[ids_evento.isin(ligados)].copy() if ligados else eventos.iloc[0:0].copy()
+ # El ID del padrón central es la relación primaria: algunas capturas históricas
+ # no alcanzaron a registrar su vínculo secundario en Relaciones_Expediente.
+ directos = eventos.iloc[0:0].copy()
+ if "ID_Alumno" in eventos.columns:
+  directos = eventos.loc[
+   eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq(str(id_alumno).strip())
+  ].copy()
+ vinculados = eventos.loc[ids_evento.isin(ligados)].copy() if ligados else eventos.iloc[0:0].copy()
+ precisos = pd.concat([directos, vinculados], ignore_index=False)
  legados = eventos.iloc[0:0].copy()
  if nombre and "Nombre_Alumno" in eventos.columns:
-  nombre_normal = str(nombre).strip().casefold()
-  coincide = eventos["Nombre_Alumno"].fillna("").astype(str).map(
-   lambda valor: valor.strip().casefold() == nombre_normal
-  )
+  from utils.text import normalizar_texto
+  nombre_normal = normalizar_texto(nombre)
+  coincide = eventos["Nombre_Alumno"].fillna("").astype(str).map(normalizar_texto).eq(nombre_normal)
   sin_vinculo = ~ids_evento.isin(ids_ligados)
+  if "ID_Alumno" in eventos.columns:
+   # Solo asociar por nombre los registros legados sin ID; nunca reasignar el
+   # evento de un alumno diferente por coincidencia de nombre.
+   sin_vinculo &= eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq("")
   if grado_grupo and "Grado_Grupo" in eventos.columns:
-   grado_normal = " ".join(str(grado_grupo).split()).casefold()
-   grado_evento = eventos["Grado_Grupo"].fillna("").astype(str).map(
-    lambda valor: " ".join(valor.split()).casefold()
-   )
+   grado_normal = normalizar_texto(grado_grupo)
+   grado_evento = eventos["Grado_Grupo"].fillna("").astype(str).map(normalizar_texto)
    coincide &= grado_evento.eq("") | grado_evento.eq(grado_normal)
   legados = eventos.loc[coincide & sin_vinculo].copy()
 
@@ -181,6 +190,11 @@ def eventos_alumno(id_alumno, nombre="", grado_grupo=""):
    .drop(columns="_orden_cronologico")
    .reset_index(drop=True)
   )
+ if not incluir_inactivos and not resultado.empty and "Estado" in resultado.columns:
+  estados = resultado["Estado"].fillna("").astype(str).str.strip().str.upper()
+  resultado = resultado.loc[
+   ~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
+  ].copy()
  return resultado
 def escuelas(): return read('Escuelas')
 def visitas(): return read('Registro_Visitas')
@@ -411,7 +425,38 @@ def repair_nombres_alumnos(rows):
  return corregidos
 
 def save_anexo3(data):
- data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
+ ensure_headers('Anexo3_Deteccion', BASE_HEADERS['Anexo3_Deteccion'])
+ data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); data.setdefault('Estado','ACTIVO'); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
+
+def update_anexo3(id_anexo3, cambios):
+ """Actualiza un BAP sin modificar su identificador ni borrar la fila."""
+ ensure_headers('Anexo3_Deteccion', BASE_HEADERS['Anexo3_Deteccion'])
+ ws=worksheet('Anexo3_Deteccion')
+ headers=retry_google(lambda: ws.row_values(1))
+ if 'ID_Anexo3' not in headers:
+  raise ValueError('La hoja Anexo3_Deteccion no contiene ID_Anexo3.')
+ ids=retry_google(lambda: ws.col_values(headers.index('ID_Anexo3')+1))
+ fila=next((i for i,v in enumerate(ids,start=1) if str(v).strip()==str(id_anexo3).strip()),None)
+ if not fila:
+  raise ValueError(f'No se encontró el Anexo III {id_anexo3}.')
+ actual=retry_google(lambda: ws.row_values(fila))
+ actual += [''] * (len(headers)-len(actual))
+ for campo,valor in dict(cambios).items():
+  if campo in headers and campo!='ID_Anexo3':
+   actual[headers.index(campo)]=valor
+ def columna(numero):
+  letras=''
+  while numero:
+   numero,resto=divmod(numero-1,26)
+   letras=chr(65+resto)+letras
+  return letras
+ retry_google(lambda: ws.update(range_name=f"A{fila}:{columna(len(headers))}{fila}",values=[actual[:len(headers)]]))
+ clear_cache('Anexo3_Deteccion')
+ return str(id_anexo3)
+
+def delete_anexo3(id_anexo3):
+ """Retira un BAP de la vista activa y conserva el registro para auditoría."""
+ return update_anexo3(id_anexo3, {'Estado': 'ANULADO'})
 def save_anexo4(data):
  ensure_headers('Anexo4_Sugerencias', BASE_HEADERS['Anexo4_Sugerencias'])
  data=dict(data); data.setdefault('ID_Anexo4',next_numeric_id('Anexo4_Sugerencias','ID_Anexo4','AN4')); data.setdefault('Estado','ACTIVO'); append_dict('Anexo4_Sugerencias',data); return data['ID_Anexo4']

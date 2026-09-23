@@ -99,12 +99,19 @@ def anexo4_page(df):
     grado_grupo = f"{fila_alumno.get('Grado', '')} {fila_alumno.get('Grupo', '')}".strip()
 
     todos = repo.anexo4()
-    sugerencias = sugerencias_de_alumno(
-        todos, fila_alumno, escuela_fallback=escuela_alumno
+    historial = sugerencias_de_alumno(
+        todos,
+        fila_alumno,
+        escuela_fallback=escuela_alumno,
+        incluir_inactivos=True,
     )
-
-    historial = sugerencias.copy()
-    activas = sugerencias.copy()
+    if "Estado" in historial.columns:
+        estados = historial["Estado"].fillna("").astype(str).str.strip().str.upper()
+        activas = historial.loc[
+            ~estados.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
+        ].copy()
+    else:
+        activas = historial.copy()
     activas = _sort_suggestions(activas)
 
     st.markdown(f"### Hoja de {nombre_alumno}")

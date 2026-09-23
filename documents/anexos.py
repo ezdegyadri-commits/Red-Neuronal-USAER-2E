@@ -220,6 +220,57 @@ def anexo5_html(alumno, rows):
     return "".join(out)
 
 
+def anexo5_pdf(alumno, rows):
+    """PDF oficial del historial único de eventos de un alumno."""
+    rows = pd.DataFrame() if rows is None else rows.copy()
+    if not rows.empty and "Fecha" in rows.columns:
+        rows["_fecha_orden"] = pd.to_datetime(rows["Fecha"], errors="coerce", dayfirst=True)
+        rows = rows.sort_values("_fecha_orden", kind="stable", na_position="last").drop(columns="_fecha_orden")
+
+    class Anexo5PDF(FPDF):
+        def header(self):
+            head = header_b64()
+            if head:
+                try:
+                    self.image(BytesIO(base64.b64decode(head.split(",", 1)[1])), x=15, y=7, w=180)
+                except Exception:
+                    pass
+            self.set_y(34)
+            self.set_font("Helvetica", "B", 13)
+            self.cell(0, 7, _fpdf_text("Anexo V. Eventos significativos"), align="C", new_x="LMARGIN", new_y="NEXT")
+            self.set_font("Helvetica", "", 10)
+            self.multi_cell(0, 6, _fpdf_text(f"Nombre del alumno: {alumno.get('Nombre_Completo', '')}"), new_x="LMARGIN", new_y="NEXT")
+            self.ln(2)
+
+        def footer(self):
+            self.set_y(-10)
+            self.set_font("Helvetica", "", 8)
+            self.cell(0, 5, _fpdf_text(f"Pagina {self.page_no()}"), align="C")
+
+    pdf = Anexo5PDF(orientation="P", unit="mm", format="letter")
+    pdf.set_margins(15, 12, 15)
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+    if rows.empty:
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 8, _fpdf_text("No hay eventos registrados."))
+    else:
+        for _, registro in rows.iterrows():
+            fecha = _fpdf_text(registro.get("Fecha", ""))
+            autor = _fpdf_text(registro.get("Especialista", ""))
+            texto = _fpdf_text(registro.get("Evento", ""))
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(0, 6, f"Fecha: {fecha}     Personal: {autor}", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.multi_cell(0, 5, texto, border=1, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "", 9)
+            pdf.cell(0, 5, "____________________________", align="R", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 5, _fpdf_text(f"Firma: {autor}   Fecha: {fecha}"), align="R", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(5)
+    return bytes(pdf.output())
+
+
 def anexo3_html(alumno, rows):
     """Genera una vista imprimible de las observaciones BAP guardadas."""
     head = header_b64()
