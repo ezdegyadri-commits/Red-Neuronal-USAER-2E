@@ -75,6 +75,7 @@
             <label class="form-label fw-bold">2. Área</label>
             <select class="form-select" id="area" onchange="cargarEspecialistas()">
               <option value="">Selecciona tu área...</option>
+              <option value="Dirección">Dirección</option>
               <option value="Psicología">Psicología</option>
               <option value="Comunicación">Comunicación</option>
               <option value="Trabajo Social">Trabajo Social</option>
@@ -186,6 +187,8 @@
       modalInstance = new bootstrap.Modal(document.getElementById('modalActividad'));
       google.script.run.withSuccessHandler(res => {
         directorioGlobal = res;
+        const opcionDireccion = document.querySelector('#area option[value="Dirección"]');
+        if (opcionDireccion && !directorioGlobal["Dirección"]) opcionDireccion.remove();
       }).obtenerDirectorio();
     };
 

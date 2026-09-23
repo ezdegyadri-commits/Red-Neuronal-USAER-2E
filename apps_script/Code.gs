@@ -10,6 +10,9 @@ function propiedadOpcional_(nombre) {
 }
 
 const DIRECTORIO = {
+  "Dirección": [
+    { nombre: "Edgar Adrián Yam Briceño", escuelas: ["Sede", "Supervisión", "DAMIÁN CARMONA", "ICHCAANZIHO", "GREGORIO TORRES QUINTERO", "REMIGIO AGUILAR SOSA", "ELVIRA PARRA ÁVILA", "MANUEL SARRADO", "DOMINGO SOLÍS RODRÍGUEZ", "QUINTANA RO0"] }
+  ],
   "Psicología": [
     { nombre: "María José Cupul Realpozo", escuelas: ["DAMIÁN CARMONA", "ICHCAANZIHO", "ELVIRA PARRA ÁVILA", "QUINTANA RO0"] },
     { nombre: "Abril de María Chable Ríos", escuelas: ["GREGORIO TORRES QUINTERO", "REMIGIO AGUILAR SOSA", "MANUEL SARRADO", "DOMINGO SOLÍS RODRÍGUEZ"] }
@@ -33,8 +36,8 @@ const PROPIEDADES_FIRMAS = {
 };
 
 function doGet() {
-  if (!usuarioEspecialistaAutorizado_()) {
-    return HtmlService.createHtmlOutput('Acceso exclusivo al equipo de especialistas de la USAER 02-E.')
+  if (!usuarioCronogramaAutorizado_()) {
+    return HtmlService.createHtmlOutput('Acceso exclusivo al equipo especialista y a Dirección de la USAER 02-E.')
       .setTitle('Acceso restringido');
   }
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -44,22 +47,43 @@ function doGet() {
 }
 
 function obtenerDirectorio() {
-  if (!usuarioEspecialistaAutorizado_()) return {};
+  if (!usuarioCronogramaAutorizado_()) return {};
+  if (!usuarioDirectorAutorizado_()) {
+    const directorioEspecialista = { ...DIRECTORIO };
+    delete directorioEspecialista["Dirección"];
+    return directorioEspecialista;
+  }
   return DIRECTORIO;
 }
 
-function usuarioEspecialistaAutorizado_() {
-  const correo = (Session.getActiveUser().getEmail() || "").trim().toLowerCase();
-  const lista = propiedadOpcional_("CORREOS_ESPECIALISTAS");
-  const autorizados = lista.split(",").map(valor => valor.trim().toLowerCase()).filter(Boolean);
-  return Boolean(correo && autorizados.includes(correo));
+function correoActivo_() {
+  return (Session.getActiveUser().getEmail() || "").trim().toLowerCase();
 }
 
-function validarEspecialista_(datos) {
-  const especialistas = Object.keys(DIRECTORIO)
-    .filter(area => area !== "Dirección")
+function correoEnLista_(propiedad, correo) {
+  const lista = propiedadOpcional_(propiedad);
+  return Boolean(correo && lista.split(",").map(valor => valor.trim().toLowerCase()).includes(correo));
+}
+
+function usuarioEspecialistaAutorizado_() {
+  return correoEnLista_("CORREOS_ESPECIALISTAS", correoActivo_());
+}
+
+function usuarioDirectorAutorizado_() {
+  return correoEnLista_("CORREOS_DIRECCION", correoActivo_());
+}
+
+function usuarioCronogramaAutorizado_() {
+  return usuarioEspecialistaAutorizado_() || usuarioDirectorAutorizado_();
+}
+
+function validarPersonalCronograma_(datos) {
+  const esDireccion = datos.area === "Dirección";
+  if (esDireccion && !usuarioDirectorAutorizado_()) return false;
+  if (!esDireccion && !usuarioEspecialistaAutorizado_()) return false;
+  const personal = Object.keys(DIRECTORIO)
     .flatMap(area => DIRECTORIO[area].map(persona => ({ nombre: persona.nombre, area })));
-  return especialistas.find(persona =>
+  return personal.find(persona =>
     persona.nombre === datos.especialista && persona.area === datos.area
   );
 }
@@ -83,10 +107,11 @@ function normalizarFecha(valor) {
 
 function obtenerAgendaEspecialista(mes, especialista) {
   try {
-    if (!usuarioEspecialistaAutorizado_()) return { exito: false, mensaje: "Acceso exclusivo al equipo de especialistas." };
-    if (!validarEspecialista_({ especialista, area: Object.keys(DIRECTORIO).find(area =>
+    if (!usuarioCronogramaAutorizado_()) return { exito: false, mensaje: "Acceso restringido." };
+    const area = Object.keys(DIRECTORIO).find(area =>
       DIRECTORIO[area].some(persona => persona.nombre === especialista)
-    ) })) return { exito: false, mensaje: "Acceso reservado al equipo de especialistas." };
+    );
+    if (!validarPersonalCronograma_({ especialista, area })) return { exito: false, mensaje: "La cuenta no está autorizada para consultar este cronograma." };
     const libro = SpreadsheetApp.openById(propiedadRequerida_("ID_BASE_DATOS"));
     const hoja = libro.getSheetByName('Registros');
     if (!hoja) return { exito: false, mensaje: "Hoja 'Registros' no encontrada." };
@@ -116,11 +141,11 @@ function obtenerAgendaEspecialista(mes, especialista) {
 
 function generarPDFCronograma(datos) {
   try {
-    if (!usuarioEspecialistaAutorizado_()) {
-      return { exito: false, mensaje: "Acceso exclusivo al equipo de especialistas." };
+    if (!usuarioCronogramaAutorizado_()) {
+      return { exito: false, mensaje: "Acceso restringido." };
     }
-    if (!validarEspecialista_(datos)) {
-      return { exito: false, mensaje: "El generador está reservado al equipo de especialistas." };
+    if (!validarPersonalCronograma_(datos)) {
+      return { exito: false, mensaje: "La persona y el área no están en el directorio del cronograma." };
     }
     const plantilla = DriveApp.getFileById(propiedadRequerida_("ID_PLANTILLA_DOC"));
     const selloTiempo = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd_HHmmss");
@@ -136,14 +161,23 @@ function generarPDFCronograma(datos) {
     cuerpo.replaceText('{{MES}}', datos.mes);
     cuerpo.replaceText('{{ESPECIALISTA}}', datos.especialista);
 
-    cuerpo.replaceText('{{ETIQUETA_NOMBRE}}', 'Especialista');
-    cuerpo.replaceText('{{CARGO_IZQ}}', 'Elaboró');
-    cuerpo.replaceText('{{NOMBRE_IZQ}}', datos.especialista);
-    inyectarImagen(cuerpo, '{{ESPACIO_FIRMA_IZQ}}', propiedadOpcional_(PROPIEDADES_FIRMAS[datos.especialista]), null);
-
-    cuerpo.replaceText('{{CARGO_DER}}', 'Vo. Bo.');
-    cuerpo.replaceText('{{NOMBRE_DER}}', 'Psic. Edgar Adrian Yam Briceño MD\nDirector de la USAER 02');
-    inyectarImagen(cuerpo, '{{ESPACIO_FIRMA_DER}}', propiedadOpcional_(PROPIEDADES_FIRMAS["Edgar Adrián Yam Briceño"]), propiedadOpcional_("ID_SELLO_OFICIAL"));
+    if (datos.area === "Dirección" && datos.especialista === "Edgar Adrián Yam Briceño") {
+      cuerpo.replaceText('{{ETIQUETA_NOMBRE}}', 'Elaboró');
+      cuerpo.replaceText('{{CARGO_IZQ}}', 'Elaboró');
+      cuerpo.replaceText('{{NOMBRE_IZQ}}', 'Psic. Edgar Adrian Yam Briceño MD\nDirector de la USAER 02');
+      inyectarImagen(cuerpo, '{{ESPACIO_FIRMA_IZQ}}', propiedadOpcional_(PROPIEDADES_FIRMAS[datos.especialista]), propiedadOpcional_("ID_SELLO_OFICIAL"));
+      cuerpo.replaceText('{{CARGO_DER}}', 'Vo. Bo.');
+      cuerpo.replaceText('{{NOMBRE_DER}}', 'Dra. Diana Durán González\nSupervisora Escolar');
+      cuerpo.replaceText('{{ESPACIO_FIRMA_DER}}', '');
+    } else {
+      cuerpo.replaceText('{{ETIQUETA_NOMBRE}}', 'Especialista');
+      cuerpo.replaceText('{{CARGO_IZQ}}', 'Elaboró');
+      cuerpo.replaceText('{{NOMBRE_IZQ}}', datos.especialista);
+      inyectarImagen(cuerpo, '{{ESPACIO_FIRMA_IZQ}}', propiedadOpcional_(PROPIEDADES_FIRMAS[datos.especialista]), null);
+      cuerpo.replaceText('{{CARGO_DER}}', 'Vo. Bo.');
+      cuerpo.replaceText('{{NOMBRE_DER}}', 'Psic. Edgar Adrian Yam Briceño MD\nDirector de la USAER 02');
+      inyectarImagen(cuerpo, '{{ESPACIO_FIRMA_DER}}', propiedadOpcional_(PROPIEDADES_FIRMAS["Edgar Adrián Yam Briceño"]), propiedadOpcional_("ID_SELLO_OFICIAL"));
+    }
 
     const tablas = cuerpo.getTables();
     if (tablas.length > 0) {
@@ -298,7 +332,7 @@ function inyectarImagen(cuerpo, etiqueta, idFirma, idSello) {
 
 function obtenerAgendaGlobal(mes) {
   try {
-    if (!usuarioEspecialistaAutorizado_()) return { exito: false, mensaje: "Acceso exclusivo al equipo de especialistas." };
+    if (!usuarioCronogramaAutorizado_()) return { exito: false, mensaje: "Acceso restringido." };
     const libro = SpreadsheetApp.openById(propiedadRequerida_("ID_BASE_DATOS"));
     const hoja = libro.getSheetByName('Registros');
     if (!hoja) return { exito: false, mensaje: "No se encontró la base de datos." };
