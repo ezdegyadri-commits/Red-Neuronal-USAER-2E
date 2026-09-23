@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Cronograma USAER 02-E</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    .calendario-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+    .dia-box {
+      background-color: white;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 10px;
+      min-height: 120px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .dia-box:hover {
+      border-color: #0d6efd;
+      box-shadow: 0 0 8px rgba(13,110,253,0.2);
+    }
+    .dia-inhabil {
+      background-color: #f8d7da;
+      cursor: not-allowed;
+    }
+    .dia-inhabil:hover {
+      border-color: #dee2e6;
+      box-shadow: none;
+    }
+    .dia-numero {
+      font-weight: bold;
+      color: #495057;
+      position: absolute;
+      top: 8px;
+      right: 12px;
+    }
+    .etiqueta-actividad {
+      font-size: 0.75rem;
+      background-color: #e9ecef;
+      padding: 4px;
+      border-radius: 4px;
+      margin-top: 20px;
+      white-space: pre-wrap;
+    }
+    .badge-inhabil {
+      color: #842029;
+      font-weight: bold;
+      margin-top: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <div class="text-center mb-4">
+      <h2 class="fw-bold text-primary">Cronograma Mensual USAER 02-E</h2>
+      <p class="text-muted">Plataforma Oficial de Planeación</p>
+    </div>
+
+    <!-- Controles Superiores -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-bold">1. Selecciona el Mes</label>
+            <input type="month" id="selectorMes" class="form-control" onchange="cargarAgendaGuardada()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">2. Área</label>
+            <select class="form-select" id="area" onchange="cargarEspecialistas()">
+              <option value="">Selecciona tu área...</option>
+              <option value="Psicología">Psicología</option>
+              <option value="Comunicación">Comunicación</option>
+              <option value="Trabajo Social">Trabajo Social</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">3. Personal</label>
+            <select class="form-select" id="especialista" onchange="cargarAgendaGuardada()" disabled>
+              <option value="">Espera...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Encabezados de Días -->
+    <div class="calendario-grid mb-2 text-center fw-bold text-secondary">
+      <div>Dom</div><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div>
+    </div>
+
+    <!-- Contenedor del Calendario -->
+    <div id="calendarioContenedor" class="calendario-grid mb-4"></div>
+
+    <!-- Botón de Generación -->
+    <button class="btn btn-primary btn-lg w-100 fw-bold mb-4" id="btnGenerar" onclick="solicitarPDF()">
+      Generar PDF Oficial con Firmas
+    </button>
+    <div id="mensajeEstado" class="alert d-none mt-3" role="alert"></div>
+
+    <!-- Tablero de Control Directivo -->
+    <hr class="mt-5 mb-4">
+    <div class="card shadow-sm border-info">
+      <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Calendario general del equipo especialista</h5>
+      </div>
+      <div class="card-body">
+        <p class="text-muted mb-3">Consulta la programación mensual del equipo de especialistas.</p>
+
+        <button class="btn btn-info w-100 fw-bold text-white" id="btnCalendarioGlobal" onclick="verCalendarioGlobal()">
+          Ver Calendario Global
+        </button>
+
+        <div id="contenedorCalendarioGlobal" class="mt-4" style="display: none;">
+          <h6 class="fw-bold text-secondary mb-3">Vista Panorámica del Mes:</h6>
+          <div class="calendario-grid" id="cuadriculaGlobal"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal para Cargar Actividad -->
+  <div class="modal fade" id="modalActividad" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">Programar Actividad</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="fechaSeleccionada">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Escuela Sede / Ubicación</label>
+            <select class="form-select" id="escuelaSelect"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Descripción de la Actividad</label>
+            <input type="text" class="form-control" id="actividadInput" placeholder="Ej. Entrevistas, Evaluación BAP, CTE..." list="sugerenciasActividades">
+            <datalist id="sugerenciasActividades">
+              <option value="Atención a alumnos con BAP">
+              <option value="Entrevista a padres de familia">
+              <option value="Reunión con docentes de grupo">
+              <option value="Evaluación psicopedagógica">
+              <option value="Consejo Técnico Escolar">
+              <option value="Reunión de Consejo Técnico de USAER">
+              <option value="Gestión administrativa en Sede">
+              <option value="Reunión en Supervisión Escolar">
+            </datalist>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger me-auto" onclick="borrarActividadDia()">Borrar Día</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" onclick="guardarActividadDia()">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let directorioGlobal = {};
+    let agendaRegistros = {}; // Almacena temporalmente lo que el usuario captura
+    let escuelasEspecialista = [];
+    let modalInstance = null;
+
+    // Días inhábiles marcados por SEP / USAER
+    const diasInhabilesOficiales = {
+      "2026-09-16": "Suspensión de labores docentes",
+      "2026-09-25": "Consejo Técnico Escolar",
+      "2026-10-30": "Consejo Técnico Escolar",
+      "2026-11-02": "Suspensión de labores docentes",
+      "2026-11-16": "Suspensión de labores docentes",
+      "2026-11-27": "Consejo Técnico Escolar",
+      "2026-12-25": "Suspensión de labores docentes"
+    };
+
+    window.onload = function() {
+      modalInstance = new bootstrap.Modal(document.getElementById('modalActividad'));
+      google.script.run.withSuccessHandler(res => {
+        directorioGlobal = res;
+      }).obtenerDirectorio();
+    };
+
+    function cargarEspecialistas() {
+      const area = document.getElementById('area').value;
+      const selectEsp = document.getElementById('especialista');
+
+      selectEsp.innerHTML = '<option value="">Selecciona tu nombre...</option>';
+
+      if (area && directorioGlobal[area]) {
+        selectEsp.disabled = false;
+        directorioGlobal[area].forEach(esp => {
+          selectEsp.innerHTML += `<option value="${esp.nombre}">${esp.nombre}</option>`;
+        });
+      } else {
+        selectEsp.disabled = true;
+      }
+
+      // Limpiamos los datos visuales al cambiar el área
+      cargarAgendaGuardada();
+    }
+
+    function cargarAgendaGuardada() {
+      const mes = document.getElementById('selectorMes').value;
+      const especialista = document.getElementById('especialista').value;
+      const area = document.getElementById('area').value;
+
+      // 1. ELIMINACIÓN DE RASTROS (Aislamiento Total)
+      // Vaciamos el diccionario de datos local y redibujamos en blanco
+      agendaRegistros = {};
+
+      if (!mes) return; // Si no hay mes, no dibujamos nada
+      generarCalendario();
+
+      // 2. BUSCAR INFORMACIÓN EXCLUSIVA
+      if (mes && especialista && area) {
+
+        // Actualizamos la lista de escuelas disponibles para esta persona
+        const datosEsp = directorioGlobal[area].find(e => e.nombre === especialista);
+        if(datosEsp) {
+           escuelasEspecialista = datosEsp.escuelas;
+        }
+
+        // Traemos de la base de datos solo sus actividades
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res.exito) {
+              agendaRegistros = res.datos;
+              generarCalendario();
+            }
+          })
+          .obtenerAgendaEspecialista(mes, especialista);
+      }
+    }
+
+    function generarCalendario() {
+      const valMes = document.getElementById('selectorMes').value;
+      const cont = document.getElementById('calendarioContenedor');
+      cont.innerHTML = '';
+
+      if (!valMes) return;
+
+      const [año, mes] = valMes.split('-');
+      const primerDia = new Date(año, mes - 1, 1).getDay();
+      const diasMes = new Date(año, mes, 0).getDate();
+
+      // Celdas vacías al inicio del mes
+      for (let i = 0; i < primerDia; i++) {
+        cont.innerHTML += `<div class="dia-box dia-inhabil" style="cursor:default"></div>`;
+      }
+
+      for (let dia = 1; dia <= diasMes; dia++) {
+        const fechaStr = `${año}-${mes}-${String(dia).padStart(2, '0')}`;
+        const fechaActual = new Date(año, mes - 1, dia);
+        const diaSemana = fechaActual.getDay();
+        const esFinSemana = (diaSemana === 0 || diaSemana === 6);
+        const inhabil = diasInhabilesOficiales[fechaStr];
+
+        if (esFinSemana || inhabil) {
+          cont.innerHTML += `
+            <div class="dia-box dia-inhabil" style="cursor:default">
+              <span class="dia-numero">${dia}</span>
+              ${inhabil ? `<div class="badge-inhabil">${inhabil}</div>` : ''}
+            </div>`;
+        } else {
+          // Si es día hábil, comprobamos si la persona tiene datos guardados
+          const datosDia = agendaRegistros[fechaStr];
+          let contenido = '';
+          if (datosDia) {
+            contenido = `<div class="etiqueta-actividad border-start border-4 border-primary">
+              <strong>${datosDia.escuela}</strong><br>${datosDia.actividad}
+            </div>`;
+          }
+
+          cont.innerHTML += `
+            <div class="dia-box" onclick="abrirModalDia('${fechaStr}')">
+              <span class="dia-numero">${dia}</span>
+              ${contenido}
+            </div>`;
+        }
+      }
+    }
+
+    function abrirModalDia(fecha) {
+      if(!document.getElementById('especialista').value) {
+        alert("Por favor selecciona tu nombre antes de programar.");
+        return;
+      }
+
+      document.getElementById('fechaSeleccionada').value = fecha;
+      const selectEscuela = document.getElementById('escuelaSelect');
+      selectEscuela.innerHTML = '';
+
+      // Llenamos el select con las escuelas autorizadas para la persona
+      escuelasEspecialista.forEach(esc => {
+        selectEscuela.innerHTML += `<option value="${esc}">${esc}</option>`;
+      });
+
+      // Si la Junta general de CTE u otro evento requiere habilitar todas (Opcional, lo manejamos con "Junta General")
+      selectEscuela.innerHTML += `<option value="Junta General (Sede)">Junta General (Sede)</option>`;
+
+      if (agendaRegistros[fecha]) {
+        selectEscuela.value = agendaRegistros[fecha].escuela;
+        document.getElementById('actividadInput').value = agendaRegistros[fecha].actividad;
+      } else {
+        document.getElementById('actividadInput').value = '';
+      }
+
+      modalInstance.show();
+    }
+
+    function guardarActividadDia() {
+      const fecha = document.getElementById('fechaSeleccionada').value;
+      const escuela = document.getElementById('escuelaSelect').value;
+      const act = document.getElementById('actividadInput').value;
+
+      if (!act) {
+        alert("La descripción de la actividad es obligatoria.");
+        return;
+      }
+
+      agendaRegistros[fecha] = { escuela: escuela, actividad: act };
+      generarCalendario();
+      modalInstance.hide();
+    }
+
+    function borrarActividadDia() {
+      const fecha = document.getElementById('fechaSeleccionada').value;
+      delete agendaRegistros[fecha];
+      generarCalendario();
+      modalInstance.hide();
+    }
+
+    function solicitarPDF() {
+      const especialista = document.getElementById('especialista').value;
+      const area = document.getElementById('area').value;
+      const mes = document.getElementById('selectorMes').value;
+
+      if (!especialista || !mes) {
+        alert("Faltan datos por seleccionar (Mes o Especialista).");
+        return;
+      }
+
+      const llavesFechas = Object.keys(agendaRegistros).sort();
+      if (llavesFechas.length === 0) {
+        alert("No has programado ninguna actividad en el calendario.");
+        return;
+      }
+
+      const agendaFormato = llavesFechas.map(f => {
+        const [a, m, d] = f.split('-');
+        return {
+          fecha: `${d}/${m}/${a}`,
+          escuela: agendaRegistros[f].escuela,
+          actividad: agendaRegistros[f].actividad
+        };
+      });
+
+      const payload = { especialista, area, mes, agenda: agendaFormato };
+
+      const btn = document.getElementById('btnGenerar');
+      const msj = document.getElementById('mensajeEstado');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generando PDF y sellando...';
+      msj.classList.add('d-none');
+      msj.classList.remove('alert-success', 'alert-danger');
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          btn.innerHTML = 'Generar PDF Oficial con Firmas';
+          msj.classList.remove('d-none');
+
+          if (res.exito) {
+            msj.classList.add('alert-success');
+            msj.innerHTML = `✅ ${res.mensaje} <br> <a href="${res.url}" target="_blank" class="fw-bold text-success text-decoration-underline">Haz clic aquí para abrir tu cronograma.</a>`;
+          } else {
+            msj.classList.add('alert-danger');
+            msj.innerHTML = `❌ Error: ${res.mensaje}`;
+          }
+        })
+        .generarPDFCronograma(payload);
+    }
+
+    function verCalendarioGlobal() {
+      const valMes = document.getElementById('selectorMes').value;
+      if(!valMes) {
+        alert("Selecciona un mes en la parte superior para ver la panorámica.");
+        return;
+      }
+
+      const btn = document.getElementById('btnCalendarioGlobal');
+      btn.innerHTML = 'Cargando datos...';
+      btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.innerHTML = 'Ver Calendario Global';
+          btn.disabled = false;
+
+          if(res.exito) {
+            renderizarCalendarioGlobal(res.datos, valMes);
+          } else {
+            alert("Error al cargar la agenda: " + res.mensaje);
+          }
+        })
+        .obtenerAgendaGlobal(valMes);
+    }
+
+    function renderizarCalendarioGlobal(agendaGlobal, valMes) {
+      const contenedor = document.getElementById('contenedorCalendarioGlobal');
+      const cuadricula = document.getElementById('cuadriculaGlobal');
+
+      contenedor.style.display = 'block';
+      cuadricula.innerHTML = '';
+
+      const [año, mes] = valMes.split('-');
+      const primerDia = new Date(año, mes - 1, 1).getDay();
+      const diasEnMes = new Date(año, mes, 0).getDate();
+
+      for(let i = 0; i < primerDia; i++) {
+        cuadricula.innerHTML += `<div class="dia-box dia-inhabil" style="cursor:default;"></div>`;
+      }
+
+      for(let dia = 1; dia <= diasEnMes; dia++) {
+        const fechaFormat = `${año}-${mes}-${String(dia).padStart(2, '0')}`;
+        const fechaActual = new Date(año, mes - 1, dia);
+        const diaSemana = fechaActual.getDay();
+
+        const esFinDeSemana = (diaSemana === 0 || diaSemana === 6);
+        const motivoInhabil = diasInhabilesOficiales[fechaFormat];
+
+        if (esFinDeSemana || motivoInhabil) {
+          cuadricula.innerHTML += `
+            <div class="dia-box dia-inhabil" style="cursor:default;">
+              <span class="dia-numero">${dia}</span>
+              ${motivoInhabil ? `<div class="badge-inhabil" style="font-size:0.6rem;">${motivoInhabil}</div>` : ''}
+            </div>`;
+        } else {
+          const actividadesDelDia = agendaGlobal[fechaFormat] || [];
+          let etiquetasHtml = '';
+
+          actividadesDelDia.forEach(act => {
+            etiquetasHtml += `<div class="bg-primary text-white rounded mb-1 px-1" style="font-size: 0.65rem; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${act.nombre} - ${act.escuela}">
+              <strong>${act.nombre}</strong>: ${act.escuela}
+            </div>`;
+          });
+
+          cuadricula.innerHTML += `
+            <div class="dia-box" style="cursor:default; overflow-y:auto;">
+              <span class="dia-numero">${dia}</span>
+              <div class="mt-4">${etiquetasHtml}</div>
+            </div>`;
+        }
+      }
+    }
+
+  </script>
+</body>
+</html>
