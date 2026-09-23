@@ -40,7 +40,7 @@ def _datos_listado(frame):
     return datos.reset_index(drop=True)
 
 
-def listado_alumnos_html(frame, ambito):
+def listado_alumnos_html(frame, ambito, firma_nombre=""):
     datos = _datos_listado(frame)
     head = header_b64()
     incluir_escuela = "toda la usaer" in str(ambito).casefold()
@@ -62,11 +62,17 @@ def listado_alumnos_html(frame, ambito):
         f"<p><b>Servicio:</b> {html.escape(SERVICE_NAME)} &nbsp; <b>Ciclo escolar:</b> {html.escape(SCHOOL_YEAR)}<br>"
         f"<b>Ámbito:</b> {html.escape(str(ambito))} &nbsp; <b>Total:</b> {len(datos)}</p>"
         f"<table><thead><tr>{encabezados}</tr></thead><tbody>{filas}</tbody></table>"
-        "</body></html>"
+        + (
+            "<div style='margin:38px auto 0;max-width:320px;text-align:center'>"
+            "_______________________________<br>"
+            f"{html.escape(str(firma_nombre))}<br>Maestra/o de apoyo responsable</div>"
+            if firma_nombre else ""
+        )
+        + "</body></html>"
     )
 
 
-def listado_alumnos_pdf(frame, ambito):
+def listado_alumnos_pdf(frame, ambito, firma_nombre=""):
     datos = _datos_listado(frame)
     incluir_escuela = "toda la usaer" in str(ambito).casefold()
     columnas = ["Escuela", "Nombre", "Edad", "Condición", "Grado y grupo"] if incluir_escuela else ["Nombre", "Edad", "Condición", "Grado y grupo"]
@@ -138,5 +144,14 @@ def listado_alumnos_pdf(frame, ambito):
             pdf.multi_cell(ancho - 2, alto_linea, _fpdf_text("\n".join(items)), border=0)
             x += ancho
         pdf.set_xy(x_inicial, y_inicial + alto)
+
+    if firma_nombre:
+        if pdf.get_y() + 24 > pdf.page_break_trigger:
+            pdf.add_page()
+        pdf.ln(10)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(0, 5, _fpdf_text("_______________________________"), align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 5, _fpdf_text(firma_nombre), align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 5, _fpdf_text("Maestra/o de apoyo responsable"), align="C", new_x="LMARGIN", new_y="NEXT")
 
     return bytes(pdf.output())

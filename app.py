@@ -33,7 +33,26 @@ with st.sidebar:
     if "DIRECTOR" in rol.upper(): menu += ["Panel de Dirección","Constancias de visita","Alta de alumnos"]
     elif "APOYO" in rol.upper(): menu += ["Alta de alumnos", "Oficios de comisión", "Anexo VII Derivación"]
     else: menu += ["Constancias de visita", "Anexo VII Derivación"]
-    page=st.radio("Navegación",menu,label_visibility="collapsed")
+    grupos_menu = {
+        "Inicio": "🏠 Inicio",
+        "Expedientes": "📁 Expedientes",
+        "Anexo III BAP": "🧭 Captura · Anexo III BAP",
+        "Anexo IV Hoja de sugerencias": "📝 Seguimiento · Anexo IV",
+        "Anexo V Eventos significativos": "📌 Seguimiento · Anexo V",
+        "Estadística": "📊 Consulta · Estadística y listado nominal",
+        "Documentos": "📄 Consulta · Documentos",
+        "Panel de Dirección": "⚙️ Dirección · Panel",
+        "Constancias de visita": "🗓️ Equipo · Constancias de visita",
+        "Alta de alumnos": "➕ Captura · Alta de alumnos",
+        "Oficios de comisión": "🧾 Apoyo · Oficios de comisión",
+        "Anexo VII Derivación": "🔎 Derivación · Anexo VII",
+    }
+    page=st.selectbox(
+        "Ir al apartado",
+        menu,
+        format_func=lambda apartado: grupos_menu.get(apartado, apartado),
+        label_visibility="collapsed",
+    )
 
 # No se lee el padrón central en módulos que no lo necesitan.
 if page in {"Inicio", "Expedientes", "Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos", "Estadística", "Documentos", "Alta de alumnos"}:

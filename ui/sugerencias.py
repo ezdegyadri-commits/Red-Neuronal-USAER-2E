@@ -10,7 +10,7 @@ from config.settings import ESCUELAS_USAER, SERVICE_NAME
 from data import repository as repo
 from documents.anexos import anexo4_html, anexo4_pdf
 from services.alumnos import alumnos_de_escuela
-from services.asignaciones import es_direccion, escuelas_asignadas
+from services.asignaciones import es_direccion, es_especialista, escuelas_asignadas
 from services.expedientes import sugerencias_de_alumno
 from ui.components import hero
 from utils.text import normalizar_texto
@@ -55,6 +55,7 @@ def anexo4_page(df):
     )
     nombre_usuario = st.session_state.get("nombre", "")
     rol = st.session_state.get("rol", "")
+    puede_anotar = es_especialista(rol) or es_direccion(rol)
     escuelas_permitidas = escuelas_asignadas(nombre_usuario, rol)
     if not escuelas_permitidas:
         st.error("No se encontraron escuelas asignadas a tu cuenta.")
@@ -124,17 +125,27 @@ def anexo4_page(df):
             st.session_state[f"{key_prefix}_{suffix}"] = value
         st.session_state[f"{key_prefix}_fecha"] = date.today()
 
-    with st.expander("Añadir sugerencia del equipo", expanded=not bool(activas.shape[0])):
-        area = st.text_input(
-            "Área / especialidad",
-            placeholder="Aprendizaje, comunicación, psicología, trabajo social…",
-            key=f"{key_prefix}_area",
+    area = motivo = texto = seguimiento = ""
+    fecha = date.today()
+    guardar = False
+    if puede_anotar:
+        with st.expander("Añadir anotación del equipo especialista", expanded=not bool(activas.shape[0])):
+            area = st.text_input(
+                "Área / especialidad",
+                placeholder="Aprendizaje, comunicación, psicología, trabajo social…",
+                key=f"{key_prefix}_area",
+            )
+            motivo = st.text_area("Motivo de la sugerencia", key=f"{key_prefix}_motivo")
+            texto = st.text_area("Sugerencias", height=180, key=f"{key_prefix}_texto")
+            fecha = st.date_input("Fecha", value=date.today(), key=f"{key_prefix}_fecha")
+            seguimiento = st.text_input("Plazo o fecha de seguimiento", key=f"{key_prefix}_seguimiento")
+            guardar = st.button("Añadir a la hoja compartida del alumno", type="primary", key=f"{key_prefix}_guardar")
+    else:
+        st.info(
+            "Esta vista concentra las anotaciones del alumno. La captura de nuevas "
+            "sugerencias corresponde al equipo especialista; cuando se guarden, "
+            "aparecerán aquí junto con las demás."
         )
-        motivo = st.text_area("Motivo de la sugerencia", key=f"{key_prefix}_motivo")
-        texto = st.text_area("Sugerencias", height=180, key=f"{key_prefix}_texto")
-        fecha = st.date_input("Fecha", value=date.today(), key=f"{key_prefix}_fecha")
-        seguimiento = st.text_input("Plazo o fecha de seguimiento", key=f"{key_prefix}_seguimiento")
-        guardar = st.button("Añadir a la hoja del alumno", type="primary", key=f"{key_prefix}_guardar")
 
     registro_borrador = {
         "ID_Alumno": id_alumno,

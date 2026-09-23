@@ -1,10 +1,84 @@
 import streamlit as st
+import pandas as pd
 
 from data import repository as repo
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from services.padron_oficial import vista_padron_oficial
+from services.alumnos import alumnos_de_escuela
+from services.asignaciones import es_direccion, escuelas_asignadas
 from ui.components import hero, card
 from ui.relatorias import generador_relatorias_director
+from utils.text import normalizar_texto
+
+
+def _control_expedientes_director(df):
+    """Vista de control de anexos vinculados; no modifica registros del padrón."""
+    st.divider()
+    st.markdown("### Control de expedientes · solo Dirección")
+    rol = st.session_state.get("rol", "")
+    nombre = st.session_state.get("nombre", "")
+    if not es_direccion(rol):
+        st.error("Este control está reservado a Dirección.")
+        return
+    escuelas = escuelas_asignadas(nombre, rol)
+    if df is None or df.empty or not escuelas:
+        st.info("No hay alumnos o escuelas disponibles para el control.")
+        return
+    escuela = st.selectbox(
+        "Escuela para revisar",
+        ["Toda la USAER", *escuelas],
+        key="control_expedientes_escuela",
+    )
+    if st.button("Actualizar control de anexos", key="control_expedientes_actualizar"):
+        try:
+            alumnos = df.copy() if escuela == "Toda la USAER" else alumnos_de_escuela(df, escuela)
+            a3, a4, a5 = repo.anexo3(), repo.anexo4(), repo.anexo5()
+
+            def conteo_por_alumno(frame):
+                if frame.empty or "ID_Alumno" not in frame.columns:
+                    return {}
+                registros = frame.copy()
+                if "Estado" in registros.columns:
+                    estado = registros["Estado"].fillna("").astype(str).str.strip().str.upper()
+                    registros = registros.loc[~estado.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})]
+                ids = registros["ID_Alumno"].fillna("").astype(str).str.strip()
+                return ids.loc[ids.ne("")].value_counts().to_dict()
+
+            conteos = [conteo_por_alumno(frame) for frame in (a3, a4, a5)]
+            tabla = []
+            for fila in alumnos.to_dict("records"):
+                ident = str(fila.get("ID_Alumno", "")).strip()
+                if not ident:
+                    continue
+                valores = [int(conteo.get(ident, 0)) for conteo in conteos]
+                tabla.append({
+                    "Alumno": fila.get("Nombre_Completo", ""),
+                    "Grado y grupo": f"{fila.get('Grado', '')} {fila.get('Grupo', '')}".strip(),
+                    "Anexo III vinculado": valores[0],
+                    "Anexo IV vinculado": valores[1],
+                    "Anexo V vinculado": valores[2],
+                    "Escuela": fila.get("Nombre_Escuela", escuela),
+                })
+            st.session_state["control_expedientes_tabla"] = tabla
+            st.session_state["control_expedientes_ambito"] = escuela
+        except Exception as ex:
+            st.error(f"No fue posible actualizar el control de expedientes: {ex}")
+
+    tabla = st.session_state.get("control_expedientes_tabla")
+    if tabla is not None and st.session_state.get("control_expedientes_ambito") == escuela:
+        st.caption(
+            "Conteos de registros activos vinculados directamente por ID_Alumno. "
+            "Las capturas grupales sin ID individual no se atribuyen a cada alumno."
+        )
+        st.dataframe(tabla, hide_index=True, width="stretch")
+        st.download_button(
+            "Descargar control como CSV",
+            data=pd.DataFrame(tabla).to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"Control_expedientes_{normalizar_texto(escuela).replace(' ', '_')}.csv",
+            mime="text/csv",
+            width="stretch",
+            key=f"descargar_control_expedientes_{normalizar_texto(escuela)}",
+        )
 
 
 def direccion_page_rapida(_df=None):
@@ -126,3 +200,4 @@ def direccion_page_rapida(_df=None):
 
 
     generador_relatorias_director()
+    _control_expedientes_director(_df)

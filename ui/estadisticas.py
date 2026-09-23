@@ -3,9 +3,10 @@
 import pandas as pd
 import streamlit as st
 
+from data import repository as repo
 from services.escuelas import indice_escuelas, nombre_escuela_canonico
 from services.alumnos import alumnos_de_escuela
-from services.asignaciones import es_direccion, escuelas_asignadas
+from services.asignaciones import es_direccion, es_especialista, escuelas_asignadas
 from documents.listados import listado_alumnos_html, listado_alumnos_pdf
 from ui.components import hero
 from utils.text import normalizar_texto
@@ -87,12 +88,49 @@ def estadisticas_page(df):
         "su escuela; el equipo especialista puede elegir una de sus escuelas asignadas."
     )
     listado = muestra.copy()
-    vista_listado = listado_alumnos_html(listado, seleccion)
+    if es_especialista(rol):
+        funcion_filtro = st.selectbox(
+            "Filtrar alumnos por función especialista registrada",
+            ["Toda la escuela", "Psicología", "Comunicación", "Trabajo Social"],
+            key=f"listado_funcion_{normalizar_texto(seleccion)}",
+        )
+        if funcion_filtro != "Toda la escuela":
+            registros_sugerencias = repo.anexo4()
+            ids_funcion = set()
+            if (
+                not registros_sugerencias.empty
+                and {"ID_Alumno", "Sugerencias_Area"}.issubset(registros_sugerencias.columns)
+            ):
+                area = registros_sugerencias["Sugerencias_Area"].fillna("").astype(str).map(normalizar_texto)
+                token_funcion = normalizar_texto(funcion_filtro)
+                ids_funcion = set(
+                    registros_sugerencias.loc[
+                        area.str.contains(token_funcion, regex=False, na=False), "ID_Alumno"
+                    ].fillna("").astype(str).str.strip()
+                ) - {""}
+            listado = listado.loc[
+                listado.get("ID_Alumno", pd.Series(index=listado.index, dtype="object"))
+                .fillna("").astype(str).str.strip().isin(ids_funcion)
+            ].copy()
+            st.caption(
+                "El filtro muestra alumnos con una anotación de Anexo IV vinculada "
+                "directamente y clasificada en esa función; no sustituye el padrón "
+                "completo de la escuela ni incluye anotaciones grupales sin ID de alumno."
+            )
+
+    firma_nombre = (
+        nombre
+        if "APOYO" in normalizar_texto(rol)
+        else ""
+    )
+    if listado.empty:
+        st.info("No hay alumnos en el filtro de función seleccionado.")
+    vista_listado = listado_alumnos_html(listado, seleccion, firma_nombre)
     with st.expander("Vista previa del formato oficial", expanded=True):
         st.html(vista_listado)
     st.download_button(
         "Descargar listado nominal en PDF carta",
-        data=listado_alumnos_pdf(listado, seleccion),
+        data=listado_alumnos_pdf(listado, seleccion, firma_nombre),
         file_name="Listado_nominal_USAER.pdf",
         mime="application/pdf",
         width="stretch",

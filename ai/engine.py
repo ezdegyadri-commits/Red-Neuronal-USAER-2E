@@ -35,3 +35,52 @@ def generar_sugerencias(contexto):
         if '429' in msg or 'quota' in msg.lower() or 'rate limit' in msg.lower():
             raise RuntimeError('Gemini alcanzó la cuota disponible. La evaluación ya quedó guardada; puedes volver a ejecutar la IA más tarde.') from e
         raise RuntimeError(f'No fue posible generar la propuesta de IA: {e}') from e
+
+
+def analizar_atencion(historial, alcance="individual"):
+    """Resume evidencia cronológica sin recibir identificadores personales."""
+    cli = client()
+    if cli is None:
+        raise RuntimeError("El análisis de IA no está configurado en este despliegue.")
+    evidencia = [
+        {
+            "fecha": str(item.get("fecha", "")),
+            "anexo": str(item.get("anexo", "")),
+            "evidencia": str(item.get("evidencia", ""))[:1200],
+        }
+        for item in (historial or [])[-40:]
+        if str(item.get("evidencia", "")).strip()
+    ]
+    if not evidencia:
+        raise ValueError("No hay evidencia de Anexos III, IV o V para analizar.")
+    payload = json.dumps(
+        {"alcance": alcance, "evidencias_cronologicas": evidencia},
+        ensure_ascii=False,
+    )
+    prompt = (
+        "Eres un asistente de análisis educativo descriptivo para un equipo USAER. "
+        "Analiza únicamente la evidencia incluida, por secuencia temporal. No infieras "
+        "diagnósticos, causas, resultados no documentados ni atribuyas intenciones. "
+        "Distingue hechos registrados, avances observables, apoyos que continúan, "
+        "acuerdos/seguimientos pendientes y vacíos de evidencia. Sugiere preguntas "
+        "para revisión colegiada, no decisiones automáticas. Indica cuando las fechas "
+        "no permitan establecer evolución. Usa español claro y breve.\nEVIDENCIA:\n"
+        + payload
+    )
+    try:
+        response = cli.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config={"temperature": 0.2},
+        )
+        resultado = (getattr(response, "text", "") or "").strip()
+        if not resultado:
+            raise RuntimeError("El servicio de IA no devolvió un análisis.")
+        return resultado
+    except Exception as exc:
+        msg = str(exc)
+        if "429" in msg or "quota" in msg.lower() or "rate limit" in msg.lower():
+            raise RuntimeError("Gemini alcanzó el límite disponible; vuelve a intentarlo más tarde.") from exc
+        if isinstance(exc, RuntimeError):
+            raise
+        raise RuntimeError(f"No fue posible analizar la atención: {exc}") from exc

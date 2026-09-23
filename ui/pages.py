@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date
 import pandas as pd
 import streamlit as st
@@ -7,8 +8,8 @@ from config.settings import ESCUELAS_USAER, BAP_ITEMS, BAP_FRECUENCIAS, SERVICE_
 from data import repository as repo
 from services.expedientes import alumnos_visibles, baps_de_alumno, expediente, alumno
 from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
-from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas
-from ai.engine import fallback, generar_sugerencias
+from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas, es_especialista
+from ai.engine import analizar_atencion, fallback, generar_sugerencias
 from documents.anexos import anexo3_html, anexo3_pdf, anexo4_html, anexo4_pdf, anexo5_html, anexo5_pdf, anexo7_pdf, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from documents.oficios import generar_oficio_comision
@@ -57,6 +58,79 @@ def _seleccionar_alumno(df, etiqueta, key):
         key=key,
     )
     return id_alumno, opciones.loc[opciones["ID_Alumno"].eq(id_alumno)].iloc[0]
+
+
+def _evidencias_para_analisis(anexo3, anexo4, anexo5, datos_sensibles=()):
+    """Prepara evidencia educativa sin nombre, CURP, escuela ni IDs personales."""
+    tokens = sorted(
+        {str(valor).strip() for valor in datos_sensibles if str(valor).strip()},
+        key=len,
+        reverse=True,
+    )
+
+    def anonimizar(texto):
+        texto = str(texto)
+        for token in tokens:
+            texto = re.sub(re.escape(token), "[dato omitido]", texto, flags=re.IGNORECASE)
+        return re.sub(
+            r"\b[A-ZÑ&]{4}\d{6}[A-Z0-9]{8}\b",
+            "[CURP omitida]",
+            texto,
+            flags=re.IGNORECASE,
+        )
+
+    resultado = []
+    for marco, nombre_anexo, campos, campo_fecha in (
+        (anexo3, "Anexo III BAP", ("BAP_Fisicas", "BAP_Actitudinales", "BAP_Pedagogicas", "BAP_Organizativas"), "Fecha"),
+        (anexo4, "Anexo IV sugerencias", ("Sugerencias_Area", "Motivo", "Sugerencias", "Fecha_Seguimiento", "Nivel_Cumplimiento_Resultados"), "Fecha_Elaboracion"),
+        (anexo5, "Anexo V evento", ("Evento",), "Fecha"),
+    ):
+        if marco is None or marco.empty:
+            continue
+        for _, fila in marco.iterrows():
+            partes = [
+                f"{campo.replace('_', ' ')}: {anonimizar(str(fila.get(campo, '')).strip())}"
+                for campo in campos
+                if str(fila.get(campo, "")).strip()
+                and str(fila.get(campo, "")).strip().lower() != "nan"
+            ]
+            if partes:
+                resultado.append({
+                    "fecha": str(fila.get(campo_fecha, "")),
+                    "anexo": nombre_anexo,
+                    "evidencia": "\n".join(partes)[:1200],
+                })
+    def fecha_orden(item):
+        fecha = pd.to_datetime(item["fecha"], errors="coerce", dayfirst=True)
+        return fecha if not pd.isna(fecha) else pd.Timestamp.min
+
+    resultado.sort(key=fecha_orden)
+    return resultado
+
+
+def _panel_analisis_atencion(anexos, key, alcance):
+    if not anexos:
+        st.info("Aún no hay evidencia de Anexos III, IV o V para analizar.")
+        return
+    st.caption(
+        "Análisis opcional, descriptivo y sujeto a revisión profesional. Al pulsarlo, "
+        "se enviarán a Gemini hasta 40 registros recientes de los anexos, omitiendo "
+        "campos de identificación y redactando coincidencias conocidas. Revisa el texto "
+        "libre y no incluyas nombres u otros datos personales antes de solicitarlo."
+    )
+    if st.button("Analizar trayectoria con IA", key=f"analizar_trayectoria_{key}"):
+        try:
+            with st.spinner("Revisando la evidencia cronológica..."):
+                st.session_state[f"analisis_trayectoria_{key}"] = analizar_atencion(anexos, alcance)
+        except Exception as exc:
+            st.error(str(exc))
+    analisis = st.session_state.get(f"analisis_trayectoria_{key}")
+    if analisis:
+        st.markdown("#### Lectura descriptiva de la evidencia")
+        st.markdown(analisis)
+        if len(anexos) > 40:
+            st.warning(f"Por límite de contexto, esta lectura usó los 40 registros más recientes de {len(anexos)} disponibles.")
+        st.caption("La IA no sustituye valoración, diagnóstico, acuerdos ni revisión colegiada.")
 
 
 def inicio(df):
@@ -177,6 +251,19 @@ def expedientes_page(df):
             )
     with tabs[4]:
         tl=exp["timeline"]
+        _panel_analisis_atencion(
+            _evidencias_para_analisis(
+                exp["anexo3"], exp["anexo4"], exp["anexo5"],
+                (
+                    exp["alumno"].get("Nombre_Completo", ""),
+                    exp["alumno"].get("CURP", ""),
+                    exp["alumno"].get("Nombre_Escuela", ""),
+                    exp["alumno"].get("ID_Escuela", ""),
+                ),
+            ),
+            str(id_alumno),
+            "individual",
+        )
         if tl.empty: st.info("El expediente todavía no tiene línea de tiempo integrada.")
         else:
             for _,r in tl.sort_values("Fecha",ascending=False).iterrows():
@@ -1387,12 +1474,20 @@ def eventos_page(df):
                 str(registro.get("Especialista", "")),
                 key=f"editar_evento_especialista_{id_alumno}",
             )
-            col_guardar, col_duplicado = st.columns(2)
+            estado_actual = str(registro.get("Estado", "ACTIVO")).strip().upper()
+            col_guardar, col_retirar, col_duplicado = st.columns(3)
             with col_guardar:
                 corregir = st.button(
                     "Guardar corrección",
                     key=f"corregir_evento_{id_alumno}",
                     width="stretch",
+                )
+            with col_retirar:
+                retirar_evento = st.button(
+                    "Retirar de la hoja activa",
+                    key=f"retirar_evento_{id_alumno}",
+                    width="stretch",
+                    disabled=estado_actual in {"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"},
                 )
             with col_duplicado:
                 marcar_duplicado = st.button(
@@ -1422,6 +1517,13 @@ def eventos_page(df):
                     st.rerun()
                 except Exception as ex:
                     st.error(f"No fue posible marcar el duplicado: {ex}")
+            if retirar_evento:
+                try:
+                    repo.update_anexo5(id_editar, {"Estado": "RETIRADO"})
+                    st.success("Evento retirado de la hoja activa; el registro histórico se conservó.")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"No fue posible retirar el evento: {ex}")
 
     fecha = st.date_input(
         "Fecha del evento",
@@ -1471,10 +1573,30 @@ def eventos_page(df):
         scrolling=True,
     )
 
+    descargas = st.columns(2)
+    with descargas[0]:
+        st.download_button(
+            "Descargar vista actual en PDF",
+            anexo5_pdf(datos, vista_eventos),
+            f"Anexo_V_{id_alumno}.pdf",
+            "application/pdf",
+            width="stretch",
+            key=f"vista_previa_anexo5_pdf_{id_alumno}",
+        )
+    with descargas[1]:
+        st.download_button(
+            "Descargar vista actual imprimible",
+            anexo5_html(datos, vista_eventos),
+            f"Anexo_V_{id_alumno}.html",
+            "text/html",
+            width="stretch",
+            key=f"vista_previa_anexo5_html_{id_alumno}",
+        )
+
     guardar = st.button(
-        "Guardar evento en Anexo V",
+        "➕ Guardar evento significativo en la hoja compartida",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key="guardar_evento_anexo5",
     )
     if not guardar:
@@ -1562,6 +1684,22 @@ def documentos_page(df):
         key="documentos_tipo",
     )
 
+    nombre_usuario = st.session_state.get("nombre", "")
+    rol_usuario = st.session_state.get("rol", "")
+    escuelas_documentos = escuelas_asignadas(nombre_usuario, rol_usuario)
+    escuela_documentos = ""
+    if es_especialista(rol_usuario):
+        if not escuelas_documentos:
+            st.error("No tienes escuelas asignadas para consultar documentos.")
+            return
+        escuela_documentos = st.selectbox(
+            "Escuela para consultar el expediente",
+            escuelas_documentos,
+            key="documentos_escuela_especialista",
+        )
+        if tipo == "Alumno individual":
+            df = alumnos_de_escuela(df, escuela_documentos)
+
     if tipo == "Alumno individual":
         if df.empty:
             st.info("No hay alumnos disponibles en tus escuelas asignadas.")
@@ -1599,9 +1737,10 @@ def documentos_page(df):
             a5_todos = a5_todos.loc[
                 ~estado_a5.isin({"ANULADO", "ELIMINADO", "DUPLICADO", "RETIRADO"})
             ].copy()
-        escuelas_disponibles = escuelas_asignadas(
-            st.session_state.get("nombre", ""),
-            st.session_state.get("rol", ""),
+        escuelas_disponibles = (
+            [escuela_documentos]
+            if escuela_documentos
+            else escuelas_asignadas(nombre_usuario, rol_usuario)
         )
         if not escuelas_disponibles:
             st.error("No tienes escuelas asignadas para consultar grupos.")
@@ -1706,6 +1845,19 @@ def documentos_page(df):
             ].copy()
 
     st.markdown(f"### Documentos de {etiqueta}")
+    if tipo == "Grupo / contexto áulico":
+        datos_sensibles_grupo = [escuela_grupo]
+        if not df.empty and escuela_grupo and "Nombre_Completo" in df.columns:
+            datos_sensibles_grupo.extend(
+                alumnos_de_escuela(df, escuela_grupo)["Nombre_Completo"]
+                .dropna().astype(str).tolist()
+            )
+        with st.expander("Análisis de atención grupal en la línea de tiempo"):
+            _panel_analisis_atencion(
+                _evidencias_para_analisis(a3, a4, a5, datos_sensibles_grupo),
+                normalizar_texto(archivo_base),
+                "grupal por escuela, grado y grupo",
+            )
     tabs = st.tabs(["Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos"])
 
     with tabs[0]:

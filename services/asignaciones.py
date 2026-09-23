@@ -60,6 +60,24 @@ def es_direccion(rol):
     )
 
 
+def es_especialista(rol):
+    """Reconoce las funciones clínicas/disciplinarias del equipo USAER."""
+    rol_n = normalizar_texto(rol)
+    if es_direccion(rol_n) or "APOYO" in rol_n:
+        return False
+    return any(
+        termino in rol_n
+        for termino in (
+            "PSICOLOG",
+            "COMUNICACION",
+            "TRABAJO SOCIAL",
+            "TRABAJADOR SOCIAL",
+            "TRABAJADORA SOCIAL",
+            "ESPECIALISTA",
+        )
+    )
+
+
 def es_trabajo_social(rol, nombre=""):
     rol_n = normalizar_texto(rol)
     nombre_n = _normalizar_nombre(nombre)

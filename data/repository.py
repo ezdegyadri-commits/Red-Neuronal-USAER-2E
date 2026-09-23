@@ -480,8 +480,18 @@ def guardar_configuracion_oficios(data):
  clear_cache('Configuracion_Oficios')
  return registro
 
-def guardar_oficio_comision(data):
- """Guarda una emisión por clave única y asigna un folio consecutivo."""
+def _siguiente_folio_oficio(folios):
+ """Automatic folios start at 22; values 1–21 remain available for manual capture."""
+ validos = []
+ for valor in folios:
+  try:
+   validos.append(int(str(valor).strip()))
+  except (TypeError, ValueError):
+   continue
+ return max([21, *validos]) + 1
+
+def guardar_oficio_comision(data, folio_manual=None):
+ """Guarda una emisión y asigna folio automático (desde 22) o manual (1–21)."""
  headers = BASE_HEADERS['Oficios_Comision']
  ensure_headers('Oficios_Comision', headers)
  ws = worksheet('Oficios_Comision')
@@ -507,7 +517,17 @@ def guardar_oficio_comision(data):
    folios.append(int(str(fila[indice_folio]).strip()))
   except (ValueError, IndexError):
    pass
- folio = max(folios) + 1 if folios else 1
+ if folio_manual is not None:
+  try:
+   folio = int(folio_manual)
+  except (TypeError, ValueError) as ex:
+   raise ValueError('El folio manual debe ser un número del 1 al 21.') from ex
+  if not 1 <= folio <= 21:
+   raise ValueError('Los folios manuales disponibles son del 1 al 21.')
+  if any(str(f).strip() == str(folio) for f in folios):
+   raise ValueError(f'El folio {folio:03d} ya está registrado; no se modificó ningún dato.')
+ else:
+  folio = _siguiente_folio_oficio(folios)
  registro = dict(data)
  registro['ID_Oficio'] = f"OFI-{folio:03d}"
  registro['Folio'] = folio
