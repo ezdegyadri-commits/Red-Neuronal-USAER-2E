@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -15,7 +16,7 @@ from utils.text import normalizar_texto
 
 ENCABEZADOS_CRONOGRAMA = [
     "Marca temporal", "Especialista", "Área", "Modalidad", "Escuela",
-    "Fecha", "Actividad", "Estado",
+    "Fecha", "Actividad", "Estado", "ID_Publicacion",
 ]
 
 AREAS_ESPECIALISTAS = {
@@ -171,8 +172,27 @@ def cargar_agenda_global(mes: str) -> list[dict[str, str]]:
                 "Especialista": row.get("Especialista", "").strip(),
                 "Área": row.get("Área", "").strip(),
                 "Escuela": row.get("Escuela", "").strip(),
+                "Actividad": row.get("Actividad", "").strip(),
             }
     return sorted(efectivos.values(), key=lambda row: (row["Fecha"], row["Especialista"]))
+
+
+def cargar_publicacion(publicacion_id: str) -> list[dict[str, str]]:
+    """Lee las actividades de una versión publicada del cronograma sin alterar historial."""
+    _, headers, registros = _leer_registros()
+    if "ID_Publicacion" not in headers:
+        return []
+    return [
+        {
+            "Fecha": _iso_fecha(row.get("Fecha", "")),
+            "Escuela": row.get("Escuela", "").strip(),
+            "Actividad": row.get("Actividad", "").strip(),
+            "Especialista": row.get("Especialista", "").strip(),
+        }
+        for row in registros
+        if str(row.get("ID_Publicacion", "")).strip() == str(publicacion_id).strip()
+        and str(row.get("Estado", "ACTIVO") or "ACTIVO").strip().upper() != "SUSTITUIDO"
+    ]
 
 
 def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda: list[dict]) -> dict:
@@ -180,6 +200,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
     mes_date = datetime.strptime(mes, "%Y-%m")
     permitidas = set(escuelas) | {"Junta General (Sede)"}
     filas_nuevas = []
+    publicacion_id = uuid4().hex
     dias_vistos = set()
     for item in agenda:
         fecha_iso = _iso_fecha(item.get("fecha"))
@@ -205,6 +226,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             "Fecha": fecha_iso,
             "Actividad": actividad,
             "Estado": "ACTIVO",
+            "ID_Publicacion": publicacion_id,
         })
     if not filas_nuevas:
         raise ValueError("Agrega al menos una actividad antes de guardar.")
@@ -219,6 +241,13 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             retry_google(lambda: ws.add_cols(posicion - ws.col_count))
         retry_google(lambda: ws.update_cell(1, posicion, "Estado"))
         headers = headers + [""] * max(0, posicion - len(headers) - 1) + ["Estado"]
+
+    if "ID_Publicacion" not in headers:
+        posicion = max(len(headers), 8) + 1
+        if ws.col_count < posicion:
+            retry_google(lambda: ws.add_cols(posicion - ws.col_count))
+        retry_google(lambda: ws.update_cell(1, posicion, "ID_Publicacion"))
+        headers = headers + [""] * max(0, posicion - len(headers) - 1) + ["ID_Publicacion"]
 
     col_estado = headers.index("Estado") + 1
     # Primero se escribe la versión nueva. Si falla, el historial anterior sigue activo.
@@ -242,7 +271,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             retry_google(lambda: ws.batch_update(columnas, value_input_option="RAW"))
         except Exception:
             aviso = "La agenda nueva se guardó; no se pudo marcar la versión anterior como sustituida. El historial se conserva y la vista usa la versión más reciente."
-    return {"filas": len(filas_nuevas), "aviso": aviso}
+    return {"filas": len(filas_nuevas), "aviso": aviso, "publicacion_id": publicacion_id}
 
 
 def _columna_a1(numero: int) -> str:
@@ -251,3 +280,4 @@ def _columna_a1(numero: int) -> str:
         numero, resto = divmod(numero - 1, 26)
         letras = chr(65 + resto) + letras
     return letras
+
