@@ -7,11 +7,15 @@ def es_especialista(rol):
     rol_n = normalizar_texto(rol)
     if any(termino in rol_n for termino in ("DIRECTOR", "DIRECCION", "COORDINADOR", "APOYO")):
         return False
+    if rol_n.strip().rstrip(".") in {"COM", "PSIC", "TS", "T S"}:
+        return True
     return any(
         termino in rol_n
         for termino in (
             "PSICOLOG",
+            "PSIC.",
             "COMUNICACION",
+            "COM.",
             "TRABAJO SOCIAL",
             "TRABAJADOR SOCIAL",
             "TRABAJADORA SOCIAL",
@@ -209,3 +213,4 @@ def alumnos_de_escuelas_asignadas(df, nombre, rol=""):
         resultado = resultado.drop_duplicates()
 
     return resultado
+
