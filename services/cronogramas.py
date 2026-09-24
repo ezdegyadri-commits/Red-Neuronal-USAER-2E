@@ -116,18 +116,43 @@ def _worksheet():
         libro = drive_oauth_google_client().open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
         return retry_google(lambda: libro.worksheet("Registros"))
     except Exception as exc:
-        errores.append(exc)
+        errores.append(("Drive OAuth", exc))
     try:
         libro_maestro, _ = connections()
         libro = libro_maestro.client.open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
         return retry_google(lambda: libro.worksheet("Registros"))
     except Exception as exc:
-        errores.append(exc)
+        errores.append(("cuenta de servicio", exc))
+        detalle = "; ".join(
+            f"{metodo}: {_resumen_error(error)}" for metodo, error in errores
+        )
         raise RuntimeError(
-            "No se pudo abrir la pestaña Registros del libro Cronogramas con las "
-            "credenciales de Drive ni con la cuenta de servicio. Verifica los permisos "
-            "del archivo en Google Sheets."
-        ) from errores[-1]
+            "No se pudo autenticar contra el libro de cronogramas. "
+            f"Diagnóstico: {detalle}. La pestaña 'Registros' existe. "
+            "Para corregir permisos: en Streamlit Cloud abre Manage app > Settings > "
+            "Secrets, copia el campo client_email dentro de credenciales_json y comparte "
+            "con esa cuenta el libro de cronogramas como Editor. Si Drive OAuth reporta "
+            "invalid_grant, vuelve a autorizar/actualizar token_json y reinicia la app. "
+            f"Libro: https://docs.google.com/spreadsheets/d/{CRONOGRAMAS_SPREADSHEET_ID}/edit"
+        ) from exc
+
+
+def _resumen_error(exc: Exception) -> str:
+    """Clasifica el error de Google sin mostrar tokens ni datos de credenciales."""
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", None) or getattr(exc, "code", None)
+    texto = str(exc).lower()
+    if "invalid_grant" in texto or "expired or revoked" in texto:
+        return "token OAuth inválido o vencido (invalid_grant)"
+    if status == 403 or "permission denied" in texto or "insufficient permission" in texto:
+        return "permiso insuficiente (HTTP 403)"
+    if status == 404 or "spreadsheet not found" in texto or "file not found" in texto:
+        return "archivo no visible para esta credencial (HTTP 404)"
+    if "worksheetnotfound" in texto or "worksheet not found" in texto:
+        return "no se encontró la pestaña solicitada"
+    if status:
+        return f"error de Google HTTP {status}"
+    return type(exc).__name__
 
 
 def _leer_registros():

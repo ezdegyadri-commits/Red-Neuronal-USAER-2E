@@ -70,6 +70,16 @@ class CronogramasTest(unittest.TestCase):
         )
         self.assertTrue(contenido.startswith(b"%PDF"))
 
+    def test_google_access_diagnostics_do_not_expose_credentials(self):
+        self.assertEqual(
+            cronogramas._resumen_error(RuntimeError("invalid_grant: token-secret")),
+            "token OAuth inválido o vencido (invalid_grant)",
+        )
+        self.assertEqual(
+            cronogramas._resumen_error(RuntimeError("403 Permission denied: private-detail")),
+            "permiso insuficiente (HTTP 403)",
+        )
+
     def test_save_appends_new_rows_and_preserves_old_version(self):
         class FakeWorksheet:
             col_count = 26
