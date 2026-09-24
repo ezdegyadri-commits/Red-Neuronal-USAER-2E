@@ -37,6 +37,16 @@ def personal_responses_connection():
     return gc.open_by_url(URL_SPREADSHEET_RESPUESTAS_PERSONAL)
 
 
+@st.cache_resource(show_spinner=False)
+def drive_oauth_google_client():
+    """gspread client for Drive-owned workbooks using the existing Drive OAuth token."""
+    token = _secret_dict('token_json')
+    creds = Credentials.from_authorized_user_info(token, ['https://www.googleapis.com/auth/drive'])
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    return gspread.authorize(creds)
+
+
 def _records_from_values(valores):
     if not valores:
         return []

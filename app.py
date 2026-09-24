@@ -2,6 +2,8 @@ import streamlit as st
 from config.settings import PAGE_TITLE
 from data import repository as repo
 from services.expedientes import alumnos_visibles
+from services.asignaciones import es_especialista
+from services.cronogramas import perfil_especialista
 from ui.theme import inject
 from ui.auth import login, logout
 from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page, documentos_page, direccion_page, visitas_page, derivacion_page
@@ -10,6 +12,7 @@ from ui.direccion_oficios import configuracion_oficios_direccion
 from ui.direccion_rapida import direccion_page_rapida
 from ui.sugerencias import anexo4_page
 from ui.estadisticas import estadisticas_page
+from ui.cronogramas import cronogramas_page
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -30,6 +33,8 @@ with st.sidebar:
     st.caption(f"Sesión: {st.session_state.get('nombre','')}")
     st.divider()
     menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos"]
+    if es_especialista(rol) and perfil_especialista(st.session_state.get("nombre", ""), rol):
+        menu += ["Cronograma mensual"]
     if "DIRECTOR" in rol.upper(): menu += ["Panel de Dirección","Constancias de visita","Alta de alumnos"]
     elif "APOYO" in rol.upper(): menu += ["Alta de alumnos", "Oficios de comisión", "Anexo VII Derivación"]
     else: menu += ["Constancias de visita", "Anexo VII Derivación"]
@@ -41,6 +46,7 @@ with st.sidebar:
         "Anexo V Eventos significativos": "📌 Seguimiento · Anexo V",
         "Estadística": "📊 Consulta · Estadística y listado nominal",
         "Documentos": "📄 Consulta · Documentos",
+        "Cronograma mensual": "🗓️ Equipo especialista · Cronograma",
         "Panel de Dirección": "⚙️ Dirección · Panel",
         "Constancias de visita": "🗓️ Equipo · Constancias de visita",
         "Alta de alumnos": "➕ Captura · Alta de alumnos",
@@ -67,6 +73,7 @@ elif page=="Anexo IV Hoja de sugerencias": anexo4_page(authorized)
 elif page=="Anexo V Eventos significativos": eventos_page(authorized)
 elif page=="Estadística": estadisticas_page(authorized)
 elif page=="Documentos": documentos_page(authorized)
+elif page=="Cronograma mensual": cronogramas_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
     configuracion_oficios_direccion()

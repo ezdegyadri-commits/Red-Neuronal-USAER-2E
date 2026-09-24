@@ -6,6 +6,9 @@ SCHOOL_YEAR = "2026 – 2027"
 FOLDER_ID_MAESTRO = "1btFuNK8l9BI5C2s3-Q0_RZBZkUOBhvtr"
 URL_SPREADSHEET_MAESTRO = "https://docs.google.com/spreadsheets/d/15hEvBOkaUvUFvTPx38yn8D_O6zWpkDm6ReiQbNK3ewc"
 URL_SPREADSHEET_RESPUESTAS_PERSONAL = "https://docs.google.com/spreadsheets/d/1wBeKwB9nwu-Rfdw5zzn9OXIxn32Gze2M44w5Ee6Ppho"
+# Libro separado que conserva el historial de los cronogramas existentes.
+CRONOGRAMAS_SPREADSHEET_ID = "1aIYdYYw_fAYvAzHWlrI2KtHO109sfye-EO944DAhBJU"
+CRONOGRAMAS_FOLDER_ID = "1IFwxtXuoBGm4IowckhGIOxfCxoaeXqd5"
 HOJA_RESPUESTAS_PERSONAL = "Respuestas de formulario 1"
 def secret_or_default(name, default):
     """Lee una variable opcional sin importar Streamlit durante el arranque."""

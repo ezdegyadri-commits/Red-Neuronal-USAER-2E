@@ -45,6 +45,14 @@ La vinculación se hace por `ID_Alumno`, `ID_Expediente` y los IDs existentes de
 6. Inicia sesión con un usuario existente.
 7. Comprueba en este orden: Inicio → Expedientes → Evaluación BAP → Seguimiento → Documentos.
 
+## Cronograma mensual del equipo especialista
+
+- El apartado solo aparece a las cinco cuentas especialistas del directorio; el perfil de Dirección no puede abrirlo.
+- Lee y escribe en el libro `Cronogramas`, pestaña `Registros`, conservando las filas anteriores. Una agenda corregida agrega una versión y marca la anterior como `SUSTITUIDO`.
+- El libro y la carpeta histórica de PDFs deben seguir accesibles desde las credenciales `token_json` de Drive o desde la cuenta de servicio `credenciales_json`.
+- El generador incluye descarga PDF y copia a la carpeta histórica. Para insertar las firmas del especialista, agrega `CRONOGRAMAS_FIRMAS` en Streamlit Secrets como JSON cuyos valores sean IDs de imagen en Drive y cuyas claves sean el nombre canónico o su versión en mayúsculas con espacios sustituidos por guiones bajos. Las imágenes de firma de Dirección y sello usan `CRONOGRAMAS_FIRMA_DIRECCION_ID` y `CRONOGRAMAS_SELLO_ID`; si no se definen, la plataforma usa los recursos locales existentes cuando están disponibles.
+- El formulario conserva días hábiles, selección de escuela, actividades, agenda guardada y calendario global. No incorpora generación con IA.
+
 ## Prueba de aceptación
 
 - Un alumno visible abre un expediente único.
