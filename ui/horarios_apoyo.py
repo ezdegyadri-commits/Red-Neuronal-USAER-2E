@@ -9,6 +9,8 @@ import pandas as pd
 import streamlit as st
 
 from data import repository as repo
+from config.settings import SCHOOL_YEAR
+from documents.horarios_apoyo import generar_horario_apoyo_pdf
 from services.asignaciones import escuelas_asignadas
 from services.cronogramas import cargar_publicacion
 from services.horarios import (
@@ -51,7 +53,7 @@ def _leer_archivo(archivo):
 
 
 def _tabla_vista(frame):
-    columnas = [col for col in ("Dia", "Inicio", "Fin", "Grupo", "Actividad", "Responsable", "Maestra") if col in frame.columns]
+    columnas = [col for col in ("Dia", "Inicio", "Fin", "Grupo", "Modalidad", "Espacio", "Actividad", "Responsable", "Maestra") if col in frame.columns]
     salida = frame[columnas].copy()
     if "Dia" in salida:
         salida["_orden"] = salida["Dia"].map({day: i for i, day in enumerate(DIAS)})
@@ -184,6 +186,17 @@ def horarios_apoyo_page():
         hora_fin = st.time_input("Fin de la jornada", value=time(13, 0), key="horario_fin")
     with c3:
         duracion = st.number_input("Duración de cada sesión (minutos)", min_value=15, max_value=180, value=50, step=5, key="horario_duracion")
+        modalidad = st.selectbox(
+            "Modalidad de atención",
+            ["Grupal", "Subgrupal", "Individual"],
+            key="horario_modalidad",
+            help="El manual contempla atención grupal, subgrupal e individual.",
+        )
+        espacio = st.selectbox(
+            "Espacio de atención",
+            ["Aula regular", "Aula de apoyo", "Otro"],
+            key="horario_espacio",
+        )
         st.caption("La propuesta evita cruces con los horarios cargados y con sesiones de apoyo del mismo grupo.")
 
     proposal_key = f"propuesta_horario_apoyo_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}"
@@ -193,6 +206,7 @@ def horarios_apoyo_page():
             propuesta, origen = proponer_horario(
                 grupos, int(sesiones), int(duracion), hora_inicio, hora_fin,
                 restricciones, horarios_equipo, maestra=nombre,
+                modalidad=modalidad, espacio=espacio,
             )
             st.session_state[proposal_key] = propuesta
             st.session_state[proposal_key + "_origen"] = origen
@@ -211,16 +225,36 @@ def horarios_apoyo_page():
                 "Inicio": st.column_config.TextColumn("Inicio · HH:MM"),
                 "Fin": st.column_config.TextColumn("Fin · HH:MM"),
                 "Grupo": st.column_config.TextColumn("Grupo"),
+                "Modalidad": st.column_config.SelectboxColumn(
+                    "Modalidad", options=["", "Grupal", "Subgrupal", "Individual"],
+                ),
+                "Espacio": st.column_config.SelectboxColumn(
+                    "Espacio", options=["", "Aula regular", "Aula de apoyo", "Otro"],
+                ),
                 "Actividad": st.column_config.TextColumn("Actividad", width="large"),
                 "Maestra": st.column_config.TextColumn("Maestra", disabled=True),
             },
             key=f"editor_horario_apoyo_{normalizar_texto(escuela)}_{version_editor}",
         )
         conflictos = detectar_choques(editada.to_dict("records"), restricciones, horarios_equipo)
+        incompletas = editada[["Modalidad", "Espacio"]].fillna("").astype(str).apply(
+            lambda columna: columna.str.strip().eq("")
+        ).any(axis=1)
+        if incompletas.any():
+            st.warning("Completa modalidad y espacio de atención en cada sesión para guardar el horario oficial.")
         if not conflictos.empty:
             st.error("Hay cruces; corrígelos antes de guardar.")
             st.dataframe(conflictos, hide_index=True, width="stretch")
-        if st.button("Guardar mi horario en la base central", type="primary", disabled=not conflictos.empty, key=f"guardar_{proposal_key}"):
+        else:
+            pdf_borrador = generar_horario_apoyo_pdf(escuela, nombre, editada.to_dict("records"))
+            st.download_button(
+                "Descargar vista previa del horario (PDF)",
+                data=pdf_borrador,
+                file_name=f"Horario_Apoyo_{normalizar_texto(nombre).replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                key=f"descargar_borrador_{proposal_key}_{version_editor}",
+            )
+        if st.button("Guardar mi horario en la base central", type="primary", disabled=not conflictos.empty or incompletas.any(), key=f"guardar_{proposal_key}"):
             try:
                 guardar_horario_apoyo(nombre, escuela, editada)
                 st.success("Horario guardado. La versión anterior permanece en el historial.")
@@ -232,5 +266,27 @@ def horarios_apoyo_page():
     propio = horarios_equipo.loc[horarios_equipo["Maestra"].astype(str).eq(nombre)].copy() if not horarios_equipo.empty and "Maestra" in horarios_equipo.columns else pd.DataFrame()
     if not propio.empty:
         st.markdown("### Mi horario guardado")
-        st.dataframe(_tabla_vista(propio), hide_index=True, width="stretch")
+        propia_vista = _tabla_vista(propio)
+        st.dataframe(propia_vista, hide_index=True, width="stretch")
+        c_editar, c_descargar = st.columns(2)
+        with c_editar:
+            if st.button("Editar mi horario vigente", key=f"editar_horario_{normalizar_texto(escuela)}"):
+                columnas_edicion = ["Dia", "Inicio", "Fin", "Grupo", "Modalidad", "Espacio", "Actividad", "Maestra"]
+                borrador = propio.reindex(columns=columnas_edicion).fillna("").copy()
+                borrador["Maestra"] = nombre
+                st.session_state[proposal_key] = borrador
+                st.session_state[proposal_key + "_origen"] = "horario guardado cargado para edición"
+                st.session_state[proposal_key + "_version"] = st.session_state.get(proposal_key + "_version", 0) + 1
+                st.rerun()
+        with c_descargar:
+            pdf_guardado = generar_horario_apoyo_pdf(escuela, nombre, propia_vista.to_dict("records"))
+            st.download_button(
+                "Descargar mi horario vigente (PDF oficial)",
+                data=pdf_guardado,
+                file_name=f"Horario_Apoyo_{normalizar_texto(nombre).replace(' ', '_')}_{normalizar_texto(escuela).replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                type="primary",
+                key=f"descargar_horario_{normalizar_texto(escuela)}",
+            )
+        st.caption(f"Ciclo escolar {SCHOOL_YEAR}. Cada guardado agrega una nueva versión y conserva la anterior.")
 
