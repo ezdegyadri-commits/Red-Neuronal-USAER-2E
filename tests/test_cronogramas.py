@@ -3,6 +3,7 @@ from datetime import date
 from unittest.mock import patch
 
 from documents.cronogramas import generar_cronograma_pdf
+from config.settings import ESCUELAS_USAER
 from services import cronogramas
 from services.cronogramas import fechas_habiles, perfil_especialista
 
@@ -11,7 +12,10 @@ class CronogramasTest(unittest.TestCase):
     def test_only_specialist_account_with_known_profile_is_allowed(self):
         perfil = perfil_especialista("María José Cupul Realpozo", "Psicóloga")
         self.assertEqual(perfil["area"], "Psicología")
-        self.assertIsNone(perfil_especialista("Psic. Edgar Adrián Yam Briceño MD", "DIRECTOR"))
+        self.assertEqual(
+            perfil_especialista("Psic. Edgar Adrián Yam Briceño MD", "DIRECTOR")["area"],
+            "Dirección",
+        )
         self.assertIsNone(perfil_especialista("Cuenta desconocida", "ESPECIALISTA"))
 
     def test_specialist_menu_profiles_accept_function_prefixes_and_abbreviated_roles(self):
@@ -21,6 +25,26 @@ class CronogramasTest(unittest.TestCase):
         self.assertEqual(elmy["nombre"], "Elmy Lucelly Puerto Gone")
         self.assertEqual(abril["area"], "Psicología")
         self.assertEqual(abril["nombre"], "Abril de María Chable Ríos")
+
+    def test_all_five_specialists_have_a_cronogram_profile(self):
+        perfiles = [
+            ("Diego Peralta Torres", "TS", "Trabajo Social"),
+            ("Com. Elmy Lucelly Puerto Gone", "Com.", "Comunicación"),
+            ("María José Cupul Realpozo", "Psic.", "Psicología"),
+            ("Psic. Abril de María Chable Ríos", "Psic.", "Psicología"),
+            ("Marilyn Pérez Lizama", "Com.", "Comunicación"),
+        ]
+        for nombre, rol, area in perfiles:
+            with self.subTest(nombre=nombre):
+                perfil = perfil_especialista(nombre, rol)
+                self.assertIsNotNone(perfil)
+                self.assertEqual(perfil["area"], area)
+
+    def test_director_can_create_and_consult_all_team_cronograms(self):
+        perfil = perfil_especialista("Psic. Edgar Adrián Yam Briceño MD", "DIRECTOR")
+        self.assertEqual(perfil["area"], "Dirección")
+        self.assertEqual(perfil["escuelas"], list(ESCUELAS_USAER.keys()))
+        self.assertIsNone(perfil_especialista("Otra persona", "DIRECTOR"))
 
     def test_month_calendar_skips_weekends_and_official_closures(self):
         dias = fechas_habiles("2026-09")
@@ -37,6 +61,14 @@ class CronogramasTest(unittest.TestCase):
         )
         self.assertTrue(contenido.startswith(b"%PDF"))
         self.assertGreater(len(contenido), 1000)
+
+    def test_director_pdf_has_single_authorization_signature_block(self):
+        perfil = perfil_especialista("Edgar Adrián Yam Briceño MD", "DIRECTOR")
+        contenido = generar_cronograma_pdf(
+            perfil, "Septiembre 2026",
+            [{"fecha": "01/09/2026", "escuela": "DAMIÁN CARMONA", "actividad": "Reunión"}],
+        )
+        self.assertTrue(contenido.startswith(b"%PDF"))
 
     def test_save_appends_new_rows_and_preserves_old_version(self):
         class FakeWorksheet:

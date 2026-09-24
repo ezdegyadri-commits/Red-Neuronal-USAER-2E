@@ -81,6 +81,16 @@ elif page=="Horarios de apoyo": horarios_apoyo_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
     configuracion_oficios_direccion()
+    st.divider()
+    st.subheader("Cronogramas del equipo")
+    st.caption("Desde aquí puedes elaborar tu propio cronograma y consultar los publicados por Psicología, Comunicación y Trabajo Social.")
+    if st.button("Abrir cronograma de Dirección y del equipo", type="primary", key="abrir_cronograma_direccion"):
+        st.session_state["mostrar_cronograma_direccion"] = True
+    if st.session_state.get("mostrar_cronograma_direccion"):
+        if st.button("Cerrar cronogramas", key="cerrar_cronograma_direccion"):
+            st.session_state["mostrar_cronograma_direccion"] = False
+            st.rerun()
+        cronogramas_page()
 elif page=="Constancias de visita": visitas_page(authorized)
 elif page=="Alta de alumnos": alta_page(authorized)
 elif page=="Oficios de comisión": oficios_comision_page()

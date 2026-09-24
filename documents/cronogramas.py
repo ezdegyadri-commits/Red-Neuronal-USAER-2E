@@ -89,13 +89,19 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         nueva_pagina()
     else:
         pdf.ln(8)
-    ancho_firma = 86
     y_firma = pdf.get_y()
     pdf.set_font("Helvetica", "", 9)
-    for x, titulo, nombre, imagen in (
-        (15, "Elaboró", perfil["nombre"], firma_especialista),
-        (109, "Vo. Bo.", "Psic. Edgar Adrián Yam Briceño MD\nDirector de la USAER 02-E", firma_direccion),
-    ):
+    if perfil.get("area") == "Dirección":
+        bloques_firma = [
+            (62, "Elaboró y da Vo. Bo.", perfil["nombre"] + "\nDirector de la USAER 02-E", firma_especialista or firma_direccion)
+        ]
+    else:
+        bloques_firma = [
+            (15, "Elaboró", perfil["nombre"], firma_especialista),
+            (109, "Vo. Bo.", "Psic. Edgar Adrián Yam Briceño MD\nDirector de la USAER 02-E", firma_direccion),
+        ]
+    for x, titulo, nombre, imagen in bloques_firma:
+        ancho_firma = 86
         pdf.set_xy(x, y_firma)
         pdf.cell(ancho_firma, 5, _fpdf_text(titulo), align="C", new_x="LMARGIN", new_y="NEXT")
         pdf.set_xy(x, y_firma + 6)
@@ -131,3 +137,4 @@ def guardar_pdf_drive(pdf_bytes: bytes, nombre_archivo: str) -> str:
         supportsAllDrives=True,
     ).execute()
     return str(archivo.get("webViewLink", ""))
+

@@ -94,12 +94,15 @@ def cronogramas_page():
     rol = str(st.session_state.get("rol", "")).strip()
     perfil = perfil_especialista(nombre, rol)
     if not perfil:
-        st.error("Este apartado es exclusivo para las cuentas autorizadas del equipo especialista.")
+        st.error("Este apartado es exclusivo para las cuentas autorizadas del equipo especialista y de Dirección.")
         return
 
-    st.title("Cronograma mensual")
+    st.title("Cronograma mensual" if perfil["area"] != "Dirección" else "Cronograma de Dirección")
     st.caption(f"{perfil['nombre']} · {perfil['area']} · USAER 02-E")
-    st.write("Selecciona una escuela y describe la actividad de cada día hábil. Las agendas anteriores se conservan al guardar una nueva versión.")
+    if perfil["area"] == "Dirección":
+        st.write("Genera tu propio cronograma y consulta el calendario consolidado de todo el equipo. Al publicar, las maestras de apoyo de las escuelas incluidas reciben el aviso en Horarios de apoyo.")
+    else:
+        st.write("Selecciona una escuela y describe la actividad de cada día hábil. Las agendas anteriores se conservan al guardar una nueva versión.")
 
     meses = _meses_disponibles()
     llaves = [llave for llave, _ in meses]
@@ -205,7 +208,9 @@ def cronogramas_page():
                 st.session_state["cronograma_pdf"] = pdf_bytes
                 st.session_state["cronograma_pdf_nombre"] = nombre_archivo
                 st.session_state["cronograma_pdf_mes"] = mes
-                st.session_state["cronograma_pdf_firma_especialista"] = bool(firma_esp)
+                st.session_state["cronograma_pdf_firma_especialista"] = bool(
+                    firma_esp or (perfil["area"] == "Dirección" and firma_dir)
+                )
                 st.session_state["cronograma_pdf_mensaje"] = f"Cronograma guardado: {resultado['filas']} actividades."
                 st.session_state["cronograma_pdf_aviso_historial"] = resultado.get("aviso", "")
                 st.session_state["cronograma_pdf_aviso_notificaciones"] = aviso_notificaciones
@@ -260,7 +265,8 @@ def cronogramas_page():
         if drive_url:
             st.markdown(f"[Abrir copia guardada en Drive]({drive_url})")
 
-    with st.expander("Calendario general del equipo especialista"):
+    with st.expander("Calendario de todo el equipo", expanded=perfil["area"] == "Dirección"):
+        st.caption("Consulta las actividades publicadas por especialistas y Dirección para el mes seleccionado.")
         if st.button("Consultar agenda global del mes", key="consultar_agenda_global"):
             try:
                 global_rows = cargar_agenda_global(mes)

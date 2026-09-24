@@ -8,9 +8,9 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from config.settings import CRONOGRAMAS_SPREADSHEET_ID
+from config.settings import CRONOGRAMAS_SPREADSHEET_ID, ESCUELAS_USAER
 from data.google import connections, drive_oauth_google_client, retry_google
-from services.asignaciones import ASIGNACIONES_ESPECIALISTAS, es_especialista
+from services.asignaciones import ASIGNACIONES_ESPECIALISTAS, es_direccion, es_especialista
 from utils.text import normalizar_texto
 
 
@@ -47,17 +47,33 @@ DIAS_INHABILES = {
 
 
 def perfil_especialista(nombre: str, rol: str) -> dict | None:
-    """Devuelve solo perfiles del directorio especialista y nunca Dirección."""
-    if not es_especialista(rol):
-        return None
-
+    """Resuelve perfiles autorizados del equipo especialista y de Dirección."""
     # En la hoja Usuarios algunos nombres llevan el prefijo de la función
     # (p. ej. "Com." o "Psic."). Retíralo para buscar el nombre canónico,
     # conservando la lista cerrada de especialistas autorizados.
     tokens = normalizar_texto(nombre).replace(".", " ").split()
-    if tokens and tokens[0] in {"COM", "COMUNICACION", "PSIC", "PSICOLOGA", "PSICOLOGO", "TS"}:
+    prefijos = {"COM", "COMUNICACION", "PSIC", "PSICOLOGA", "PSICOLOGO", "TS", "DIRECTOR"}
+    while tokens and tokens[0] in prefijos:
         tokens = tokens[1:]
     llave = " ".join(tokens).strip()
+
+    # Dirección genera su propio cronograma y consulta el mismo calendario
+    # consolidado del equipo. La lista cerrada evita habilitar cuentas ajenas.
+    if es_direccion(rol):
+        nombres_direccion = {
+            "EDGAR ADRIAN YAM BRICENO",
+            "EDGAR ADRIAN YAM BRICENO MD",
+        }
+        if llave not in nombres_direccion:
+            return None
+        return {
+            "nombre": "Psic. Edgar Adrián Yam Briceño MD",
+            "area": "Dirección",
+            "escuelas": list(ESCUELAS_USAER.keys()),
+        }
+
+    if not es_especialista(rol):
+        return None
     for nombre_directorio, escuelas in ASIGNACIONES_ESPECIALISTAS.items():
         if llave == normalizar_texto(nombre_directorio).replace(".", "").strip():
             area = AREAS_ESPECIALISTAS.get(normalizar_texto(nombre_directorio))
