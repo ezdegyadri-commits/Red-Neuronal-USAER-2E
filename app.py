@@ -53,11 +53,12 @@ with st.sidebar:
         "Oficios de comisión": "🧾 Apoyo · Oficios de comisión",
         "Anexo VII Derivación": "🔎 Derivación · Anexo VII",
     }
-    page=st.selectbox(
+    page=st.radio(
         "Ir al apartado",
         menu,
         format_func=lambda apartado: grupos_menu.get(apartado, apartado),
         label_visibility="collapsed",
+        key="navegacion_principal",
     )
 
 # No se lee el padrón central en módulos que no lo necesitan.
@@ -81,3 +82,4 @@ elif page=="Constancias de visita": visitas_page(authorized)
 elif page=="Alta de alumnos": alta_page(authorized)
 elif page=="Oficios de comisión": oficios_comision_page()
 elif page=="Anexo VII Derivación": derivacion_page(authorized)
+
