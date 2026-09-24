@@ -1,13 +1,39 @@
 import unittest
+from io import BytesIO
 
 import pandas as pd
+from docx import Document
 
 from documents.horarios_apoyo import generar_horario_apoyo_pdf
 from services.horarios import detectar_choques, normalizar_tabla_horario, proponer_horario
 from services.cronogramas import perfil_especialista
+from ui.horarios_apoyo import TIPOS_ARCHIVO_HORARIOS, _leer_archivo
 
 
 class HorariosApoyoTest(unittest.TestCase):
+    def test_uploader_accepts_word_and_common_image_formats(self):
+        self.assertTrue({"doc", "docx", "png", "jpg", "jpeg", "webp", "tif"}.issubset(TIPOS_ARCHIVO_HORARIOS))
+
+    def test_word_table_is_read_as_a_schedule_reference(self):
+        document = Document()
+        table = document.add_table(rows=2, cols=5)
+        for cell, value in zip(table.rows[0].cells, ["Día", "Inicio", "Fin", "Materia", "Grupo"]):
+            cell.text = value
+        for cell, value in zip(table.rows[1].cells, ["Lunes", "08:00", "08:50", "Inglés", "2A"]):
+            cell.text = value
+        content = BytesIO()
+        document.save(content)
+
+        class Uploaded:
+            name = "horario.docx"
+            def getvalue(self):
+                return content.getvalue()
+
+        parsed, warnings = _leer_archivo(Uploaded())
+        self.assertEqual(warnings, [])
+        self.assertEqual(parsed[0][1].iloc[0]["Actividad"], "Inglés")
+        self.assertEqual(parsed[0][1].iloc[0]["Grupo"], "2A")
+
     def test_imported_schedule_normalizes_columns_and_empty_cells(self):
         source = pd.DataFrame([{
             "Día": "Lunes", "Inicio": "08:00", "Fin": "08:50",

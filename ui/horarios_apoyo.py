@@ -7,6 +7,7 @@ from io import BytesIO
 
 import pandas as pd
 import streamlit as st
+from docx import Document
 
 from data import repository as repo
 from config.settings import SCHOOL_YEAR
@@ -29,6 +30,9 @@ from services.horarios import (
 from utils.text import normalizar_texto
 
 
+TIPOS_ARCHIVO_HORARIOS = ["xlsx", "xls", "csv", "doc", "docx", "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"]
+
+
 def _leer_archivo(archivo):
     contenido = archivo.getvalue()
     nombre = archivo.name.lower()
@@ -38,6 +42,31 @@ def _leer_archivo(archivo):
         except UnicodeDecodeError:
             frame = pd.read_csv(BytesIO(contenido), encoding="latin-1")
         return [(archivo.name, normalizar_tabla_horario(frame))], []
+    if nombre.endswith(".docx"):
+        documento = Document(BytesIO(contenido))
+        salida = []
+        errores = []
+        for indice, tabla in enumerate(documento.tables, start=1):
+            filas = [[celda.text.strip() for celda in fila.cells] for fila in tabla.rows]
+            if len(filas) < 2:
+                continue
+            encabezados = filas[0]
+            if not any(encabezados):
+                errores.append(f"Tabla {indice}: falta la fila de encabezados.")
+                continue
+            ancho = len(encabezados)
+            frame = pd.DataFrame(
+                [(fila + [""] * ancho)[:ancho] for fila in filas[1:]],
+                columns=encabezados,
+            )
+            try:
+                salida.append((f"{archivo.name} · Tabla {indice}", normalizar_tabla_horario(frame)))
+            except ValueError as exc:
+                errores.append(f"Tabla {indice}: {exc}")
+        if not salida:
+            detalle = "; ".join(errores) or "No contiene una tabla de horario que pueda convertirse automáticamente."
+            raise ValueError(f"{detalle} Puedes usar el archivo como referencia y transcribirlo en la tabla de captura.")
+        return salida, errores
     hojas = pd.read_excel(BytesIO(contenido), sheet_name=None)
     salida = []
     errores = []
@@ -127,34 +156,84 @@ def horarios_apoyo_page():
         return
 
     st.markdown("### Cargar horarios de referencia")
-    st.caption("Carga archivos XLSX o CSV con columnas Día, Inicio, Fin y Actividad/Materia. Grupo y Responsable son opcionales. Los horarios anteriores se conservan como historial.")
+    st.caption("Carga Excel/CSV, documentos Word (.doc/.docx) o imágenes. Las tablas compatibles de .docx se leen automáticamente; las imágenes, .doc y formatos no tabulares se muestran como referencia para transcribir. Los horarios anteriores se conservan como historial.")
     plantilla = pd.DataFrame([{"Día": "Lunes", "Inicio": "08:00", "Fin": "08:50", "Actividad": "Inglés", "Grupo": "2A", "Responsable": ""}])
     st.download_button("Descargar plantilla de horario", plantilla.to_csv(index=False).encode("utf-8-sig"), "Plantilla_horario_escolar.csv", "text/csv", key="plantilla_horario_apoyo")
     archivos = st.file_uploader(
         "Horarios de materias, docentes y otras maestras de apoyo",
-        type=["xlsx", "xls", "csv"], accept_multiple_files=True, key="carga_restricciones_horario",
+        type=TIPOS_ARCHIVO_HORARIOS, accept_multiple_files=True, key="carga_restricciones_horario",
     )
     preparados = []
+    referencias = []
     errores = []
     for archivo in archivos or []:
         try:
+            extension = archivo.name.rsplit(".", 1)[-1].lower() if "." in archivo.name else ""
+            if extension in {"png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"}:
+                referencias.append((archivo, "imagen"))
+                continue
+            if extension == "doc":
+                referencias.append((archivo, "word_antiguo"))
+                continue
             hojas_validas, avisos_hojas = _leer_archivo(archivo)
             preparados.extend(hojas_validas)
             errores.extend(f"{archivo.name} · {aviso}" for aviso in avisos_hojas)
         except Exception as exc:
-            errores.append(f"{archivo.name}: {exc}")
+            if archivo.name.lower().endswith(".docx"):
+                referencias.append((archivo, "word"))
+                errores.append(f"{archivo.name}: {exc}")
+            else:
+                errores.append(f"{archivo.name}: {exc}")
+    for archivo, tipo in referencias:
+        if tipo == "imagen":
+            with st.expander(f"Vista de referencia: {archivo.name}"):
+                st.image(archivo.getvalue(), caption=archivo.name, width="stretch")
+        elif tipo == "word":
+            with st.expander(f"Texto de referencia: {archivo.name}"):
+                documento = Document(BytesIO(archivo.getvalue()))
+                texto = "\n".join(parrafo.text for parrafo in documento.paragraphs if parrafo.text.strip())
+                st.text(texto or "El documento no contiene texto extraíble; usa la vista en Word y captura los bloques manualmente.")
+        else:
+            st.info(f"{archivo.name} está adjunto como referencia. Ábrelo en Word y transcribe sus bloques en la tabla de captura.")
     if errores:
         for error in errores:
             st.warning(error)
-    if preparados:
-        vista_carga = pd.concat([
-            frame.assign(Archivo=origen) for origen, frame in preparados
-        ], ignore_index=True)
-        st.dataframe(vista_carga, hide_index=True, width="stretch")
+    captura_manual = None
+    if referencias:
+        st.info("Transcribe abajo los bloques de las imágenes o documentos sin tabla reconocible. Revisa los datos antes de guardarlos.")
+        captura_manual = st.data_editor(
+            pd.DataFrame([{"Día": "", "Inicio": "", "Fin": "", "Grupo": "", "Actividad": "", "Responsable": ""}]),
+            num_rows="dynamic", hide_index=True, width="stretch",
+            column_config={
+                "Día": st.column_config.SelectboxColumn("Día", options=["", *DIAS]),
+                "Inicio": st.column_config.TextColumn("Inicio · HH:MM"),
+                "Fin": st.column_config.TextColumn("Fin · HH:MM"),
+                "Grupo": st.column_config.TextColumn("Grupo"),
+                "Actividad": st.column_config.TextColumn("Actividad / materia", width="large"),
+                "Responsable": st.column_config.TextColumn("Responsable"),
+            },
+            key=f"captura_manual_horario_{normalizar_texto(escuela)}",
+        )
+    if preparados or referencias:
+        vista_carga = pd.concat(
+            [frame.assign(Archivo=origen) for origen, frame in preparados],
+            ignore_index=True,
+        ) if preparados else pd.DataFrame()
+        if not vista_carga.empty:
+            st.dataframe(vista_carga, hide_index=True, width="stretch")
         if st.button("Guardar horarios de referencia para esta escuela", type="primary", key="guardar_restricciones_horario"):
             try:
                 total = 0
-                for origen, frame in preparados:
+                filas_guardar = list(preparados)
+                if captura_manual is not None:
+                    captura = captura_manual.fillna("").astype(str)
+                    captura = captura.loc[captura.apply(lambda fila: any(valor.strip() for valor in fila), axis=1)]
+                    if not captura.empty:
+                        filas_guardar.append(("Captura desde archivo de referencia", normalizar_tabla_horario(captura)))
+                if not filas_guardar:
+                    st.warning("No hay horarios transcritos para guardar todavía.")
+                    st.stop()
+                for origen, frame in filas_guardar:
                     _, cuenta = guardar_restricciones(escuela, nombre, origen, frame)
                     total += cuenta
                 st.success(f"Se añadieron {total} bloques de referencia. Las versiones sustituidas permanecen en el historial.")
