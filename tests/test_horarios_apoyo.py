@@ -7,7 +7,7 @@ from docx import Document
 from documents.horarios_apoyo import generar_horario_apoyo_pdf
 from services.horarios import detectar_choques, normalizar_tabla_horario, proponer_horario
 from services.cronogramas import perfil_especialista
-from ui.horarios_apoyo import TIPOS_ARCHIVO_HORARIOS, _leer_archivo
+from ui.horarios_apoyo import TIPOS_ARCHIVO_HORARIOS, _avisos_maestra, _leer_archivo
 
 
 class HorariosApoyoTest(unittest.TestCase):
@@ -89,6 +89,21 @@ class HorariosApoyoTest(unittest.TestCase):
         for name, role, area in profiles:
             with self.subTest(area=area):
                 self.assertEqual(perfil_especialista(name, role)["area"], area)
+
+    def test_notification_api_error_does_not_stop_schedule_page(self):
+        import ui.horarios_apoyo as horarios_ui
+
+        warnings = []
+
+        def fail_to_read(_nombre):
+            raise RuntimeError("Google Sheets temporarily unavailable")
+
+        with patch.object(horarios_ui, "cargar_avisos_apoyo", side_effect=fail_to_read):
+            with patch.object(horarios_ui.st, "warning", side_effect=warnings.append):
+                _avisos_maestra("Docente", "Escuela Primaria")
+
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("no se modificó ni eliminó información", warnings[0])
 
 
 if __name__ == "__main__":
