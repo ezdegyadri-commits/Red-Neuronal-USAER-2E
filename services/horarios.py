@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import date, datetime, time
 from uuid import uuid4
@@ -10,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from config.settings import ESCUELAS_USAER, GEMINI_MODEL
+from config.settings import ESCUELAS_USAER
 from data.google import clear_cache, ensure_headers, retry_google
 from data import repository as repo
 from services.asignaciones import escuelas_asignadas
@@ -335,7 +334,7 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
 
 def proponer_horario(grupos, sesiones_por_grupo, duracion, inicio, fin, restricciones, apoyo_existente,
                      maestra="", modalidad="Grupal", espacio="Aula regular"):
-    """Usa IA si está configurada; valida siempre localmente y cae a propuesta simple."""
+    """Propone una distribución determinista, sin IA, y valida restricciones locales."""
     grupos = [str(g).strip() for g in grupos if str(g).strip()]
     if not grupos:
         raise ValueError("Escribe al menos un grupo, por ejemplo 2A, 3B.")
@@ -375,44 +374,7 @@ def proponer_horario(grupos, sesiones_por_grupo, duracion, inicio, fin, restricc
             raise ValueError(f"No encontré suficientes espacios sin cruces para el grupo {peticion['Grupo']}.")
         propuesta.append(elegido)
 
-    try:
-        from ai.engine import client
-        cli = client()
-        if cli is None:
-            return pd.DataFrame(propuesta), "propuesta automática (IA no configurada)"
-        restricciones_seguras = []
-        if restricciones is not None and not restricciones.empty:
-            restricciones_seguras = [
-                {key: str(row.get(key, "")) for key in ("Dia", "Inicio", "Fin", "Grupo", "Actividad")}
-                for row in restricciones.to_dict("records")
-            ]
-        prompt = (
-            "Sugiere un horario escolar semanal USAER como JSON: {\"sesiones\":[{\"Dia\":\"Lunes\","
-            "\"Inicio\":\"08:00\",\"Fin\":\"08:50\",\"Grupo\":\"2A\",\"Actividad\":\"Apoyo\"}]}. "
-            "No uses fines de semana. Respeta duración, grupos, jornada y todos los bloqueos. "
-            "No incluyas datos personales. Devuelve solo JSON.\n"
-            + json.dumps({"grupos": grupos, "sesiones_por_grupo": int(sesiones_por_grupo),
-                          "duracion_minutos": int(duracion), "inicio": str(inicio), "fin": str(fin),
-                          "modalidad": modalidad, "espacio": espacio,
-                          "bloqueos": restricciones_seguras}, ensure_ascii=False)
-        )
-        response = cli.models.generate_content(model=GEMINI_MODEL, contents=prompt, config={"temperature": 0.2})
-        body = re.sub(r"^```(?:json)?\s*|\s*```$", "", (getattr(response, "text", "") or "").strip(), flags=re.I)
-        parsed = json.loads(body).get("sesiones", [])
-        ai_rows = []
-        for row in parsed:
-            item = {"Dia": normalizar_dia(row.get("Dia")), "Inicio": _hora_texto(row.get("Inicio")),
-                    "Fin": _hora_texto(row.get("Fin")), "Grupo": str(row.get("Grupo", "")).strip(),
-                    "Actividad": str(row.get("Actividad", "Atención de apoyo")).strip(), "Maestra": maestra,
-                    "Modalidad": modalidad, "Espacio": espacio}
-            if item["Grupo"] not in grupos or _hora_minutos(item["Fin"]) - _hora_minutos(item["Inicio"]) != int(duracion):
-                raise ValueError("La IA devolvió un horario que no respeta grupo o duración.")
-            ai_rows.append(item)
-        if len(ai_rows) != len(peticiones) or not detectar_choques(ai_rows, restricciones, apoyo_existente).empty:
-            raise ValueError("La IA devolvió una propuesta con cruces o incompleta.")
-        return pd.DataFrame(ai_rows), "propuesta revisada por IA"
-    except Exception:
-        return pd.DataFrame(propuesta), "propuesta automática de respaldo; puedes editarla antes de guardar"
+    return pd.DataFrame(propuesta), "propuesta automática sin IA; puedes editarla antes de guardar"
 
 
 def avisar_maestras_apoyo(publicacion_id, especialista, mes, agenda):
