@@ -76,7 +76,7 @@ def drive_service():
     return build('drive', 'v3', credentials=creds)
 
 def retry_google(operation, attempts=3):
-    """Reintenta solo límites transitorios de Google con espera progresiva."""
+    """Reintenta límites y fallos temporales de Google con espera progresiva."""
     last = None
     for attempt in range(attempts):
         try:
@@ -84,13 +84,17 @@ def retry_google(operation, attempts=3):
         except Exception as exc:
             last = exc
             message = str(exc).lower()
+            response = getattr(exc, "response", None)
+            status = getattr(response, "status_code", None)
             is_quota = (
-                "429" in message
+                status == 429
+                or "429" in message
                 or "quota exceeded" in message
                 or "resource_exhausted" in message
                 or "read requests" in message
             )
-            if not is_quota or attempt == attempts - 1:
+            is_temporary_server_error = status in {500, 502, 503, 504}
+            if not (is_quota or is_temporary_server_error) or attempt == attempts - 1:
                 raise
             time.sleep(min(4, 0.75 * (2 ** attempt)) + random.uniform(0, 0.25))
     raise last
