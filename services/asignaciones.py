@@ -2,6 +2,24 @@ from utils.text import normalizar_texto
 from config.settings import ESCUELAS_USAER
 
 
+def es_especialista(rol):
+    """Reconoce las funciones clínicas/disciplinarias del equipo USAER."""
+    rol_n = normalizar_texto(rol)
+    if any(termino in rol_n for termino in ("DIRECTOR", "DIRECCION", "COORDINADOR", "APOYO")):
+        return False
+    return any(
+        termino in rol_n
+        for termino in (
+            "PSICOLOG",
+            "COMUNICACION",
+            "TRABAJO SOCIAL",
+            "TRABAJADOR SOCIAL",
+            "TRABAJADORA SOCIAL",
+            "ESPECIALISTA",
+        )
+    )
+
+
 ASIGNACIONES_ESPECIALISTAS = {
     "MARIA JOSE CUPUL REALPOZO": [
         "Damián Carmona",
@@ -57,24 +75,6 @@ def es_direccion(rol):
         "DIRECTOR" in rol_n
         or "DIRECCION" in rol_n
         or "COORDINADOR" in rol_n
-    )
-
-
-def es_especialista(rol):
-    """Reconoce las funciones clínicas/disciplinarias del equipo USAER."""
-    rol_n = normalizar_texto(rol)
-    if es_direccion(rol_n) or "APOYO" in rol_n:
-        return False
-    return any(
-        termino in rol_n
-        for termino in (
-            "PSICOLOG",
-            "COMUNICACION",
-            "TRABAJO SOCIAL",
-            "TRABAJADOR SOCIAL",
-            "TRABAJADORA SOCIAL",
-            "ESPECIALISTA",
-        )
     )
 
 
