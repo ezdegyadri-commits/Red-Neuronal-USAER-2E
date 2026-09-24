@@ -14,6 +14,14 @@ class CronogramasTest(unittest.TestCase):
         self.assertIsNone(perfil_especialista("Psic. Edgar Adrián Yam Briceño MD", "DIRECTOR"))
         self.assertIsNone(perfil_especialista("Cuenta desconocida", "ESPECIALISTA"))
 
+    def test_specialist_menu_profiles_accept_function_prefixes_and_abbreviated_roles(self):
+        elmy = perfil_especialista("Com. Elmy Lucelly Puerto Gone", "Com.")
+        abril = perfil_especialista("Psic. Abril de Maria Chable Rios", "Psic.")
+        self.assertEqual(elmy["area"], "Comunicación")
+        self.assertEqual(elmy["nombre"], "Elmy Lucelly Puerto Gone")
+        self.assertEqual(abril["area"], "Psicología")
+        self.assertEqual(abril["nombre"], "Abril de María Chable Ríos")
+
     def test_month_calendar_skips_weekends_and_official_closures(self):
         dias = fechas_habiles("2026-09")
         self.assertTrue(all(dia.weekday() < 5 for dia in dias))
@@ -97,10 +105,11 @@ class CronogramasTest(unittest.TestCase):
                 ["Damián Carmona"],
                 [{"fecha": "2026-09-02", "escuela": "Damián Carmona", "actividad": "Seguimiento"}],
             )
-        self.assertEqual(ws.headers, [(1, 8, "Estado")])
-        self.assertEqual(len(ws.appended[0]), 8)
+        self.assertEqual(ws.headers, [(1, 9, "ID_Publicacion")])
+        self.assertEqual(len(ws.appended[0]), 9)
         self.assertEqual(ws.updates[0]["range"], "H2")
 
 
 if __name__ == "__main__":
     unittest.main()
+
