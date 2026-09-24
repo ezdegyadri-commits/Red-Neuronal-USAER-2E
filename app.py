@@ -13,6 +13,7 @@ from ui.direccion_rapida import direccion_page_rapida
 from ui.sugerencias import anexo4_page
 from ui.estadisticas import estadisticas_page
 from ui.cronogramas import cronogramas_page
+from ui.horarios_apoyo import horarios_apoyo_page
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -36,7 +37,7 @@ with st.sidebar:
     if es_especialista(rol) and perfil_especialista(st.session_state.get("nombre", ""), rol):
         menu += ["Cronograma mensual"]
     if "DIRECTOR" in rol.upper(): menu += ["Panel de Dirección","Constancias de visita","Alta de alumnos"]
-    elif "APOYO" in rol.upper(): menu += ["Alta de alumnos", "Oficios de comisión", "Anexo VII Derivación"]
+    elif "APOYO" in rol.upper(): menu += ["Horarios de apoyo", "Alta de alumnos", "Oficios de comisión", "Anexo VII Derivación"]
     else: menu += ["Constancias de visita", "Anexo VII Derivación"]
     grupos_menu = {
         "Inicio": "🏠 Inicio",
@@ -47,6 +48,7 @@ with st.sidebar:
         "Estadística": "📊 Consulta · Estadística y listado nominal",
         "Documentos": "📄 Consulta · Documentos",
         "Cronograma mensual": "🗓️ Equipo especialista · Cronograma",
+        "Horarios de apoyo": "🕒 Maestras de apoyo · Horarios y avisos",
         "Panel de Dirección": "⚙️ Dirección · Panel",
         "Constancias de visita": "🗓️ Equipo · Constancias de visita",
         "Alta de alumnos": "➕ Captura · Alta de alumnos",
@@ -75,6 +77,7 @@ elif page=="Anexo V Eventos significativos": eventos_page(authorized)
 elif page=="Estadística": estadisticas_page(authorized)
 elif page=="Documentos": documentos_page(authorized)
 elif page=="Cronograma mensual": cronogramas_page()
+elif page=="Horarios de apoyo": horarios_apoyo_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
     configuracion_oficios_direccion()
@@ -82,3 +85,4 @@ elif page=="Constancias de visita": visitas_page(authorized)
 elif page=="Alta de alumnos": alta_page(authorized)
 elif page=="Oficios de comisión": oficios_comision_page()
 elif page=="Anexo VII Derivación": derivacion_page(authorized)
+
