@@ -2,7 +2,9 @@ import unittest
 
 import pandas as pd
 
+from documents.horarios_apoyo import generar_horario_apoyo_pdf
 from services.horarios import detectar_choques, normalizar_tabla_horario, proponer_horario
+from services.cronogramas import perfil_especialista
 
 
 class HorariosApoyoTest(unittest.TestCase):
@@ -35,6 +37,32 @@ class HorariosApoyoTest(unittest.TestCase):
         } for day in ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes")])
         with self.assertRaisesRegex(ValueError, "suficientes espacios"):
             proponer_horario(["2A"], 1, 50, "08:00", "13:00", restrictions, pd.DataFrame())
+
+    def test_schedule_proposal_carries_manual_attention_fields(self):
+        proposal, _ = proponer_horario(
+            ["2A"], 1, 50, "08:00", "13:00", pd.DataFrame(), pd.DataFrame(),
+            maestra="Maestra de apoyo", modalidad="Subgrupal", espacio="Aula de apoyo",
+        )
+        self.assertEqual(proposal.iloc[0]["Modalidad"], "Subgrupal")
+        self.assertEqual(proposal.iloc[0]["Espacio"], "Aula de apoyo")
+
+    def test_official_pdf_contains_school_teacher_and_signature_blocks(self):
+        content = generar_horario_apoyo_pdf("Escuela Primaria", "Docente de apoyo", [{
+            "Dia": "Lunes", "Inicio": "08:00", "Fin": "08:50", "Grupo": "2A",
+            "Modalidad": "Grupal", "Espacio": "Aula regular", "Actividad": "Lectoescritura",
+        }])
+        self.assertTrue(content.startswith(b"%PDF"))
+        self.assertGreater(len(content), 1000)
+
+    def test_monthly_cronogram_generators_are_available_for_all_specialist_areas(self):
+        profiles = (
+            ("María José Cupul Realpozo", "Psicóloga", "Psicología"),
+            ("Elmy Lucelly Puerto Gone", "Comunicación", "Comunicación"),
+            ("Diego Peralta Torres", "Trabajo Social", "Trabajo Social"),
+        )
+        for name, role, area in profiles:
+            with self.subTest(area=area):
+                self.assertEqual(perfil_especialista(name, role)["area"], area)
 
 
 if __name__ == "__main__":
