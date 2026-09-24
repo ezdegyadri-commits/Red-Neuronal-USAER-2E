@@ -21,7 +21,7 @@ ZONA = ZoneInfo("America/Mexico_City")
 DIAS = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes")
 HORARIOS_APOYO_HEADERS = [
     "ID_Version", "Guardado_En", "Maestra", "ID_Escuela", "Escuela",
-    "Dia", "Inicio", "Fin", "Grupo", "Actividad", "Estado",
+    "Dia", "Inicio", "Fin", "Grupo", "Modalidad", "Espacio", "Actividad", "Estado",
 ]
 RESTRICCIONES_HEADERS = [
     "ID_Version", "Cargado_En", "Cargado_Por", "ID_Escuela", "Escuela",
@@ -40,6 +40,8 @@ _ALIASES = {
     "Actividad": ("ACTIVIDAD", "ASIGNATURA", "MATERIA", "CLASE", "ESPACIO CURRICULAR"),
     "Grupo": ("GRUPO", "GRADO Y GRUPO", "GRADO GRUPO", "GRADO"),
     "Responsable": ("RESPONSABLE", "DOCENTE", "MAESTRO", "MAESTRA", "PROFESOR"),
+    "Modalidad": ("MODALIDAD", "TIPO DE ATENCION", "TIPO DE ATENCIÓN"),
+    "Espacio": ("ESPACIO", "LUGAR", "CONTEXTO", "ESPACIO DE ATENCION", "ESPACIO DE ATENCIÓN"),
 }
 
 
@@ -155,6 +157,8 @@ def normalizar_tabla_horario(frame):
             "Actividad": actividad,
             "Grupo": valor_celda(row, "Grupo"),
             "Responsable": valor_celda(row, "Responsable"),
+            "Modalidad": valor_celda(row, "Modalidad"),
+            "Espacio": valor_celda(row, "Espacio"),
         })
     if not salida:
         raise ValueError("No encontré filas con actividad y horario válidos.")
@@ -256,6 +260,8 @@ def guardar_horario_apoyo(maestra, escuela, frame):
             "ID_Version": version, "Guardado_En": now, "Maestra": maestra,
             "ID_Escuela": _id_escuela(escuela), "Escuela": escuela, "Dia": dia,
             "Inicio": inicio, "Fin": fin, "Grupo": grupo,
+            "Modalidad": str(item.get("Modalidad", "")).strip(),
+            "Espacio": str(item.get("Espacio", "")).strip(),
             "Actividad": actividad, "Estado": "ACTIVO",
         })
     if not nuevos:
@@ -327,7 +333,8 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
     return pd.DataFrame(conflictos, columns=["Día", "Grupo", "Horario propuesto", "Actividad que se cruza", "Horario existente"])
 
 
-def proponer_horario(grupos, sesiones_por_grupo, duracion, inicio, fin, restricciones, apoyo_existente, maestra=""):
+def proponer_horario(grupos, sesiones_por_grupo, duracion, inicio, fin, restricciones, apoyo_existente,
+                     maestra="", modalidad="Grupal", espacio="Aula regular"):
     """Usa IA si está configurada; valida siempre localmente y cae a propuesta simple."""
     grupos = [str(g).strip() for g in grupos if str(g).strip()]
     if not grupos:
@@ -355,7 +362,10 @@ def proponer_horario(grupos, sesiones_por_grupo, duracion, inicio, fin, restricc
             key = (slot["Dia"], slot["Inicio"])
             if key in usados:
                 continue
-            candidate = {**slot, **peticion, "Actividad": "Atención de apoyo", "Maestra": maestra}
+            candidate = {
+                **slot, **peticion, "Actividad": "Atención de apoyo", "Maestra": maestra,
+                "Modalidad": modalidad, "Espacio": espacio,
+            }
             if not detectar_choques([candidate], restricciones, apoyo_existente).empty:
                 continue
             elegido = candidate
@@ -383,6 +393,7 @@ def proponer_horario(grupos, sesiones_por_grupo, duracion, inicio, fin, restricc
             "No incluyas datos personales. Devuelve solo JSON.\n"
             + json.dumps({"grupos": grupos, "sesiones_por_grupo": int(sesiones_por_grupo),
                           "duracion_minutos": int(duracion), "inicio": str(inicio), "fin": str(fin),
+                          "modalidad": modalidad, "espacio": espacio,
                           "bloqueos": restricciones_seguras}, ensure_ascii=False)
         )
         response = cli.models.generate_content(model=GEMINI_MODEL, contents=prompt, config={"temperature": 0.2})
@@ -392,7 +403,8 @@ def proponer_horario(grupos, sesiones_por_grupo, duracion, inicio, fin, restricc
         for row in parsed:
             item = {"Dia": normalizar_dia(row.get("Dia")), "Inicio": _hora_texto(row.get("Inicio")),
                     "Fin": _hora_texto(row.get("Fin")), "Grupo": str(row.get("Grupo", "")).strip(),
-                    "Actividad": str(row.get("Actividad", "Atención de apoyo")).strip(), "Maestra": maestra}
+                    "Actividad": str(row.get("Actividad", "Atención de apoyo")).strip(), "Maestra": maestra,
+                    "Modalidad": modalidad, "Espacio": espacio}
             if item["Grupo"] not in grupos or _hora_minutos(item["Fin"]) - _hora_minutos(item["Inicio"]) != int(duracion):
                 raise ValueError("La IA devolvió un horario que no respeta grupo o duración.")
             ai_rows.append(item)
