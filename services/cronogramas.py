@@ -50,7 +50,14 @@ def perfil_especialista(nombre: str, rol: str) -> dict | None:
     """Devuelve solo perfiles del directorio especialista y nunca Dirección."""
     if not es_especialista(rol):
         return None
-    llave = normalizar_texto(nombre).replace(".", "").strip()
+
+    # En la hoja Usuarios algunos nombres llevan el prefijo de la función
+    # (p. ej. "Com." o "Psic."). Retíralo para buscar el nombre canónico,
+    # conservando la lista cerrada de especialistas autorizados.
+    tokens = normalizar_texto(nombre).replace(".", " ").split()
+    if tokens and tokens[0] in {"COM", "COMUNICACION", "PSIC", "PSICOLOGA", "PSICOLOGO", "TS"}:
+        tokens = tokens[1:]
+    llave = " ".join(tokens).strip()
     for nombre_directorio, escuelas in ASIGNACIONES_ESPECIALISTAS.items():
         if llave == normalizar_texto(nombre_directorio).replace(".", "").strip():
             area = AREAS_ESPECIALISTAS.get(normalizar_texto(nombre_directorio))
