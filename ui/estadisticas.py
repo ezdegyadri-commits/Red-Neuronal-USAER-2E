@@ -136,11 +136,12 @@ def estadisticas_page(df):
         width="stretch",
         key=f"listado_nominal_pdf_{normalizar_texto(seleccion)}",
     )
-    with st.expander("Editar o actualizar datos de un alumno"):
+    with st.expander("Editar o actualizar datos del listado nominal", expanded=True):
         st.caption(
-            "Los cambios se guardan en la base central y se reflejan en los demás "
-            "procesos. Por seguridad, aquí solo puedes seleccionar alumnos de tu ámbito; "
-            "la escuela y las asignaciones de personal se administran por separado."
+            "Selecciona un alumno para corregir sus datos, incluida la condición. "
+            "Los cambios se guardan en la base central. Los campos que dejes vacíos "
+            "no borrarán información existente; no se elimina ningún registro. "
+            "Solo puedes editar alumnos de tu ámbito asignado."
         )
         alumnos_editables = listado[
             listado.get("ID_Alumno", pd.Series(index=listado.index, dtype="object"))
@@ -167,7 +168,7 @@ def estadisticas_page(df):
             campos = [
                 ("Nombre_Completo", "Nombre completo"),
                 ("CURP", "CURP"),
-                ("Edad_1_Septiembre", "Edad al 1 de septiembre"),
+                ("Edad_1_Septiembre", "Edad al 1 de septiembre de 2026"),
                 ("Sexo", "Sexo"),
                 ("Situacion_Alumno", "Situación del alumno"),
                 ("Nivel_Educativo", "Nivel educativo"),
@@ -191,20 +192,33 @@ def estadisticas_page(df):
                         valores[campo] = st.text_input(etiqueta, value=valor, key=f"edicion_{id_edicion}_{campo}")
                 guardar = st.form_submit_button("Guardar cambios en la base central", type="primary", width="stretch")
             if guardar:
-                valores["Nombre_Completo"] = valores["Nombre_Completo"].strip()
                 edad = valores["Edad_1_Septiembre"].strip()
-                if not valores["Nombre_Completo"]:
-                    st.error("El nombre del alumno no puede quedar vacío.")
-                elif edad and not edad.isdigit():
+                if edad and not edad.isdigit():
                     st.error("La edad debe ser un número entero o quedar vacía.")
                 else:
-                    if edad:
-                        valores["Edad_1_Septiembre"] = int(edad)
+                    cambios = {}
+                    for campo, nuevo in valores.items():
+                        nuevo = str(nuevo).strip()
+                        # Nunca convertir un campo en blanco en un borrado.
+                        if not nuevo:
+                            continue
+                        anterior = actual.get(campo, "")
+                        anterior = "" if pd.isna(anterior) else str(anterior).strip()
+                        if campo == "Edad_1_Septiembre":
+                            nuevo = int(nuevo)
+                            try:
+                                anterior = int(float(anterior)) if anterior else ""
+                            except (TypeError, ValueError):
+                                pass
+                        if nuevo != anterior:
+                            cambios[campo] = nuevo
                     try:
-                        from data import repository as repo
-                        repo.update_alumno(id_edicion, valores, ids_editables)
-                        st.success("Datos actualizados en la base central. Se recargará la información de la plataforma.")
-                        st.rerun()
+                        if not cambios:
+                            st.info("No detecté cambios. La información se conservó sin modificaciones.")
+                        else:
+                            repo.update_alumno(id_edicion, cambios, ids_editables)
+                            st.success("Cambios guardados en la base central; el padrón y los procesos se actualizarán.")
+                            st.rerun()
                     except Exception as exc:
                         st.error(f"No se pudo actualizar el alumno: {exc}")
 
