@@ -8,6 +8,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import streamlit as st
 
 from config.settings import ESCUELAS_USAER
 from data.google import clear_cache, ensure_headers, retry_google
@@ -416,12 +417,20 @@ def avisar_maestras_apoyo(publicacion_id, especialista, mes, agenda):
             [[row.get(header, "") for header in headers] for row in nuevos],
             value_input_option="USER_ENTERED",
         ))
+        _leer_avisos_cache.clear()
         clear_cache("Avisos_Cronogramas")
     return len(nuevos)
 
 
-def cargar_avisos_apoyo(nombre):
+@st.cache_data(ttl=20, show_spinner=False)
+def _leer_avisos_cache():
+    """Reduce lecturas repetidas de la hoja durante los reruns de Streamlit."""
     _, _, rows = _leer("Avisos_Cronogramas", AVISOS_HEADERS)
+    return rows
+
+
+def cargar_avisos_apoyo(nombre):
+    rows = _leer_avisos_cache()
     return [row for row in rows if normalizar_texto(row.get("Destinatario", "")) == normalizar_texto(nombre)]
 
 
@@ -441,6 +450,7 @@ def marcar_avisos_leidos(ids_aviso):
             ])
     if updates:
         retry_google(lambda: ws.batch_update(updates, value_input_option="USER_ENTERED"))
+        _leer_avisos_cache.clear()
         clear_cache("Avisos_Cronogramas")
     return len(updates) // 2
 
