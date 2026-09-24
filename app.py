@@ -42,8 +42,8 @@ with st.sidebar:
         "Inicio": "🏠 Inicio",
         "Expedientes": "📁 Expedientes",
         "Anexo III BAP": "🧭 Captura · Anexo III BAP",
-        "Anexo IV Hoja de sugerencias": "📝 Seguimiento · Anexo IV",
-        "Anexo V Eventos significativos": "📌 Seguimiento · Anexo V",
+        "Anexo IV Hoja de sugerencias": "📝 Anexo IV · Hoja de sugerencias",
+        "Anexo V Eventos significativos": "📌 Anexo V · Hoja de eventos significativos",
         "Estadística": "📊 Consulta · Estadística y listado nominal",
         "Documentos": "📄 Consulta · Documentos",
         "Cronograma mensual": "🗓️ Equipo especialista · Cronograma",
@@ -82,4 +82,3 @@ elif page=="Constancias de visita": visitas_page(authorized)
 elif page=="Alta de alumnos": alta_page(authorized)
 elif page=="Oficios de comisión": oficios_comision_page()
 elif page=="Anexo VII Derivación": derivacion_page(authorized)
-
