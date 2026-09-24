@@ -1,5 +1,6 @@
 import unittest
 from io import BytesIO
+from unittest.mock import patch
 
 import pandas as pd
 from docx import Document
