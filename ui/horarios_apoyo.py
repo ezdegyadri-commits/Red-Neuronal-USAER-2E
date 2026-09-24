@@ -91,7 +91,15 @@ def _tabla_vista(frame):
 
 
 def _avisos_maestra(nombre, escuela):
-    avisos = cargar_avisos_apoyo(nombre)
+    try:
+        avisos = cargar_avisos_apoyo(nombre)
+    except Exception:
+        st.warning(
+            "No se pudieron consultar los avisos de cronogramas en este momento. "
+            "Puedes continuar con tus horarios; no se modificó ni eliminó información. "
+            "Vuelve a intentarlo más tarde."
+        )
+        return
     avisos = [row for row in avisos if normalizar_texto(row.get("Escuela", "")) == normalizar_texto(escuela)]
     if not avisos:
         st.info("Aquí aparecerán los avisos del equipo especialista para esta escuela.")

@@ -12,6 +12,30 @@ from ui.components import hero
 from utils.text import normalizar_texto
 
 
+def _cambios_edicion(valores, actual, quitar_grupo=False):
+    """Prepara cambios mínimos; solo la acción explícita permite vaciar Grupo."""
+    cambios = {}
+    for campo, nuevo in valores.items():
+        nuevo = str(nuevo).strip()
+        if not nuevo:
+            continue
+        anterior = actual.get(campo, "")
+        anterior = "" if pd.isna(anterior) else str(anterior).strip()
+        if campo == "Edad_1_Septiembre":
+            nuevo = int(nuevo)
+            try:
+                anterior = int(float(anterior)) if anterior else ""
+            except (TypeError, ValueError):
+                pass
+        if nuevo != anterior:
+            cambios[campo] = nuevo
+
+    grupo_actual = actual.get("Grupo", "")
+    grupo_actual = "" if pd.isna(grupo_actual) else str(grupo_actual).strip()
+    if quitar_grupo and grupo_actual:
+        cambios["Grupo"] = ""
+    return cambios
+
 def _serie(frame, column, missing="(Sin dato)"):
     if column not in frame.columns:
         return pd.Series([missing] * len(frame), index=frame.index, dtype="object")
@@ -139,9 +163,9 @@ def estadisticas_page(df):
     with st.expander("Editar o actualizar datos del listado nominal", expanded=True):
         st.caption(
             "Selecciona un alumno para corregir sus datos, incluida la condición. "
-            "Los cambios se guardan en la base central. Los campos que dejes vacíos "
-            "no borrarán información existente; no se elimina ningún registro. "
-            "Solo puedes editar alumnos de tu ámbito asignado."
+            "Los cambios se guardan en la base central. Los campos vacíos no borran "
+            "información; para quitar un grupo usa la casilla específica. No se elimina "
+            "ningún registro y solo puedes editar alumnos de tu ámbito asignado."
         )
         alumnos_editables = listado[
             listado.get("ID_Alumno", pd.Series(index=listado.index, dtype="object"))
@@ -184,34 +208,26 @@ def estadisticas_page(df):
             ]
             with st.form(f"editar_alumno_{id_edicion}"):
                 valores = {}
+                quitar_grupo = False
                 columnas = st.columns(2)
                 for indice, (campo, etiqueta) in enumerate(campos):
                     valor = actual.get(campo, "")
                     valor = "" if pd.isna(valor) else str(valor)
                     with columnas[indice % 2]:
                         valores[campo] = st.text_input(etiqueta, value=valor, key=f"edicion_{id_edicion}_{campo}")
+                        if campo == "Grupo" and valor.strip():
+                            quitar_grupo = st.checkbox(
+                                "Quitar el grupo registrado",
+                                help="Deja vacío el campo Grupo. No cambia los demás datos del alumno.",
+                                key=f"quitar_grupo_{id_edicion}_{normalizar_texto(valor)}",
+                            )
                 guardar = st.form_submit_button("Guardar cambios en la base central", type="primary", width="stretch")
             if guardar:
                 edad = valores["Edad_1_Septiembre"].strip()
                 if edad and not edad.isdigit():
                     st.error("La edad debe ser un número entero o quedar vacía.")
                 else:
-                    cambios = {}
-                    for campo, nuevo in valores.items():
-                        nuevo = str(nuevo).strip()
-                        # Nunca convertir un campo en blanco en un borrado.
-                        if not nuevo:
-                            continue
-                        anterior = actual.get(campo, "")
-                        anterior = "" if pd.isna(anterior) else str(anterior).strip()
-                        if campo == "Edad_1_Septiembre":
-                            nuevo = int(nuevo)
-                            try:
-                                anterior = int(float(anterior)) if anterior else ""
-                            except (TypeError, ValueError):
-                                pass
-                        if nuevo != anterior:
-                            cambios[campo] = nuevo
+                    cambios = _cambios_edicion(valores, actual, quitar_grupo)
                     try:
                         if not cambios:
                             st.info("No detecté cambios. La información se conservó sin modificaciones.")
