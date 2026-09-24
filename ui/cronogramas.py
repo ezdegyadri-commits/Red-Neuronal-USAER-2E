@@ -20,6 +20,7 @@ from services.cronogramas import (
     guardar_agenda,
     perfil_especialista,
 )
+from services.horarios import avisar_maestras_apoyo
 
 
 MESES = (
@@ -170,6 +171,24 @@ def cronogramas_page():
         try:
             with st.spinner("Guardando la agenda y preparando el PDF..."):
                 resultado = guardar_agenda(perfil["nombre"], perfil["area"], mes, perfil["escuelas"], agenda)
+                st.session_state["cronograma_publicacion_pendiente"] = {
+                    "id": resultado.get("publicacion_id", ""),
+                    "especialista": perfil["nombre"],
+                    "mes": mes,
+                    "agenda": agenda,
+                }
+                try:
+                    notificadas = avisar_maestras_apoyo(
+                        resultado.get("publicacion_id", ""), perfil["nombre"], mes, agenda
+                    )
+                    aviso_notificaciones = (
+                        f"Se avisó a {notificadas} maestra(s) de apoyo."
+                        if notificadas else
+                        "El cronograma se guardó; no se encontraron cuentas de maestras de apoyo asignadas a esas escuelas."
+                    )
+                    st.session_state["cronograma_publicacion_pendiente"] = None
+                except Exception as aviso_exc:
+                    aviso_notificaciones = f"El cronograma se guardó, pero no se pudieron registrar los avisos: {aviso_exc}"
                 filas_pdf = [
                     {"fecha": date.fromisoformat(item["fecha"]).strftime("%d/%m/%Y"),
                      "escuela": item["escuela"], "actividad": item["actividad"]}
@@ -189,6 +208,7 @@ def cronogramas_page():
                 st.session_state["cronograma_pdf_firma_especialista"] = bool(firma_esp)
                 st.session_state["cronograma_pdf_mensaje"] = f"Cronograma guardado: {resultado['filas']} actividades."
                 st.session_state["cronograma_pdf_aviso_historial"] = resultado.get("aviso", "")
+                st.session_state["cronograma_pdf_aviso_notificaciones"] = aviso_notificaciones
                 st.session_state["cronograma_pdf_drive_url"] = ""
                 st.session_state["cronograma_pdf_drive_aviso"] = ""
                 try:
@@ -212,6 +232,20 @@ def cronogramas_page():
             )
         if st.session_state.get("cronograma_pdf_aviso_historial"):
             st.warning(st.session_state["cronograma_pdf_aviso_historial"])
+        if st.session_state.get("cronograma_pdf_aviso_notificaciones"):
+            st.info(st.session_state["cronograma_pdf_aviso_notificaciones"])
+        pendiente = st.session_state.get("cronograma_publicacion_pendiente")
+        if pendiente and pendiente.get("especialista") == perfil["nombre"]:
+            if st.button("Reintentar aviso a maestras de apoyo", key="reintentar_aviso_cronograma"):
+                try:
+                    notificadas = avisar_maestras_apoyo(
+                        pendiente["id"], pendiente["especialista"], pendiente["mes"], pendiente["agenda"]
+                    )
+                    st.session_state["cronograma_pdf_aviso_notificaciones"] = f"Aviso registrado para {notificadas} maestra(s) de apoyo."
+                    st.session_state["cronograma_publicacion_pendiente"] = None
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"No fue posible registrar los avisos: {exc}")
         if st.session_state.get("cronograma_pdf_drive_aviso"):
             st.warning(st.session_state["cronograma_pdf_drive_aviso"])
         st.download_button(
@@ -242,3 +276,4 @@ def cronogramas_page():
                 st.dataframe(vista, hide_index=True, width="stretch")
             else:
                 st.info("No hay actividades guardadas para este mes.")
+
