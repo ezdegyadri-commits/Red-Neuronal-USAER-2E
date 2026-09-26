@@ -1,5 +1,6 @@
 import json
 import re
+from html import escape
 from datetime import date
 import pandas as pd
 import streamlit as st
@@ -8,7 +9,7 @@ from config.settings import ESCUELAS_USAER, BAP_ITEMS, BAP_FRECUENCIAS, SERVICE_
 from data import repository as repo
 from services.expedientes import alumnos_visibles, baps_de_alumno, expediente, alumno
 from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
-from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas, es_especialista
+from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas, es_especialista, es_direccion
 from ai.engine import analizar_atencion, fallback, generar_sugerencias
 from documents.anexos import anexo3_html, anexo3_pdf, anexo4_html, anexo4_pdf, anexo5_html, anexo5_pdf, anexo7_pdf, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
@@ -2545,13 +2546,18 @@ def visitas_page(df):
     rol_usuario = str(
         st.session_state.get("rol", "")
     ).strip()
+    es_director = es_direccion(rol_usuario)
 
     escuelas_permitidas = escuelas_asignadas(
         nombre_usuario,
         rol_usuario
     )
 
-    if not escuelas_permitidas:
+    opciones_escuela = list(escuelas_permitidas)
+    if es_director:
+        opciones_escuela.append("Sede USAER")
+
+    if not opciones_escuela:
         st.error(
             "No se encontraron escuelas asignadas para tu usuario. "
             "Verifica la configuración de tu sesión."
@@ -2570,7 +2576,7 @@ def visitas_page(df):
         with col1:
             escuela_seleccionada = st.selectbox(
                 "Escuela visitada",
-                escuelas_permitidas,
+                opciones_escuela,
                 key="visita_escuela"
             )
 
@@ -2651,7 +2657,7 @@ def visitas_page(df):
         "Ichcaanziho": {
             "director": "Mtra. Rennaty Maribel Puga Jimenez",
             "cargo_director": "Directora",
-            "apoyo": "Mtra. Marycruz Caamal Coral",
+            "apoyo": "Mtra. Marycruz Caamal Coral y Mtra. María Cecilia Solís Vázquez",
         },
         "Gregorio Torres Quintero": {
             "director": "Mtro. Elmer Ariel Ontiveros Requena",
@@ -2685,11 +2691,10 @@ def visitas_page(df):
         },
     }
 
-    datos_escuela = directorio_firmas.get(
-        escuela_seleccionada
-    )
+    es_sede_usaer = escuela_seleccionada == "Sede USAER"
+    datos_escuela = directorio_firmas.get(escuela_seleccionada)
 
-    if not datos_escuela:
+    if not datos_escuela and not (es_director and es_sede_usaer):
         st.error(
             "No se encontró la información de firmas de esta escuela."
         )
@@ -2714,7 +2719,7 @@ def visitas_page(df):
     # VALIDACIÓN FINAL DE SEGURIDAD
     # ---------------------------------------------------------
 
-    if escuela_seleccionada not in escuelas_permitidas:
+    if escuela_seleccionada not in opciones_escuela:
         st.error(
             "Acceso denegado: esta escuela no está asignada "
             "a tu usuario."
@@ -2782,6 +2787,61 @@ def visitas_page(df):
         'style="display:block; width:100%; max-width:720px; height:auto; margin:auto;">'
         '</div>'
     )
+
+    def firma(nombre, cargo, ancho="50%"):
+        return (
+            f'<td style="width:{ancho};padding:10px 8px;text-align:center;">'
+            '___________________________<br>'
+            f'<b>{escape(str(nombre))}</b><br>'
+            f'{escape(str(cargo))}</td>'
+        )
+
+    if es_director:
+        firma_director_usaer = firma(
+            "Psic. Edgar Adrián Yam Briceño MD",
+            "Director de la USAER 02-E",
+        )
+        firma_supervisora = firma(
+            "Dra. Diana Durán González",
+            "Supervisora de la Zona 01",
+        )
+        if es_sede_usaer:
+            firmas_html = (
+                "<tr>"
+                f"{firma_director_usaer}{firma_supervisora}"
+                "</tr>"
+            )
+        else:
+            firmas_html = (
+                "<tr>"
+                f"{firma(datos_escuela['director'], datos_escuela['cargo_director'] + ' de la primaria')}"
+                f"{firma(datos_escuela['apoyo'], 'Maestra(o) de apoyo')}"
+                "</tr><tr>"
+                f"{firma_director_usaer}{firma_supervisora}"
+                "</tr>"
+            )
+    else:
+        firmas_html = f"""
+<tr>
+<td style="width:50%;padding-bottom:16px;padding-right:8px;">
+___________________________<br><b>{escape(datos_escuela['director'])}</b><br>
+{escape(datos_escuela['cargo_director'])} de la primaria
+</td>
+<td style="width:50%;padding-bottom:16px;padding-left:8px;">
+___________________________<br><b>{escape(datos_escuela['apoyo'])}</b><br>
+Maestra(o) de apoyo
+</td>
+</tr><tr>
+<td style="width:50%;padding-right:8px;">
+___________________________<br><b>Psic. Edgar Adrián Yam Briceño MD</b><br>
+Director de la USAER 02-E
+</td>
+<td style="width:50%;padding-left:8px;">
+___________________________<br><b>{escape(nombre_usuario)}</b><br>
+{escape(especialidad)}
+</td>
+</tr>
+"""
 
     html_constancia = f"""
 <div style="
@@ -2932,68 +2992,7 @@ Otros: {detalle("Otros")}
     break-inside:avoid;
     page-break-inside:avoid;
 ">
-
-<tr>
-
-<td style="
-    width:50%;
-    padding-bottom:16px;
-    padding-right:8px;
-">
-
-___________________________<br>
-
-<b>{datos_escuela["director"]}</b><br>
-
-{datos_escuela["cargo_director"]} de la primaria
-
-</td>
-
-<td style="
-    width:50%;
-    padding-bottom:16px;
-    padding-left:8px;
-">
-
-___________________________<br>
-
-<b>{datos_escuela["apoyo"]}</b><br>
-
-Maestra(o) de apoyo
-
-</td>
-
-</tr>
-
-<tr>
-
-<td style="
-    width:50%;
-    padding-right:8px;
-">
-
-___________________________<br>
-
-<b>Psic. Edgar Adrián Yam Briceño MD</b><br>
-
-Director de la USAER 02-E
-
-</td>
-
-<td style="
-    width:50%;
-    padding-left:8px;
-">
-
-___________________________<br>
-
-<b>{nombre_usuario}</b><br>
-
-{especialidad}
-
-</td>
-
-</tr>
+{firmas_html}
 
 </table>
 
