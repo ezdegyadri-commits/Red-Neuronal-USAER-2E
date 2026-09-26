@@ -2610,18 +2610,23 @@ def visitas_page(df):
             )
 
         with col_mot2:
+            opciones_intervencion = [
+                "Intervención en Grupo",
+                "Apoyo individual en aula",
+                "Elaboración del Plan de Intervención",
+                "Consejo Técnico Escolar",
+                "Junta del Servicio de Apoyo",
+                "Junta Académica del Servicio de Apoyo",
+                "Otros",
+            ]
             motivos_der = st.multiselect(
                 "Intervención y juntas",
-                [
-                    "Intervención en Grupo",
-                    "Apoyo individual en aula",
-                    "Elaboración del Plan de Intervención",
-                    "Consejo Técnico Escolar",
-                    "Junta del Servicio de Apoyo",
-                    "Junta Académica del Servicio de Apoyo",
-                    "Otros",
-                ],
-                key="visita_motivos_der"
+                opciones_intervencion,
+                key="visita_motivos_der",
+                accept_new_options=True,
+            )
+            st.caption(
+                "Selecciona una opción o escribe otra actividad y presiona Enter."
             )
 
         detalles_motivos = st.text_input(
@@ -2766,6 +2771,17 @@ def visitas_page(df):
             return f"<b>{detalles_motivos}</b>"
         return linea
 
+    motivos_personalizados = [
+        str(motivo).strip()
+        for motivo in motivos_der
+        if str(motivo).strip()
+        and str(motivo).strip() not in opciones_intervencion
+    ]
+    actividades_personalizadas_html = "".join(
+        f"( X ) {escape(motivo)}<br>"
+        for motivo in motivos_personalizados
+    )
+
     # ---------------------------------------------------------
     # CONSTANCIA OFICIAL
     # ---------------------------------------------------------
@@ -2790,7 +2806,7 @@ def visitas_page(df):
 
     def firma(nombre, cargo, ancho="50%"):
         return (
-            f'<td style="width:{ancho};padding:10px 8px;text-align:center;">'
+            f'<td style="width:{ancho};padding:22px 10px 18px;text-align:center;line-height:1.5;vertical-align:top;">'
             '___________________________<br>'
             f'<b>{escape(str(nombre))}</b><br>'
             f'{escape(str(cargo))}</td>'
@@ -2823,20 +2839,20 @@ def visitas_page(df):
     else:
         firmas_html = f"""
 <tr>
-<td style="width:50%;padding-bottom:16px;padding-right:8px;">
+<td style="width:50%;padding:22px 12px 20px 8px;line-height:1.5;vertical-align:top;">
 ___________________________<br><b>{escape(datos_escuela['director'])}</b><br>
 {escape(datos_escuela['cargo_director'])} de la primaria
 </td>
-<td style="width:50%;padding-bottom:16px;padding-left:8px;">
+<td style="width:50%;padding:22px 8px 20px 12px;line-height:1.5;vertical-align:top;">
 ___________________________<br><b>{escape(datos_escuela['apoyo'])}</b><br>
 Maestra(o) de apoyo
 </td>
 </tr><tr>
-<td style="width:50%;padding-right:8px;">
+<td style="width:50%;padding:22px 12px 20px 8px;line-height:1.5;vertical-align:top;">
 ___________________________<br><b>Psic. Edgar Adrián Yam Briceño MD</b><br>
 Director de la USAER 02-E
 </td>
-<td style="width:50%;padding-left:8px;">
+<td style="width:50%;padding:22px 8px 20px 12px;line-height:1.5;vertical-align:top;">
 ___________________________<br><b>{escape(nombre_usuario)}</b><br>
 {escape(especialidad)}
 </td>
@@ -2962,7 +2978,8 @@ Junta del Servicio de Apoyo<br>
 Junta Académica del Servicio de Apoyo<br>
 
 {marca("Otros")}
-Otros: {detalle("Otros")}
+Otros: {detalle("Otros")}<br>
+{actividades_personalizadas_html}
 
 </td>
 
@@ -2988,9 +3005,11 @@ Otros: {detalle("Otros")}
     width:100%;
     font-size:11px;
     text-align:center;
-    margin-top:22px;
+    margin-top:30px;
     break-inside:avoid;
     page-break-inside:avoid;
+    border-collapse:separate;
+    border-spacing:14px 26px;
 ">
 {firmas_html}
 
