@@ -103,7 +103,9 @@ def generar_horario_apoyo_pdf(escuela: str, docente: str, filas: list[dict]) -> 
             for width, value in zip(TABLE_WIDTHS, cells)
         ]
         row_height = max(line_counts) * 4.2 + 3
-        if pdf.get_y() + row_height > 188:
+        # Reserva el espacio de validación desde antes del cierre de tabla para
+        # mantener firmas y último bloque juntos en la misma página.
+        if pdf.get_y() + row_height + 48 > 181:
             iniciar_pagina(titulo=False)
         start_x, start_y = pdf.get_x(), pdf.get_y()
         for width, value in zip(TABLE_WIDTHS, cells):
@@ -114,11 +116,7 @@ def generar_horario_apoyo_pdf(escuela: str, docente: str, filas: list[dict]) -> 
             pdf.set_xy(x + width, start_y)
         pdf.set_xy(start_x, start_y + row_height)
 
-    # Deja las firmas juntas al final; si la tabla agotó la página, usa una hoja final institucional.
-    if pdf.get_y() + 39 > 190:
-        iniciar_pagina(titulo=False, encabezado_tabla=False)
-    else:
-        pdf.ln(6)
+    pdf.ln(6)
     y = pdf.get_y()
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(PAGE_WIDTH, 6, _fpdf_text("VALIDACIÓN"), align="C", new_x="LMARGIN", new_y="NEXT")
@@ -194,7 +192,8 @@ def generar_horario_apoyo_cuadricula_pdf(
         lineas = [len(pdf.multi_cell(ancho_dia - 4, 4, t, dry_run=True,
                                      output=MethodReturnValue.LINES)) if t else 1 for t in textos]
         alto = max(17, 4 * max(lineas) + 4)
-        if pdf.get_y() + alto > 160:
+        # Reserva en cada salto suficiente espacio para que validación no quede sola.
+        if pdf.get_y() + alto + 47 > 181:
             nueva_pagina()
             pdf.set_font("Helvetica", "", 7.5)
         x0, y0 = pdf.get_x(), pdf.get_y()
@@ -212,9 +211,6 @@ def generar_horario_apoyo_cuadricula_pdf(
                 pdf.multi_cell(ancho_dia - 4, 4, texto_celda, align="C")
         pdf.set_xy(x0, y0 + alto)
 
-    if pdf.get_y() + 43 > 181:
-        pdf.add_page()
-        pdf.set_y(72)
     y = pdf.get_y() + 4
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_xy(12, y)
@@ -232,4 +228,3 @@ def generar_horario_apoyo_cuadricula_pdf(
         pdf.cell(119, 5, _fpdf_text(nombre), align="C")
     pdf.set_creation_date(datetime.now(ZoneInfo("America/Mexico_City")))
     return bytes(pdf.output())
-

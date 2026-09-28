@@ -114,7 +114,7 @@ def listado_alumnos_pdf(frame, ambito, firma_nombre=""):
     pdf.add_page()
     pdf.set_font("Helvetica", "", 8)
 
-    for _, registro in datos.iterrows():
+    for indice, (_, registro) in enumerate(datos.iterrows()):
         valores = [str(registro.get(col, "") or "") for col in columnas]
         lineas = []
         for valor, ancho in zip(valores, anchos):
@@ -133,7 +133,8 @@ def listado_alumnos_pdf(frame, ambito, firma_nombre=""):
                 resultado.append(linea)
             lineas.append(resultado)
         alto = max(len(items) for items in lineas) * alto_linea + 2
-        if pdf.get_y() + alto > pdf.page_break_trigger:
+        espacio_firma = 30 if firma_nombre and indice == len(datos) - 1 else 0
+        if pdf.get_y() + alto + espacio_firma > pdf.page_break_trigger:
             pdf.add_page()
             pdf.set_font("Helvetica", "", 8)
         x_inicial, y_inicial = pdf.get_x(), pdf.get_y()
@@ -146,8 +147,6 @@ def listado_alumnos_pdf(frame, ambito, firma_nombre=""):
         pdf.set_xy(x_inicial, y_inicial + alto)
 
     if firma_nombre:
-        if pdf.get_y() + 24 > pdf.page_break_trigger:
-            pdf.add_page()
         pdf.ln(10)
         pdf.set_font("Helvetica", "", 9)
         pdf.cell(0, 5, _fpdf_text("_______________________________"), align="C", new_x="LMARGIN", new_y="NEXT")

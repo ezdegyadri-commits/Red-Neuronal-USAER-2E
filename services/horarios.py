@@ -132,6 +132,46 @@ def franjas_semanales(inicio, fin, duraciones):
     return bloques
 
 
+def franjas_diarias(inicio, fin, duraciones, descanso_inicio="", descanso_fin=""):
+    """Construye módulos para un día e inserta el descanso en el mismo intervalo."""
+    desde, hasta = _hora_minutos(inicio), _hora_minutos(fin)
+    if hasta <= desde:
+        raise ValueError("La jornada debe terminar después de su inicio.")
+    partes = [str(x).strip() for x in str(duraciones).split(",") if str(x).strip()]
+    if not partes or not all(x.isdecimal() and 15 <= int(x) <= 180 for x in partes):
+        raise ValueError("Indica duraciones de 15 a 180 minutos, por ejemplo 60,60,45,60.")
+    pausa = None
+    if str(descanso_inicio).strip() or str(descanso_fin).strip():
+        if not str(descanso_inicio).strip() or not str(descanso_fin).strip():
+            raise ValueError("Completa la hora de inicio y fin del descanso.")
+        pausa = (_hora_minutos(descanso_inicio), _hora_minutos(descanso_fin))
+        if pausa[0] < desde or pausa[1] > hasta or pausa[1] <= pausa[0]:
+            raise ValueError("El descanso debe quedar dentro de la jornada y terminar después de iniciar.")
+    duraciones_min = [int(x) for x in partes]
+    bloques, cursor, indice = [], desde, 0
+    while cursor < hasta:
+        if pausa and cursor == pausa[0]:
+            bloques.append((f"{pausa[0] // 60:02d}:{pausa[0] % 60:02d}",
+                            f"{pausa[1] // 60:02d}:{pausa[1] % 60:02d}", "Descanso"))
+            cursor = pausa[1]
+            continue
+        duracion = duraciones_min[min(indice, len(duraciones_min) - 1)]
+        siguiente = min(cursor + duracion, hasta)
+        if pausa and cursor < pausa[0] < siguiente:
+            siguiente = pausa[0]
+        if siguiente - cursor < 15:
+            raise ValueError("El descanso deja un módulo menor de 15 minutos; ajusta su horario o las duraciones.")
+        bloques.append((f"{cursor // 60:02d}:{cursor % 60:02d}",
+                        f"{siguiente // 60:02d}:{siguiente % 60:02d}", "Módulo"))
+        cursor = siguiente
+        indice += 1
+        if len(bloques) > 24:
+            raise ValueError("El horario no puede tener más de 24 módulos por día.")
+    return [(inicio, fin) for inicio, fin, _tipo in bloques], {
+        (inicio, fin): tipo for inicio, fin, tipo in bloques if tipo == "Descanso"
+    }
+
+
 def _claves_grupo(valor):
     """Compara 4º A, 4A y 4to A sin confundir escuelas ni grados."""
     texto = normalizar_texto(valor)
@@ -218,6 +258,7 @@ def _coincide_escuela(row, escuela):
     }
 
 
+@st.cache_data(ttl=45, show_spinner=False)
 def cargar_restricciones(escuela):
     _, _, rows = _leer("Horarios_Restricciones", RESTRICCIONES_HEADERS)
     activos = [row for row in rows if _coincide_escuela(row, escuela)
@@ -226,15 +267,24 @@ def cargar_restricciones(escuela):
 
 
 def guardar_restricciones(escuela, cargado_por, archivo, frame):
-    """Anexa la revisión del horario; la versión anterior queda marcada, nunca se borra."""
-    rows = frame.to_dict("records") if isinstance(frame, pd.DataFrame) else list(frame)
-    if not rows:
+    """Anexa un horario; la versión anterior queda marcada, nunca se borra."""
+    return guardar_restricciones_lote(escuela, cargado_por, [(archivo, frame)])
+
+
+def guardar_restricciones_lote(escuela, cargado_por, archivos_frames):
+    """Guarda una carga de varios archivos en una sola operación de escritura."""
+    entradas = []
+    for archivo, frame in archivos_frames:
+        rows = frame.to_dict("records") if isinstance(frame, pd.DataFrame) else list(frame)
+        if rows:
+            entradas.extend((str(archivo), row) for row in rows)
+    if not entradas:
         raise ValueError("No hay filas de horario para guardar.")
     ws, headers, existentes = _leer("Horarios_Restricciones", RESTRICCIONES_HEADERS)
     version = uuid4().hex
     now = datetime.now(ZONA).isoformat(timespec="seconds")
     nuevos = []
-    for item in rows:
+    for archivo, item in entradas:
         dia = normalizar_dia(item.get("Dia", ""))
         inicio, fin = _hora_texto(item.get("Inicio")), _hora_texto(item.get("Fin"))
         if _hora_minutos(fin) <= _hora_minutos(inicio):
@@ -255,10 +305,10 @@ def guardar_restricciones(escuela, cargado_por, archivo, frame):
         [[row.get(header, "") for header in headers] for row in nuevos],
         value_input_option="RAW",
     ))
-    # A reemplazo del mismo archivo, se preservan las filas anteriores como historial.
-    old = [row for row in existentes
-           if _coincide_escuela(row, escuela)
-           and str(row.get("Archivo", "")).strip() == archivo
+    # A reemplazo de cada archivo se preservan las filas anteriores como historial.
+    archivos_nuevos = {archivo for archivo, _item in entradas}
+    old = [row for row in existentes if _coincide_escuela(row, escuela)
+           and str(row.get("Archivo", "")).strip() in archivos_nuevos
            and str(row.get("Estado", "ACTIVO")).upper() == "ACTIVO"]
     if old and "Estado" in headers:
         pos = headers.index("Estado") + 1
@@ -269,9 +319,11 @@ def guardar_restricciones(escuela, cargado_por, archivo, frame):
             # Se conserva la nueva versión; los duplicados de consulta se limitan a la más reciente.
             pass
     clear_cache("Horarios_Restricciones")
+    cargar_restricciones.clear()
     return version, len(nuevos)
 
 
+@st.cache_data(ttl=45, show_spinner=False)
 def cargar_horarios_apoyo(escuela):
     """Retorna la última versión por maestra en la escuela, conservando todo el historial."""
     _, _, rows = _leer("Horarios_Apoyo", HORARIOS_APOYO_HEADERS)
@@ -318,6 +370,7 @@ def guardar_horario_apoyo(maestra, escuela, frame):
         value_input_option="RAW",
     ))
     clear_cache("Horarios_Apoyo")
+    cargar_horarios_apoyo.clear()
     return version, len(nuevos)
 
 
@@ -500,4 +553,3 @@ def marcar_avisos_leidos(ids_aviso):
         _leer_avisos_cache.clear()
         clear_cache("Avisos_Cronogramas")
     return len(updates) // 2
-

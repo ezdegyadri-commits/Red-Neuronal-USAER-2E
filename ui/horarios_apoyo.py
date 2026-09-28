@@ -29,6 +29,7 @@ from services.horarios import (
     franjas_semanales,
     guardar_horario_apoyo,
     guardar_restricciones,
+    guardar_restricciones_lote,
     marcar_avisos_leidos,
     normalizar_tabla_horario,
     proponer_horario,
@@ -99,19 +100,63 @@ def _clave_imagen_horario(nombre, escuela, archivo):
 
 
 def _leer_imagenes_pendientes(imagenes, nombre, escuela):
-    """Prepara todas las imágenes cargadas sin sobrescribir revisiones previas."""
+    """Lee el conjunto de imágenes en una sola petición al modelo para reducir cuota."""
     errores = []
-    leidas = 0
-    for archivo in imagenes:
-        clave = _clave_imagen_horario(nombre, escuela, archivo)
-        if clave in st.session_state:
+    pendientes = [archivo for archivo in imagenes
+                  if _clave_imagen_horario(nombre, escuela, archivo) not in st.session_state
+                  and f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" not in st.session_state]
+    if not pendientes:
+        return 0, errores
+    from google.genai import types
+    from ai.engine import client
+    from config.settings import GEMINI_MODEL
+    cli = client()
+    if cli is None:
+        return 0, ["La lectura automática no está configurada; captura los bloques en la tabla manual."]
+    contents = [
+        "Lee los horarios de todas las imágenes adjuntas. Devuelve SOLO JSON válido con forma "
+        '{"archivos":{"nombre exacto del archivo":[{"Día":"Lunes","Inicio":"08:00",'
+        '"Fin":"08:50","Grupo":"2A","Actividad":"Inglés","Responsable":""}]}}. '
+        "No inventes datos; deja campos vacíos si no se distinguen. Horas HH:MM de 24 horas."
+    ]
+    claves = {}
+    for archivo in pendientes:
+        ext = archivo.name.rsplit(".", 1)[-1].lower()
+        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                "webp": "image/webp", "bmp": "image/bmp", "tif": "image/tiff", "tiff": "image/tiff"}.get(ext)
+        if not mime:
+            errores.append(f"{archivo.name}: formato no compatible para lectura automática.")
             continue
-        try:
-            st.session_state[clave] = _leer_imagen_horario(archivo)
-            leidas += 1
-        except Exception as exc:
-            errores.append(f"{archivo.name}: {exc}")
-    return leidas, errores
+        contents.extend([f"Archivo: {archivo.name}", types.Part.from_bytes(data=archivo.getvalue(), mime_type=mime)])
+        claves[archivo.name] = archivo
+    if not claves:
+        return 0, errores
+    try:
+        response = cli.models.generate_content(
+            model=GEMINI_MODEL, contents=contents,
+            config={"temperature": 0, "response_mime_type": "application/json"},
+        )
+        raw = json.loads((response.text or "{}").strip())
+        resultado = raw.get("archivos", raw) if isinstance(raw, dict) else {}
+        leidas = 0
+        for nombre_archivo, archivo in claves.items():
+            filas = resultado.get(nombre_archivo, [])
+            if not filas:
+                errores.append(f"{nombre_archivo}: no se reconocieron bloques; puedes transcribirlos manualmente.")
+                st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = errores[-1]
+                continue
+            try:
+                st.session_state[_clave_imagen_horario(nombre, escuela, archivo)] = normalizar_tabla_horario(pd.DataFrame(filas))
+                leidas += 1
+            except Exception as exc:
+                errores.append(f"{nombre_archivo}: revisa la captura manual ({exc}).")
+                st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = errores[-1]
+        return leidas, errores
+    except Exception as exc:
+        aviso = f"No se pudo leer el conjunto de imágenes (posible límite temporal del servicio): {exc}. No se guardó ni borró ningún horario; usa captura manual o reintenta después."
+        for archivo in claves.values():
+            st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = aviso
+        return 0, [aviso]
 
 
 def _leer_archivo(archivo):
@@ -226,22 +271,39 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     clave_franjas, clave_filas = f"{prefijo}_franjas", f"{prefijo}_filas"
     st.markdown("### Mi plantilla semanal · lunes a viernes")
     st.caption("Elige cuánto dura cada módulo. Puedes escribir una duración repetida (60) o varias (60,60,30,60); la última se repite hasta terminar la jornada.")
-    c1, c2, c3, c4 = st.columns([1, 1, 2, 1])
+    c1, c2 = st.columns(2)
     with c1:
         inicio = st.time_input("Inicio", value=time(7, 0), key=f"{prefijo}_inicio")
     with c2:
         fin = st.time_input("Fin", value=time(13, 0), key=f"{prefijo}_fin")
-    with c3:
-        duraciones = st.text_input("Minutos por módulo", value="60", key=f"{prefijo}_duraciones")
-    with c4:
-        aplicar = st.button("Aplicar módulos", key=f"{prefijo}_aplicar", type="primary")
-    if aplicar or clave_franjas not in st.session_state:
+    st.caption("Configura duraciones distintas por día, separadas por comas. El descanso indicado se replica durante toda la semana.")
+    duraciones_por_dia = {}
+    columnas_dias = st.columns(5)
+    for dia, columna in zip(DIAS, columnas_dias):
+        with columna:
+            duraciones_por_dia[dia] = st.text_input(f"{dia} · minutos", value="60", key=f"{prefijo}_dur_{dia}")
+    pausa_cols = st.columns([1, 1, 2])
+    with pausa_cols[0]:
+        descanso_inicio = st.text_input("Descanso desde · HH:MM", value="", key=f"{prefijo}_descanso_inicio", placeholder="10:00")
+    with pausa_cols[1]:
+        descanso_fin = st.text_input("Descanso hasta · HH:MM", value="", key=f"{prefijo}_descanso_fin", placeholder="10:30")
+    try:
+        franjas_por_dia = {dia: franjas_semanales(inicio, fin, duraciones_por_dia[dia]) for dia in DIAS}
+    except ValueError as exc:
+        st.error(str(exc))
+        return
+    pausas = {}
+    if descanso_inicio or descanso_fin:
         try:
-            st.session_state[clave_franjas] = franjas_semanales(inicio, fin, duraciones)
+            from services.horarios import franjas_diarias
+            for dia in DIAS:
+                franjas_por_dia[dia], pausa_dia = franjas_diarias(inicio, fin, duraciones_por_dia[dia], descanso_inicio, descanso_fin)
+                pausas.update(pausa_dia)
         except ValueError as exc:
             st.error(str(exc))
             return
-    franjas = st.session_state[clave_franjas]
+    franjas = sorted({franja for diario in franjas_por_dia.values() for franja in diario})
+    st.session_state[clave_franjas] = franjas
     borrador = st.session_state.setdefault(clave_filas, {})
     propia = (horarios_equipo.loc[horarios_equipo["Maestra"].astype(str).eq(nombre)].copy()
               if not horarios_equipo.empty and "Maestra" in horarios_equipo else pd.DataFrame())
@@ -249,10 +311,9 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
         for item in propia.to_dict("records"):
             clave = f"{item.get('Dia')}|{item.get('Inicio')}|{item.get('Fin')}"
             borrador[clave] = item
-        franjas_guardadas = sorted({(str(row["Inicio"]), str(row["Fin"]))
-                                   for row in propia.to_dict("records")})
+        franjas_guardadas = sorted({(str(row["Inicio"]), str(row["Fin"])) for row in propia.to_dict("records")})
         if franjas_guardadas:
-            st.session_state[clave_franjas] = franjas_guardadas
+            franjas = franjas_guardadas
         st.session_state[f"{prefijo}_editor_version"] = st.session_state.get(f"{prefijo}_editor_version", 0) + 1
         st.rerun()
 
@@ -270,6 +331,8 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
              ".horario-apoyo-grid td{height:86px;vertical-align:top;border:1px solid #a9bfce;padding:9px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}"
              ".horario-apoyo-grid .hora{background:#f0f5f9;text-align:center;font-weight:bold;width:12%}"
              ".horario-apoyo-grid .ocupado{background:#eef8f1}.horario-apoyo-grid .choque{background:#ffe5e5}"
+             ".horario-apoyo-grid .descanso{background:#fff1bf;color:#6f5200;text-align:center;font-weight:bold}"
+             ".horario-apoyo-grid .inactivo{background:#f7f9fb;color:#c2cbd2;text-align:center}"
              ".horario-apoyo-grid .vacio{color:#8195a6}</style>",
              "<div style='overflow-x:auto'><table class='horario-apoyo-grid'><thead><tr><th>Hora</th>"]
     tabla.extend(f"<th>{html.escape(dia)}</th>" for dia in dias)
@@ -284,8 +347,10 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
                 str(item.get("Alumnos", "")).strip() if item else "",
                 str(item.get("Actividad", "")).strip() if item else "",
             ))) if item else ""
-            clase = "choque" if conflicto else ("ocupado" if item else "vacio")
-            tabla.append(f"<td class='{clase}'>{html.escape(contenido) if contenido else 'Sin capturar'}</td>")
+            descanso = (desde, hasta) in pausas and (desde, hasta) in franjas_por_dia[dia]
+            clase = "descanso" if descanso else ("choque" if conflicto else ("ocupado" if item else ("vacio" if (desde, hasta) in franjas_por_dia[dia] else "inactivo")))
+            etiqueta = "DESCANSO" if descanso else (html.escape(contenido) if contenido else ("Sin capturar" if (desde, hasta) in franjas_por_dia[dia] else "—"))
+            tabla.append(f"<td class='{clase}'>{etiqueta}</td>")
         tabla.append("</tr>")
     tabla.append("</tbody></table></div>")
     st.markdown("".join(tabla), unsafe_allow_html=True)
@@ -299,7 +364,8 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
 
     st.markdown("#### Capturar o editar un espacio")
     dia_elegido = st.selectbox("Día", dias, key=f"{prefijo}_dia")
-    franja_elegida = st.selectbox("Módulo", franjas,
+    franjas_dia = [f for f in franjas_por_dia[dia_elegido] if f not in pausas]
+    franja_elegida = st.selectbox("Módulo", franjas_dia,
                                 format_func=lambda x: f"{x[0]} – {x[1]}", key=f"{prefijo}_modulo")
     desde, hasta = franja_elegida
     clave = f"{dia_elegido}|{desde}|{hasta}"
@@ -350,6 +416,31 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     with c_espacio:
         espacio = st.selectbox("Espacio", ["Aula regular", "Aula de apoyo", "Otro"],
                                key=f"{clave_editor}_espacio")
+    grupo_candidato = grupo or str(actual.get("Grupo", ""))
+    if ids:
+        grupos_alumnos = sorted({_grupo_alumno(row) for row in visibles.to_dict("records")
+                                 if str(row.get("ID_Alumno", "")) in set(ids) and _grupo_alumno(row)})
+        grupo_candidato = ", ".join(grupos_alumnos)
+    candidato = {
+        "Dia": dia_elegido, "Inicio": desde, "Fin": hasta,
+        "Grupo": grupo_candidato,
+        "ID_Alumnos": ",".join(ids) or str(actual.get("ID_Alumnos", "")),
+        "Actividad": actividad.strip() or str(actual.get("Actividad", "")), "Maestra": nombre,
+    }
+    filas_en_vivo = [row for row in filas if not (row.get("Dia") == dia_elegido and row.get("Inicio") == desde and row.get("Fin") == hasta)]
+    if candidato["Actividad"]:
+        filas_en_vivo.append(candidato)
+        try:
+            choques_en_vivo = detectar_choques(filas_en_vivo, restricciones, horarios_equipo)
+            horario_objetivo = f"{desde}–{hasta}"
+            conflictos_bloque = [r for r in choques_en_vivo.to_dict("records") if r.get("Día") == dia_elegido and str(r.get("Horario propuesto", "")).replace(" ", "").replace("-", "–") == horario_objetivo]
+            if conflictos_bloque:
+                st.error("⚠️ Conflicto de horario en este módulo. Ajusta día/hora o revisa los horarios de referencia antes de guardar.")
+                st.dataframe(pd.DataFrame(conflictos_bloque), hide_index=True, width="stretch")
+            else:
+                st.success("✓ Sin choque detectado en este módulo.")
+        except Exception as exc:
+            st.warning(f"No se pudo validar el módulo en vivo: {exc}")
     c_guardar, c_vaciar = st.columns(2)
     with c_guardar:
         if st.button("Añadir o actualizar este bloque", type="primary", key=f"{prefijo}_guardar_{clave}"):
@@ -383,7 +474,12 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     listo = bool(borrador) and confirmada and choques.empty and not fuera
     if listo:
         try:
-            pdf = generar_horario_apoyo_cuadricula_pdf(escuela, nombre, filas, franjas)
+            filas_pdf = filas + [
+                {"Dia": dia, "Inicio": desde_pausa, "Fin": hasta_pausa,
+                 "Grupo": "", "Alumnos": "", "Actividad": "DESCANSO"}
+                for dia in DIAS for (desde_pausa, hasta_pausa), tipo in pausas.items()
+            ]
+            pdf = generar_horario_apoyo_cuadricula_pdf(escuela, nombre, filas_pdf, franjas)
             st.download_button("Descargar horario oficial horizontal (PDF)", pdf,
                                file_name=f"Horario_Semanal_{normalizar_texto(nombre).replace(' ', '_')}.pdf",
                                mime="application/pdf", key=f"{prefijo}_descargar")
@@ -457,17 +553,16 @@ def horarios_apoyo_page():
     if imagenes:
         st.markdown(f"#### 🖼️ {len(imagenes)} imagen(es) cargada(s)")
         pendientes = [archivo for archivo in imagenes
-                      if _clave_imagen_horario(nombre, escuela, archivo) not in st.session_state]
+                      if _clave_imagen_horario(nombre, escuela, archivo) not in st.session_state
+                      and f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" not in st.session_state]
         if pendientes:
-            st.warning(f"Falta leer {len(pendientes)} imagen(es). Subirlas no transcribe sus horarios automáticamente.")
-            if st.button("✨ Leer todas las imágenes para revisar sus horarios", type="primary",
-                         key="leer_todas_imagenes_horario"):
-                with st.spinner("Leyendo los horarios de las imágenes…"):
-                    leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
-                for fallo in fallos:
-                    st.warning(fallo)
-                if leidas:
-                    st.rerun()
+            st.info(f"Leyendo automáticamente {len(pendientes)} imagen(es) en una sola solicitud para reducir errores de cuota…")
+            with st.spinner("Reconociendo los bloques de horario. Podrás corregirlos antes de guardarlos…"):
+                leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
+            for fallo in fallos:
+                st.warning(fallo)
+            if leidas:
+                st.rerun()
         else:
             st.success("Las imágenes están listas para revisión. Comprueba los bloques antes de guardar.")
     for archivo, tipo in referencias:
@@ -541,9 +636,7 @@ def horarios_apoyo_page():
                             st.rerun()
                     st.warning("Aún no hay bloques válidos. Lee las imágenes con el botón de arriba o captura al menos una fila completa en la tabla manual.")
                     st.stop()
-                for origen, frame in filas_guardar:
-                    _, cuenta = guardar_restricciones(escuela, nombre, origen, frame)
-                    total += cuenta
+                _, total = guardar_restricciones_lote(escuela, nombre, filas_guardar)
                 st.success(f"Se añadieron {total} bloques de referencia. Las versiones sustituidas permanecen en el historial.")
                 st.rerun()
             except Exception as exc:
