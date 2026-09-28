@@ -61,7 +61,7 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
 
     nueva_pagina()
     encabezado_tabla()
-    for item in filas:
+    for indice, item in enumerate(filas):
         fecha = _fpdf_text(item.get("fecha", ""))
         escuela = _fpdf_text(item.get("escuela", ""))
         actividad = _fpdf_text(item.get("actividad", ""))
@@ -71,7 +71,8 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
             len(pdf.multi_cell(95, 5, actividad, dry_run=True, output=MethodReturnValue.LINES)),
         ]
         alto = max(alturas + [1]) * 5 + 3
-        if pdf.get_y() + alto > 250:
+        reserva_firma = 47 if indice == len(filas) - 1 else 0
+        if pdf.get_y() + alto + reserva_firma > 250:
             pie()
             nueva_pagina()
             encabezado_tabla()
@@ -84,11 +85,7 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
             pdf.set_xy(x + ancho, y0)
         pdf.set_xy(x0, y0 + alto)
 
-    if pdf.get_y() + 42 > 250:
-        pie()
-        nueva_pagina()
-    else:
-        pdf.ln(8)
+    pdf.ln(8)
     y_firma = pdf.get_y()
     pdf.set_font("Helvetica", "", 9)
     if perfil.get("area") == "Dirección":

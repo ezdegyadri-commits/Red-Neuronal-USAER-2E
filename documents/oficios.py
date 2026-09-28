@@ -3,6 +3,7 @@ from pathlib import Path
 import unicodedata
 
 from fpdf import FPDF
+from fpdf.enums import MethodReturnValue
 
 
 MESES = (
@@ -173,6 +174,10 @@ def generar_oficio_comision(registro):
         "Agradezco las facilidades brindadas para el cumplimiento de esta comisión "
         "y aprovecho la ocasión para enviarle un cordial saludo."
     )
+    lineas_texto = max(1, len(pdf.multi_cell(0, 6, texto, dry_run=True, output=MethodReturnValue.LINES)))
+    # Anticipa el cierre con firma para que no se desprenda al final de página.
+    if pdf.get_y() + lineas_texto * 6 + 52 > pdf.page_break_trigger:
+        pdf.add_page()
     pdf.multi_cell(0, 6, texto, align="J")
     pdf.ln(12)
 
