@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -175,7 +175,7 @@ def generar_pdf_oficial(
             ("TOPPADDING", (0, 0), (-1, -1), 4),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ]))
-        elementos.append(bloque_direccion)
+        elementos.append(KeepTogether([Spacer(1, 12), bloque_direccion]))
     elementos.extend([
         Spacer(1, 20),
         Paragraph("FIRMAS DEL PERSONAL ASISTENTE", seccion_estilo),
