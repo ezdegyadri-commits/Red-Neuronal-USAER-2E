@@ -2538,6 +2538,14 @@ def _visitas_visibles(registros, nombre, rol, escuelas):
     """Restringe el historial a escuelas autorizadas y al autor, salvo dirección."""
     if registros is None or registros.empty:
         return pd.DataFrame(columns=getattr(registros, "columns", []))
+    registros = registros.copy()
+    for actual, anterior in (("Personal", "Especialista"), ("Motivo", "Motivos")):
+        if anterior in registros.columns:
+            if actual not in registros.columns:
+                registros[actual] = registros[anterior]
+            else:
+                vacios = registros[actual].fillna("").astype(str).str.strip().eq("")
+                registros.loc[vacios, actual] = registros.loc[vacios, anterior]
     if not {"Escuela", "Personal"}.issubset(registros.columns):
         return registros.iloc[0:0].copy()
     autorizadas = {normalizar_texto(escuela) for escuela in escuelas}
@@ -2755,7 +2763,7 @@ def visitas_page(df):
         if normalizar_texto(autor).replace(".", "") == normalizar_texto(nombre_usuario).replace(".", ""):
             rol_autor = rol_usuario
         else:
-            rol_autor = ""
+            rol_autor = str(registro_recuperado.get("Area", "")).strip()
             try:
                 usuarios = repo.usuarios()
                 if {"Nombre", "Rol"}.issubset(usuarios.columns):
@@ -2776,8 +2784,13 @@ def visitas_page(df):
             )
         motivos_izq = []
         motivos_der = [motivo.strip() for motivo in str(registro_recuperado.get("Motivo", "")).split(",") if motivo.strip()]
-        detalles_motivos = str(registro_recuperado.get("Evidencia", ""))
-        descripcion_actividad = str(registro_recuperado.get("Observaciones", ""))
+        detalles_motivos = str(registro_recuperado.get("Evidencia", "") or "")
+        descripcion_actividad = str(registro_recuperado.get("Observaciones", "") or "")
+        if "Observaciones" not in registro_recuperado or "Evidencia" not in registro_recuperado:
+            st.warning(
+                "Este registro antiguo no guardó la descripción o los detalles. "
+                "La constancia recuperada solo puede mostrar la información que existe en el historial."
+            )
         id_visita = str(registro_recuperado.get("ID_Visita", "")).strip()
     else:
         return
