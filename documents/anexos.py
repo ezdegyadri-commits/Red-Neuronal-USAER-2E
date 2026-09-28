@@ -5,6 +5,7 @@ import pandas as pd
 from io import BytesIO
 from pathlib import Path
 from fpdf import FPDF
+from fpdf.enums import MethodReturnValue
 from config.settings import ESCUELAS_USAER, SERVICE_NAME, SCHOOL_YEAR
 
 
@@ -162,6 +163,11 @@ def anexo4_pdf(alumno, rows):
             border=1, new_x="LMARGIN", new_y="NEXT",
         )
         pdf.ln(2)
+        resultados = _fpdf_text(registro.get("Nivel_Cumplimiento_Resultados", "") or " ")
+        lineas_resultados = max(1, len(pdf.multi_cell(disponible, 5, resultados, dry_run=True, output=MethodReturnValue.LINES)))
+        # Mantén el cierre de resultados y el bloque completo de firmas juntos.
+        if pdf.get_y() + 6 + lineas_resultados * 5 + 42 > pdf.page_break_trigger:
+            pdf.add_page()
         pdf.set_font("Helvetica", "B", 9)
         pdf.cell(
             0, 5, "Nivel de cumplimiento y resultados",
@@ -170,7 +176,7 @@ def anexo4_pdf(alumno, rows):
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(
             disponible, 5,
-            _fpdf_text(registro.get("Nivel_Cumplimiento_Resultados", "") or " "),
+            resultados,
             border=1, new_x="LMARGIN", new_y="NEXT",
         )
         pdf.ln(5)
@@ -259,6 +265,10 @@ def anexo5_pdf(alumno, rows):
             fecha = _fpdf_text(registro.get("Fecha", ""))
             autor = _fpdf_text(registro.get("Especialista", ""))
             texto = _fpdf_text(registro.get("Evento", ""))
+            pdf.set_font("Helvetica", "", 10)
+            lineas_evento = max(1, len(pdf.multi_cell(0, 5, texto, dry_run=True, output=MethodReturnValue.LINES)))
+            if pdf.get_y() + 23 + lineas_evento * 5 > pdf.page_break_trigger:
+                pdf.add_page()
             pdf.set_font("Helvetica", "B", 10)
             pdf.cell(0, 6, f"Fecha: {fecha}     Personal: {autor}", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
