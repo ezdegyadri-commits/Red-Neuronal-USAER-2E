@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import re
 from datetime import time
@@ -89,6 +90,28 @@ def _leer_imagen_horario(archivo):
     if not isinstance(datos, list) or not datos:
         raise ValueError("No se reconocieron bloques de horario. Usa la captura manual.")
     return normalizar_tabla_horario(pd.DataFrame(datos))
+
+
+def _clave_imagen_horario(nombre, escuela, archivo):
+    """Separa lecturas por docente, escuela y contenido, no solo por nombre de archivo."""
+    huella = hashlib.sha256(archivo.getvalue()).hexdigest()[:16]
+    return f"bloques_imagen_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}_{huella}"
+
+
+def _leer_imagenes_pendientes(imagenes, nombre, escuela):
+    """Prepara todas las imágenes cargadas sin sobrescribir revisiones previas."""
+    errores = []
+    leidas = 0
+    for archivo in imagenes:
+        clave = _clave_imagen_horario(nombre, escuela, archivo)
+        if clave in st.session_state:
+            continue
+        try:
+            st.session_state[clave] = _leer_imagen_horario(archivo)
+            leidas += 1
+        except Exception as exc:
+            errores.append(f"{archivo.name}: {exc}")
+    return leidas, errores
 
 
 def _leer_archivo(archivo):
@@ -401,8 +424,8 @@ def horarios_apoyo_page():
         st.error(f"No se pudieron leer los horarios compartidos: {exc}")
         return
 
-    st.markdown("### Cargar horarios de referencia")
-    st.caption("Carga Excel/CSV, documentos Word (.doc/.docx) o imágenes. Las tablas compatibles de .docx se leen automáticamente; las imágenes, .doc y formatos no tabulares se muestran como referencia para transcribir. Los horarios anteriores se conservan como historial.")
+    st.markdown("### 📎 Horarios de referencia de la escuela")
+    st.info("**1. Sube los archivos → 2. Revisa o completa los bloques → 3. Guarda.** Las imágenes necesitan lectura o captura antes de convertirse en horarios que permitan detectar choques. Los horarios anteriores se conservan.")
     plantilla = pd.DataFrame([{"Día": "Lunes", "Inicio": "08:00", "Fin": "08:50", "Actividad": "Inglés", "Grupo": "2A", "Responsable": ""}])
     st.download_button("Descargar plantilla de horario", plantilla.to_csv(index=False).encode("utf-8-sig"), "Plantilla_horario_escolar.csv", "text/csv", key="plantilla_horario_apoyo")
     archivos = st.file_uploader(
@@ -430,29 +453,39 @@ def horarios_apoyo_page():
                 errores.append(f"{archivo.name}: {exc}")
             else:
                 errores.append(f"{archivo.name}: {exc}")
+    imagenes = [archivo for archivo, tipo in referencias if tipo == "imagen"]
+    if imagenes:
+        st.markdown(f"#### 🖼️ {len(imagenes)} imagen(es) cargada(s)")
+        pendientes = [archivo for archivo in imagenes
+                      if _clave_imagen_horario(nombre, escuela, archivo) not in st.session_state]
+        if pendientes:
+            st.warning(f"Falta leer {len(pendientes)} imagen(es). Subirlas no transcribe sus horarios automáticamente.")
+            if st.button("✨ Leer todas las imágenes para revisar sus horarios", type="primary",
+                         key="leer_todas_imagenes_horario"):
+                with st.spinner("Leyendo los horarios de las imágenes…"):
+                    leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
+                for fallo in fallos:
+                    st.warning(fallo)
+                if leidas:
+                    st.rerun()
+        else:
+            st.success("Las imágenes están listas para revisión. Comprueba los bloques antes de guardar.")
     for archivo, tipo in referencias:
         if tipo == "imagen":
-            with st.expander(f"Vista de referencia: {archivo.name}"):
+            clave_imagen = _clave_imagen_horario(nombre, escuela, archivo)
+            with st.expander(f"Ver imagen: {archivo.name}"):
                 st.image(archivo.getvalue(), caption=archivo.name, width="stretch")
-                clave_imagen = f"bloques_imagen_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}_{archivo.name}_{len(archivo.getvalue())}"
-                if st.button("Leer bloques de esta imagen", key=f"leer_{clave_imagen}",
-                             help="Envía la imagen al servicio de lectura configurado; revisa los datos detectados antes de guardarlos."):
-                    try:
-                        st.session_state[clave_imagen] = _leer_imagen_horario(archivo)
-                    except Exception as exc:
-                        st.warning(f"No se pudo leer esta imagen: {exc}")
-                if clave_imagen in st.session_state:
-                    st.caption("Revisa día, horas, grupo y materia detectados antes de guardar. Corrige aquí cualquier lectura errónea.")
-                    revisado = st.data_editor(
-                        st.session_state[clave_imagen], num_rows="dynamic", hide_index=True,
-                        width="stretch", key=f"revision_{clave_imagen}",
-                    )
-                    try:
-                        preparados.append((f"{archivo.name} · lectura revisada", normalizar_tabla_horario(revisado.rename(
-                            columns={"Dia": "Día", "Actividad": "Materia"}
-                        ))))
-                    except ValueError as exc:
-                        st.warning(f"Corrige las filas reconocidas: {exc}")
+            if clave_imagen in st.session_state:
+                st.markdown(f"**Revisar bloques de {archivo.name}**")
+                st.caption("Corrige día, horas, grupo y actividad. Solo estos bloques revisados se guardarán.")
+                revisado = st.data_editor(
+                    st.session_state[clave_imagen], num_rows="dynamic", hide_index=True,
+                    width="stretch", key=f"revision_{clave_imagen}",
+                )
+                try:
+                    preparados.append((f"{archivo.name} · lectura revisada", normalizar_tabla_horario(revisado)))
+                except ValueError as exc:
+                    st.warning(f"Corrige las filas reconocidas en {archivo.name}: {exc}")
         elif tipo == "word":
             with st.expander(f"Texto de referencia: {archivo.name}"):
                 documento = Document(BytesIO(archivo.getvalue()))
@@ -465,7 +498,8 @@ def horarios_apoyo_page():
             st.warning(error)
     captura_manual = None
     if referencias:
-        st.info("Transcribe abajo los bloques de las imágenes o documentos sin tabla reconocible. Revisa los datos antes de guardarlos.")
+        st.markdown("#### ✍️ Captura manual (si falta algún bloque)")
+        st.caption("Úsala cuando una imagen o documento no pueda leerse, o para añadir bloques omitidos. Una fila por día, hora y actividad.")
         captura_manual = st.data_editor(
             pd.DataFrame([{"Día": "", "Inicio": "", "Fin": "", "Grupo": "", "Actividad": "", "Responsable": ""}]),
             num_rows="dynamic", hide_index=True, width="stretch",
@@ -485,8 +519,9 @@ def horarios_apoyo_page():
             ignore_index=True,
         ) if preparados else pd.DataFrame()
         if not vista_carga.empty:
+            st.markdown(f"#### ✅ Vista previa: {len(vista_carga)} bloque(s) listos para guardar")
             st.dataframe(vista_carga, hide_index=True, width="stretch")
-        if st.button("Guardar horarios de referencia para esta escuela", type="primary", key="guardar_restricciones_horario"):
+        if st.button("💾 Guardar horarios de referencia revisados", type="primary", key="guardar_restricciones_horario"):
             try:
                 total = 0
                 filas_guardar = list(preparados)
@@ -496,7 +531,15 @@ def horarios_apoyo_page():
                     if not captura.empty:
                         filas_guardar.append(("Captura desde archivo de referencia", normalizar_tabla_horario(captura)))
                 if not filas_guardar:
-                    st.warning("No hay horarios transcritos para guardar todavía.")
+                    if imagenes:
+                        with st.spinner("Leyendo las imágenes para preparar los horarios…"):
+                            leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
+                        for fallo in fallos:
+                            st.warning(fallo)
+                        if leidas:
+                            st.info("Ya preparé los bloques. Revísalos en la vista previa y vuelve a pulsar Guardar.")
+                            st.rerun()
+                    st.warning("Aún no hay bloques válidos. Lee las imágenes con el botón de arriba o captura al menos una fila completa en la tabla manual.")
                     st.stop()
                 for origen, frame in filas_guardar:
                     _, cuenta = guardar_restricciones(escuela, nombre, origen, frame)
@@ -639,4 +682,3 @@ def horarios_apoyo_page():
                 key=f"descargar_horario_{normalizar_texto(escuela)}",
             )
         st.caption(f"Ciclo escolar {SCHOOL_YEAR}. Cada guardado agrega una nueva versión y conserva la anterior.")
-
