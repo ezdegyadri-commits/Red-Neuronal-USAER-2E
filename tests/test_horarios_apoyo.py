@@ -8,7 +8,9 @@ from docx import Document
 from documents.horarios_apoyo import generar_horario_apoyo_pdf, generar_horario_apoyo_cuadricula_pdf
 from services.horarios import detectar_choques, franjas_semanales, normalizar_tabla_horario, proponer_horario
 from services.cronogramas import perfil_especialista
-from ui.horarios_apoyo import TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra, _avisos_maestra, _leer_archivo, _leer_imagen_horario
+from ui.horarios_apoyo import (TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra,
+    _avisos_maestra, _clave_imagen_horario, _leer_archivo, _leer_imagen_horario,
+    _leer_imagenes_pendientes)
 
 
 class HorariosApoyoTest(unittest.TestCase):
@@ -140,6 +142,27 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertEqual(result.iloc[0]["Actividad"], "Inglés")
         self.assertEqual(result.iloc[0]["Grupo"], "4A")
 
+    def test_uploaded_images_are_prepared_once_and_distinguished_by_content(self):
+        class Uploaded:
+            name = "horario.jpg"
+            def __init__(self, content):
+                self.content = content
+            def getvalue(self):
+                return self.content
+
+        first, second = Uploaded(b"lunes"), Uploaded(b"martes")
+        self.assertNotEqual(_clave_imagen_horario("Maestra", "Escuela", first),
+                            _clave_imagen_horario("Maestra", "Escuela", second))
+        rows = normalizar_tabla_horario(pd.DataFrame([{
+            "Dia": "Lunes", "Inicio": "08:00", "Fin": "09:00", "Actividad": "Inglés",
+        }]))
+        state = {}
+        with patch("ui.horarios_apoyo.st.session_state", state):
+            with patch("ui.horarios_apoyo._leer_imagen_horario", return_value=rows) as read:
+                self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (2, []))
+                self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (0, []))
+        self.assertEqual(read.call_count, 2)
+
     def test_monthly_cronogram_generators_are_available_for_all_specialist_areas(self):
         profiles = (
             ("María José Cupul Realpozo", "Psicóloga", "Psicología"),
@@ -168,4 +191,3 @@ class HorariosApoyoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
