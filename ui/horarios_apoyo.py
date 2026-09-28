@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import html
+import json
+import re
 from datetime import time
 from io import BytesIO
 
@@ -11,8 +14,9 @@ from docx import Document
 
 from data import repository as repo
 from config.settings import SCHOOL_YEAR
-from documents.horarios_apoyo import generar_horario_apoyo_pdf
+from documents.horarios_apoyo import generar_horario_apoyo_pdf, generar_horario_apoyo_cuadricula_pdf
 from services.asignaciones import escuelas_asignadas
+from services.alumnos import filtrar_alumnos_por_escuelas
 from services.cronogramas import cargar_publicacion
 from services.horarios import (
     DIAS,
@@ -21,6 +25,7 @@ from services.horarios import (
     cargar_horarios_apoyo,
     cargar_restricciones,
     detectar_choques,
+    franjas_semanales,
     guardar_horario_apoyo,
     guardar_restricciones,
     marcar_avisos_leidos,
@@ -31,6 +36,59 @@ from utils.text import normalizar_texto
 
 
 TIPOS_ARCHIVO_HORARIOS = ["xlsx", "xls", "csv", "doc", "docx", "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"]
+
+
+def _alumnos_de_maestra(nombre, escuela):
+    """Entrega IDs y nombres de la escuela, destacando los asignados a la cuenta."""
+    todos = filtrar_alumnos_por_escuelas(repo.alumnos(), [escuela]).copy()
+    if todos.empty:
+        return todos, todos
+    columna = "Maestra de Apoyo"
+    if columna not in todos:
+        return todos.iloc[0:0].copy(), todos
+    nombre_n = normalizar_texto(nombre).replace(".", "")
+    asignacion = todos[columna].fillna("").astype(str).map(
+        lambda value: normalizar_texto(value).replace(".", "")
+    )
+    propios = todos.loc[asignacion.map(lambda value: bool(value) and
+                              (value == nombre_n or value.endswith(nombre_n) or nombre_n.endswith(value)))].copy()
+    return propios, todos
+
+
+def _grupo_alumno(row):
+    return f"{str(row.get('Grado', '')).strip()} {str(row.get('Grupo', '')).strip()}".strip()
+
+
+def _leer_imagen_horario(archivo):
+    """Propone filas de una imagen; siempre requieren revisión antes de guardarse."""
+    from google.genai import types
+    from ai.engine import client
+
+    cli = client()
+    if cli is None:
+        raise RuntimeError("La lectura de imágenes no está configurada. Transcribe los bloques en la tabla inferior.")
+    extension = archivo.name.rsplit(".", 1)[-1].lower()
+    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+            "webp": "image/webp"}.get(extension)
+    if not mime:
+        raise ValueError("Para lectura asistida usa JPG, PNG o WebP; los demás formatos siguen disponibles como referencia.")
+    from config.settings import GEMINI_MODEL
+    prompt = (
+        "Lee SOLO los bloques de este horario escolar. Devuelve un arreglo JSON, sin markdown, "
+        "con un objeto por bloque y claves Día, Inicio, Fin, Grupo, Actividad, Responsable. "
+        "Usa lunes a viernes y horas HH:MM en formato de 24 horas. Si no distingues un dato, "
+        "déjalo vacío. No inventes grupos, materias ni horas. No incluyas encabezados vacíos."
+    )
+    response = cli.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[prompt, types.Part.from_bytes(data=archivo.getvalue(), mime_type=mime)],
+        config={"temperature": 0},
+    )
+    texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", (response.text or "").strip(), flags=re.I)
+    datos = json.loads(texto)
+    if not isinstance(datos, list) or not datos:
+        raise ValueError("No se reconocieron bloques de horario. Usa la captura manual.")
+    return normalizar_tabla_horario(pd.DataFrame(datos))
 
 
 def _leer_archivo(archivo):
@@ -82,7 +140,7 @@ def _leer_archivo(archivo):
 
 
 def _tabla_vista(frame):
-    columnas = [col for col in ("Dia", "Inicio", "Fin", "Grupo", "Modalidad", "Espacio", "Actividad", "Responsable", "Maestra") if col in frame.columns]
+    columnas = [col for col in ("Dia", "Inicio", "Fin", "Grupo", "Alumnos", "Modalidad", "Espacio", "Actividad", "Responsable", "Maestra") if col in frame.columns]
     salida = frame[columnas].copy()
     if "Dia" in salida:
         salida["_orden"] = salida["Dia"].map({day: i for i, day in enumerate(DIAS)})
@@ -137,6 +195,186 @@ def _avisos_maestra(nombre, escuela):
             st.rerun()
         except Exception as exc:
             st.error(f"No se pudo actualizar el estado de lectura: {exc}")
+
+
+def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
+    """Editor visual semanal; conserva el borrador hasta que la docente guarde."""
+    prefijo = f"cuadricula_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}"
+    clave_franjas, clave_filas = f"{prefijo}_franjas", f"{prefijo}_filas"
+    st.markdown("### Mi plantilla semanal · lunes a viernes")
+    st.caption("Elige cuánto dura cada módulo. Puedes escribir una duración repetida (60) o varias (60,60,30,60); la última se repite hasta terminar la jornada.")
+    c1, c2, c3, c4 = st.columns([1, 1, 2, 1])
+    with c1:
+        inicio = st.time_input("Inicio", value=time(7, 0), key=f"{prefijo}_inicio")
+    with c2:
+        fin = st.time_input("Fin", value=time(13, 0), key=f"{prefijo}_fin")
+    with c3:
+        duraciones = st.text_input("Minutos por módulo", value="60", key=f"{prefijo}_duraciones")
+    with c4:
+        aplicar = st.button("Aplicar módulos", key=f"{prefijo}_aplicar", type="primary")
+    if aplicar or clave_franjas not in st.session_state:
+        try:
+            st.session_state[clave_franjas] = franjas_semanales(inicio, fin, duraciones)
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+    franjas = st.session_state[clave_franjas]
+    borrador = st.session_state.setdefault(clave_filas, {})
+    propia = (horarios_equipo.loc[horarios_equipo["Maestra"].astype(str).eq(nombre)].copy()
+              if not horarios_equipo.empty and "Maestra" in horarios_equipo else pd.DataFrame())
+    if not propia.empty and st.button("Cargar mi horario vigente para editarlo en esta plantilla", key=f"{prefijo}_cargar"):
+        for item in propia.to_dict("records"):
+            clave = f"{item.get('Dia')}|{item.get('Inicio')}|{item.get('Fin')}"
+            borrador[clave] = item
+        franjas_guardadas = sorted({(str(row["Inicio"]), str(row["Fin"]))
+                                   for row in propia.to_dict("records")})
+        if franjas_guardadas:
+            st.session_state[clave_franjas] = franjas_guardadas
+        st.session_state[f"{prefijo}_editor_version"] = st.session_state.get(f"{prefijo}_editor_version", 0) + 1
+        st.rerun()
+
+    filas = list(borrador.values())
+    try:
+        choques = detectar_choques(filas, restricciones, horarios_equipo) if filas else pd.DataFrame()
+    except ValueError as exc:
+        st.error(f"Hay una hora o día inválido en el borrador: {exc}")
+        return
+    celdas_conflicto = {(str(row["Día"]), str(row["Horario propuesto"]).replace("–", "|"))
+                        for row in choques.to_dict("records")} if not choques.empty else set()
+    dias = list(DIAS)
+    tabla = ["<style>.horario-apoyo-grid{width:100%;min-width:850px;border-collapse:collapse;table-layout:fixed;font-family:Arial,sans-serif}"
+             ".horario-apoyo-grid th{background:#d9eaf6;color:#173b57;padding:12px;border:1px solid #a9bfce;font-size:16px}"
+             ".horario-apoyo-grid td{height:86px;vertical-align:top;border:1px solid #a9bfce;padding:9px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}"
+             ".horario-apoyo-grid .hora{background:#f0f5f9;text-align:center;font-weight:bold;width:12%}"
+             ".horario-apoyo-grid .ocupado{background:#eef8f1}.horario-apoyo-grid .choque{background:#ffe5e5}"
+             ".horario-apoyo-grid .vacio{color:#8195a6}</style>",
+             "<div style='overflow-x:auto'><table class='horario-apoyo-grid'><thead><tr><th>Hora</th>"]
+    tabla.extend(f"<th>{html.escape(dia)}</th>" for dia in dias)
+    tabla.append("</tr></thead><tbody>")
+    for desde, hasta in franjas:
+        tabla.append(f"<tr><td class='hora'>{html.escape(desde)}<br>–<br>{html.escape(hasta)}</td>")
+        for dia in dias:
+            item = borrador.get(f"{dia}|{desde}|{hasta}")
+            conflicto = (dia, f"{desde}|{hasta}") in celdas_conflicto
+            contenido = "\n".join(filter(None, (
+                str(item.get("Grupo", "")).strip() if item else "",
+                str(item.get("Alumnos", "")).strip() if item else "",
+                str(item.get("Actividad", "")).strip() if item else "",
+            ))) if item else ""
+            clase = "choque" if conflicto else ("ocupado" if item else "vacio")
+            tabla.append(f"<td class='{clase}'>{html.escape(contenido) if contenido else 'Sin capturar'}</td>")
+        tabla.append("</tr>")
+    tabla.append("</tbody></table></div>")
+    st.markdown("".join(tabla), unsafe_allow_html=True)
+    if not choques.empty:
+        st.error("Se detectaron choques con materias u otros bloques. Revisa la tabla antes de guardar.")
+        st.dataframe(choques, hide_index=True, width="stretch")
+    fuera = [row for row in filas if (str(row.get("Inicio", "")), str(row.get("Fin", ""))) not in franjas]
+    if fuera:
+        st.warning(f"Hay {len(fuera)} bloque(s) de un diseño anterior fuera de las franjas visibles; se conservan en el borrador.")
+        st.dataframe(pd.DataFrame(fuera), hide_index=True, width="stretch")
+
+    st.markdown("#### Capturar o editar un espacio")
+    dia_elegido = st.selectbox("Día", dias, key=f"{prefijo}_dia")
+    franja_elegida = st.selectbox("Módulo", franjas,
+                                format_func=lambda x: f"{x[0]} – {x[1]}", key=f"{prefijo}_modulo")
+    desde, hasta = franja_elegida
+    clave = f"{dia_elegido}|{desde}|{hasta}"
+    actual = borrador.get(clave, {})
+    version = st.session_state.get(f"{prefijo}_editor_version", 0)
+    clave_editor = f"{prefijo}_{clave}_{version}"
+    modo_inicial = 1 if str(actual.get("ID_Alumnos", "")).strip() else (0 if str(actual.get("Grupo", "")).strip() else 2)
+    modo = st.radio("Qué atenderás en este espacio", ["Grado/grupo", "Alumno(s)", "Actividad libre"],
+                    index=modo_inicial, horizontal=True, key=f"{clave_editor}_modo")
+    try:
+        propios, escuela_completa = _alumnos_de_maestra(nombre, escuela)
+    except Exception as exc:
+        st.error(f"No se pudo cargar el padrón de esta escuela: {exc}")
+        return
+    ampliar = False
+    if modo == "Alumno(s)" and len(propios) < len(escuela_completa):
+        ids_guardados = {x for x in str(actual.get("ID_Alumnos", "")).split(",") if x}
+        ids_propios = set(propios.get("ID_Alumno", pd.Series(dtype=str)).fillna("").astype(str))
+        ampliar = st.checkbox("Mostrar también alumnos de esta escuela sin asignación a mi nombre",
+                             value=bool(ids_guardados - ids_propios),
+                             help="Útil si un registro de la base central aún no tiene la maestra correcta.",
+                             key=f"{clave_editor}_ampliar")
+    visibles = escuela_completa if ampliar else propios
+    opciones_grupo = sorted({_grupo_alumno(row) for row in escuela_completa.to_dict("records")
+                             if _grupo_alumno(row)})
+    grupo = ""
+    ids = []
+    if modo == "Grado/grupo":
+        grupo_anterior = str(actual.get("Grupo", ""))
+        opciones = ["", *opciones_grupo]
+        grupo = st.selectbox("Grado y grupo", opciones,
+                             index=opciones.index(grupo_anterior) if grupo_anterior in opciones else 0,
+                             key=f"{clave_editor}_grupo")
+    elif modo == "Alumno(s)":
+        por_id = {str(row.get("ID_Alumno", "")): row for row in visibles.to_dict("records")
+                  if str(row.get("ID_Alumno", "")).strip()}
+        ids_previos = [x for x in str(actual.get("ID_Alumnos", "")).split(",") if x in por_id]
+        ids = st.multiselect("Alumno o alumnos", list(por_id), default=ids_previos,
+                             format_func=lambda x: f"{por_id[x].get('Nombre_Completo', '')} · {_grupo_alumno(por_id[x])} · {x}",
+                             key=f"{clave_editor}_alumnos")
+    actividad = st.text_area("Actividad o propósito (puedes redactarla libremente)",
+                             value=str(actual.get("Actividad", "")),
+                             key=f"{clave_editor}_actividad")
+    c_modalidad, c_espacio = st.columns(2)
+    with c_modalidad:
+        modalidad = st.selectbox("Modalidad", ["Grupal", "Subgrupal", "Individual", "Otra"],
+                                  key=f"{clave_editor}_modalidad")
+    with c_espacio:
+        espacio = st.selectbox("Espacio", ["Aula regular", "Aula de apoyo", "Otro"],
+                               key=f"{clave_editor}_espacio")
+    c_guardar, c_vaciar = st.columns(2)
+    with c_guardar:
+        if st.button("Añadir o actualizar este bloque", type="primary", key=f"{prefijo}_guardar_{clave}"):
+            if modo == "Grado/grupo" and not grupo:
+                st.warning("Selecciona el grado o grupo.")
+            elif modo == "Alumno(s)" and not ids:
+                st.warning("Selecciona al menos un alumno de la escuela.")
+            elif modo == "Actividad libre" and not actividad.strip():
+                st.warning("Escribe la actividad.")
+            else:
+                por_id = {str(row.get("ID_Alumno", "")): row for row in visibles.to_dict("records")}
+                elegidos = [por_id[x] for x in ids]
+                grupos = sorted({_grupo_alumno(row) for row in elegidos if _grupo_alumno(row)})
+                borrador[clave] = {
+                    "Dia": dia_elegido, "Inicio": desde, "Fin": hasta,
+                    "Grupo": grupo or ", ".join(grupos),
+                    "Alumnos": "; ".join(str(row.get("Nombre_Completo", "")) for row in elegidos),
+                    "ID_Alumnos": ",".join(ids),
+                    "Actividad": actividad.strip() or ("Atención individual" if len(ids) == 1 else "Atención de apoyo"),
+                    "Modalidad": modalidad, "Espacio": espacio, "Maestra": nombre,
+                }
+                st.rerun()
+    with c_vaciar:
+        if actual and st.button("Quitar este bloque del borrador", key=f"{prefijo}_vaciar_{clave}"):
+            borrador.pop(clave, None)
+            st.session_state[f"{prefijo}_editor_version"] = version + 1
+            st.rerun()
+
+    confirmada = st.checkbox("Confirmo que revisé los bloques y que el horario está listo",
+                             key=f"{prefijo}_confirmado")
+    listo = bool(borrador) and confirmada and choques.empty and not fuera
+    if listo:
+        try:
+            pdf = generar_horario_apoyo_cuadricula_pdf(escuela, nombre, filas, franjas)
+            st.download_button("Descargar horario oficial horizontal (PDF)", pdf,
+                               file_name=f"Horario_Semanal_{normalizar_texto(nombre).replace(' ', '_')}.pdf",
+                               mime="application/pdf", key=f"{prefijo}_descargar")
+        except Exception as exc:
+            st.error(f"No se pudo preparar el PDF: {exc}")
+            listo = False
+    if st.button("Guardar esta versión en la base central", type="primary",
+                 disabled=not listo, key=f"{prefijo}_publicar"):
+        try:
+            guardar_horario_apoyo(nombre, escuela, filas)
+            st.success("Horario guardado. La versión anterior se conserva.")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"No se pudo guardar el horario: {exc}")
 
 
 def horarios_apoyo_page():
@@ -196,6 +434,25 @@ def horarios_apoyo_page():
         if tipo == "imagen":
             with st.expander(f"Vista de referencia: {archivo.name}"):
                 st.image(archivo.getvalue(), caption=archivo.name, width="stretch")
+                clave_imagen = f"bloques_imagen_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}_{archivo.name}_{len(archivo.getvalue())}"
+                if st.button("Leer bloques de esta imagen", key=f"leer_{clave_imagen}",
+                             help="Envía la imagen al servicio de lectura configurado; revisa los datos detectados antes de guardarlos."):
+                    try:
+                        st.session_state[clave_imagen] = _leer_imagen_horario(archivo)
+                    except Exception as exc:
+                        st.warning(f"No se pudo leer esta imagen: {exc}")
+                if clave_imagen in st.session_state:
+                    st.caption("Revisa día, horas, grupo y materia detectados antes de guardar. Corrige aquí cualquier lectura errónea.")
+                    revisado = st.data_editor(
+                        st.session_state[clave_imagen], num_rows="dynamic", hide_index=True,
+                        width="stretch", key=f"revision_{clave_imagen}",
+                    )
+                    try:
+                        preparados.append((f"{archivo.name} · lectura revisada", normalizar_tabla_horario(revisado.rename(
+                            columns={"Dia": "Día", "Actividad": "Materia"}
+                        ))))
+                    except ValueError as exc:
+                        st.warning(f"Corrige las filas reconocidas: {exc}")
         elif tipo == "word":
             with st.expander(f"Texto de referencia: {archivo.name}"):
                 documento = Document(BytesIO(archivo.getvalue()))
@@ -262,6 +519,8 @@ def horarios_apoyo_page():
             colega = st.selectbox("Consultar horario de una colega", colegas_opciones, key=f"horario_colega_{normalizar_texto(escuela)}")
             st.dataframe(_tabla_vista(colegas.loc[colegas["Maestra"].astype(str).eq(colega)]), hide_index=True, width="stretch")
 
+    st.divider()
+    _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo)
     st.divider()
     st.markdown("### Proponer mi horario semanal")
     c1, c2, c3 = st.columns(3)
@@ -366,7 +625,11 @@ def horarios_apoyo_page():
                 st.session_state[proposal_key + "_version"] = st.session_state.get(proposal_key + "_version", 0) + 1
                 st.rerun()
         with c_descargar:
-            pdf_guardado = generar_horario_apoyo_pdf(escuela, nombre, propia_vista.to_dict("records"))
+            franjas_guardadas = sorted({(str(row["Inicio"]), str(row["Fin"]))
+                                       for row in propio.to_dict("records")})
+            pdf_guardado = generar_horario_apoyo_cuadricula_pdf(
+                escuela, nombre, propio.to_dict("records"), franjas_guardadas,
+            )
             st.download_button(
                 "Descargar mi horario vigente (PDF oficial)",
                 data=pdf_guardado,

@@ -22,6 +22,7 @@ DIAS = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes")
 HORARIOS_APOYO_HEADERS = [
     "ID_Version", "Guardado_En", "Maestra", "ID_Escuela", "Escuela",
     "Dia", "Inicio", "Fin", "Grupo", "Modalidad", "Espacio", "Actividad", "Estado",
+    "Alumnos", "ID_Alumnos",
 ]
 RESTRICCIONES_HEADERS = [
     "ID_Version", "Cargado_En", "Cargado_Por", "ID_Escuela", "Escuela",
@@ -103,6 +104,50 @@ def _hora_minutos(valor):
 def _hora_texto(valor):
     minutos = _hora_minutos(valor)
     return f"{minutos // 60:02d}:{minutos % 60:02d}"
+
+
+def franjas_semanales(inicio, fin, duraciones):
+    """Construye módulos consecutivos; acepta una duración o una lista por módulo."""
+    desde, hasta = _hora_minutos(inicio), _hora_minutos(fin)
+    if hasta <= desde:
+        raise ValueError("La jornada debe terminar después de su inicio.")
+    partes = [str(x).strip() for x in str(duraciones).split(",") if str(x).strip()]
+    if not partes or not all(x.isdecimal() and 15 <= int(x) <= 180 for x in partes):
+        raise ValueError("Indica duraciones de 15 a 180 minutos, por ejemplo 60,60,30,60.")
+    minutos = [int(x) for x in partes]
+    bloques = []
+    cursor = desde
+    indice = 0
+    while cursor < hasta:
+        duracion = minutos[min(indice, len(minutos) - 1)]
+        siguiente = min(cursor + duracion, hasta)
+        if siguiente - cursor < 15:
+            raise ValueError("La última franja quedaría menor de 15 minutos; ajusta la jornada o las duraciones.")
+        bloques.append((f"{cursor // 60:02d}:{cursor % 60:02d}",
+                        f"{siguiente // 60:02d}:{siguiente % 60:02d}"))
+        if len(bloques) > 24:
+            raise ValueError("El horario no puede tener más de 24 módulos por día.")
+        cursor = siguiente
+        indice += 1
+    return bloques
+
+
+def _claves_grupo(valor):
+    """Compara 4º A, 4A y 4to A sin confundir escuelas ni grados."""
+    texto = normalizar_texto(valor)
+    claves = set()
+    for parte in re.split(r"[,;/]+", texto):
+        parte = re.sub(r"\b(?:GRADO|GRUPO|PRIMERO|SEGUNDO|TERCERO)\b", " ", parte)
+        match = re.search(r"(\d+)\s*(?:°|º|TO\.?|O\.?)?\s*([A-Z])?", parte)
+        if match:
+            claves.add((str(int(match.group(1))), match.group(2) or ""))
+    return claves
+
+
+def _coinciden_grupos(primero, segundo):
+    a, b = _claves_grupo(primero), _claves_grupo(segundo)
+    return any(x[0] == y[0] and (not x[1] or not y[1] or x[1] == y[1])
+               for x in a for y in b)
 
 
 def normalizar_dia(valor):
@@ -208,7 +253,7 @@ def guardar_restricciones(escuela, cargado_por, archivo, frame):
         raise ValueError("No quedaron actividades válidas para guardar.")
     retry_google(lambda: ws.append_rows(
         [[row.get(header, "") for header in headers] for row in nuevos],
-        value_input_option="USER_ENTERED",
+        value_input_option="RAW",
     ))
     # A reemplazo del mismo archivo, se preservan las filas anteriores como historial.
     old = [row for row in existentes
@@ -263,12 +308,14 @@ def guardar_horario_apoyo(maestra, escuela, frame):
             "Modalidad": str(item.get("Modalidad", "")).strip(),
             "Espacio": str(item.get("Espacio", "")).strip(),
             "Actividad": actividad, "Estado": "ACTIVO",
+            "Alumnos": str(item.get("Alumnos", "")).strip(),
+            "ID_Alumnos": str(item.get("ID_Alumnos", "")).strip(),
         })
     if not nuevos:
         raise ValueError("No hay sesiones completas para guardar.")
     retry_google(lambda: ws.append_rows(
         [[row.get(header, "") for header in headers] for row in nuevos],
-        value_input_option="USER_ENTERED",
+        value_input_option="RAW",
     ))
     clear_cache("Horarios_Apoyo")
     return version, len(nuevos)
@@ -289,7 +336,7 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
             if normalizar_dia(anterior.get("Dia", "")) != dia:
                 continue
             a_ini, a_fin = _hora_minutos(anterior.get("Inicio")), _hora_minutos(anterior.get("Fin"))
-            mismo_grupo = normalizar_texto(anterior.get("Grupo", "")) == grupo
+            mismo_grupo = _coinciden_grupos(anterior.get("Grupo", ""), item.get("Grupo", ""))
             if ini < a_fin and a_ini < fin:
                 conflictos.append({
                     "Día": dia, "Grupo": item.get("Grupo", ""),
@@ -305,7 +352,7 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
                 continue
             b_ini, b_fin = _hora_minutos(bloque.get("Inicio")), _hora_minutos(bloque.get("Fin"))
             b_grupo = normalizar_texto(bloque.get("Grupo", ""))
-            mismo_grupo_o_general = not b_grupo or b_grupo == grupo
+            mismo_grupo_o_general = not b_grupo or _coinciden_grupos(bloque.get("Grupo", ""), item.get("Grupo", ""))
             if mismo_grupo_o_general and ini < b_fin and b_ini < fin:
                 conflictos.append({
                     "Día": dia, "Grupo": item.get("Grupo", ""),
@@ -320,7 +367,7 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
             for _, bloque in peer.iterrows():
                 if normalizar_dia(bloque.get("Dia", "")) != dia:
                     continue
-                if normalizar_texto(bloque.get("Grupo", "")) != grupo:
+                if not _coinciden_grupos(bloque.get("Grupo", ""), item.get("Grupo", "")):
                     continue
                 b_ini, b_fin = _hora_minutos(bloque.get("Inicio")), _hora_minutos(bloque.get("Fin"))
                 if ini < b_fin and b_ini < fin:

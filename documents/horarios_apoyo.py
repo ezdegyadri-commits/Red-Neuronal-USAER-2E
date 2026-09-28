@@ -139,3 +139,97 @@ def generar_horario_apoyo_pdf(escuela: str, docente: str, filas: list[dict]) -> 
     pdf.set_creation_date(datetime.now(ZoneInfo("America/Mexico_City")))
     return bytes(pdf.output())
 
+
+def generar_horario_apoyo_cuadricula_pdf(
+    escuela: str, docente: str, filas: list[dict], franjas: list[tuple[str, str]],
+) -> bytes:
+    """Horario institucional horizontal con lunes a viernes y firmas al final."""
+    if not franjas:
+        raise ValueError("Configura al menos un módulo para imprimir el horario.")
+    dias = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes")
+    ancho_hora = 34.0
+    ancho_dia = (PAGE_WIDTH - ancho_hora) / 5
+    pdf = _HorarioPDF(orientation="L", unit="mm", format="letter")
+    pdf.set_margins(12, 12, 12)
+    pdf.set_auto_page_break(auto=False)
+    por_celda = {}
+    for item in filas:
+        clave = (str(item.get("Dia", "")), str(item.get("Inicio", "")), str(item.get("Fin", "")))
+        por_celda.setdefault(clave, []).append(item)
+
+    def nueva_pagina():
+        pdf.add_page()
+        pdf.set_y(31)
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.set_text_color(22, 56, 82)
+        pdf.cell(PAGE_WIDTH, 8, _fpdf_text("HORARIO SEMANAL DE ATENCIÓN DE APOYO"),
+                 align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(PAGE_WIDTH, 6, _fpdf_text(f"Escuela: {escuela}   |   Docente: {docente}"),
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(PAGE_WIDTH, 6, _fpdf_text(f"USAER 02-E   |   Ciclo escolar {SCHOOL_YEAR}"),
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(218, 232, 242)
+        pdf.cell(ancho_hora, 9, "HORARIO", border=1, align="C", fill=True)
+        for dia in dias:
+            pdf.cell(ancho_dia, 9, _fpdf_text(dia.upper()), border=1, align="C", fill=True)
+        pdf.ln()
+
+    nueva_pagina()
+    for inicio, fin in franjas:
+        textos = []
+        for dia in dias:
+            partes = []
+            for item in por_celda.get((dia, inicio, fin), []):
+                partes.append("\n".join(filter(None, (
+                    str(item.get("Grupo", "")).strip(),
+                    str(item.get("Alumnos", "")).strip(),
+                    str(item.get("Actividad", "")).strip(),
+                ))))
+            textos.append(_fpdf_text("\n\n".join(partes)))
+        pdf.set_font("Helvetica", "", 7.5)
+        lineas = [len(pdf.multi_cell(ancho_dia - 4, 4, t, dry_run=True,
+                                     output=MethodReturnValue.LINES)) if t else 1 for t in textos]
+        alto = max(17, 4 * max(lineas) + 4)
+        if pdf.get_y() + alto > 160:
+            nueva_pagina()
+            pdf.set_font("Helvetica", "", 7.5)
+        x0, y0 = pdf.get_x(), pdf.get_y()
+        pdf.set_fill_color(245, 248, 251)
+        pdf.rect(x0, y0, ancho_hora, alto, style="DF")
+        pdf.set_xy(x0 + 1, y0 + 5)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.multi_cell(ancho_hora - 2, 5, f"{inicio}\n{fin}", align="C")
+        pdf.set_font("Helvetica", "", 7.5)
+        for indice, texto_celda in enumerate(textos):
+            x = x0 + ancho_hora + indice * ancho_dia
+            pdf.rect(x, y0, ancho_dia, alto)
+            pdf.set_xy(x + 2, y0 + 2)
+            if texto_celda:
+                pdf.multi_cell(ancho_dia - 4, 4, texto_celda, align="C")
+        pdf.set_xy(x0, y0 + alto)
+
+    if pdf.get_y() + 43 > 181:
+        pdf.add_page()
+        pdf.set_y(72)
+    y = pdf.get_y() + 4
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_xy(12, y)
+    pdf.cell(PAGE_WIDTH, 6, "VALIDACIÓN", align="C")
+    for x, titulo, nombre in (
+        (12, "DOCENTE DE APOYO QUE ELABORA", docente),
+        (148, "VO. BO. DIRECTOR DE LA USAER 02-E", "Psic. Edgar Adrián Yam Briceño MD"),
+    ):
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_xy(x, y + 11)
+        pdf.cell(119, 5, _fpdf_text(titulo), align="C")
+        pdf.set_xy(x + 13, y + 25)
+        pdf.cell(93, 5, "_____________________________________", align="C")
+        pdf.set_xy(x, y + 32)
+        pdf.cell(119, 5, _fpdf_text(nombre), align="C")
+    pdf.set_creation_date(datetime.now(ZoneInfo("America/Mexico_City")))
+    return bytes(pdf.output())
+
