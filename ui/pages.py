@@ -1,4 +1,5 @@
 import json
+import hashlib
 import re
 from html import escape
 from datetime import date
@@ -2533,6 +2534,41 @@ def direccion_page(df):
             use_container_width=True,
         )
 
+def _visitas_visibles(registros, nombre, rol, escuelas):
+    """Restringe el historial a escuelas autorizadas y al autor, salvo dirección."""
+    if registros is None or registros.empty:
+        return pd.DataFrame(columns=getattr(registros, "columns", []))
+    if not {"Escuela", "Personal"}.issubset(registros.columns):
+        return registros.iloc[0:0].copy()
+    autorizadas = {normalizar_texto(escuela) for escuela in escuelas}
+    if es_direccion(rol):
+        autorizadas.add(normalizar_texto("Sede USAER"))
+    visibles = registros.loc[registros["Escuela"].fillna("").astype(str).map(normalizar_texto).isin(autorizadas)].copy()
+    if not es_direccion(rol):
+        identidad = normalizar_texto(nombre).replace(".", "")
+        visibles = visibles.loc[visibles["Personal"].fillna("").astype(str).map(
+            lambda valor: normalizar_texto(valor).replace(".", "")
+        ).eq(identidad)].copy()
+    return visibles
+
+
+def _clave_visita(registro):
+    campos = ("ID_Visita", "Fecha", "Escuela", "Personal", "Motivo", "Observaciones", "Evidencia")
+    texto = json.dumps([str(registro.get(campo, "")) for campo in campos], ensure_ascii=False)
+    return hashlib.sha256(texto.encode("utf-8")).hexdigest()
+
+
+def _fecha_visita_guardada(valor):
+    if isinstance(valor, date):
+        return valor
+    for formato in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            return pd.to_datetime(str(valor).strip(), format=formato).date()
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
 def visitas_page(df):
     hero(
         "Constancias de visita",
@@ -2568,6 +2604,57 @@ def visitas_page(df):
         f"Escuelas disponibles para {nombre_usuario}: "
         f"{len(escuelas_permitidas)}"
     )
+
+    registro_recuperado = None
+    with st.expander("📂 Recuperar y descargar constancias anteriores", expanded=True):
+        st.caption("Consulta registros ya guardados. Recuperar o descargar no crea otra constancia ni cambia el folio.")
+        try:
+            historial = _visitas_visibles(
+                repo.visitas(), nombre_usuario, rol_usuario, opciones_escuela
+            )
+        except Exception as exc:
+            st.warning(f"No se pudo consultar el historial de visitas: {exc}")
+            historial = pd.DataFrame()
+        if historial.empty:
+            st.info("No hay constancias anteriores visibles para esta cuenta y sus escuelas.")
+        else:
+            escuelas_historial = sorted(historial["Escuela"].fillna("").astype(str).unique())
+            filtro_escuela = st.selectbox(
+                "Filtrar historial por escuela", ["Todas", *escuelas_historial],
+                key="visita_historial_escuela",
+            )
+            if filtro_escuela != "Todas":
+                historial = historial.loc[historial["Escuela"].astype(str).eq(filtro_escuela)]
+            historial = historial.assign(
+                _fecha_orden=historial["Fecha"].map(_fecha_visita_guardada)
+            ).sort_values("_fecha_orden", ascending=False, kind="stable", na_position="last")
+            registros_historial = {
+                f"{_clave_visita(fila)}-{indice}": fila
+                for indice, fila in enumerate(historial.to_dict("records"))
+            }
+            opciones_historial = list(registros_historial)
+            if opciones_historial:
+                clave_elegida = st.selectbox(
+                    "Constancia guardada (fecha · escuela · autor · folio)",
+                    opciones_historial,
+                    format_func=lambda clave: " · ".join(filter(None, (
+                        str(registros_historial[clave].get("Fecha", "")),
+                        str(registros_historial[clave].get("Escuela", "")),
+                        str(registros_historial[clave].get("Personal", "")),
+                        str(registros_historial[clave].get("ID_Visita", "")),
+                    ))),
+                    key="visita_historial_seleccion",
+                )
+                if st.button("📄 Recuperar esta constancia", type="primary", key="visita_historial_recuperar"):
+                    st.session_state["visita_historial_activa"] = clave_elegida
+            registro_recuperado = registros_historial.get(
+                st.session_state.get("visita_historial_activa", "")
+            )
+            if registro_recuperado:
+                st.success("Constancia recuperada. La vista previa y la descarga aparecen debajo del formulario.")
+                if st.button("Cerrar constancia recuperada", key="visita_historial_cerrar"):
+                    st.session_state.pop("visita_historial_activa", None)
+                    registro_recuperado = None
 
     with st.form("form_constancia", clear_on_submit=False):
 
@@ -2646,7 +2733,53 @@ def visitas_page(df):
             use_container_width=True
         )
 
-    if not generar_acta:
+    if generar_acta:
+        st.session_state.pop("visita_historial_activa", None)
+        registro_recuperado = None
+    elif registro_recuperado:
+        fecha_guardada = _fecha_visita_guardada(registro_recuperado.get("Fecha", ""))
+        if fecha_guardada is None:
+            st.warning("El registro no tiene una fecha válida; no se reconstruyó para evitar una constancia con fecha incorrecta.")
+            return
+        escuela_guardada = str(registro_recuperado.get("Escuela", "")).strip()
+        escuela_canonica = next(
+            (escuela for escuela in opciones_escuela
+             if normalizar_texto(escuela) == normalizar_texto(escuela_guardada)), None
+        )
+        if escuela_canonica is None:
+            st.error("Esta escuela ya no está autorizada para tu cuenta.")
+            return
+        escuela_seleccionada = escuela_canonica
+        fecha_visita = fecha_guardada
+        autor = str(registro_recuperado.get("Personal", "")).strip()
+        if normalizar_texto(autor).replace(".", "") == normalizar_texto(nombre_usuario).replace(".", ""):
+            rol_autor = rol_usuario
+        else:
+            rol_autor = ""
+            try:
+                usuarios = repo.usuarios()
+                if {"Nombre", "Rol"}.issubset(usuarios.columns):
+                    iguales = usuarios.loc[usuarios["Nombre"].fillna("").astype(str).map(
+                        lambda valor: normalizar_texto(valor).replace(".", "")
+                    ).eq(normalizar_texto(autor).replace(".", ""))]
+                    if not iguales.empty:
+                        rol_autor = str(iguales.iloc[0].get("Rol", ""))
+            except Exception:
+                pass
+        nombre_usuario = autor
+        rol_usuario = rol_autor
+        es_director = es_direccion(rol_autor)
+        if not rol_autor:
+            st.warning(
+                "El registro antiguo no conserva la función del autor y no se encontró en Usuarios. "
+                "Verifica el cargo que aparece junto a la firma antes de imprimir."
+            )
+        motivos_izq = []
+        motivos_der = [motivo.strip() for motivo in str(registro_recuperado.get("Motivo", "")).split(",") if motivo.strip()]
+        detalles_motivos = str(registro_recuperado.get("Evidencia", ""))
+        descripcion_actividad = str(registro_recuperado.get("Observaciones", ""))
+        id_visita = str(registro_recuperado.get("ID_Visita", "")).strip()
+    else:
         return
 
     # ---------------------------------------------------------
@@ -2738,22 +2871,20 @@ def visitas_page(df):
     # GUARDAR EN REGISTRO_VISITAS
     # ---------------------------------------------------------
 
-    try:
-        id_visita = repo.save_visita({
-            "Fecha": fecha_visita.strftime("%d/%m/%Y"),
-            "Escuela": escuela_seleccionada,
-            "Personal": nombre_usuario,
-            "Motivo": motivos_completos,
-            "Observaciones": descripcion_actividad,
-            "Evidencia": detalles_motivos,
-            "Estatus": "GENERADA",
-        })
-
-    except Exception as ex:
-        st.error(
-            f"No fue posible guardar la visita en la plataforma: {ex}"
-        )
-        return
+    if generar_acta:
+        try:
+            id_visita = repo.save_visita({
+                "Fecha": fecha_visita.strftime("%d/%m/%Y"),
+                "Escuela": escuela_seleccionada,
+                "Personal": nombre_usuario,
+                "Motivo": motivos_completos,
+                "Observaciones": descripcion_actividad,
+                "Evidencia": detalles_motivos,
+                "Estatus": "GENERADA",
+            })
+        except Exception as ex:
+            st.error(f"No fue posible guardar la visita en la plataforma: {ex}")
+            return
 
     # ---------------------------------------------------------
     # FUNCIONES PARA MARCAR LAS OPCIONES
@@ -2768,7 +2899,7 @@ def visitas_page(df):
 
     def detalle(opcion, linea="________________________"):
         if detalles_motivos and opcion in motivos:
-            return f"<b>{detalles_motivos}</b>"
+            return f"<b>{escape(detalles_motivos)}</b>"
         return linea
 
     motivos_personalizados = [
@@ -2859,6 +2990,8 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
 </tr>
 """
 
+    inicio_ciclo = fecha_visita.year if fecha_visita.month >= 9 else fecha_visita.year - 1
+    ciclo_constancia = SCHOOL_YEAR if generar_acta else f"{inicio_ciclo} – {inicio_ciclo + 1}"
     html_constancia = f"""
 <div style="
     background-color:white;
@@ -2882,12 +3015,12 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
 
 <div style="font-size:12px;margin-bottom:4px;">
     Servicio de educación especial que realiza la visita:
-    <u>{especialidad}</u>
+    <u>{escape(especialidad)}</u>
 </div>
 
 <div style="font-size:12px;margin-bottom:4px;">
     Curso escolar:
-    <u>{SCHOOL_YEAR}</u>
+    <u>{escape(ciclo_constancia)}</u>
     &nbsp;&nbsp;&nbsp;&nbsp;
     Fecha de la visita:
     <u>{fecha_visita.strftime("%d/%m/%Y")}</u>
@@ -2898,7 +3031,7 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
 
 <div style="font-size:12px;margin-bottom:10px;">
     Escuela:
-    <u>{escuela_seleccionada}</u>
+    <u>{escape(escuela_seleccionada)}</u>
     &nbsp;&nbsp;&nbsp;&nbsp;
     Localidad:
     <u>MÉRIDA</u>
@@ -3025,7 +3158,7 @@ Otros: {detalle("Otros")}<br>
 <meta charset="UTF-8">
 
 <title>
-Constancia de Visita - {escuela_seleccionada}
+Constancia de Visita - {escape(escuela_seleccionada)}
 </title>
 
 <style>
@@ -3068,9 +3201,14 @@ Constancia de Visita - {escuela_seleccionada}
 </html>
 """
 
-    st.success(
-        f"Constancia generada correctamente. Folio: {id_visita}"
-    )
+    if generar_acta:
+        st.success(f"Constancia generada correctamente. Folio: {id_visita}")
+    else:
+        st.info(
+            f"Vista reconstruida del registro {id_visita or 'sin folio'}. "
+            "No se creó un registro nuevo. El archivo original no se almacenó; "
+            "esta copia utiliza los datos conservados en Registro_Visitas."
+        )
 
     st.markdown(
         html_constancia,
@@ -3083,14 +3221,12 @@ Constancia de Visita - {escuela_seleccionada}
         file_name=(
             f"Constancia_Visita_"
             f"{escuela_seleccionada.replace(' ', '_')}_"
-            f"{fecha_visita.strftime('%Y%m%d')}.html"
+            f"{fecha_visita.strftime('%Y%m%d')}_"
+            f"{re.sub(r'[^A-Za-z0-9_-]', '_', str(id_visita))}.html"
         ),
         mime="text/html",
         use_container_width=True,
     )
 
-    st.caption(
-        "La constancia también quedó registrada en "
-        "Registro_Visitas."
-    )
+    st.caption("Registro_Visitas conserva el historial; descargar no añade ni modifica filas.")
 
