@@ -13,7 +13,7 @@ from ui.direccion_rapida import direccion_page_rapida
 from ui.sugerencias import anexo4_page
 from ui.estadisticas import estadisticas_page
 from ui.cronogramas import cronogramas_page
-from ui.horarios_apoyo import horarios_apoyo_page
+from ui.horarios_apoyo import horarios_apoyo_page, horarios_apoyo_direccion
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -80,6 +80,8 @@ elif page=="Cronograma mensual": cronogramas_page()
 elif page=="Horarios de apoyo": horarios_apoyo_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
+    horarios_apoyo_direccion()
+    st.divider()
     configuracion_oficios_direccion()
     st.divider()
     st.subheader("Cronogramas del equipo")
