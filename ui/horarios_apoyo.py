@@ -230,6 +230,7 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
                                    for row in propia.to_dict("records")})
         if franjas_guardadas:
             st.session_state[clave_franjas] = franjas_guardadas
+        st.session_state[f"{prefijo}_editor_version"] = st.session_state.get(f"{prefijo}_editor_version", 0) + 1
         st.rerun()
 
     filas = list(borrador.values())
@@ -280,8 +281,11 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     desde, hasta = franja_elegida
     clave = f"{dia_elegido}|{desde}|{hasta}"
     actual = borrador.get(clave, {})
+    version = st.session_state.get(f"{prefijo}_editor_version", 0)
+    clave_editor = f"{prefijo}_{clave}_{version}"
+    modo_inicial = 1 if str(actual.get("ID_Alumnos", "")).strip() else (0 if str(actual.get("Grupo", "")).strip() else 2)
     modo = st.radio("Qué atenderás en este espacio", ["Grado/grupo", "Alumno(s)", "Actividad libre"],
-                    horizontal=True, key=f"{prefijo}_modo_{clave}")
+                    index=modo_inicial, horizontal=True, key=f"{clave_editor}_modo")
     try:
         propios, escuela_completa = _alumnos_de_maestra(nombre, escuela)
     except Exception as exc:
@@ -289,9 +293,12 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
         return
     ampliar = False
     if modo == "Alumno(s)" and len(propios) < len(escuela_completa):
+        ids_guardados = {x for x in str(actual.get("ID_Alumnos", "")).split(",") if x}
+        ids_propios = set(propios.get("ID_Alumno", pd.Series(dtype=str)).fillna("").astype(str))
         ampliar = st.checkbox("Mostrar también alumnos de esta escuela sin asignación a mi nombre",
+                             value=bool(ids_guardados - ids_propios),
                              help="Útil si un registro de la base central aún no tiene la maestra correcta.",
-                             key=f"{prefijo}_ampliar_{clave}")
+                             key=f"{clave_editor}_ampliar")
     visibles = escuela_completa if ampliar else propios
     opciones_grupo = sorted({_grupo_alumno(row) for row in escuela_completa.to_dict("records")
                              if _grupo_alumno(row)})
@@ -302,24 +309,24 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
         opciones = ["", *opciones_grupo]
         grupo = st.selectbox("Grado y grupo", opciones,
                              index=opciones.index(grupo_anterior) if grupo_anterior in opciones else 0,
-                             key=f"{prefijo}_grupo_{clave}")
+                             key=f"{clave_editor}_grupo")
     elif modo == "Alumno(s)":
         por_id = {str(row.get("ID_Alumno", "")): row for row in visibles.to_dict("records")
                   if str(row.get("ID_Alumno", "")).strip()}
         ids_previos = [x for x in str(actual.get("ID_Alumnos", "")).split(",") if x in por_id]
         ids = st.multiselect("Alumno o alumnos", list(por_id), default=ids_previos,
                              format_func=lambda x: f"{por_id[x].get('Nombre_Completo', '')} · {_grupo_alumno(por_id[x])} · {x}",
-                             key=f"{prefijo}_alumnos_{clave}")
+                             key=f"{clave_editor}_alumnos")
     actividad = st.text_area("Actividad o propósito (puedes redactarla libremente)",
                              value=str(actual.get("Actividad", "")),
-                             key=f"{prefijo}_actividad_{clave}")
+                             key=f"{clave_editor}_actividad")
     c_modalidad, c_espacio = st.columns(2)
     with c_modalidad:
         modalidad = st.selectbox("Modalidad", ["Grupal", "Subgrupal", "Individual", "Otra"],
-                                  key=f"{prefijo}_modalidad_{clave}")
+                                  key=f"{clave_editor}_modalidad")
     with c_espacio:
         espacio = st.selectbox("Espacio", ["Aula regular", "Aula de apoyo", "Otro"],
-                               key=f"{prefijo}_espacio_{clave}")
+                               key=f"{clave_editor}_espacio")
     c_guardar, c_vaciar = st.columns(2)
     with c_guardar:
         if st.button("Añadir o actualizar este bloque", type="primary", key=f"{prefijo}_guardar_{clave}"):
@@ -345,6 +352,7 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     with c_vaciar:
         if actual and st.button("Quitar este bloque del borrador", key=f"{prefijo}_vaciar_{clave}"):
             borrador.pop(clave, None)
+            st.session_state[f"{prefijo}_editor_version"] = version + 1
             st.rerun()
 
     confirmada = st.checkbox("Confirmo que revisé los bloques y que el horario está listo",
