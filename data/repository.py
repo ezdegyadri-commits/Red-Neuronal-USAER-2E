@@ -664,6 +664,7 @@ def save_anexo7(data):
  ensure_headers('Anexo7_Derivacion', BASE_HEADERS['Anexo7_Derivacion'])
  data=dict(data); data.setdefault('ID_Anexo7',next_numeric_id('Anexo7_Derivacion','ID_Anexo7','AN7')); append_dict('Anexo7_Derivacion',data); return data['ID_Anexo7']
 def save_visita(data):
+ ensure_headers('Registro_Visitas', BASE_HEADERS['Registro_Visitas'])
  data=dict(data); data.setdefault('ID_Visita',next_numeric_id('Registro_Visitas','ID_Visita','VIS')); append_dict('Registro_Visitas',data); return data['ID_Visita']
 
 def ensure_integrated_sheets():
