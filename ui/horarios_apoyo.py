@@ -98,6 +98,21 @@ def _clave_imagen_horario(nombre, escuela, archivo):
     return f"bloques_imagen_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}_{huella}"
 
 
+def _limpiar_lectura_imagen(nombre, escuela, archivo):
+    """Olvida solo la lectura temporal de una imagen; no toca horarios guardados."""
+    clave = _clave_imagen_horario(nombre, escuela, archivo)
+    for key in (clave, f"ocr_error_{clave}"):
+        st.session_state.pop(key, None)
+
+
+def _borrador_de_horario(filas):
+    """Construye un borrador nuevo desde la versión vigente, sin mezclar residuos."""
+    return {
+        f"{item.get('Dia')}|{item.get('Inicio')}|{item.get('Fin')}": item
+        for item in filas
+    }
+
+
 def _leer_imagenes_pendientes(imagenes, nombre, escuela):
     """Lee el conjunto de imágenes en una sola petición al modelo para reducir cuota."""
     errores = []
@@ -114,11 +129,11 @@ def _leer_imagenes_pendientes(imagenes, nombre, escuela):
         return 0, ["La lectura automática no está configurada; captura los bloques en la tabla manual."]
     contents = [
         "Lee los horarios de todas las imágenes adjuntas. Devuelve SOLO JSON válido con forma "
-        '{"archivos":{"nombre exacto del archivo":[{"Día":"Lunes","Inicio":"08:00",'
+        '{"archivos":{"número::nombre de archivo":[{"Día":"Lunes","Inicio":"08:00",'
         '"Fin":"08:50","Grupo":"2A","Actividad":"Inglés","Responsable":""}]}}. '
         "No inventes datos; deja campos vacíos si no se distinguen. Horas HH:MM de 24 horas."
     ]
-    claves = {}
+    claves = []
     for archivo in pendientes:
         ext = archivo.name.rsplit(".", 1)[-1].lower()
         mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
@@ -126,8 +141,9 @@ def _leer_imagenes_pendientes(imagenes, nombre, escuela):
         if not mime:
             errores.append(f"{archivo.name}: formato no compatible para lectura automática.")
             continue
-        contents.extend([f"Archivo: {archivo.name}", types.Part.from_bytes(data=archivo.getvalue(), mime_type=mime)])
-        claves[archivo.name] = archivo
+        etiqueta_archivo = f"{len(claves) + 1}::{archivo.name}"
+        contents.extend([f"Archivo: {etiqueta_archivo}", types.Part.from_bytes(data=archivo.getvalue(), mime_type=mime)])
+        claves.append((etiqueta_archivo, archivo))
     if not claves:
         return 0, errores
     try:
@@ -138,22 +154,29 @@ def _leer_imagenes_pendientes(imagenes, nombre, escuela):
         raw = json.loads((response.text or "{}").strip())
         resultado = raw.get("archivos", raw) if isinstance(raw, dict) else {}
         leidas = 0
-        for nombre_archivo, archivo in claves.items():
-            filas = resultado.get(nombre_archivo, [])
+        for etiqueta_archivo, archivo in claves:
+            filas = resultado.get(etiqueta_archivo, [])
             if not filas:
-                errores.append(f"{nombre_archivo}: no se reconocieron bloques; puedes transcribirlos manualmente.")
+                errores.append(f"{archivo.name}: no se reconocieron bloques; puedes transcribirlos manualmente.")
                 st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = errores[-1]
                 continue
             try:
                 st.session_state[_clave_imagen_horario(nombre, escuela, archivo)] = normalizar_tabla_horario(pd.DataFrame(filas))
                 leidas += 1
             except Exception as exc:
-                errores.append(f"{nombre_archivo}: revisa la captura manual ({exc}).")
+                errores.append(f"{archivo.name}: revisa la captura manual ({exc}).")
                 st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = errores[-1]
         return leidas, errores
     except Exception as exc:
-        aviso = f"No se pudo leer el conjunto de imágenes (posible límite temporal del servicio): {exc}. No se guardó ni borró ningún horario; usa captura manual o reintenta después."
-        for archivo in claves.values():
+        detalle = str(exc)
+        if "503" in detalle or "UNAVAILABLE" in detalle.upper() or "HIGH DEMAND" in detalle.upper():
+            causa = "El servicio de lectura está temporalmente saturado (503); no es un error de guardado."
+        elif "429" in detalle or "QUOTA" in detalle.upper() or "RESOURCE_EXHAUSTED" in detalle.upper():
+            causa = "El servicio alcanzó su límite de solicitudes (429); espera antes de volver a intentarlo."
+        else:
+            causa = "El servicio no pudo completar la lectura."
+        aviso = f"{causa} No se guardó ni modificó ningún horario. Puedes reintentar manualmente o capturar los bloques en la tabla. Detalle: {detalle}"
+        for _etiqueta_archivo, archivo in claves:
             st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = aviso
         return 0, [aviso]
 
@@ -307,13 +330,14 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     propia = (horarios_equipo.loc[horarios_equipo["Maestra"].astype(str).eq(nombre)].copy()
               if not horarios_equipo.empty and "Maestra" in horarios_equipo else pd.DataFrame())
     if not propia.empty and st.button("Cargar mi horario vigente para editarlo en esta plantilla", key=f"{prefijo}_cargar"):
-        for item in propia.to_dict("records"):
-            clave = f"{item.get('Dia')}|{item.get('Inicio')}|{item.get('Fin')}"
-            borrador[clave] = item
-        franjas_guardadas = sorted({(str(row["Inicio"]), str(row["Fin"])) for row in propia.to_dict("records")})
-        if franjas_guardadas:
-            franjas = franjas_guardadas
+        # Reemplaza el borrador completo; un merge deja bloques obsoletos "congelados".
+        st.session_state[clave_filas] = _borrador_de_horario(propia.to_dict("records"))
         st.session_state[f"{prefijo}_editor_version"] = st.session_state.get(f"{prefijo}_editor_version", 0) + 1
+        st.rerun()
+    if borrador and st.button("Reiniciar borrador temporal", key=f"{prefijo}_reiniciar_borrador"):
+        st.session_state[clave_filas] = {}
+        st.session_state[f"{prefijo}_editor_version"] = st.session_state.get(f"{prefijo}_editor_version", 0) + 1
+        st.info("Se limpió únicamente el borrador de esta sesión. El horario guardado y su historial siguen intactos.")
         st.rerun()
 
     filas = list(borrador.values())
@@ -510,6 +534,11 @@ def horarios_apoyo_page():
     st.caption("Organiza tus sesiones, consulta referencias de la escuela y recibe aquí los cronogramas del equipo especialista.")
     escuela = st.selectbox("Escuela asignada", escuelas, key="horario_apoyo_escuela")
     _avisos_maestra(nombre, escuela)
+    clave_identidad = f"{normalizar_texto(nombre)}_{normalizar_texto(escuela)}"
+    if st.button("↻ Actualizar horarios guardados", key=f"actualizar_horarios_{clave_identidad}"):
+        cargar_restricciones.clear()
+        cargar_horarios_apoyo.clear()
+        st.rerun()
     st.divider()
 
     try:
@@ -523,9 +552,12 @@ def horarios_apoyo_page():
     st.info("**1. Sube los archivos → 2. Revisa o completa los bloques → 3. Guarda.** Las imágenes necesitan lectura o captura antes de convertirse en horarios que permitan detectar choques. Los horarios anteriores se conservan.")
     plantilla = pd.DataFrame([{"Día": "Lunes", "Inicio": "08:00", "Fin": "08:50", "Actividad": "Inglés", "Grupo": "2A", "Responsable": ""}])
     st.download_button("Descargar plantilla de horario", plantilla.to_csv(index=False).encode("utf-8-sig"), "Plantilla_horario_escolar.csv", "text/csv", key="plantilla_horario_apoyo")
+    clave_version_carga = f"version_carga_horario_{clave_identidad}"
+    version_carga = st.session_state.get(clave_version_carga, 0)
+    clave_uploader = f"carga_restricciones_horario_{clave_identidad}_{version_carga}"
     archivos = st.file_uploader(
         "Horarios de materias, docentes y otras maestras de apoyo",
-        type=TIPOS_ARCHIVO_HORARIOS, accept_multiple_files=True, key="carga_restricciones_horario",
+        type=TIPOS_ARCHIVO_HORARIOS, accept_multiple_files=True, key=clave_uploader,
     )
     preparados = []
     referencias = []
@@ -551,19 +583,39 @@ def horarios_apoyo_page():
     imagenes = [archivo for archivo, tipo in referencias if tipo == "imagen"]
     if imagenes:
         st.markdown(f"#### 🖼️ {len(imagenes)} imagen(es) cargada(s)")
+        hay_lectura_fallida = any(
+            f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" in st.session_state
+            for archivo in imagenes
+        )
+        if st.button("🧹 Quitar esta carga y empezar de nuevo", key=f"limpiar_carga_{clave_identidad}_{version_carga}"):
+            for archivo in imagenes:
+                _limpiar_lectura_imagen(nombre, escuela, archivo)
+            st.session_state[clave_version_carga] = version_carga + 1
+            st.rerun()
         pendientes = [archivo for archivo in imagenes
                       if _clave_imagen_horario(nombre, escuela, archivo) not in st.session_state
                       and f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" not in st.session_state]
-        if pendientes:
-            st.info(f"Leyendo automáticamente {len(pendientes)} imagen(es) en una sola solicitud para reducir errores de cuota…")
+        errores_guardados = [
+            st.session_state.get(f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}")
+            for archivo in imagenes
+        ]
+        for fallo in dict.fromkeys(error for error in errores_guardados if error):
+            st.warning(fallo)
+        if pendientes or hay_lectura_fallida:
+            etiqueta = "↻ Reintentar lectura de imágenes" if hay_lectura_fallida else "✨ Analizar imágenes cargadas"
+            st.info("La lectura automática inicia solo cuando la solicitas; así no se repite al editar otros campos ni al actualizar la página.")
+        else:
+            st.success("Las imágenes ya se analizaron. Comprueba y corrige los bloques antes de guardarlos.")
+        if (pendientes or hay_lectura_fallida) and st.button(etiqueta, type="primary", key=f"analizar_imagenes_{clave_identidad}_{version_carga}"):
+            if hay_lectura_fallida:
+                for archivo in imagenes:
+                    st.session_state.pop(f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}", None)
             with st.spinner("Reconociendo los bloques de horario. Podrás corregirlos antes de guardarlos…"):
                 leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
             for fallo in fallos:
                 st.warning(fallo)
             if leidas:
                 st.rerun()
-        else:
-            st.success("Las imágenes están listas para revisión. Comprueba los bloques antes de guardar.")
     for archivo, tipo in referencias:
         if tipo == "imagen":
             clave_imagen = _clave_imagen_horario(nombre, escuela, archivo)
@@ -574,7 +626,7 @@ def horarios_apoyo_page():
                 st.caption("Corrige día, horas, grupo y actividad. Solo estos bloques revisados se guardarán.")
                 revisado = st.data_editor(
                     st.session_state[clave_imagen], num_rows="dynamic", hide_index=True,
-                    width="stretch", key=f"revision_{clave_imagen}",
+                    width="stretch", key=f"revision_{clave_imagen}_{version_carga}",
                 )
                 try:
                     preparados.append((f"{archivo.name} · lectura revisada", normalizar_tabla_horario(revisado)))
@@ -625,15 +677,7 @@ def horarios_apoyo_page():
                     if not captura.empty:
                         filas_guardar.append(("Captura desde archivo de referencia", normalizar_tabla_horario(captura)))
                 if not filas_guardar:
-                    if imagenes:
-                        with st.spinner("Leyendo las imágenes para preparar los horarios…"):
-                            leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
-                        for fallo in fallos:
-                            st.warning(fallo)
-                        if leidas:
-                            st.info("Ya preparé los bloques. Revísalos en la vista previa y vuelve a pulsar Guardar.")
-                            st.rerun()
-                    st.warning("Aún no hay bloques válidos. Lee las imágenes con el botón de arriba o captura al menos una fila completa en la tabla manual.")
+                    st.warning("Aún no hay bloques válidos. Analiza las imágenes con el botón indicado o captura al menos una fila completa en la tabla manual.")
                     st.stop()
                 _, total = guardar_restricciones_lote(escuela, nombre, filas_guardar)
                 st.success(f"Se añadieron {total} bloques de referencia. Las versiones sustituidas permanecen en el historial.")

@@ -10,7 +10,7 @@ from services.horarios import detectar_choques, franjas_semanales, normalizar_ta
 from services.cronogramas import perfil_especialista
 from ui.horarios_apoyo import (TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra,
     _avisos_maestra, _clave_imagen_horario, _leer_archivo, _leer_imagen_horario,
-    _leer_imagenes_pendientes)
+    _leer_imagenes_pendientes, _borrador_de_horario, _limpiar_lectura_imagen)
 
 
 class HorariosApoyoTest(unittest.TestCase):
@@ -157,11 +157,69 @@ class HorariosApoyoTest(unittest.TestCase):
             "Dia": "Lunes", "Inicio": "08:00", "Fin": "09:00", "Actividad": "Inglés",
         }]))
         state = {}
+        service = Mock()
+        service.models.generate_content.return_value.text = (
+            '{"archivos":{"1::horario.jpg":[{"Dia":"Lunes","Inicio":"08:00","Fin":"09:00","Actividad":"Inglés"}],'
+            '"2::horario.jpg":[{"Dia":"Martes","Inicio":"08:00","Fin":"09:00","Actividad":"Maya"}]}}'
+        )
         with patch("ui.horarios_apoyo.st.session_state", state):
-            with patch("ui.horarios_apoyo._leer_imagen_horario", return_value=rows) as read:
-                self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (2, []))
-                self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (0, []))
-        self.assertEqual(read.call_count, 2)
+            with patch("ui.horarios_apoyo.normalizar_tabla_horario", side_effect=[rows, rows]):
+                genai_stub = Mock()
+                genai_stub.types.Part.from_bytes.side_effect = lambda **kwargs: kwargs
+                with patch.dict("sys.modules", {"google.genai": genai_stub}):
+                    with patch("ai.engine.client", return_value=service):
+                        self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (2, []))
+                        self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (0, []))
+        self.assertEqual(service.models.generate_content.call_count, 1)
+
+    def test_reloading_schedule_replaces_stale_draft_instead_of_merging(self):
+        vigente = [{"Dia": "Lunes", "Inicio": "08:00", "Fin": "09:00", "Actividad": "Lectura"}]
+        borrador_previo = {
+            "Viernes|12:00|13:00": {"Dia": "Viernes", "Inicio": "12:00", "Fin": "13:00", "Actividad": "Bloque obsoleto"}
+        }
+        actualizado = _borrador_de_horario(vigente)
+        self.assertEqual(list(actualizado), ["Lunes|08:00|09:00"])
+        self.assertNotIn("Viernes|12:00|13:00", actualizado)
+        # La construcción no muta ni borra el borrador previo ni la base central.
+        self.assertIn("Viernes|12:00|13:00", borrador_previo)
+
+    def test_clearing_image_load_only_removes_temporary_ocr_state(self):
+        class Uploaded:
+            name = "horario.jpg"
+            def getvalue(self):
+                return b"imagen temporal"
+
+        archivo = Uploaded()
+        clave = _clave_imagen_horario("Zuemmy", "Escuela", archivo)
+        state = {clave: pd.DataFrame([{"Actividad": "lectura"}]),
+                 f"ocr_error_{clave}": "503", "otra_clave": "se conserva"}
+        with patch("ui.horarios_apoyo.st.session_state", state):
+            _limpiar_lectura_imagen("Zuemmy", "Escuela", archivo)
+        self.assertNotIn(clave, state)
+        self.assertNotIn(f"ocr_error_{clave}", state)
+        self.assertEqual(state["otra_clave"], "se conserva")
+
+    def test_image_503_message_says_nothing_was_saved_and_keeps_retry_state(self):
+        class Uploaded:
+            name = "horario.jpg"
+            def getvalue(self):
+                return b"imagen-503"
+
+        archivo = Uploaded()
+        state = {}
+        service = Mock()
+        service.models.generate_content.side_effect = RuntimeError("503 UNAVAILABLE high demand")
+        genai_stub = Mock()
+        genai_stub.types.Part.from_bytes.return_value = "imagen"
+        with patch("ui.horarios_apoyo.st.session_state", state):
+            with patch.dict("sys.modules", {"google.genai": genai_stub}):
+                with patch("ai.engine.client", return_value=service):
+                    leidas, fallos = _leer_imagenes_pendientes([archivo], "Zuemmy", "Escuela")
+        self.assertEqual(leidas, 0)
+        self.assertIn("503", fallos[0])
+        self.assertIn("No se guardó ni modificó", fallos[0])
+        self.assertIn(f"ocr_error_{_clave_imagen_horario('Zuemmy', 'Escuela', archivo)}", state)
+
 
     def test_monthly_cronogram_generators_are_available_for_all_specialist_areas(self):
         profiles = (
