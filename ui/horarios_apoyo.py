@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from difflib import SequenceMatcher
+from difflib import SequenceMatcher
 from datetime import time
 from io import BytesIO
 
@@ -37,7 +38,7 @@ from services.horarios import (
 from utils.text import normalizar_texto
 
 
-TIPOS_ARCHIVO_HORARIOS = ["xlsx", "xls", "csv", "doc", "docx", "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"]
+TIPOS_ARCHIVO_HORARIOS = ["xlsx", "xls", "csv", "doc", "docx", "pdf", "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"]
 
 
 def _alumnos_de_maestra(nombre, escuela):
@@ -114,6 +115,29 @@ def _borrador_de_horario(filas):
     }
 
 
+def _interpretar_celda_horario(texto):
+    """Separa el grado de la actividad para que los avisos de choque sean específicos."""
+    original = " ".join(str(texto or "").split()).strip(" |·,;.-")
+    clave = normalizar_texto(original)
+    ordinales = {
+        "PRIMERO": "1°", "PRIMER": "1°", "PRIMERA": "1°",
+        "SEGUNDO": "2°", "SEGUNDA": "2°", "TERCERO": "3°",
+        "TERCER": "3°", "TERCERA": "3°", "CUARTO": "4°",
+        "CUARTA": "4°", "QUINTO": "5°", "QUINTA": "5°",
+        "SEXTO": "6°", "SEXTA": "6°",
+    }
+    patron = re.compile(
+        r"\b(PRIMER[OA]?|SEGUND[OA]|TERCER[OA]?|CUART[OA]|QUINT[OA]|SEXT[OA])\s+GRADO\b",
+    )
+    coincidencia = patron.search(clave)
+    if not coincidencia:
+        return "", original or "Horario escolar"
+    grupo = ordinales.get(coincidencia.group(1), "")
+    resto = (clave[:coincidencia.start()] + " " + clave[coincidencia.end():]).strip(" |·,;.-")
+    actividad = resto.title() if resto else "Clase regular"
+    return grupo, actividad
+
+
 def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
     """Interpreta tablas horarias aunque el OCR divida las horas y los encabezados."""
     dias = {
@@ -141,13 +165,14 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
         raise ValueError("No se detectó texto legible.")
 
     centros_dia = {}
+    y_encabezados = []
+    alias = {"LUN": "Lunes", "MAR": "Martes", "MIE": "Miércoles",
+             "JUE": "Jueves", "VIE": "Viernes"}
     for palabra in palabras:
         clave_dia = normalizar_texto(palabra["texto"]).strip(".,;:")
         dia = dias.get(clave_dia)
         if dia is None:
             # Acepta abreviaturas comunes y errores pequeños de lectura en encabezados.
-            alias = {"LUN": "Lunes", "MAR": "Martes", "MIE": "Miércoles",
-                     "JUE": "Jueves", "VIE": "Viernes"}
             dia = alias.get(clave_dia)
         if dia is None and len(clave_dia) >= 4:
             dia = next((valor for clave, valor in dias.items()
@@ -158,6 +183,7 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
                 dia = dias[coincidencia]
         if dia:
             centros_dia.setdefault(dia, []).append(palabra["x"])
+            y_encabezados.append(palabra["y"])
     centros_dia = {dia: sum(xs) / len(xs) for dia, xs in centros_dia.items()}
     if len(centros_dia) < 2:
         raise ValueError("No se reconocieron suficientes encabezados de días para ordenar el horario.")
@@ -220,7 +246,10 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
     ]
     filas = []
     for indice, fila in enumerate(filas_hora):
-        arriba = 0 if indice == 0 else (filas_hora[indice - 1]["y"] + fila["y"]) / 2
+        # No mezclar el título, escuela ni encabezado de días dentro del primer módulo.
+        arriba = ((max(y_encabezados) + fila["y"]) / 2 if indice == 0 and y_encabezados
+                  else 0 if indice == 0
+                  else (filas_hora[indice - 1]["y"] + fila["y"]) / 2)
         abajo = alto_imagen if indice + 1 == len(filas_hora) else (fila["y"] + filas_hora[indice + 1]["y"]) / 2
         for columna, (dia, _centro) in enumerate(columnas):
             textos = [
@@ -232,12 +261,13 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
             ]
             actividad = " ".join(textos).strip()
             if actividad:
+                grupo, actividad = _interpretar_celda_horario(actividad)
                 filas.append({
                     "Día": dia,
                     "Inicio": f"{fila['inicio'][0]:02d}:{fila['inicio'][1]:02d}",
                     "Fin": f"{fila['fin'][0]:02d}:{fila['fin'][1]:02d}",
                     "Actividad": actividad,
-                    "Grupo": "",
+                    "Grupo": grupo,
                     "Responsable": "",
                 })
     if not filas:
@@ -393,6 +423,113 @@ def _leer_imagenes_pendientes(imagenes, nombre, escuela):
         return 0, [aviso]
 
 
+def _dia_desde_encabezado(texto):
+    clave = normalizar_texto(texto).strip(" .,:;\t")
+    alias = {"LUN": "Lunes", "MAR": "Martes", "MIE": "Miércoles",
+             "JUE": "Jueves", "VIE": "Viernes"}
+    if clave in alias:
+        return alias[clave]
+    for dia in DIAS:
+        if normalizar_texto(dia) == clave or normalizar_texto(dia).startswith(clave) and len(clave) >= 4:
+            return dia
+    if len(clave) >= 5:
+        candidato = max(DIAS, key=lambda dia: SequenceMatcher(None, clave, normalizar_texto(dia)).ratio())
+        if SequenceMatcher(None, clave, normalizar_texto(candidato)).ratio() >= 0.72:
+            return candidato
+    return ""
+
+
+def _hora_intervalo_matriz(valor):
+    texto = str(valor or "").replace("—", "-").replace("–", "-").replace("−", "-")
+    horas = re.findall(r"(?<!\d)(\d{1,2}\s*[:.]\s*\d{2})(?!\d)", texto)
+    if len(horas) < 2:
+        return None
+    try:
+        inicio = normalizar_tabla_horario(pd.DataFrame([{
+            "Día": "Lunes", "Inicio": horas[0], "Fin": horas[1], "Actividad": "x",
+        }])).iloc[0]
+    except (ValueError, IndexError):
+        return None
+    return str(inicio["Inicio"]), str(inicio["Fin"])
+
+
+def _matriz_horario_a_frame(matriz):
+    """Convierte una tabla semanal (días en columnas, horas en filas) a bloques."""
+    filas = [[str(celda or "").strip() for celda in fila] for fila in matriz]
+    if not filas:
+        raise ValueError("La tabla no tiene contenido.")
+    ancho = max(map(len, filas))
+    filas = [(fila + [""] * ancho)[:ancho] for fila in filas]
+    candidatos = []
+    for indice, fila in enumerate(filas):
+        dias_columna = {col: _dia_desde_encabezado(valor) for col, valor in enumerate(fila)}
+        dias_columna = {col: dia for col, dia in dias_columna.items() if dia}
+        tiene_hora = "HORA" in normalizar_texto(fila[0]) if fila else False
+        if len(dias_columna) >= 2 or (len(dias_columna) == 1 and tiene_hora):
+            candidatos.append((indice, dias_columna))
+    if not candidatos:
+        raise ValueError("No encontré una fila de encabezados con días de la semana.")
+    encabezado, dias_columna = max(candidatos, key=lambda item: (len(item[1]), -item[0]))
+    salida = []
+    vistos = set()
+    for fila in filas[encabezado + 1:]:
+        intervalo = _hora_intervalo_matriz(fila[0])
+        if not intervalo:
+            continue
+        inicio, fin = intervalo
+        for columna, dia in dias_columna.items():
+            celda = fila[columna].strip()
+            if not celda:
+                continue
+            grupo, actividad = _interpretar_celda_horario(celda)
+            llave = (dia, inicio, fin, normalizar_texto(celda))
+            if llave in vistos:
+                continue
+            vistos.add(llave)
+            salida.append({"Día": dia, "Inicio": inicio, "Fin": fin,
+                           "Actividad": actividad, "Grupo": grupo, "Responsable": ""})
+    if not salida:
+        raise ValueError("No encontré celdas con actividad y horas válidas.")
+    return normalizar_tabla_horario(pd.DataFrame(salida))
+
+
+def _leer_pdf_horario(archivo):
+    """Lee tablas de PDF directamente y usa OCR local para páginas escaneadas."""
+    try:
+        import fitz
+    except ImportError as exc:
+        raise RuntimeError("La lectura de PDF no está instalada en este despliegue.") from exc
+    documento = fitz.open(stream=archivo.getvalue(), filetype="pdf")
+    salida, errores = [], []
+    for numero, pagina in enumerate(documento, start=1):
+        encontrados = []
+        try:
+            tablas = pagina.find_tables().tables
+        except Exception:
+            tablas = []
+        for tabla in tablas:
+            try:
+                encontrados.append(_matriz_horario_a_frame(tabla.extract()))
+            except ValueError:
+                continue
+        if not encontrados:
+            pixmap = pagina.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            from types import SimpleNamespace
+            pagina_imagen = SimpleNamespace(
+                name=f"{archivo.name} · página {numero}.png",
+                getvalue=lambda: pixmap.tobytes("png"),
+            )
+            try:
+                encontrados.append(_leer_imagen_ocr_local(pagina_imagen))
+            except Exception as exc:
+                errores.append(f"Página {numero}: no se pudo reconocer; puedes revisar el PDF y completar la tabla.")
+        salida.extend((f"{archivo.name} · Página {numero}", frame) for frame in encontrados)
+    documento.close()
+    if not salida:
+        raise ValueError("No se reconocieron horarios en el PDF. Puedes usarlo como referencia y completar la tabla.")
+    return salida, errores
+
+
 def _leer_archivo(archivo):
     contenido = archivo.getvalue()
     nombre = archivo.name.lower()
@@ -402,6 +539,8 @@ def _leer_archivo(archivo):
         except UnicodeDecodeError:
             frame = pd.read_csv(BytesIO(contenido), encoding="latin-1")
         return [(archivo.name, normalizar_tabla_horario(frame))], []
+    if nombre.endswith(".pdf"):
+        return _leer_pdf_horario(archivo)
     if nombre.endswith(".docx"):
         documento = Document(BytesIO(contenido))
         salida = []
@@ -422,7 +561,10 @@ def _leer_archivo(archivo):
             try:
                 salida.append((f"{archivo.name} · Tabla {indice}", normalizar_tabla_horario(frame)))
             except ValueError as exc:
-                errores.append(f"Tabla {indice}: {exc}")
+                try:
+                    salida.append((f"{archivo.name} · Tabla {indice}", _matriz_horario_a_frame(filas)))
+                except ValueError:
+                    errores.append(f"Tabla {indice}: {exc}")
         if not salida:
             detalle = "; ".join(errores) or "No contiene una tabla de horario que pueda convertirse automáticamente."
             raise ValueError(f"{detalle} Puedes usar el archivo como referencia y transcribirlo en la tabla de captura.")
@@ -432,7 +574,12 @@ def _leer_archivo(archivo):
     errores = []
     for hoja, frame in hojas.items():
         try:
-            salida.append((f"{archivo.name} · {hoja}", normalizar_tabla_horario(frame)))
+            try:
+                normalizada = normalizar_tabla_horario(frame)
+            except ValueError:
+                matriz = [frame.columns.tolist(), *frame.fillna("").astype(str).values.tolist()]
+                normalizada = _matriz_horario_a_frame(matriz)
+            salida.append((f"{archivo.name} · {hoja}", normalizada))
         except ValueError as exc:
             errores.append(f"{hoja}: {exc}")
     if not salida:
@@ -767,6 +914,7 @@ def horarios_apoyo_page():
     clave_version_carga = f"version_carga_horario_{clave_identidad}"
     version_carga = st.session_state.get(clave_version_carga, 0)
     clave_uploader = f"carga_restricciones_horario_{clave_identidad}_{version_carga}"
+    st.caption("Acepta Excel, CSV, Word, PDF e imágenes. El lector propone los bloques; revísalos antes de guardar.")
     archivos = st.file_uploader(
         "Horarios de materias, docentes y otras maestras de apoyo",
         type=TIPOS_ARCHIVO_HORARIOS, accept_multiple_files=True, key=clave_uploader,
@@ -789,6 +937,9 @@ def horarios_apoyo_page():
         except Exception as exc:
             if archivo.name.lower().endswith(".docx"):
                 referencias.append((archivo, "word"))
+                errores.append(f"{archivo.name}: {exc}")
+            elif archivo.name.lower().endswith(".pdf"):
+                referencias.append((archivo, "pdf"))
                 errores.append(f"{archivo.name}: {exc}")
             else:
                 errores.append(f"{archivo.name}: {exc}")
@@ -891,6 +1042,12 @@ def horarios_apoyo_page():
                 documento = Document(BytesIO(archivo.getvalue()))
                 texto = "\n".join(parrafo.text for parrafo in documento.paragraphs if parrafo.text.strip())
                 st.text(texto or "El documento no contiene texto extraíble; usa la vista en Word y captura los bloques manualmente.")
+        elif tipo == "pdf":
+            st.download_button(
+                f"Abrir PDF de referencia: {archivo.name}", data=archivo.getvalue(),
+                file_name=archivo.name, mime="application/pdf",
+                key=f"abrir_pdf_horario_{clave_identidad}_{hashlib.sha256(archivo.getvalue()).hexdigest()[:10]}",
+            )
         else:
             st.info(f"{archivo.name} está adjunto como referencia. Ábrelo en Word y transcribe sus bloques en la tabla de captura.")
     if errores:
