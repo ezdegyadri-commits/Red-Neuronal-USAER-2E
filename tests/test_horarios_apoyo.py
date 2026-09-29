@@ -248,6 +248,34 @@ class HorariosApoyoTest(unittest.TestCase):
             "IA ocupada (503); no cambió el horario. Prueba OCR local.",
         )
 
+    def test_local_ocr_handles_separate_time_tokens_and_slightly_truncated_weekday(self):
+        words = [
+            ("Lunes", 120, 15), ("Miercole", 330, 15),
+            ("7:30", 5, 60), ("–", 48, 60), ("8:15", 80, 61),
+            ("Tercero", 120, 60), ("grado", 170, 82),
+            ("8:30", 5, 140), ("–", 48, 140), ("9:15", 80, 140),
+            ("Cuarto", 120, 140), ("Sexto", 330, 140),
+        ]
+        datos = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+        for texto, x, y in words:
+            datos["text"].append(texto)
+            datos["conf"].append("90")
+            datos["left"].append(x)
+            datos["top"].append(y)
+            datos["width"].append(35)
+            datos["height"].append(12)
+        rows = _bloques_desde_ocr_tsv(datos, 500, 220)
+        self.assertIn("07:30", rows["Inicio"].tolist())
+        self.assertIn("08:15", rows["Fin"].tolist())
+        self.assertEqual(set(rows["Dia"]), {"Lunes", "Miércoles"})
+        self.assertTrue(rows["Actividad"].str.contains("Tercero grado").any())
+
+    def test_ocr_warning_is_short_and_does_not_expose_provider_payload(self):
+        self.assertEqual(
+            _mensaje_ocr_corto("503 UNAVAILABLE provider internal payload"),
+            "IA ocupada (503); no cambió el horario. Prueba OCR local.",
+        )
+
     def test_monthly_cronogram_generators_are_available_for_all_specialist_areas(self):
         profiles = (
             ("María José Cupul Realpozo", "Psicóloga", "Psicología"),
