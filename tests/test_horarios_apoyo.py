@@ -142,6 +142,7 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertEqual(result.iloc[0]["Actividad"], "Inglés")
         self.assertEqual(result.iloc[0]["Grupo"], "4A")
 
+    def test_uploaded_images_are_prepared_once_and_distinguished_by_content(self):
         class Uploaded:
             name = "horario.jpg"
             def __init__(self, content):
@@ -218,6 +219,7 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertIn("503", fallos[0])
         self.assertIn("No se guardó ni modificó", fallos[0])
         self.assertIn(f"ocr_error_{_clave_imagen_horario('Zuemmy', 'Escuela', archivo)}", state)
+
 
     def test_monthly_cronogram_generators_are_available_for_all_specialist_areas(self):
         profiles = (
