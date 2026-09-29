@@ -10,7 +10,7 @@ from services.horarios import detectar_choques, franjas_semanales, normalizar_ta
 from services.cronogramas import perfil_especialista
 from ui.horarios_apoyo import (TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra,
     _avisos_maestra, _clave_imagen_horario, _leer_archivo, _leer_imagen_horario,
-    _leer_imagenes_pendientes)
+    _leer_imagenes_pendientes, _borrador_de_horario, _limpiar_lectura_imagen)
 
 
 class HorariosApoyoTest(unittest.TestCase):
