@@ -11,4 +11,4 @@ fpdf2
 openai
 reportlab
 python-docx
-
+pytesseract

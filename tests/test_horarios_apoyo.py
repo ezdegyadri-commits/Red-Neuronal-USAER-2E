@@ -10,7 +10,8 @@ from services.horarios import detectar_choques, franjas_semanales, normalizar_ta
 from services.cronogramas import perfil_especialista
 from ui.horarios_apoyo import (TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra,
     _avisos_maestra, _clave_imagen_horario, _leer_archivo, _leer_imagen_horario,
-    _leer_imagenes_pendientes, _borrador_de_horario, _limpiar_lectura_imagen)
+    _leer_imagenes_pendientes, _borrador_de_horario, _limpiar_lectura_imagen,
+    _bloques_desde_ocr_tsv, _mensaje_ocr_corto)
 
 
 class HorariosApoyoTest(unittest.TestCase):
@@ -220,6 +221,32 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertIn("No se guardó ni modificó", fallos[0])
         self.assertIn(f"ocr_error_{_clave_imagen_horario('Zuemmy', 'Escuela', archivo)}", state)
 
+
+    def test_local_ocr_maps_printed_schedule_cells_to_editable_rows(self):
+        words = [
+            ("Lunes", 130, 15), ("Martes", 330, 15),
+            ("07:00-08:00", 5, 60), ("Lectura", 120, 60), ("Inglés", 320, 60),
+            ("08:00-09:00", 5, 130), ("Grupo", 120, 130), ("Maya", 320, 130),
+        ]
+        datos = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+        for texto, x, y in words:
+            datos["text"].append(texto)
+            datos["conf"].append("90")
+            datos["left"].append(x)
+            datos["top"].append(y)
+            datos["width"].append(60)
+            datos["height"].append(12)
+        rows = _bloques_desde_ocr_tsv(datos, 500, 200)
+        self.assertEqual(set(rows["Dia"]), {"Lunes", "Martes"})
+        self.assertEqual(set(rows["Actividad"]), {"Lectura", "Inglés", "Grupo", "Maya"})
+        self.assertIn("07:00", rows["Inicio"].tolist())
+        self.assertIn("09:00", rows["Fin"].tolist())
+
+    def test_ocr_warning_is_short_and_does_not_expose_provider_payload(self):
+        self.assertEqual(
+            _mensaje_ocr_corto("503 UNAVAILABLE provider internal payload"),
+            "IA ocupada (503); no cambió el horario. Prueba OCR local.",
+        )
 
     def test_monthly_cronogram_generators_are_available_for_all_specialist_areas(self):
         profiles = (

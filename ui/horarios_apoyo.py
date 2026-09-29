@@ -113,6 +113,139 @@ def _borrador_de_horario(filas):
     }
 
 
+def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
+    """Interpreta filas sencillas de una tabla horaria a partir de cajas OCR."""
+    dias = {
+        "LUNES": "Lunes", "MARTES": "Martes", "MIERCOLES": "Miércoles",
+        "JUEVES": "Jueves", "VIERNES": "Viernes",
+    }
+    palabras = []
+    cantidad = len(datos.get("text", []))
+    for indice in range(cantidad):
+        texto = str(datos["text"][indice]).strip()
+        try:
+            confianza = float(datos.get("conf", [100] * cantidad)[indice])
+            izquierda = int(datos["left"][indice])
+            arriba = int(datos["top"][indice])
+            ancho = int(datos["width"][indice])
+            alto = int(datos["height"][indice])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if texto and confianza >= 10 and ancho >= 0 and alto > 0:
+            palabras.append({"texto": texto, "x": izquierda + ancho / 2,
+                             "y": arriba + alto / 2, "alto": alto})
+    if not palabras:
+        raise ValueError("No se detectó texto legible.")
+
+    centros_dia = {}
+    for palabra in palabras:
+        dia = dias.get(normalizar_texto(palabra["texto"]).strip(".,;:"))
+        if dia:
+            centros_dia.setdefault(dia, []).append(palabra["x"])
+    centros_dia = {dia: sum(xs) / len(xs) for dia, xs in centros_dia.items()}
+    if len(centros_dia) < 2:
+        raise ValueError("No se reconocieron suficientes encabezados de días para ordenar el horario.")
+    columnas = sorted(centros_dia.items(), key=lambda item: item[1])
+    centros_x = [x for _dia, x in columnas]
+    alto_medio = sorted(p["alto"] for p in palabras)[len(palabras) // 2]
+    tolerancia_y = max(12, alto_medio * 1.3)
+    bandas = []
+    for palabra in sorted(palabras, key=lambda p: p["y"]):
+        if not bandas or palabra["y"] - bandas[-1]["y"] > tolerancia_y:
+            bandas.append({"y": palabra["y"], "palabras": [palabra]})
+        else:
+            banda = bandas[-1]
+            banda["palabras"].append(palabra)
+            banda["y"] = sum(p["y"] for p in banda["palabras"]) / len(banda["palabras"])
+
+    patron_hora = re.compile(r"(?<!\d)(\d{1,2})\s*[:.]\s*(\d{2})(?!\d)")
+    filas_hora = []
+    for banda in bandas:
+        margen_izquierdo = [p for p in banda["palabras"] if p["x"] < centros_x[0]]
+        texto_horas = " ".join(p["texto"] for p in sorted(margen_izquierdo, key=lambda p: p["x"]))
+        texto_horas = re.sub(r"(?<=\d)[Oo](?=[:.]\d)|(?<=[:.])[Oo](?=\d)", "0", texto_horas)
+        horas = [(int(h), int(m)) for h, m in patron_hora.findall(texto_horas)]
+        if len(horas) >= 2:
+            inicio, fin = horas[0], horas[1]
+            if fin > inicio:
+                filas_hora.append({"y": banda["y"], "inicio": inicio, "fin": fin})
+    filas_hora.sort(key=lambda item: item["y"])
+    if not filas_hora:
+        raise ValueError("No se reconocieron módulos con hora de inicio y fin.")
+
+    centros_tiempo = [
+        sum(p["x"] for p in palabra["palabras"] if patron_hora.search(p["texto"])) / max(
+            1, sum(1 for p in palabra["palabras"] if patron_hora.search(p["texto"]))
+        )
+        for palabra in bandas if patron_hora.search(" ".join(p["texto"] for p in palabra["palabras"]))
+    ]
+    centro_tiempo = sum(centros_tiempo) / len(centros_tiempo) if centros_tiempo else centros_x[0] / 2
+    limites_x = [
+        max(0, (centro_tiempo + centros_x[0]) / 2),
+        *[(centros_x[i] + centros_x[i + 1]) / 2 for i in range(len(centros_x) - 1)],
+        ancho_imagen,
+    ]
+    filas = []
+    for indice, fila in enumerate(filas_hora):
+        arriba = 0 if indice == 0 else (filas_hora[indice - 1]["y"] + fila["y"]) / 2
+        abajo = alto_imagen if indice + 1 == len(filas_hora) else (fila["y"] + filas_hora[indice + 1]["y"]) / 2
+        for columna, (dia, _centro) in enumerate(columnas):
+            textos = [
+                p["texto"] for p in palabras
+                if limites_x[columna] <= p["x"] < limites_x[columna + 1]
+                and arriba <= p["y"] < abajo
+                and normalizar_texto(p["texto"]).strip(".,;:") not in dias
+                and not patron_hora.search(p["texto"])
+            ]
+            actividad = " ".join(textos).strip()
+            if actividad:
+                filas.append({
+                    "Día": dia,
+                    "Inicio": f"{fila['inicio'][0]:02d}:{fila['inicio'][1]:02d}",
+                    "Fin": f"{fila['fin'][0]:02d}:{fila['fin'][1]:02d}",
+                    "Actividad": actividad,
+                    "Grupo": "",
+                    "Responsable": "",
+                })
+    if not filas:
+        raise ValueError("No se encontraron actividades dentro de los módulos detectados.")
+    return normalizar_tabla_horario(pd.DataFrame(filas))
+
+
+def _leer_imagen_ocr_local(archivo):
+    """Lee texto localmente con Tesseract; no usa servicios externos ni guarda datos."""
+    try:
+        from PIL import Image, ImageOps
+        import pytesseract
+        from pytesseract import Output
+    except ImportError as exc:
+        raise RuntimeError("El OCR local no está instalado todavía.") from exc
+    imagen = ImageOps.exif_transpose(Image.open(BytesIO(archivo.getvalue()))).convert("RGB")
+    try:
+        orientacion = pytesseract.image_to_osd(imagen, output_type=Output.DICT)
+        giro = int(orientacion.get("rotate", 0) or 0)
+        if giro:
+            imagen = imagen.rotate(360 - giro, expand=True)
+    except Exception:
+        # Algunas tablas tienen poco texto para estimar la orientación; se conserva la foto.
+        pass
+    datos = pytesseract.image_to_data(
+        imagen, lang="spa+eng", config="--psm 6", output_type=Output.DICT,
+    )
+    return _bloques_desde_ocr_tsv(datos, imagen.width, imagen.height)
+
+
+def _mensaje_ocr_corto(mensaje):
+    texto = str(mensaje).upper()
+    if "503" in texto or "UNAVAILABLE" in texto:
+        return "IA ocupada (503); no cambió el horario. Prueba OCR local."
+    if "429" in texto or "QUOTA" in texto or "RESOURCE_EXHAUSTED" in texto:
+        return "Límite temporal (429); no cambió el horario. Usa OCR local o espera."
+    if "OCR LOCAL" in texto and "NO ESTÁ INSTALADO" in texto:
+        return "OCR local no disponible; prueba lectura con IA o captura manual."
+    return "No se pudo leer el horario. Prueba otra opción o captura manualmente."
+
+
 def _leer_imagenes_pendientes(imagenes, nombre, escuela):
     """Lee el conjunto de imágenes en una sola petición al modelo para reducir cuota."""
     errores = []
@@ -616,6 +749,28 @@ def horarios_apoyo_page():
                 st.warning(fallo)
             if leidas:
                 st.rerun()
+        if (pendientes or hay_lectura_fallida) and st.button(
+            "🔎 Probar OCR local", key=f"ocr_local_{clave_identidad}_{version_carga}"
+        ):
+            leidas_local = 0
+            primer_fallo = ""
+            with st.spinner("Leyendo texto en la imagen…"):
+                for archivo in imagenes:
+                    clave = _clave_imagen_horario(nombre, escuela, archivo)
+                    if clave in st.session_state:
+                        continue
+                    try:
+                        st.session_state[clave] = _leer_imagen_ocr_local(archivo)
+                        st.session_state.pop(f"ocr_error_{clave}", None)
+                        leidas_local += 1
+                    except Exception as exc:
+                        st.session_state[f"ocr_error_{clave}"] = str(exc)
+                        primer_fallo = primer_fallo or str(exc)
+            if leidas_local:
+                st.success("Texto listo para revisar.")
+                st.rerun()
+            elif primer_fallo:
+                st.warning(_mensaje_ocr_corto(primer_fallo))
     for archivo, tipo in referencias:
         if tipo == "imagen":
             clave_imagen = _clave_imagen_horario(nombre, escuela, archivo)
