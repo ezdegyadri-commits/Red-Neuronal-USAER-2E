@@ -679,7 +679,6 @@ def horarios_apoyo_page():
                 if not filas_guardar:
                     st.warning("Aún no hay bloques válidos. Analiza las imágenes con el botón indicado o captura al menos una fila completa en la tabla manual.")
                     st.stop()
-                    st.stop()
                 _, total = guardar_restricciones_lote(escuela, nombre, filas_guardar)
                 st.success(f"Se añadieron {total} bloques de referencia. Las versiones sustituidas permanecen en el historial.")
                 st.rerun()
