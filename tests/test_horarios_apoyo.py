@@ -250,7 +250,7 @@ class HorariosApoyoTest(unittest.TestCase):
 
     def test_local_ocr_handles_separate_time_tokens_and_slightly_truncated_weekday(self):
         words = [
-            ("Lunes", 120, 15), ("Miercole", 330, 15),
+            ("Lunes", 120, 15), ("Miercole", 330, 15), ("MIE", 330, 16),
             ("7:30", 5, 60), ("–", 48, 60), ("8:15", 80, 61),
             ("Tercero", 120, 60), ("grado", 170, 82),
             ("8:30", 5, 140), ("–", 48, 140), ("9:15", 80, 140),
