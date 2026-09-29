@@ -114,7 +114,7 @@ def _borrador_de_horario(filas):
 
 
 def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
-    """Interpreta filas sencillas de una tabla horaria a partir de cajas OCR."""
+    """Interpreta tablas horarias aunque el OCR divida las horas y los encabezados."""
     dias = {
         "LUNES": "Lunes", "MARTES": "Martes", "MIERCOLES": "Miércoles",
         "JUEVES": "Jueves", "VIERNES": "Viernes",
@@ -139,7 +139,12 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
 
     centros_dia = {}
     for palabra in palabras:
-        dia = dias.get(normalizar_texto(palabra["texto"]).strip(".,;:"))
+        clave_dia = normalizar_texto(palabra["texto"]).strip(".,;:")
+        dia = dias.get(clave_dia)
+        if dia is None:
+            # Tesseract suele perder la última letra o el acento en encabezados pequeños.
+            dia = next((valor for clave, valor in dias.items()
+                        if len(clave_dia) >= 4 and clave.startswith(clave_dia)), None)
         if dia:
             centros_dia.setdefault(dia, []).append(palabra["x"])
     centros_dia = {dia: sum(xs) / len(xs) for dia, xs in centros_dia.items()}
@@ -148,7 +153,7 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
     columnas = sorted(centros_dia.items(), key=lambda item: item[1])
     centros_x = [x for _dia, x in columnas]
     alto_medio = sorted(p["alto"] for p in palabras)[len(palabras) // 2]
-    tolerancia_y = max(12, alto_medio * 1.3)
+    tolerancia_y = max(18, alto_medio * 2.0)
     bandas = []
     for palabra in sorted(palabras, key=lambda p: p["y"]):
         if not bandas or palabra["y"] - bandas[-1]["y"] > tolerancia_y:
@@ -158,17 +163,34 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
             banda["palabras"].append(palabra)
             banda["y"] = sum(p["y"] for p in banda["palabras"]) / len(banda["palabras"])
 
-    patron_hora = re.compile(r"(?<!\d)(\d{1,2})\s*[:.]\s*(\d{2})(?!\d)")
+    patron_hora = re.compile(r"(?<!\d)(\d{1,2})\s*[:.]\s*([0-5]?\d)(?!\d)")
+    # Extrae horas de cada caja por separado: el guion y cada extremo suelen ser
+    # palabras distintas en TSV, por lo que unir primero el texto de una línea falla.
+    candidatos_hora = []
+    for palabra in palabras:
+        if palabra["x"] >= centros_x[0]:
+            continue
+        token = re.sub(r"(?<=\d)[Oo](?=[:.]\d)|(?<=[:.])[Oo](?=\d)", "0", palabra["texto"])
+        for h, m in patron_hora.findall(token):
+            hora = (int(h), int(m))
+            if hora[0] <= 23:
+                candidatos_hora.append({"y": palabra["y"], "x": palabra["x"], "hora": hora})
+    grupos_hora = []
+    tolerancia_hora = max(14, alto_medio * 1.6)
+    for candidato in sorted(candidatos_hora, key=lambda item: item["y"]):
+        if not grupos_hora or candidato["y"] - grupos_hora[-1]["y"] > tolerancia_hora:
+            grupos_hora.append({"y": candidato["y"], "items": [candidato]})
+        else:
+            grupo = grupos_hora[-1]
+            grupo["items"].append(candidato)
+            grupo["y"] = sum(item["y"] for item in grupo["items"]) / len(grupo["items"])
     filas_hora = []
-    for banda in bandas:
-        margen_izquierdo = [p for p in banda["palabras"] if p["x"] < centros_x[0]]
-        texto_horas = " ".join(p["texto"] for p in sorted(margen_izquierdo, key=lambda p: p["x"]))
-        texto_horas = re.sub(r"(?<=\d)[Oo](?=[:.]\d)|(?<=[:.])[Oo](?=\d)", "0", texto_horas)
-        horas = [(int(h), int(m)) for h, m in patron_hora.findall(texto_horas)]
+    for grupo in grupos_hora:
+        horas = [item["hora"] for item in sorted(grupo["items"], key=lambda item: item["x"])]
         if len(horas) >= 2:
-            inicio, fin = horas[0], horas[1]
+            inicio, fin = horas[0], horas[-1]
             if fin > inicio:
-                filas_hora.append({"y": banda["y"], "inicio": inicio, "fin": fin})
+                filas_hora.append({"y": grupo["y"], "inicio": inicio, "fin": fin})
     filas_hora.sort(key=lambda item: item["y"])
     if not filas_hora:
         raise ValueError("No se reconocieron módulos con hora de inicio y fin.")
@@ -213,9 +235,9 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
 
 
 def _leer_imagen_ocr_local(archivo):
-    """Lee texto localmente con Tesseract; no usa servicios externos ni guarda datos."""
+    """Prueba variantes locales de la imagen; no usa servicios externos ni guarda datos."""
     try:
-        from PIL import Image, ImageOps
+        from PIL import Image, ImageEnhance, ImageFilter, ImageOps
         import pytesseract
         from pytesseract import Output
     except ImportError as exc:
@@ -229,10 +251,26 @@ def _leer_imagen_ocr_local(archivo):
     except Exception:
         # Algunas tablas tienen poco texto para estimar la orientación; se conserva la foto.
         pass
-    datos = pytesseract.image_to_data(
-        imagen, lang="spa+eng", config="--psm 6", output_type=Output.DICT,
-    )
-    return _bloques_desde_ocr_tsv(datos, imagen.width, imagen.height)
+    # Mejora fotos comprimidas y texto pequeño: primero original, después ampliadas,
+    # con contraste y umbral. Se detiene en la primera lectura estructurada válida.
+    escala = max(2, min(3, 1800 // max(1, imagen.width)))
+    grande = imagen.resize((imagen.width * escala, imagen.height * escala), Image.Resampling.LANCZOS)
+    gris = ImageOps.grayscale(grande)
+    gris = ImageOps.autocontrast(gris)
+    nitida = ImageEnhance.Sharpness(gris).enhance(1.7)
+    umbral = nitida.point(lambda pixel: 255 if pixel > 165 else 0)
+    variantes = [(imagen, "--psm 6"), (grande, "--psm 6"),
+                 (nitida, "--psm 6"), (umbral, "--psm 6"), (nitida, "--psm 11")]
+    ultimo_error = None
+    for preparada, configuracion in variantes:
+        datos = pytesseract.image_to_data(
+            preparada, lang="spa+eng", config=configuracion, output_type=Output.DICT,
+        )
+        try:
+            return _bloques_desde_ocr_tsv(datos, preparada.width, preparada.height)
+        except ValueError as exc:
+            ultimo_error = exc
+    raise ValueError(str(ultimo_error or "No se reconocieron bloques de horario."))
 
 
 def _mensaje_ocr_corto(mensaje):
