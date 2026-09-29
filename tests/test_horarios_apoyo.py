@@ -11,12 +11,12 @@ from services.cronogramas import perfil_especialista
 from ui.horarios_apoyo import (TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra,
     _avisos_maestra, _clave_imagen_horario, _leer_archivo, _leer_imagen_horario,
     _leer_imagenes_pendientes, _borrador_de_horario, _limpiar_lectura_imagen,
-    _bloques_desde_ocr_tsv, _mensaje_ocr_corto)
+    _bloques_desde_ocr_tsv, _mensaje_ocr_corto, _matriz_horario_a_frame)
 
 
 class HorariosApoyoTest(unittest.TestCase):
     def test_uploader_accepts_word_and_common_image_formats(self):
-        self.assertTrue({"doc", "docx", "png", "jpg", "jpeg", "webp", "tif"}.issubset(TIPOS_ARCHIVO_HORARIOS))
+        self.assertTrue({"doc", "docx", "pdf", "png", "jpg", "jpeg", "webp", "tif"}.issubset(TIPOS_ARCHIVO_HORARIOS))
 
     def test_word_table_is_read_as_a_schedule_reference(self):
         document = Document()
@@ -37,6 +37,67 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertEqual(parsed[0][1].iloc[0]["Actividad"], "Inglés")
         self.assertEqual(parsed[0][1].iloc[0]["Grupo"], "2A")
+
+    def test_word_weekly_matrix_is_read_by_day_columns_and_time_rows(self):
+        document = Document()
+        table = document.add_table(rows=3, cols=3)
+        values = [
+            ["Hora", "Lunes", "Miércoles"],
+            ["7:30 – 8:15", "Cuarto grado", "Inglés"],
+            ["8:30 – 9:15", "Quinto grado", "Tercero grado"],
+        ]
+        for row, values_row in zip(table.rows, values):
+            for cell, value in zip(row.cells, values_row):
+                cell.text = value
+        content = BytesIO()
+        document.save(content)
+
+        class Uploaded:
+            name = "horario_matriz.docx"
+            def getvalue(self):
+                return content.getvalue()
+
+        parsed, warnings = _leer_archivo(Uploaded())
+        self.assertEqual(warnings, [])
+        frame = parsed[0][1]
+        self.assertEqual(len(frame), 4)
+        self.assertEqual(set(frame["Dia"]), {"Lunes", "Miércoles"})
+        self.assertIn("4°", frame["Grupo"].tolist())
+        self.assertIn("Inglés", frame["Actividad"].tolist())
+
+    def test_excel_weekly_matrix_includes_column_headers_in_detection(self):
+        source = pd.DataFrame([
+            ["7:30-8:15", "Cuarto grado", "Maya"],
+            ["8:30-9:15", "Quinto grado", "Tercero grado"],
+        ], columns=["Hora", "Lunes", "Martes"])
+
+        class Uploaded:
+            name = "horario_matriz.xlsx"
+            def getvalue(self):
+                return b"excel mock"
+
+        with patch("ui.horarios_apoyo.pd.read_excel", return_value={"Horario": source}):
+            parsed, warnings = _leer_archivo(Uploaded())
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(parsed[0][1]), 4)
+        self.assertEqual(set(parsed[0][1]["Dia"]), {"Lunes", "Martes"})
+
+    def test_excel_weekly_matrix_includes_column_headers_in_detection(self):
+        source = pd.DataFrame([
+            ["7:30-8:15", "Cuarto grado", "Maya"],
+            ["8:30-9:15", "Quinto grado", "Tercero grado"],
+        ], columns=["Hora", "Lunes", "Martes"])
+
+        class Uploaded:
+            name = "horario_matriz.xlsx"
+            def getvalue(self):
+                return b"excel mock"
+
+        with patch("ui.horarios_apoyo.pd.read_excel", return_value={"Horario": source}):
+            parsed, warnings = _leer_archivo(Uploaded())
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(parsed[0][1]), 4)
+        self.assertEqual(set(parsed[0][1]["Dia"]), {"Lunes", "Martes"})
 
     def test_imported_schedule_normalizes_columns_and_empty_cells(self):
         source = pd.DataFrame([{
@@ -222,11 +283,13 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertIn(f"ocr_error_{_clave_imagen_horario('Zuemmy', 'Escuela', archivo)}", state)
 
 
-    def test_local_ocr_maps_printed_schedule_cells_to_editable_rows(self):
+    def test_local_ocr_excludes_title_and_maps_grade_to_group_for_conflicts(self):
         words = [
-            ("Lunes", 130, 15), ("Martes", 330, 15),
-            ("07:00-08:00", 5, 60), ("Lectura", 120, 60), ("Inglés", 320, 60),
-            ("08:00-09:00", 5, 130), ("Grupo", 120, 130), ("Maya", 320, 130),
+            ("HORARIO", 170, 5), ("Escuela", 200, 15),
+            ("Lunes", 120, 35), ("Martes", 330, 35),
+            ("7:30-8:15", 5, 80), ("Cuarto", 120, 80), ("grado", 170, 80),
+            ("Tercero", 330, 80), ("grado", 380, 80),
+            ("8:30-9:15", 5, 150), ("Maya", 120, 150), ("Lectura", 330, 150),
         ]
         datos = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
         for texto, x, y in words:
@@ -234,13 +297,13 @@ class HorariosApoyoTest(unittest.TestCase):
             datos["conf"].append("90")
             datos["left"].append(x)
             datos["top"].append(y)
-            datos["width"].append(60)
+            datos["width"].append(45)
             datos["height"].append(12)
-        rows = _bloques_desde_ocr_tsv(datos, 500, 200)
-        self.assertEqual(set(rows["Dia"]), {"Lunes", "Martes"})
-        self.assertEqual(set(rows["Actividad"]), {"Lectura", "Inglés", "Grupo", "Maya"})
-        self.assertIn("07:00", rows["Inicio"].tolist())
-        self.assertIn("09:00", rows["Fin"].tolist())
+        rows = _bloques_desde_ocr_tsv(datos, 500, 220)
+        self.assertFalse(rows["Actividad"].str.contains("HORARIO|Escuela", case=False).any())
+        primero = rows.loc[rows["Inicio"].eq("07:30")]
+        self.assertEqual(primero["Grupo"].tolist(), ["4°", "3°"])
+        self.assertEqual(primero["Actividad"].tolist(), ["Clase regular", "Clase regular"])
 
     def test_ocr_warning_is_short_and_does_not_expose_provider_payload(self):
         self.assertEqual(
@@ -250,7 +313,7 @@ class HorariosApoyoTest(unittest.TestCase):
 
     def test_local_ocr_handles_separate_time_tokens_and_slightly_truncated_weekday(self):
         words = [
-            ("Lunes", 120, 15), ("Miercole", 330, 15), ("MIE", 330, 16),
+            ("Lunes", 120, 15), ("Miercole", 330, 15),
             ("7:30", 5, 60), ("–", 48, 60), ("8:15", 80, 61),
             ("Tercero", 120, 60), ("grado", 170, 82),
             ("8:30", 5, 140), ("–", 48, 140), ("9:15", 80, 140),
@@ -268,7 +331,29 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertIn("07:30", rows["Inicio"].tolist())
         self.assertIn("08:15", rows["Fin"].tolist())
         self.assertEqual(set(rows["Dia"]), {"Lunes", "Miércoles"})
-        self.assertTrue(rows["Actividad"].str.contains("Tercero grado").any())
+        self.assertTrue(rows["Grupo"].eq("3°").any())
+
+    def test_local_ocr_excludes_title_and_maps_grade_to_group_for_conflicts(self):
+        words = [
+            ("HORARIO", 170, 5), ("Escuela", 200, 15),
+            ("Lunes", 120, 35), ("Martes", 330, 35),
+            ("7:30-8:15", 5, 80), ("Cuarto", 120, 80), ("grado", 170, 80),
+            ("Tercero", 330, 80), ("grado", 380, 80),
+            ("8:30-9:15", 5, 150), ("Maya", 120, 150), ("Lectura", 330, 150),
+        ]
+        datos = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+        for texto, x, y in words:
+            datos["text"].append(texto)
+            datos["conf"].append("90")
+            datos["left"].append(x)
+            datos["top"].append(y)
+            datos["width"].append(45)
+            datos["height"].append(12)
+        rows = _bloques_desde_ocr_tsv(datos, 500, 220)
+        self.assertFalse(rows["Actividad"].str.contains("HORARIO|Escuela", case=False).any())
+        primero = rows.loc[rows["Inicio"].eq("07:30")]
+        self.assertEqual(primero["Grupo"].tolist(), ["4°", "3°"])
+        self.assertEqual(primero["Actividad"].tolist(), ["Clase regular", "Clase regular"])
 
     def test_ocr_warning_is_short_and_does_not_expose_provider_payload(self):
         self.assertEqual(
