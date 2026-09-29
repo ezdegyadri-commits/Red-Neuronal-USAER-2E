@@ -6,6 +6,7 @@ import html
 import hashlib
 import json
 import re
+from difflib import SequenceMatcher
 from datetime import time
 from io import BytesIO
 
@@ -131,7 +132,9 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
             alto = int(datos["height"][indice])
         except (TypeError, ValueError, IndexError):
             continue
-        if texto and confianza >= 10 and ancho >= 0 and alto > 0:
+        # Los títulos de día impresos y subrayados a veces reciben baja confianza;
+        # se mantienen para el reconocimiento, pero el resultado siempre es editable.
+        if texto and confianza >= 0 and ancho >= 0 and alto > 0:
             palabras.append({"texto": texto, "x": izquierda + ancho / 2,
                              "y": arriba + alto / 2, "alto": alto})
     if not palabras:
@@ -142,9 +145,17 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
         clave_dia = normalizar_texto(palabra["texto"]).strip(".,;:")
         dia = dias.get(clave_dia)
         if dia is None:
-            # Tesseract suele perder la última letra o el acento en encabezados pequeños.
+            # Acepta abreviaturas comunes y errores pequeños de lectura en encabezados.
+            alias = {"LUN": "Lunes", "MAR": "Martes", "MIE": "Miércoles",
+                     "JUE": "Jueves", "VIE": "Viernes"}
+            dia = alias.get(clave_dia)
+        if dia is None and len(clave_dia) >= 4:
             dia = next((valor for clave, valor in dias.items()
-                        if len(clave_dia) >= 4 and clave.startswith(clave_dia)), None)
+                        if clave.startswith(clave_dia)), None)
+        if dia is None and len(clave_dia) >= 5:
+            coincidencia = max(dias, key=lambda clave: SequenceMatcher(None, clave_dia, clave).ratio())
+            if SequenceMatcher(None, clave_dia, coincidencia).ratio() >= 0.72:
+                dia = dias[coincidencia]
         if dia:
             centros_dia.setdefault(dia, []).append(palabra["x"])
     centros_dia = {dia: sum(xs) / len(xs) for dia, xs in centros_dia.items()}
@@ -262,14 +273,44 @@ def _leer_imagen_ocr_local(archivo):
     variantes = [(imagen, "--psm 6"), (grande, "--psm 6"),
                  (nitida, "--psm 6"), (umbral, "--psm 6"), (nitida, "--psm 11")]
     ultimo_error = None
+    datos_ampliados = None
     for preparada, configuracion in variantes:
         datos = pytesseract.image_to_data(
             preparada, lang="spa+eng", config=configuracion, output_type=Output.DICT,
         )
+        if preparada is grande and configuracion == "--psm 6":
+            datos_ampliados = datos
         try:
             return _bloques_desde_ocr_tsv(datos, preparada.width, preparada.height)
         except ValueError as exc:
             ultimo_error = exc
+    # En algunas imágenes Tesseract lee bien la tabla pero pierde sus encabezados.
+    # Recorta y amplía solo la franja superior para distinguir mejor los días.
+    if datos_ampliados is not None:
+        alto_encabezado = max(1, int(grande.height * 0.45))
+        encabezado = grande.crop((0, 0, grande.width, alto_encabezado))
+        escala_encabezado = 2
+        encabezado = ImageOps.autocontrast(ImageOps.grayscale(encabezado)).resize(
+            (encabezado.width * escala_encabezado, encabezado.height * escala_encabezado),
+            Image.Resampling.LANCZOS,
+        )
+        for idioma in ("spa+eng", "eng"):
+            for configuracion in ("--psm 6", "--psm 11"):
+                datos_dias = pytesseract.image_to_data(
+                    encabezado, lang=idioma, config=configuracion, output_type=Output.DICT,
+                )
+                combinados = {campo: list(datos_ampliados.get(campo, []))
+                              for campo in ("text", "conf", "left", "top", "width", "height")}
+                total = len(datos_dias.get("text", []))
+                for indice in range(total):
+                    combinados["text"].append(datos_dias["text"][indice])
+                    combinados["conf"].append(datos_dias.get("conf", [100] * total)[indice])
+                    for campo in ("left", "top", "width", "height"):
+                        combinados[campo].append(round(int(datos_dias[campo][indice]) / escala_encabezado))
+                try:
+                    return _bloques_desde_ocr_tsv(combinados, grande.width, grande.height)
+                except ValueError as exc:
+                    ultimo_error = exc
     raise ValueError(str(ultimo_error or "No se reconocieron bloques de horario."))
 
 
@@ -771,7 +812,9 @@ def horarios_apoyo_page():
             for archivo in imagenes
         ]
         for fallo in dict.fromkeys(error for error in errores_guardados if error):
-            st.warning(fallo)
+            # Puede haber avisos extensos guardados en sesiones iniciadas con la
+            # versión anterior; nunca mostramos el detalle interno del proveedor.
+            st.warning(_mensaje_ocr_corto(fallo))
         if pendientes or hay_lectura_fallida:
             etiqueta = "↻ Reintentar lectura de imágenes" if hay_lectura_fallida else "✨ Analizar imágenes cargadas"
             st.info("La lectura automática inicia solo cuando la solicitas; así no se repite al editar otros campos ni al actualizar la página.")
@@ -783,10 +826,28 @@ def horarios_apoyo_page():
                     st.session_state.pop(f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}", None)
             with st.spinner("Reconociendo los bloques de horario. Podrás corregirlos antes de guardarlos…"):
                 leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
-            for fallo in fallos:
-                st.warning(fallo)
+            leidas_local = 0
+            if fallos:
+                # Si la IA está ocupada o no entiende un archivo, intenta OCR local
+                # de inmediato para evitar pedir a la maestra otro clic.
+                with st.spinner("Probando lectura local de las imágenes restantes…"):
+                    for archivo in imagenes:
+                        clave = _clave_imagen_horario(nombre, escuela, archivo)
+                        if clave in st.session_state:
+                            continue
+                        st.session_state.pop(f"ocr_error_{clave}", None)
+                        try:
+                            st.session_state[clave] = _leer_imagen_ocr_local(archivo)
+                            leidas_local += 1
+                        except Exception as exc:
+                            st.session_state[f"ocr_error_{clave}"] = _mensaje_ocr_corto(exc)
+            if leidas_local:
+                st.success("Lectura lista para revisar.")
+                st.rerun()
             if leidas:
                 st.rerun()
+            if fallos:
+                st.warning("No se pudieron reconocer algunos horarios. Puedes corregirlos en la tabla de captura.")
         if (pendientes or hay_lectura_fallida) and st.button(
             "🔎 Probar OCR local", key=f"ocr_local_{clave_identidad}_{version_carga}"
         ):
