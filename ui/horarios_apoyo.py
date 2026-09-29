@@ -129,7 +129,7 @@ def _leer_imagenes_pendientes(imagenes, nombre, escuela):
         return 0, ["La lectura automática no está configurada; captura los bloques en la tabla manual."]
     contents = [
         "Lee los horarios de todas las imágenes adjuntas. Devuelve SOLO JSON válido con forma "
-        '{"archivos":{"nombre exacto del archivo":[{"Día":"Lunes","Inicio":"08:00",'
+        '{"archivos":{"número::nombre de archivo":[{"Día":"Lunes","Inicio":"08:00",'
         '"Fin":"08:50","Grupo":"2A","Actividad":"Inglés","Responsable":""}]}}. '
         "No inventes datos; deja campos vacíos si no se distinguen. Horas HH:MM de 24 horas."
     ]
@@ -177,66 +177,6 @@ def _leer_imagenes_pendientes(imagenes, nombre, escuela):
             causa = "El servicio no pudo completar la lectura."
         aviso = f"{causa} No se guardó ni modificó ningún horario. Puedes reintentar manualmente o capturar los bloques en la tabla. Detalle: {detalle}"
         for _etiqueta_archivo, archivo in claves:
-            st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = aviso
-        return 0, [aviso]
-
-
-def _leer_archivo(imagenes, nombre, escuela):
-    """Lee el conjunto de imágenes en una sola petición al modelo para reducir cuota."""
-    errores = []
-    pendientes = [archivo for archivo in imagenes
-                  if _clave_imagen_horario(nombre, escuela, archivo) not in st.session_state
-                  and f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" not in st.session_state]
-    if not pendientes:
-        return 0, errores
-    from google.genai import types
-    from ai.engine import client
-    from config.settings import GEMINI_MODEL
-    cli = client()
-    if cli is None:
-        return 0, ["La lectura automática no está configurada; captura los bloques en la tabla manual."]
-    contents = [
-        "Lee los horarios de todas las imágenes adjuntas. Devuelve SOLO JSON válido con forma "
-        '{"archivos":{"nombre exacto del archivo":[{"Día":"Lunes","Inicio":"08:00",'
-        '"Fin":"08:50","Grupo":"2A","Actividad":"Inglés","Responsable":""}]}}. '
-        "No inventes datos; deja campos vacíos si no se distinguen. Horas HH:MM de 24 horas."
-    ]
-    claves = {}
-    for archivo in pendientes:
-        ext = archivo.name.rsplit(".", 1)[-1].lower()
-        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
-                "webp": "image/webp", "bmp": "image/bmp", "tif": "image/tiff", "tiff": "image/tiff"}.get(ext)
-        if not mime:
-            errores.append(f"{archivo.name}: formato no compatible para lectura automática.")
-            continue
-        contents.extend([f"Archivo: {archivo.name}", types.Part.from_bytes(data=archivo.getvalue(), mime_type=mime)])
-        claves[archivo.name] = archivo
-    if not claves:
-        return 0, errores
-    try:
-        response = cli.models.generate_content(
-            model=GEMINI_MODEL, contents=contents,
-            config={"temperature": 0, "response_mime_type": "application/json"},
-        )
-        raw = json.loads((response.text or "{}").strip())
-        resultado = raw.get("archivos", raw) if isinstance(raw, dict) else {}
-        leidas = 0
-        for nombre_archivo, archivo in claves.items():
-            filas = resultado.get(nombre_archivo, [])
-            if not filas:
-                errores.append(f"{nombre_archivo}: no se reconocieron bloques; puedes transcribirlos manualmente.")
-                st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = errores[-1]
-                continue
-            try:
-                st.session_state[_clave_imagen_horario(nombre, escuela, archivo)] = normalizar_tabla_horario(pd.DataFrame(filas))
-                leidas += 1
-            except Exception as exc:
-                errores.append(f"{nombre_archivo}: revisa la captura manual ({exc}).")
-                st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = errores[-1]
-        return leidas, errores
-    except Exception as exc:
-        aviso = f"No se pudo leer el conjunto de imágenes (posible límite temporal del servicio): {exc}. No se guardó ni borró ningún horario; usa captura manual o reintenta después."
-        for archivo in claves.values():
             st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = aviso
         return 0, [aviso]
 
