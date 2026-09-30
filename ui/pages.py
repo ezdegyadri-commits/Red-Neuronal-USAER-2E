@@ -2561,7 +2561,10 @@ def _visitas_visibles(registros, nombre, rol, escuelas):
 
 
 def _clave_visita(registro):
-    campos = ("ID_Visita", "Fecha", "Escuela", "Personal", "Motivo", "Observaciones", "Evidencia")
+    campos = (
+        "ID_Visita", "Fecha", "Escuela", "Personal", "Motivo",
+        "Observaciones", "Evidencia", "Tipo_Acta", "Lugar",
+    )
     texto = json.dumps([str(registro.get(campo, "")) for campo in campos], ensure_ascii=False)
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
 
@@ -2575,6 +2578,24 @@ def _fecha_visita_guardada(valor):
         except (TypeError, ValueError):
             pass
     return None
+
+
+def _es_acta_reunion(registro):
+    """Reconoce también reuniones históricas cuyo tipo solo quedó en el motivo."""
+    motivo = str(registro.get("Motivo", ""))
+    tipo = str(registro.get("Tipo_Acta", ""))
+    return (
+        normalizar_texto(tipo) == normalizar_texto("Reunión de trabajo")
+        or normalizar_texto("Reunión de trabajo") in normalizar_texto(motivo)
+    )
+
+
+def _firmantes_reunion_trabajo(nombre_especialista, especialidad):
+    """La reunión de trabajo lleva únicamente las firmas de Dirección y del especialista."""
+    return [
+        ("Psic. Edgar Adrián Yam Briceño MD", "Director de la USAER 02-E"),
+        (str(nombre_especialista), str(especialidad)),
+    ]
 
 
 def visitas_page(df):
@@ -2591,6 +2612,7 @@ def visitas_page(df):
         st.session_state.get("rol", "")
     ).strip()
     es_director = es_direccion(rol_usuario)
+    especialista_acta = es_especialista(rol_usuario)
 
     escuelas_permitidas = escuelas_asignadas(
         nombre_usuario,
@@ -2655,6 +2677,28 @@ def visitas_page(df):
                 )
                 if st.button("📄 Recuperar esta constancia", type="primary", key="visita_historial_recuperar"):
                     st.session_state["visita_historial_activa"] = clave_elegida
+                    registro_elegido = registros_historial[clave_elegida]
+                    reunion_guardada = _es_acta_reunion(registro_elegido)
+                    st.session_state["visita_tipo_acta"] = (
+                        "Reunión de trabajo" if reunion_guardada else "Constancia de visita"
+                    )
+                    st.session_state["visita_lugar"] = str(
+                        registro_elegido.get("Lugar", "") or "Sede USAER"
+                    )
+                    if reunion_guardada:
+                        st.session_state["visita_detalles_reunion"] = str(
+                            registro_elegido.get("Evidencia", "") or ""
+                        )
+                        st.session_state["visita_descripcion_reunion"] = str(
+                            registro_elegido.get("Observaciones", "") or ""
+                        )
+                    else:
+                        st.session_state["visita_detalles"] = str(
+                            registro_elegido.get("Evidencia", "") or ""
+                        )
+                        st.session_state["visita_descripcion"] = str(
+                            registro_elegido.get("Observaciones", "") or ""
+                        )
             registro_recuperado = registros_historial.get(
                 st.session_state.get("visita_historial_activa", "")
             )
@@ -2664,76 +2708,98 @@ def visitas_page(df):
                     st.session_state.pop("visita_historial_activa", None)
                     registro_recuperado = None
 
+    tipo_guardado = (
+        "Reunión de trabajo" if registro_recuperado and _es_acta_reunion(registro_recuperado)
+        else "Constancia de visita"
+    )
+    if especialista_acta:
+        opciones_tipo_acta = ["Constancia de visita", "Reunión de trabajo"]
+        tipo_inicial = tipo_guardado if registro_recuperado else st.session_state.get(
+            "visita_tipo_acta", "Constancia de visita"
+        )
+        tipo_acta = st.radio(
+            "Tipo de acta", opciones_tipo_acta,
+            index=opciones_tipo_acta.index(tipo_inicial) if tipo_inicial in opciones_tipo_acta else 0,
+            horizontal=True, key="visita_tipo_acta",
+        )
+    else:
+        tipo_acta = "Reunión de trabajo" if _es_acta_reunion(registro_recuperado or {}) else "Constancia de visita"
+        if tipo_acta == "Reunión de trabajo":
+            st.info("Acta de reunión recuperada del historial.")
+
     with st.form("form_constancia", clear_on_submit=False):
 
         col1, col2 = st.columns([2, 1])
 
         with col1:
             escuela_seleccionada = st.selectbox(
-                "Escuela visitada",
+                "Escuela relacionada" if tipo_acta == "Reunión de trabajo" else "Escuela visitada",
                 opciones_escuela,
                 key="visita_escuela"
             )
 
+        if tipo_acta == "Reunión de trabajo":
+            lugar_acta = st.text_input(
+                "Lugar de la reunión",
+                value="Sede USAER",
+                key="visita_lugar",
+                help="Puedes dejar la Sede USAER o escribir el nombre de otra escuela.",
+            ).strip()
+        else:
+            lugar_acta = escuela_seleccionada
+
         with col2:
             fecha_visita = st.date_input(
-                "Fecha de la visita",
+                "Fecha de la reunión" if tipo_acta == "Reunión de trabajo" else "Fecha de la visita",
                 date.today(),
                 key="visita_fecha"
             )
 
-        st.markdown(
-            "### Motivo de la visita"
-        )
-
-        col_mot1, col_mot2 = st.columns(2)
-
-        with col_mot1:
-            motivos_izq = st.multiselect(
-                "Actividades de seguimiento y apoyo",
-                [
-                    "Observación en grupo",
-                    "Entrevista con...",
-                    "Trabajo interdisciplinario",
-                    "Sugerencias a Maestra(o)",
-                    "Sugerencias a Padres de...",
-                    "Valoración a...",
-                    "Revaloración de sugerencias con...",
-                    "Elaboración o actualización de EPP",
-                ],
-                key="visita_motivos_izq"
+        if tipo_acta == "Reunión de trabajo":
+            st.markdown("### Reunión de trabajo")
+            motivos_izq = []
+            motivos_der = ["Reunión de trabajo"]
+            opciones_intervencion = ["Reunión de trabajo"]
+            detalles_motivos = st.text_input(
+                "Participantes o tema de trabajo (opcional)", key="visita_detalles_reunion"
             )
-
-        with col_mot2:
-            opciones_intervencion = [
-                "Intervención en Grupo",
-                "Apoyo individual en aula",
-                "Elaboración del Plan de Intervención",
-                "Consejo Técnico Escolar",
-                "Junta del Servicio de Apoyo",
-                "Junta Académica del Servicio de Apoyo",
-                "Otros",
-            ]
-            motivos_der = st.multiselect(
-                "Intervención y juntas",
-                opciones_intervencion,
-                key="visita_motivos_der",
-                accept_new_options=True,
+            descripcion_actividad = st.text_area(
+                "Temas tratados y acuerdos de trabajo", height=140, key="visita_descripcion_reunion"
             )
-            st.caption(
-                "Selecciona una opción o escribe otra actividad y presiona Enter."
+        else:
+            st.markdown("### Motivo de la visita")
+            col_mot1, col_mot2 = st.columns(2)
+
+            with col_mot1:
+                motivos_izq = st.multiselect(
+                    "Actividades de seguimiento y apoyo",
+                    [
+                        "Observación en grupo", "Entrevista con...", "Trabajo interdisciplinario",
+                        "Sugerencias a Maestra(o)", "Sugerencias a Padres de...", "Valoración a...",
+                        "Revaloración de sugerencias con...", "Elaboración o actualización de EPP",
+                    ],
+                    key="visita_motivos_izq"
+                )
+
+            with col_mot2:
+                opciones_intervencion = [
+                    "Intervención en Grupo", "Apoyo individual en aula",
+                    "Elaboración del Plan de Intervención", "Consejo Técnico Escolar",
+                    "Junta del Servicio de Apoyo", "Junta Académica del Servicio de Apoyo", "Otros",
+                ]
+                motivos_der = st.multiselect(
+                    "Intervención y juntas", opciones_intervencion,
+                    key="visita_motivos_der", accept_new_options=True,
+                )
+                st.caption("Selecciona una opción o escribe otra actividad y presiona Enter.")
+
+            detalles_motivos = st.text_input(
+                "Especifica nombres o detalles del motivo (opcional)", key="visita_detalles"
             )
-
-        detalles_motivos = st.text_input(
-            "Especifica nombres o detalles del motivo (opcional)",
-            key="visita_detalles"
-        )
-
-        descripcion_actividad = st.text_area(
-            "Breve descripción de las actividades desarrolladas",
-            height=140,
-            key="visita_descripcion"
-        )
+            descripcion_actividad = st.text_area(
+                "Breve descripción de las actividades desarrolladas", height=140,
+                key="visita_descripcion"
+            )
 
         generar_acta = st.form_submit_button(
             "🖨️ Generar Constancia Oficial",
@@ -2758,6 +2824,10 @@ def visitas_page(df):
             st.error("Esta escuela ya no está autorizada para tu cuenta.")
             return
         escuela_seleccionada = escuela_canonica
+        tipo_acta = "Reunión de trabajo" if _es_acta_reunion(registro_recuperado) else "Constancia de visita"
+        lugar_acta = str(registro_recuperado.get("Lugar", "") or (
+            "Sede USAER" if tipo_acta == "Reunión de trabajo" else escuela_seleccionada
+        )).strip()
         fecha_visita = fecha_guardada
         autor = str(registro_recuperado.get("Personal", "")).strip()
         if normalizar_texto(autor).replace(".", "") == normalizar_texto(nombre_usuario).replace(".", ""):
@@ -2879,6 +2949,9 @@ def visitas_page(df):
 
     motivos = motivos_izq + motivos_der
     motivos_completos = ", ".join(motivos)
+    if tipo_acta == "Reunión de trabajo" and not lugar_acta:
+        st.error("Escribe el lugar de la reunión antes de generar el acta.")
+        return
 
     # ---------------------------------------------------------
     # GUARDAR EN REGISTRO_VISITAS
@@ -2889,6 +2962,8 @@ def visitas_page(df):
             id_visita = repo.save_visita({
                 "Fecha": fecha_visita.strftime("%d/%m/%Y"),
                 "Escuela": escuela_seleccionada,
+                "Lugar": lugar_acta,
+                "Tipo_Acta": tipo_acta,
                 "Personal": nombre_usuario,
                 "Motivo": motivos_completos,
                 "Observaciones": descripcion_actividad,
@@ -2956,7 +3031,10 @@ def visitas_page(df):
             f'{escape(str(cargo))}</td>'
         )
 
-    if es_director:
+    if tipo_acta == "Reunión de trabajo":
+        firmas_reunion = _firmantes_reunion_trabajo(nombre_usuario, especialidad)
+        firmas_html = "<tr>" + "".join(firma(nombre, cargo) for nombre, cargo in firmas_reunion) + "</tr>"
+    elif es_director:
         firma_director_usaer = firma(
             "Psic. Edgar Adrián Yam Briceño MD",
             "Director de la USAER 02-E",
@@ -3005,6 +3083,18 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
 
     inicio_ciclo = fecha_visita.year if fecha_visita.month >= 9 else fecha_visita.year - 1
     ciclo_constancia = SCHOOL_YEAR if generar_acta else f"{inicio_ciclo} – {inicio_ciclo + 1}"
+    titulo_acta = "Acta de reunión de trabajo" if tipo_acta == "Reunión de trabajo" else "Constancia de visita"
+    etiqueta_fecha = "Fecha de la reunión" if tipo_acta == "Reunión de trabajo" else "Fecha de la visita"
+    etiqueta_escuela = "Escuela relacionada" if tipo_acta == "Reunión de trabajo" else "Escuela"
+    ubicacion_html = f"""
+<div style="font-size:12px;margin-bottom:10px;">
+    {etiqueta_escuela}: <u>{escape(escuela_seleccionada)}</u>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    Lugar: <u>{escape(lugar_acta)}</u>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    Localidad: <u>MÉRIDA</u>
+</div>
+"""
     html_constancia = f"""
 <div style="
     background-color:white;
@@ -3023,7 +3113,7 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
     text-decoration:underline;
     margin:0 0 14px;
 ">
-    Constancia de visita
+    {escape(titulo_acta)}
 </h3>
 
 <div style="font-size:12px;margin-bottom:4px;">
@@ -3035,23 +3125,17 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
     Curso escolar:
     <u>{escape(ciclo_constancia)}</u>
     &nbsp;&nbsp;&nbsp;&nbsp;
-    Fecha de la visita:
+    {etiqueta_fecha}:
     <u>{fecha_visita.strftime("%d/%m/%Y")}</u>
     &nbsp;&nbsp;&nbsp;&nbsp;
     Hora:
     <u>de 7:00 a 12:00 hrs</u>
 </div>
 
-<div style="font-size:12px;margin-bottom:10px;">
-    Escuela:
-    <u>{escape(escuela_seleccionada)}</u>
-    &nbsp;&nbsp;&nbsp;&nbsp;
-    Localidad:
-    <u>MÉRIDA</u>
-</div>
+{ubicacion_html}
 
 <div style="font-size:12px;margin-bottom:3px;">
-    <b>Motivo de la visita:</b>
+    <b>{"Tipo de acta:" if tipo_acta == "Reunión de trabajo" else "Motivo de la visita:"}</b>
 </div>
 
 <table style="
@@ -3125,6 +3209,7 @@ Junta Académica del Servicio de Apoyo<br>
 
 {marca("Otros")}
 Otros: {detalle("Otros")}<br>
+{marca("Reunión de trabajo")} Reunión de trabajo<br>
 {actividades_personalizadas_html}
 
 </td>
@@ -3136,7 +3221,7 @@ Otros: {detalle("Otros")}<br>
     font-size:12px;
     margin-bottom:5px;
 ">
-    <b>Breve descripción de las actividades desarrolladas:</b>
+    <b>{"Temas tratados y acuerdos de trabajo:" if tipo_acta == "Reunión de trabajo" else "Breve descripción de las actividades desarrolladas:"}</b>
 </div>
 
 <div style="
@@ -3171,7 +3256,7 @@ Otros: {detalle("Otros")}<br>
 <meta charset="UTF-8">
 
 <title>
-Constancia de Visita - {escape(escuela_seleccionada)}
+{escape(titulo_acta)} - {escape(escuela_seleccionada)}
 </title>
 
 <style>
