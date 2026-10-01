@@ -139,6 +139,35 @@ def _materia_desde_titulo(texto):
     return ""
 
 
+def _celda_ocr_util(texto, grupo=""):
+    """Evita que residuos de horas o puntuación se conviertan en actividades."""
+    if grupo:
+        return True
+    letras = re.sub(r"[^A-Z]", "", normalizar_texto(texto))
+    return len(letras) >= 3
+
+
+def _normalizar_actividad_ocr(texto):
+    """Corrige únicamente errores OCR muy cercanos a materias conocidas."""
+    original = " ".join(str(texto or "").split()).strip(" |·,;.-")
+    clave = normalizar_texto(original)
+    canonicas = {
+        "COROS Y CANTOS": "Coros y Cantos",
+        "CORO Y CANTOS": "Coro y Cantos",
+        "EDUCACION FISICA": "Educación física",
+        "INGLES": "Inglés",
+        "MAYA": "Maya",
+        "ARTES": "Artes",
+    }
+    if clave in canonicas:
+        return canonicas[clave]
+    if len(clave) >= 8:
+        mejor = max(canonicas, key=lambda etiqueta: SequenceMatcher(None, clave, etiqueta).ratio())
+        if SequenceMatcher(None, clave, mejor).ratio() >= 0.84:
+            return canonicas[mejor]
+    return original
+
+
 def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
     """Interpreta tablas horarias aunque el OCR divida las horas y los encabezados."""
     dias = {
@@ -265,9 +294,13 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
             ]
             actividad = " ".join(textos).strip()
             if actividad:
-                grupo, actividad = _interpretar_celda_horario(actividad)
+                texto_celda = actividad
+                grupo, actividad = _interpretar_celda_horario(texto_celda)
+                if not _celda_ocr_util(texto_celda, grupo):
+                    continue
                 if grupo and actividad == "Clase regular" and materia:
                     actividad = materia
+                actividad = _normalizar_actividad_ocr(actividad)
                 filas.append({
                     "Día": dia,
                     "Inicio": f"{fila['inicio'][0]:02d}:{fila['inicio'][1]:02d}",
@@ -387,8 +420,11 @@ def _bloques_desde_cuadricula(imagen, pytesseract, Output):
             if not texto:
                 continue
             grupo, actividad = _interpretar_celda_horario(texto)
+            if not _celda_ocr_util(texto, grupo):
+                continue
             if grupo and actividad == "Clase regular":
                 actividad = materia
+            actividad = _normalizar_actividad_ocr(actividad)
             filas.append({
                 "Día": dia, "Inicio": intervalo[0], "Fin": intervalo[1],
                 "Grupo": grupo, "Actividad": actividad, "Responsable": "",
