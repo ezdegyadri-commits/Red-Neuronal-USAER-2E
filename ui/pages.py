@@ -10,7 +10,7 @@ from config.settings import ESCUELAS_USAER, BAP_ITEMS, BAP_FRECUENCIAS, SERVICE_
 from data import repository as repo
 from services.expedientes import alumnos_visibles, baps_de_alumno, expediente, alumno
 from services.alumnos import alumnos_de_escuela, alumnos_individuales_de_escuela
-from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas, es_especialista, es_direccion
+from services.asignaciones import escuelas_asignadas, alumnos_de_escuelas_asignadas, es_especialista, es_direccion, puede_dar_alta_alumnos
 from ai.engine import analizar_atencion, fallback, generar_sugerencias
 from documents.anexos import anexo3_html, anexo3_pdf, anexo4_html, anexo4_pdf, anexo5_html, anexo5_pdf, anexo7_pdf, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
@@ -278,10 +278,13 @@ def alta_page(df):
         "Alta de alumnos",
         "Registra la información requerida para el padrón USAER 2026–2027."
     )
-    escuelas_disponibles = escuelas_asignadas(
-        st.session_state.get("nombre", ""),
-        st.session_state.get("rol", ""),
-    )
+    nombre_usuario = st.session_state.get("nombre", "")
+    rol_usuario = st.session_state.get("rol", "")
+    if not puede_dar_alta_alumnos(nombre_usuario, rol_usuario):
+        st.error("El alta está disponible únicamente para el personal autorizado.")
+        return
+
+    escuelas_disponibles = escuelas_asignadas(nombre_usuario, rol_usuario)
     if not escuelas_disponibles:
         st.error("No tienes escuelas asignadas para registrar alumnos.")
         return
@@ -290,19 +293,55 @@ def alta_page(df):
         catalogo_escuelas = repo.escuelas().fillna("")
     except Exception:
         catalogo_escuelas = pd.DataFrame()
+    try:
+        # Se consulta el padrón completo para precargar metadatos y evitar
+        # duplicados aun cuando el alumno no aparezca en la vista asignada.
+        padron_escuelas = repo.read("Alumnos")
+    except Exception as ex:
+        st.error(f"No se pudo validar la base central; por seguridad no se habilitó el alta: {ex}")
+        return
+    if padron_escuelas is None or "CURP" not in padron_escuelas.columns:
+        st.error("No se pudo verificar la CURP en la base central; no se habilitó el alta.")
+        return
+    curps_existentes = set(
+        padron_escuelas["CURP"].fillna("").astype(str).str.strip().str.upper()
+    )
 
     def datos_escuela(nombre):
-        if catalogo_escuelas.empty:
-            return {}
-        for _, registro in catalogo_escuelas.iterrows():
-            registro = registro.to_dict()
-            if normalizar_texto(registro.get("Nombre_Escuela", "")) == normalizar_texto(nombre):
-                return registro
-            if normalizar_texto(registro.get("ID_Escuela", "")) == normalizar_texto(
-                ESCUELAS_USAER.get(nombre, "")
-            ):
-                return registro
-        return {}
+        codigo = ESCUELAS_USAER.get(nombre, "")
+        datos = {}
+        if not catalogo_escuelas.empty:
+            for _, registro in catalogo_escuelas.iterrows():
+                registro = registro.to_dict()
+                if normalizar_texto(registro.get("Nombre_Escuela", "")) == normalizar_texto(nombre):
+                    datos = registro
+                    break
+                if normalizar_texto(registro.get("ID_Escuela", "")) == normalizar_texto(codigo):
+                    datos = registro
+                    break
+        # El catálogo de escuelas puede estar incompleto; completar desde el
+        # padrón central existente sin pedir que la maestra repita esos datos.
+        if not padron_escuelas.empty and "ID_Escuela" in padron_escuelas.columns:
+            filas = padron_escuelas.loc[
+                padron_escuelas["ID_Escuela"].fillna("").astype(str).str.strip().eq(codigo)
+            ]
+            if not filas.empty:
+                fila = filas.iloc[0]
+                desde_padron = {
+                    "Nombre_Escuela": fila.get("Nombre_Escuela", nombre),
+                    "ID_Escuela": codigo,
+                    "CCT": fila.get("CCT_Escuela", ""),
+                    "Turno": fila.get("Turno_Escuela", ""),
+                    "Direccion": fila.get("Direccion_Escuela", ""),
+                    "Localidad": fila.get("Localidad_Escuela", ""),
+                    "Municipio": fila.get("Municipio_Escuela", ""),
+                }
+                for campo, valor in desde_padron.items():
+                    if not str(datos.get(campo, "")).strip():
+                        datos[campo] = valor
+        datos.setdefault("Nombre_Escuela", nombre)
+        datos.setdefault("ID_Escuela", codigo)
+        return datos
 
     def dato_escuela(registro, *campos):
         for campo in campos:
@@ -352,39 +391,47 @@ def alta_page(df):
         with c3:
             grupo = st.text_input("Grupo", max_chars=8)
 
-        escuela = st.selectbox("Escuela atendida", escuelas_disponibles)
+        escuela = st.selectbox(
+            "Escuela atendida", escuelas_disponibles,
+            disabled=len(escuelas_disponibles) == 1,
+        )
         datos_de_escuela = datos_escuela(escuela)
-        st.caption("Datos de la escuela que también se incluirán en el padrón.")
+        st.caption("Los datos institucionales se precargan y se guardan con el alumno.")
         c1, c2, c3 = st.columns(3)
         with c1:
             turno_escuela = st.text_input(
                 "Turno de la escuela",
-                dato_escuela(datos_de_escuela, "Turno"),
+                dato_escuela(datos_de_escuela, "Turno", "Turno_Escuela"),
+                disabled=True,
             )
         with c2:
             cct_escuela = st.text_input(
                 "CCT de la escuela",
-                dato_escuela(datos_de_escuela, "CCT"),
+                dato_escuela(datos_de_escuela, "CCT", "CCT_Escuela"),
+                disabled=True,
             )
         with c3:
             localidad_escuela = st.text_input(
                 "Localidad",
-                dato_escuela(datos_de_escuela, "Localidad"),
+                dato_escuela(datos_de_escuela, "Localidad", "Localidad_Escuela"),
+                disabled=True,
             )
         c1, c2 = st.columns(2)
         with c1:
             direccion_escuela = st.text_input(
                 "Dirección de la escuela",
-                dato_escuela(datos_de_escuela, "Direccion", "Dirección"),
+                dato_escuela(datos_de_escuela, "Direccion", "Dirección", "Direccion_Escuela"),
+                disabled=True,
             )
         with c2:
             municipio_escuela = st.text_input(
                 "Municipio",
-                dato_escuela(datos_de_escuela, "Municipio"),
+                dato_escuela(datos_de_escuela, "Municipio", "Municipio_Escuela"),
+                disabled=True,
             )
 
         apoyo = st.text_input(
-            "Maestra/o de apoyo", st.session_state.get("nombre", "")
+            "Maestra/o de apoyo", value=nombre_usuario, disabled=True,
         )
         regular = st.text_input("Docente regular")
         condicion = st.selectbox(
@@ -421,6 +468,9 @@ def alta_page(df):
         if len(curp_limpia) != 18 or not curp_limpia.isalnum():
             st.error("La CURP debe contener exactamente 18 caracteres alfanuméricos.")
             return
+        if curp_limpia in curps_existentes:
+            st.error("Esa CURP ya existe en la base central; el expediente actual se conserva sin cambios.")
+            return
 
         datos_nuevo = {
             "Nombre_Completo": nombre.strip(),
@@ -432,7 +482,7 @@ def alta_page(df):
             "Grado": grado,
             "Grupo": grupo.strip(),
             "ID_Escuela": ESCUELAS_USAER[escuela],
-            "Maestra de Apoyo": apoyo.strip(),
+            "Maestra de Apoyo": nombre_usuario,
             "ID_Maestro_Regular": regular.strip(),
             "Condicion_Discapacidad": condicion,
             "Estatus": "Activo",
@@ -440,7 +490,7 @@ def alta_page(df):
             "Lengua_Indigena_Mayahablante": lengua,
             "Afrodescendiente": afrodescendiente,
             "Migrante": migrante,
-            "Nombre_Escuela": escuela.strip().upper(),
+            "Nombre_Escuela": dato_escuela(datos_de_escuela, "Nombre_Escuela") or escuela.strip().upper(),
             "Turno_Escuela": turno_escuela.strip(),
             "CCT_Escuela": cct_escuela.strip(),
             "Direccion_Escuela": direccion_escuela.strip(),
@@ -459,8 +509,8 @@ def alta_page(df):
     st.divider()
     st.markdown("### Subir Excel a la base central de alumnos")
     st.caption(
-        "Las CURP que ya existen se actualizan en su expediente, no se agregan "
-        "como alumnos nuevos. Las CURP repetidas dentro del archivo se excluyen."
+        "Las altas nuevas se agregan al padrón central. Las CURP ya existentes "
+        "se conservan sin cambios."
     )
     archivo = st.file_uploader(
         "Subir Excel de alumnos",
@@ -598,10 +648,11 @@ def alta_page(df):
             escuela_archivo = dato(
                 fila, "NOMBRE_ESCUELA", "ESCUELA", "ID_ESCUELA"
             )
-            codigo_escuela = (
-                resolver_escuela(escuela_archivo)
-                or escuela_predeterminada
-            )
+            codigo_del_archivo = resolver_escuela(escuela_archivo) if escuela_archivo else ""
+            if escuela_archivo and not codigo_del_archivo:
+                errores.append(f"Fila {numero}: la escuela indicada no corresponde a tu asignación.")
+                continue
+            codigo_escuela = codigo_del_archivo or escuela_predeterminada
             if not nombre_archivo:
                 continue
             if len(curp_archivo) != 18 or not curp_archivo.isalnum():
@@ -616,6 +667,12 @@ def alta_page(df):
                 errores.append(f"Fila {numero}: CURP duplicada en el mismo archivo.")
                 continue
             curps_archivo.add(curp_archivo)
+            if curp_archivo in curps_existentes:
+                errores.append(
+                    f"Fila {numero}: la CURP ya existe en la base central; "
+                    "el expediente se conserva sin cambios."
+                )
+                continue
             edad_archivo = dato(
                 fila,
                 "EDAD_1_SEPTIEMBRE",
@@ -648,13 +705,14 @@ def alta_page(df):
             if not migrante_archivo and "MIGR" in condiciones_normalizadas:
                 migrante_archivo = "Sí"
 
-            nombre_escuela_resuelto = next(
-                (
-                    nombre.upper()
-                    for nombre, codigo in ESCUELAS_USAER.items()
-                    if codigo == codigo_escuela
-                ),
-                str(escuela_archivo).strip().upper(),
+            nombre_escuela_mapa = next(
+                (nombre for nombre, codigo in ESCUELAS_USAER.items() if codigo == codigo_escuela),
+                str(escuela_archivo).strip(),
+            )
+            datos_escuela_archivo = datos_escuela(nombre_escuela_mapa)
+            nombre_escuela_resuelto = (
+                dato_escuela(datos_escuela_archivo, "Nombre_Escuela")
+                or nombre_escuela_mapa.upper()
             )
 
             preparados.append({
@@ -669,10 +727,7 @@ def alta_page(df):
                 "Grado": dato(fila, "GRADO", "NIVEL_Y_GRADO_AL_QUE_ESTA_INSCRITO"),
                 "Grupo": dato(fila, "GRUPO"),
                 "ID_Escuela": codigo_escuela,
-                "Maestra de Apoyo": dato(
-                    fila, "MAESTRA_DE_APOYO", "MAESTRO_DE_APOYO",
-                    default=st.session_state.get("nombre", ""),
-                ),
+                "Maestra de Apoyo": nombre_usuario,
                 "ID_Maestro_Regular": dato(fila, "DOCENTE_REGULAR", "ID_MAESTRO_REGULAR"),
                 "Condicion_Discapacidad": dato(
                     fila, "CONDICION_DISCAPACIDAD", "DISCAPACIDAD_O_CONDICION",
@@ -684,11 +739,11 @@ def alta_page(df):
                 "Afrodescendiente": afro_archivo,
                 "Migrante": migrante_archivo,
                 "Nombre_Escuela": nombre_escuela_resuelto,
-                "Turno_Escuela": dato(fila, "TURNO"),
-                "CCT_Escuela": dato(fila, "CCT_DE_LA_ESCUELA", "CCT"),
-                "Direccion_Escuela": dato(fila, "DIRECCION"),
-                "Localidad_Escuela": dato(fila, "LOCALIDAD"),
-                "Municipio_Escuela": dato(fila, "MUNICIPIO"),
+                "Turno_Escuela": dato_escuela(datos_escuela_archivo, "Turno", "Turno_Escuela") or dato(fila, "TURNO"),
+                "CCT_Escuela": dato_escuela(datos_escuela_archivo, "CCT", "CCT_Escuela") or dato(fila, "CCT_DE_LA_ESCUELA", "CCT"),
+                "Direccion_Escuela": dato_escuela(datos_escuela_archivo, "Direccion", "Dirección", "Direccion_Escuela") or dato(fila, "DIRECCION"),
+                "Localidad_Escuela": dato_escuela(datos_escuela_archivo, "Localidad", "Localidad_Escuela") or dato(fila, "LOCALIDAD"),
+                "Municipio_Escuela": dato_escuela(datos_escuela_archivo, "Municipio", "Municipio_Escuela") or dato(fila, "MUNICIPIO"),
                 "Condiciones_Adicionales": condiciones_archivo,
             })
 
@@ -766,10 +821,10 @@ def alta_page(df):
                 key="confirmar_carga_masiva",
             ):
                 try:
-                    nuevos, actualizados = repo.upsert_alumnos(preparados)
+                    nuevos = len(repo.save_alumnos(preparados))
                     st.success(
-                        f"Consolidación terminada: {nuevos} alumno(s) nuevo(s) y "
-                        f"{actualizados} expediente(s) actualizado(s) con los datos del padrón, sin duplicados."
+                        f"Se agregaron {nuevos} alumno(s) nuevo(s) a la base central. "
+                        "Los expedientes existentes se conservaron sin cambios."
                     )
                 except Exception as ex:
                     st.error(f"No fue posible consolidar el padrón: {ex}")
