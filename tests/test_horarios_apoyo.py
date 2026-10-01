@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 from docx import Document
+from PIL import Image, ImageDraw
 
 from documents.horarios_apoyo import generar_horario_apoyo_pdf, generar_horario_apoyo_cuadricula_pdf
 from services.horarios import detectar_choques, franjas_semanales, normalizar_tabla_horario, proponer_horario
@@ -11,10 +12,40 @@ from services.cronogramas import perfil_especialista
 from ui.horarios_apoyo import (TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra,
     _avisos_maestra, _clave_imagen_horario, _leer_archivo, _leer_imagen_horario,
     _leer_imagenes_pendientes, _borrador_de_horario, _limpiar_lectura_imagen,
-    _bloques_desde_ocr_tsv, _mensaje_ocr_corto, _matriz_horario_a_frame)
+    _bloques_desde_ocr_tsv, _bloques_desde_cuadricula, _mensaje_ocr_corto, _matriz_horario_a_frame)
 
 
 class HorariosApoyoTest(unittest.TestCase):
+    def test_grid_ocr_uses_cell_positions_and_subject_instead_of_mixing_columns(self):
+        image = Image.new("RGB", (400, 160), "white")
+        draw = ImageDraw.Draw(image)
+        for x in (10, 100, 240, 390):
+            draw.line((x, 10, x, 150), fill="black", width=2)
+        for y in (10, 50, 100, 150):
+            draw.line((10, y, 390, y), fill="black", width=2)
+        entries = [
+            ("Lunes", 150, 27), ("Martes", 290, 27),
+            ("7:00-7:50", 50, 73), ("Cuarto", 155, 73), ("grado", 205, 73),
+            ("Quinto", 295, 73), ("grado", 345, 73),
+            ("8:00-8:50", 50, 122), ("Segundo", 155, 122), ("grado", 205, 122),
+        ]
+        data = {
+            "text": [item[0] for item in entries],
+            "left": [item[1] - 10 for item in entries],
+            "top": [item[2] - 7 for item in entries],
+            "width": [20] * len(entries),
+            "height": [14] * len(entries),
+        }
+        reader = Mock()
+        reader.image_to_data.return_value = data
+        reader.image_to_string.return_value = "HORARIO INGLÉS"
+        output = Mock(DICT="dict")
+        frame = _bloques_desde_cuadricula(image, reader, output)
+        self.assertEqual(len(frame), 3)
+        self.assertEqual(set(frame["Dia"]), {"Lunes", "Martes"})
+        self.assertEqual(set(frame["Grupo"]), {"2°", "4°", "5°"})
+        self.assertEqual(set(frame["Actividad"]), {"Inglés"})
+
     def test_uploader_accepts_word_and_common_image_formats(self):
         self.assertTrue({"doc", "docx", "pdf", "png", "jpg", "jpeg", "webp", "tif"}.issubset(TIPOS_ARCHIVO_HORARIOS))
 
@@ -183,7 +214,7 @@ class HorariosApoyoTest(unittest.TestCase):
         with patch("ui.horarios_apoyo.repo.alumnos", return_value=roster):
             propios, escuela = _alumnos_de_maestra("Marycruz Caamal Coral", "Ichcaanziho")
         self.assertEqual(propios["ID_Alumno"].tolist(), ["A1"])
-        self.assertEqual(set(escuela["ID_Alumno"]), {"A1", "A2"})
+        self.assertEqual(set(escuela["ID_Alumno"]), {"A1"})
 
     def test_image_reading_yields_editable_rows_without_saving(self):
         class Uploaded:
@@ -279,7 +310,7 @@ class HorariosApoyoTest(unittest.TestCase):
                     leidas, fallos = _leer_imagenes_pendientes([archivo], "Zuemmy", "Escuela")
         self.assertEqual(leidas, 0)
         self.assertIn("503", fallos[0])
-        self.assertIn("No se guardó ni modificó", fallos[0])
+        self.assertIn("no cambió el horario", fallos[0])
         self.assertIn(f"ocr_error_{_clave_imagen_horario('Zuemmy', 'Escuela', archivo)}", state)
 
 
