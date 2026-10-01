@@ -22,6 +22,7 @@ class AltaPermissionsTest(unittest.TestCase):
     def test_admite_prefijo_de_apoyo_y_cuenta_directiva_autorizada(self):
         self.assertTrue(puede_dar_alta_alumnos("Mtra. Marycruz Caamal Coral", "Apoyo"))
         self.assertTrue(puede_dar_alta_alumnos("Edgar Adrián Yam Briceño", "Director"))
+        self.assertTrue(puede_dar_alta_alumnos("Psic. Edgar Adrián Yam Briceño MD", "Director"))
 
     def test_bloquea_especialistas_y_apoyos_no_autorizados(self):
         no_autorizados = [
