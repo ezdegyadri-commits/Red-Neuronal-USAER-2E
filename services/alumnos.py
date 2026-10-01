@@ -1,7 +1,35 @@
+import re
+
 import pandas as pd
 
 from config.settings import ESCUELAS_USAER
 from utils.text import normalizar_texto
+
+
+DOCENTES_ICHC_AANZIHO = {
+    "MARYCRUZ CAAMAL CORAL",
+    "MARIA CECILIA SOLIS VAZQUEZ",
+}
+
+
+def _nombre_docente(valor):
+    """Compara la identidad completa sin títulos como Mtra. o Maestra."""
+    texto = normalizar_texto(valor)
+    texto = re.sub(r"^(?:MTRA|MTRO|MAESTRA|MAESTRO)\.?\s+", "", texto)
+    return " ".join(texto.replace(".", " ").split())
+
+
+def filtrar_alumnos_por_docente_compartido(df, nombre):
+    """Separa las dos cuentas de apoyo de Ichcaanziho por asignación central explícita."""
+    if df is None or df.empty:
+        return pd.DataFrame() if df is None else df
+    docente = _nombre_docente(nombre)
+    if docente not in DOCENTES_ICHC_AANZIHO:
+        return df
+    if "Maestra de Apoyo" not in df.columns:
+        return df.iloc[0:0].copy()
+    asignaciones = df["Maestra de Apoyo"].fillna("").astype(str).map(_nombre_docente)
+    return df.loc[asignaciones.eq(docente)].copy()
 
 
 def _columnas_identidad_escuela(df):
