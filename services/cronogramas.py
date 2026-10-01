@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from config.settings import CRONOGRAMAS_SPREADSHEET_ID, ESCUELAS_USAER
-from data.google import connections, drive_oauth_google_client, retry_google
+from data.google import drive_oauth_google_client, retry_google, service_account_client
 from services.asignaciones import ASIGNACIONES_ESPECIALISTAS, es_direccion, es_especialista
 from utils.text import normalizar_texto
 
@@ -109,27 +109,26 @@ def fechas_habiles(mes: str) -> list[date]:
 
 def _worksheet():
     errores = []
-    # El libro fue creado y usado por Apps Script desde Drive. Primero se prueba
-    # la identidad OAuth que ya utiliza la plataforma para Drive y después la
-    # cuenta de servicio que lee la base central.
+    # Preferir la cuenta de servicio para evitar depender del token OAuth de
+    # Drive, que puede vencer o revocarse. Esta credencial abre directamente
+    # libros compartidos y no requiere acceder al atributo interno del libro maestro.
+    try:
+        libro = service_account_client().open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
+        return retry_google(lambda: libro.worksheet("Registros"))
+    except Exception as exc:
+        errores.append(("cuenta de servicio", exc))
     try:
         libro = drive_oauth_google_client().open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
         return retry_google(lambda: libro.worksheet("Registros"))
     except Exception as exc:
         errores.append(("Drive OAuth", exc))
-    try:
-        libro_maestro, _ = connections()
-        libro = libro_maestro.client.open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
-        return retry_google(lambda: libro.worksheet("Registros"))
-    except Exception as exc:
-        errores.append(("cuenta de servicio", exc))
         detalle = "; ".join(
             f"{metodo}: {_resumen_error(error)}" for metodo, error in errores
         )
         raise RuntimeError(
             "No se pudo autenticar contra el libro de cronogramas. "
             f"Diagnóstico: {detalle}. La pestaña 'Registros' existe. "
-            "Para corregir permisos: en Streamlit Cloud abre Manage app > Settings > "
+            "Si aparece permiso insuficiente o archivo no visible, en Streamlit Cloud abre Manage app > Settings > "
             "Secrets, copia el campo client_email dentro de credenciales_json y comparte "
             "con esa cuenta el libro de cronogramas como Editor. Si Drive OAuth reporta "
             "invalid_grant, vuelve a autorizar/actualizar token_json y reinicia la app. "

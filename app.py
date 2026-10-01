@@ -65,7 +65,7 @@ with st.sidebar:
 
 # No se lee el padrón central en módulos que no lo necesitan.
 if page in {"Inicio", "Expedientes", "Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos", "Estadística", "Documentos", "Alta de alumnos"}:
-    authorized = alumnos_visibles(rol, escuelas)
+    authorized = alumnos_visibles(rol, escuelas, st.session_state.get("nombre", ""))
 else:
     authorized = None
 

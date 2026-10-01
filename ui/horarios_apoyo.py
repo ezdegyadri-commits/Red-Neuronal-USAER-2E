@@ -19,7 +19,7 @@ from data import repository as repo
 from config.settings import ESCUELAS_USAER, SCHOOL_YEAR
 from documents.horarios_apoyo import generar_horario_apoyo_cuadricula_pdf
 from services.asignaciones import escuelas_asignadas
-from services.alumnos import filtrar_alumnos_por_escuelas
+from services.alumnos import filtrar_alumnos_por_docente_compartido, filtrar_alumnos_por_escuelas
 from services.cronogramas import cargar_publicacion
 from services.horarios import (
     DIAS,
@@ -42,10 +42,13 @@ TIPOS_ARCHIVO_HORARIOS = ["xlsx", "xls", "csv", "doc", "docx", "pdf", "png", "jp
 
 
 def _alumnos_de_maestra(nombre, escuela):
-    """Entrega IDs y nombres de la escuela, destacando los asignados a la cuenta."""
+    """Entrega alumnos de la docente; en escuela compartida no ofrece cuentas ajenas."""
     todos = filtrar_alumnos_por_escuelas(repo.alumnos(), [escuela]).copy()
     if todos.empty:
         return todos, todos
+    if normalizar_texto(escuela) in {"ICHCAANZIHO", "ESC-002"}:
+        propios = filtrar_alumnos_por_docente_compartido(todos, nombre)
+        return propios, propios
     columna = "Maestra de Apoyo"
     if columna not in todos:
         return todos.iloc[0:0].copy(), todos
@@ -275,15 +278,134 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
     return normalizar_tabla_horario(pd.DataFrame(filas))
 
 
+def _lineas_cuadricula(imagen, eje):
+    """Localiza bordes largos de la tabla; ignora letras y subrayados cortos."""
+    gris = imagen.convert("L")
+    ancho, alto = gris.size
+    escala = 2 if max(ancho, alto) > 1800 else 1
+    if escala == 2:
+        gris = gris.resize((ancho // 2, alto // 2))
+    ancho, alto = gris.size
+    pixeles = gris.load()
+    longitud = ancho if eje == "horizontal" else alto
+    transversal = alto if eje == "horizontal" else ancho
+    umbral = longitud * (0.58 if eje == "horizontal" else 0.50)
+    candidatos = []
+    for posicion in range(transversal):
+        oscuros = sum(
+            pixeles[paso, posicion] < 115 if eje == "horizontal"
+            else pixeles[posicion, paso] < 115
+            for paso in range(longitud)
+        )
+        if oscuros >= umbral:
+            candidatos.append(posicion * escala)
+    grupos = []
+    for posicion in candidatos:
+        if grupos and posicion - grupos[-1][-1] <= escala * 2:
+            grupos[-1].append(posicion)
+        else:
+            grupos.append([posicion])
+    return [round(sum(grupo) / len(grupo)) for grupo in grupos]
+
+
+def _texto_celda_ocr(palabras, x0, y0, x1, y1):
+    return " ".join(
+        palabra["texto"] for palabra in sorted(
+            (p for p in palabras if x0 + 3 < p["x"] < x1 - 3 and y0 + 3 < p["y"] < y1 - 3),
+            key=lambda p: (round(p["y"] / 16), p["x"]),
+        )
+    ).strip()
+
+
+def _bloques_desde_cuadricula(imagen, pytesseract, Output):
+    """Lee cada celda de una tabla impresa usando sus bordes como coordenadas."""
+    from PIL import ImageOps
+
+    xs = _lineas_cuadricula(imagen, "vertical")
+    ys = _lineas_cuadricula(imagen, "horizontal")
+    if len(xs) < 3 or len(ys) < 3:
+        raise ValueError("No se detectó una cuadrícula completa.")
+    # Una tabla real presenta bordes alineados y al menos dos filas horarias.
+    datos = pytesseract.image_to_data(
+        ImageOps.autocontrast(imagen.convert("L")), lang="spa+eng",
+        config="--psm 11", output_type=Output.DICT,
+    )
+    palabras = []
+    for indice, texto in enumerate(datos.get("text", [])):
+        texto = str(texto).strip()
+        if not texto:
+            continue
+        try:
+            x = int(datos["left"][indice]) + int(datos["width"][indice]) / 2
+            y = int(datos["top"][indice]) + int(datos["height"][indice]) / 2
+        except (KeyError, ValueError, IndexError):
+            continue
+        palabras.append({"texto": texto, "x": x, "y": y})
+
+    cabeceras = []
+    for columna in range(1, len(xs) - 1):
+        texto = _texto_celda_ocr(palabras, xs[columna], ys[0], xs[columna + 1], ys[1])
+        dia = _dia_desde_encabezado(texto)
+        if not dia:
+            recorte = imagen.crop((xs[columna] + 3, ys[0] + 3, xs[columna + 1] - 3, ys[1] - 3))
+            dia = _dia_desde_encabezado(pytesseract.image_to_string(recorte, lang="spa+eng", config="--psm 7"))
+        if dia:
+            cabeceras.append((columna, dia))
+    if not cabeceras:
+        raise ValueError("No se reconocieron los encabezados de días.")
+
+    titulo = pytesseract.image_to_string(
+        imagen.crop((0, 0, imagen.width, max(1, ys[0]))),
+        lang="spa+eng", config="--psm 6",
+    )
+    clave_titulo = normalizar_texto(titulo)
+    materia = next((etiqueta for token, etiqueta in (
+        ("EDUCACION FISICA", "Educación física"), ("INGLES", "Inglés"),
+        ("MAYA", "Maya"), ("ARTES", "Artes"),
+    ) if token in clave_titulo), "Clase regular")
+    filas = []
+    for renglon in range(1, len(ys) - 1):
+        hora = _texto_celda_ocr(palabras, xs[0], ys[renglon], xs[1], ys[renglon + 1])
+        intervalo = _hora_intervalo_matriz(hora)
+        if not intervalo:
+            recorte = imagen.crop((xs[0] + 3, ys[renglon] + 3, xs[1] - 3, ys[renglon + 1] - 3))
+            intervalo = _hora_intervalo_matriz(
+                pytesseract.image_to_string(recorte, lang="eng", config="--psm 6")
+            )
+        if not intervalo:
+            continue
+        for columna, dia in cabeceras:
+            texto = _texto_celda_ocr(
+                palabras, xs[columna], ys[renglon], xs[columna + 1], ys[renglon + 1]
+            )
+            if not texto:
+                continue
+            grupo, actividad = _interpretar_celda_horario(texto)
+            if grupo and actividad == "Clase regular":
+                actividad = materia
+            filas.append({
+                "Día": dia, "Inicio": intervalo[0], "Fin": intervalo[1],
+                "Grupo": grupo, "Actividad": actividad, "Responsable": "",
+            })
+    if not filas:
+        raise ValueError("No se encontraron actividades en la cuadrícula.")
+    return normalizar_tabla_horario(pd.DataFrame(filas))
+
+
 def _leer_imagen_ocr_local(archivo):
     """Prueba variantes locales de la imagen; no usa servicios externos ni guarda datos."""
     try:
-        from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+        from PIL import Image, ImageEnhance, ImageOps
         import pytesseract
         from pytesseract import Output
     except ImportError as exc:
         raise RuntimeError("El OCR local no está instalado todavía.") from exc
     imagen = ImageOps.exif_transpose(Image.open(BytesIO(archivo.getvalue()))).convert("RGB")
+    try:
+        return _bloques_desde_cuadricula(imagen, pytesseract, Output)
+    except ValueError:
+        # Los diseños sin bordes siguen usando el lector flexible por posiciones.
+        pass
     try:
         orientacion = pytesseract.image_to_osd(imagen, output_type=Output.DICT)
         giro = int(orientacion.get("rotate", 0) or 0)
@@ -366,12 +488,17 @@ def _leer_imagenes_pendientes(imagenes, nombre, escuela):
     from google.genai import types
     from ai.engine import client
     from config.settings import GEMINI_MODEL
-    cli = client()
+    try:
+        cli = client()
+    except Exception:
+        cli = None
     if cli is None:
-        return 0, ["La lectura automática no está configurada; captura los bloques en la tabla manual."]
+        for archivo in pendientes:
+            st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = "Lectura automática no disponible."
+        return 0, ["Lectura automática no disponible."]
     contents = [
         "Lee los horarios de todas las imágenes adjuntas. Devuelve SOLO JSON válido con forma "
-        '{"archivos":{"número::nombre de archivo":[{"Día":"Lunes","Inicio":"08:00",'
+        '{"archivos":{"nombre exacto del archivo":[{"Día":"Lunes","Inicio":"08:00",'
         '"Fin":"08:50","Grupo":"2A","Actividad":"Inglés","Responsable":""}]}}. '
         "No inventes datos; deja campos vacíos si no se distinguen. Horas HH:MM de 24 horas."
     ]
@@ -411,13 +538,7 @@ def _leer_imagenes_pendientes(imagenes, nombre, escuela):
         return leidas, errores
     except Exception as exc:
         detalle = str(exc)
-        if "503" in detalle or "UNAVAILABLE" in detalle.upper() or "HIGH DEMAND" in detalle.upper():
-            causa = "El servicio de lectura está temporalmente saturado (503); no es un error de guardado."
-        elif "429" in detalle or "QUOTA" in detalle.upper() or "RESOURCE_EXHAUSTED" in detalle.upper():
-            causa = "El servicio alcanzó su límite de solicitudes (429); espera antes de volver a intentarlo."
-        else:
-            causa = "El servicio no pudo completar la lectura."
-        aviso = f"{causa} No se guardó ni modificó ningún horario. Puedes reintentar manualmente o capturar los bloques en la tabla. Detalle: {detalle}"
+        aviso = _mensaje_ocr_corto(detalle)
         for _etiqueta_archivo, archivo in claves:
             st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = aviso
         return 0, [aviso]
@@ -962,65 +1083,31 @@ def horarios_apoyo_page():
             st.session_state.get(f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}")
             for archivo in imagenes
         ]
-        for fallo in dict.fromkeys(error for error in errores_guardados if error):
-            # Puede haber avisos extensos guardados en sesiones iniciadas con la
-            # versión anterior; nunca mostramos el detalle interno del proveedor.
-            st.warning(_mensaje_ocr_corto(fallo))
+        if any(errores_guardados):
+            st.warning("No se pudieron leer algunas imágenes. Puedes reintentarlo o completar la tabla.")
         if pendientes or hay_lectura_fallida:
-            etiqueta = "↻ Reintentar lectura de imágenes" if hay_lectura_fallida else "✨ Analizar imágenes cargadas"
-            st.info("La lectura automática inicia solo cuando la solicitas; así no se repite al editar otros campos ni al actualizar la página.")
+            etiqueta = "↻ Reintentar lectura" if hay_lectura_fallida else "✨ Leer horarios de las imágenes"
         else:
-            st.success("Las imágenes ya se analizaron. Comprueba y corrige los bloques antes de guardarlos.")
+            st.success("Lectura lista. Revisa los bloques antes de guardarlos.")
         if (pendientes or hay_lectura_fallida) and st.button(etiqueta, type="primary", key=f"analizar_imagenes_{clave_identidad}_{version_carga}"):
-            if hay_lectura_fallida:
-                for archivo in imagenes:
-                    st.session_state.pop(f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}", None)
-            with st.spinner("Reconociendo los bloques de horario. Podrás corregirlos antes de guardarlos…"):
-                leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
             leidas_local = 0
-            if fallos:
-                # Si la IA está ocupada o no entiende un archivo, intenta OCR local
-                # de inmediato para evitar pedir a la maestra otro clic.
-                with st.spinner("Probando lectura local de las imágenes restantes…"):
-                    for archivo in imagenes:
-                        clave = _clave_imagen_horario(nombre, escuela, archivo)
-                        if clave in st.session_state:
-                            continue
-                        st.session_state.pop(f"ocr_error_{clave}", None)
-                        try:
-                            st.session_state[clave] = _leer_imagen_ocr_local(archivo)
-                            leidas_local += 1
-                        except Exception as exc:
-                            st.session_state[f"ocr_error_{clave}"] = _mensaje_ocr_corto(exc)
-            if leidas_local:
-                st.success("Lectura lista para revisar.")
-                st.rerun()
-            if leidas:
-                st.rerun()
-            if fallos:
-                st.warning("No se pudieron reconocer algunos horarios. Puedes corregirlos en la tabla de captura.")
-        if (pendientes or hay_lectura_fallida) and st.button(
-            "🔎 Probar OCR local", key=f"ocr_local_{clave_identidad}_{version_carga}"
-        ):
-            leidas_local = 0
-            primer_fallo = ""
-            with st.spinner("Leyendo texto en la imagen…"):
+            with st.spinner("Leyendo las tablas de horario…"):
                 for archivo in imagenes:
                     clave = _clave_imagen_horario(nombre, escuela, archivo)
                     if clave in st.session_state:
                         continue
+                    st.session_state.pop(f"ocr_error_{clave}", None)
                     try:
                         st.session_state[clave] = _leer_imagen_ocr_local(archivo)
-                        st.session_state.pop(f"ocr_error_{clave}", None)
                         leidas_local += 1
-                    except Exception as exc:
-                        st.session_state[f"ocr_error_{clave}"] = str(exc)
-                        primer_fallo = primer_fallo or str(exc)
-            if leidas_local:
-                st.success("Texto listo para revisar.")
+                    except Exception:
+                        # Solo los archivos difíciles recurren al servicio externo.
+                        pass
+                leidas_ia, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
+            if leidas_local or leidas_ia:
                 st.rerun()
-            elif primer_fallo:
-                st.warning(_mensaje_ocr_corto(primer_fallo))
+            if fallos:
+                st.rerun()
     for archivo, tipo in referencias:
         if tipo == "imagen":
             clave_imagen = _clave_imagen_horario(nombre, escuela, archivo)

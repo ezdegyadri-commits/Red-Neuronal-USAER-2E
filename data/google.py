@@ -31,6 +31,12 @@ def connections():
 
 
 @st.cache_resource(show_spinner=False)
+def service_account_client():
+    """Devuelve el cliente autenticado de Sheets para abrir libros distintos al central."""
+    return gspread.service_account_from_dict(_secret_dict('credenciales_json'))
+
+
+@st.cache_resource(show_spinner=False)
 def personal_responses_connection():
     """Abre en solo lectura la hoja vinculada al formulario de personal."""
     gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'))

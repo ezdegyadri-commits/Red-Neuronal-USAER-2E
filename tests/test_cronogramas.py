@@ -75,6 +75,27 @@ class CronogramasTest(unittest.TestCase):
             cronogramas._resumen_error(RuntimeError("invalid_grant: token-secret")),
             "token OAuth inválido o vencido (invalid_grant)",
         )
+
+    def test_cronogramas_uses_service_account_directly_before_oauth(self):
+        worksheet = object()
+        workbook = type("Workbook", (), {"worksheet": lambda self, name: worksheet})()
+        client = type("Client", (), {"open_by_key": lambda self, key: workbook})()
+        with (
+            patch.object(cronogramas, "service_account_client", return_value=client),
+            patch.object(cronogramas, "drive_oauth_google_client") as oauth,
+        ):
+            self.assertIs(cronogramas._worksheet(), worksheet)
+        oauth.assert_not_called()
+
+    def test_cronogramas_falls_back_to_oauth_if_service_account_fails(self):
+        worksheet = object()
+        workbook = type("Workbook", (), {"worksheet": lambda self, name: worksheet})()
+        client = type("Client", (), {"open_by_key": lambda self, key: workbook})()
+        with (
+            patch.object(cronogramas, "service_account_client", side_effect=RuntimeError("unavailable")),
+            patch.object(cronogramas, "drive_oauth_google_client", return_value=client),
+        ):
+            self.assertIs(cronogramas._worksheet(), worksheet)
         self.assertEqual(
             cronogramas._resumen_error(RuntimeError("403 Permission denied: private-detail")),
             "permiso insuficiente (HTTP 403)",
