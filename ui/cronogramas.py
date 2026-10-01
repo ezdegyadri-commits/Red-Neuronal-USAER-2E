@@ -29,6 +29,17 @@ MESES = (
 )
 ESCUELA_JUNTA = "Junta General (Sede)"
 
+# Los archivos permanecen privados en Drive y se comparten solo como lector
+# con la cuenta de servicio; estos IDs no habilitan acceso sin ese permiso.
+FIRMAS_DRIVE_DEFAULT = {
+    "Abril de María Chable Ríos": "1JunTJoYJjpee64GMRcetX9AZWHVh6hgU",
+    "María José Cupul Realpozo": "1hpwXpje0nHXGQwVjExJJRcGVngiicN_I",
+    "Marilyn Pérez Lizama": "1vdNwkZVdbWAz5c-A5s6uQUcEeGMBauxZ",
+    "Elmy Lucelly Puerto Gone": "1icDrDeguMexU2htThzNsIRn_ADaVXJBW",
+    "Diego Peralta Torres": "119Q5blPGYQb4FvSf5HzYfsy97bOXnOQD",
+    "Psic. Edgar Adrián Yam Briceño MD": "1a817fqYg3Dc5IfPwZYXibfAMH8LeVpS0",
+}
+
 
 def _mes_actual() -> date:
     return date.today().replace(day=1)
@@ -49,8 +60,8 @@ def _meses_disponibles():
 def _firma_drive(firma_id: str) -> bytes | None:
     if not firma_id:
         return None
-    from data.google import drive_service
-    return drive_service().files().get_media(fileId=firma_id).execute()
+    from data.google import service_account_drive_service
+    return service_account_drive_service().files().get_media(fileId=firma_id).execute()
 
 
 def _firma_drive_segura(firma_id: str) -> bytes | None:
@@ -62,7 +73,7 @@ def _firma_drive_segura(firma_id: str) -> bytes | None:
 
 def _recursos_firma(perfil: dict):
     """Carga firmas opcionales de Drive sin incluir identificadores en el código fuente."""
-    firmas = st.secrets.get("CRONOGRAMAS_FIRMAS", {})
+    firmas = st.secrets.get("CRONOGRAMAS_FIRMAS", FIRMAS_DRIVE_DEFAULT)
     if isinstance(firmas, str):
         try:
             firmas = json.loads(firmas)
