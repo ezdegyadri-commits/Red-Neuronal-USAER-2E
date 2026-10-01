@@ -92,7 +92,7 @@ def puede_dar_alta_alumnos(nombre, rol):
     ):
         return False
     identidad = normalizar_texto(nombre)
-    identidad = re.sub(r"^(?:MTRA|MAESTRA)\\.?\\s*", "", identidad).strip()
+    identidad = re.sub(r"^(?:MTRA|MAESTRA)\.?\s*", "", identidad).strip()
     identidad = " ".join(identidad.replace(".", " ").split())
     if identidad == DIRECTIVO_AUTORIZADO_ALTA and "DIRECTOR" in rol_normalizado:
         return True
