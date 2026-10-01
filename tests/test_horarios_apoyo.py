@@ -38,7 +38,9 @@ class HorariosApoyoTest(unittest.TestCase):
         }
         reader = Mock()
         reader.image_to_data.return_value = data
-        reader.image_to_string.return_value = "HORARIO INGLÉS"
+        reader.image_to_string.side_effect = lambda crop, **_kwargs: (
+            "HORARIO INGLÉS" if crop.width == image.width else ""
+        )
         output = Mock(DICT="dict")
         frame = _bloques_desde_cuadricula(image, reader, output)
         self.assertEqual(len(frame), 3)
@@ -222,16 +224,13 @@ class HorariosApoyoTest(unittest.TestCase):
             def getvalue(self):
                 return b"imagen-de-prueba"
 
-        service = Mock()
-        service.models.generate_content.return_value.text = (
-            '[{"Día":"Lunes","Inicio":"08:00","Fin":"09:00",'
-            '"Grupo":"4A","Actividad":"Inglés","Responsable":"Docente"}]'
-        )
-        genai_stub = Mock()
-        genai_stub.types.Part.from_bytes.return_value = "imagen"
-        with patch.dict("sys.modules", {"google.genai": genai_stub}):
-            with patch("ai.engine.client", return_value=service):
-                result = _leer_imagen_horario(Uploaded())
+        result = normalizar_tabla_horario(pd.DataFrame([{
+            "Día": "Lunes", "Inicio": "08:00", "Fin": "09:00",
+            "Grupo": "4A", "Actividad": "Inglés", "Responsable": "Docente",
+        }]))
+        with patch("ui.horarios_apoyo._leer_imagen_ocr_local", return_value=result) as lector:
+            result = _leer_imagen_horario(Uploaded())
+        lector.assert_called_once()
         self.assertEqual(result.iloc[0]["Actividad"], "Inglés")
         self.assertEqual(result.iloc[0]["Grupo"], "4A")
 
@@ -250,20 +249,11 @@ class HorariosApoyoTest(unittest.TestCase):
             "Dia": "Lunes", "Inicio": "08:00", "Fin": "09:00", "Actividad": "Inglés",
         }]))
         state = {}
-        service = Mock()
-        service.models.generate_content.return_value.text = (
-            '{"archivos":{"1::horario.jpg":[{"Dia":"Lunes","Inicio":"08:00","Fin":"09:00","Actividad":"Inglés"}],'
-            '"2::horario.jpg":[{"Dia":"Martes","Inicio":"08:00","Fin":"09:00","Actividad":"Maya"}]}}'
-        )
         with patch("ui.horarios_apoyo.st.session_state", state):
-            with patch("ui.horarios_apoyo.normalizar_tabla_horario", side_effect=[rows, rows]):
-                genai_stub = Mock()
-                genai_stub.types.Part.from_bytes.side_effect = lambda **kwargs: kwargs
-                with patch.dict("sys.modules", {"google.genai": genai_stub}):
-                    with patch("ai.engine.client", return_value=service):
-                        self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (2, []))
-                        self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (0, []))
-        self.assertEqual(service.models.generate_content.call_count, 1)
+            with patch("ui.horarios_apoyo._leer_imagen_ocr_local", return_value=rows) as lector:
+                self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (2, []))
+                self.assertEqual(_leer_imagenes_pendientes([first, second], "Maestra", "Escuela"), (0, []))
+        self.assertEqual(lector.call_count, 2)
 
     def test_reloading_schedule_replaces_stale_draft_instead_of_merging(self):
         vigente = [{"Dia": "Lunes", "Inicio": "08:00", "Fin": "09:00", "Actividad": "Lectura"}]
@@ -292,7 +282,7 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertNotIn(f"ocr_error_{clave}", state)
         self.assertEqual(state["otra_clave"], "se conserva")
 
-    def test_image_503_message_says_nothing_was_saved_and_keeps_retry_state(self):
+    def test_local_ocr_failure_keeps_image_and_retry_state(self):
         class Uploaded:
             name = "horario.jpg"
             def getvalue(self):
@@ -300,20 +290,13 @@ class HorariosApoyoTest(unittest.TestCase):
 
         archivo = Uploaded()
         state = {}
-        service = Mock()
-        service.models.generate_content.side_effect = RuntimeError("503 UNAVAILABLE high demand")
-        genai_stub = Mock()
-        genai_stub.types.Part.from_bytes.return_value = "imagen"
         with patch("ui.horarios_apoyo.st.session_state", state):
-            with patch.dict("sys.modules", {"google.genai": genai_stub}):
-                with patch("ai.engine.client", return_value=service):
-                    leidas, fallos = _leer_imagenes_pendientes([archivo], "Zuemmy", "Escuela")
+            with patch("ui.horarios_apoyo._leer_imagen_ocr_local", side_effect=ValueError("sin texto")):
+                leidas, fallos = _leer_imagenes_pendientes([archivo], "Zuemmy", "Escuela")
         self.assertEqual(leidas, 0)
-        self.assertIn("503", fallos[0])
-        self.assertIn("no cambió el horario", fallos[0])
+        self.assertEqual(fallos, ["horario.jpg"])
         self.assertIn(f"ocr_error_{_clave_imagen_horario('Zuemmy', 'Escuela', archivo)}", state)
 
-
     def test_local_ocr_excludes_title_and_maps_grade_to_group_for_conflicts(self):
         words = [
             ("HORARIO", 170, 5), ("Escuela", 200, 15),
@@ -339,57 +322,7 @@ class HorariosApoyoTest(unittest.TestCase):
     def test_ocr_warning_is_short_and_does_not_expose_provider_payload(self):
         self.assertEqual(
             _mensaje_ocr_corto("503 UNAVAILABLE provider internal payload"),
-            "IA ocupada (503); no cambió el horario. Prueba OCR local.",
-        )
-
-    def test_local_ocr_handles_separate_time_tokens_and_slightly_truncated_weekday(self):
-        words = [
-            ("Lunes", 120, 15), ("Miercole", 330, 15),
-            ("7:30", 5, 60), ("–", 48, 60), ("8:15", 80, 61),
-            ("Tercero", 120, 60), ("grado", 170, 82),
-            ("8:30", 5, 140), ("–", 48, 140), ("9:15", 80, 140),
-            ("Cuarto", 120, 140), ("Sexto", 330, 140),
-        ]
-        datos = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
-        for texto, x, y in words:
-            datos["text"].append(texto)
-            datos["conf"].append("90")
-            datos["left"].append(x)
-            datos["top"].append(y)
-            datos["width"].append(35)
-            datos["height"].append(12)
-        rows = _bloques_desde_ocr_tsv(datos, 500, 220)
-        self.assertIn("07:30", rows["Inicio"].tolist())
-        self.assertIn("08:15", rows["Fin"].tolist())
-        self.assertEqual(set(rows["Dia"]), {"Lunes", "Miércoles"})
-        self.assertTrue(rows["Grupo"].eq("3°").any())
-
-    def test_local_ocr_excludes_title_and_maps_grade_to_group_for_conflicts(self):
-        words = [
-            ("HORARIO", 170, 5), ("Escuela", 200, 15),
-            ("Lunes", 120, 35), ("Martes", 330, 35),
-            ("7:30-8:15", 5, 80), ("Cuarto", 120, 80), ("grado", 170, 80),
-            ("Tercero", 330, 80), ("grado", 380, 80),
-            ("8:30-9:15", 5, 150), ("Maya", 120, 150), ("Lectura", 330, 150),
-        ]
-        datos = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
-        for texto, x, y in words:
-            datos["text"].append(texto)
-            datos["conf"].append("90")
-            datos["left"].append(x)
-            datos["top"].append(y)
-            datos["width"].append(45)
-            datos["height"].append(12)
-        rows = _bloques_desde_ocr_tsv(datos, 500, 220)
-        self.assertFalse(rows["Actividad"].str.contains("HORARIO|Escuela", case=False).any())
-        primero = rows.loc[rows["Inicio"].eq("07:30")]
-        self.assertEqual(primero["Grupo"].tolist(), ["4°", "3°"])
-        self.assertEqual(primero["Actividad"].tolist(), ["Clase regular", "Clase regular"])
-
-    def test_ocr_warning_is_short_and_does_not_expose_provider_payload(self):
-        self.assertEqual(
-            _mensaje_ocr_corto("503 UNAVAILABLE provider internal payload"),
-            "IA ocupada (503); no cambió el horario. Prueba OCR local.",
+            "No se pudo leer una parte; revisa y completa los bloques en la tabla.",
         )
 
     def test_monthly_cronogram_generators_are_available_for_all_specialist_areas(self):

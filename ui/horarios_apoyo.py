@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import html
 import hashlib
-import json
 import re
 from difflib import SequenceMatcher
 from difflib import SequenceMatcher
@@ -63,38 +62,6 @@ def _alumnos_de_maestra(nombre, escuela):
 
 def _grupo_alumno(row):
     return f"{str(row.get('Grado', '')).strip()} {str(row.get('Grupo', '')).strip()}".strip()
-
-
-def _leer_imagen_horario(archivo):
-    """Propone filas de una imagen; siempre requieren revisión antes de guardarse."""
-    from google.genai import types
-    from ai.engine import client
-
-    cli = client()
-    if cli is None:
-        raise RuntimeError("La lectura de imágenes no está configurada. Transcribe los bloques en la tabla inferior.")
-    extension = archivo.name.rsplit(".", 1)[-1].lower()
-    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
-            "webp": "image/webp"}.get(extension)
-    if not mime:
-        raise ValueError("Para lectura asistida usa JPG, PNG o WebP; los demás formatos siguen disponibles como referencia.")
-    from config.settings import GEMINI_MODEL
-    prompt = (
-        "Lee SOLO los bloques de este horario escolar. Devuelve un arreglo JSON, sin markdown, "
-        "con un objeto por bloque y claves Día, Inicio, Fin, Grupo, Actividad, Responsable. "
-        "Usa lunes a viernes y horas HH:MM en formato de 24 horas. Si no distingues un dato, "
-        "déjalo vacío. No inventes grupos, materias ni horas. No incluyas encabezados vacíos."
-    )
-    response = cli.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[prompt, types.Part.from_bytes(data=archivo.getvalue(), mime_type=mime)],
-        config={"temperature": 0},
-    )
-    texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", (response.text or "").strip(), flags=re.I)
-    datos = json.loads(texto)
-    if not isinstance(datos, list) or not datos:
-        raise ValueError("No se reconocieron bloques de horario. Usa la captura manual.")
-    return normalizar_tabla_horario(pd.DataFrame(datos))
 
 
 def _clave_imagen_horario(nombre, escuela, archivo):
@@ -379,6 +346,12 @@ def _bloques_desde_cuadricula(imagen, pytesseract, Output):
                 palabras, xs[columna], ys[renglon], xs[columna + 1], ys[renglon + 1]
             )
             if not texto:
+                recorte = imagen.crop((xs[columna] + 3, ys[renglon] + 3,
+                                       xs[columna + 1] - 3, ys[renglon + 1] - 3))
+                texto = pytesseract.image_to_string(
+                    recorte, lang="spa+eng", config="--psm 6"
+                ).strip()
+            if not texto:
                 continue
             grupo, actividad = _interpretar_celda_horario(texto)
             if grupo and actividad == "Clase regular":
@@ -402,17 +375,17 @@ def _leer_imagen_ocr_local(archivo):
         raise RuntimeError("El OCR local no está instalado todavía.") from exc
     imagen = ImageOps.exif_transpose(Image.open(BytesIO(archivo.getvalue()))).convert("RGB")
     try:
-        return _bloques_desde_cuadricula(imagen, pytesseract, Output)
-    except ValueError:
-        # Los diseños sin bordes siguen usando el lector flexible por posiciones.
-        pass
-    try:
         orientacion = pytesseract.image_to_osd(imagen, output_type=Output.DICT)
         giro = int(orientacion.get("rotate", 0) or 0)
         if giro:
             imagen = imagen.rotate(360 - giro, expand=True)
     except Exception:
         # Algunas tablas tienen poco texto para estimar la orientación; se conserva la foto.
+        pass
+    try:
+        return _bloques_desde_cuadricula(imagen, pytesseract, Output)
+    except ValueError:
+        # Los diseños sin bordes siguen usando el lector flexible por posiciones.
         pass
     # Mejora fotos comprimidas y texto pequeño: primero original, después ampliadas,
     # con contraste y umbral. Se detiene en la primera lectura estructurada válida.
@@ -467,81 +440,33 @@ def _leer_imagen_ocr_local(archivo):
 
 
 def _mensaje_ocr_corto(mensaje):
-    texto = str(mensaje).upper()
-    if "503" in texto or "UNAVAILABLE" in texto:
-        return "IA ocupada (503); no cambió el horario. Prueba OCR local."
-    if "429" in texto or "QUOTA" in texto or "RESOURCE_EXHAUSTED" in texto:
-        return "Límite temporal (429); no cambió el horario. Usa OCR local o espera."
-    if "OCR LOCAL" in texto and "NO ESTÁ INSTALADO" in texto:
-        return "OCR local no disponible; prueba lectura con IA o captura manual."
-    return "No se pudo leer el horario. Prueba otra opción o captura manualmente."
+    return "No se pudo leer una parte; revisa y completa los bloques en la tabla."
 
 
 def _leer_imagenes_pendientes(imagenes, nombre, escuela):
-    """Lee el conjunto de imágenes en una sola petición al modelo para reducir cuota."""
+    """Lee con Tesseract local; no consulta modelos externos ni genera cuotas."""
     errores = []
     pendientes = [archivo for archivo in imagenes
                   if _clave_imagen_horario(nombre, escuela, archivo) not in st.session_state
                   and f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" not in st.session_state]
     if not pendientes:
         return 0, errores
-    from google.genai import types
-    from ai.engine import client
-    from config.settings import GEMINI_MODEL
-    try:
-        cli = client()
-    except Exception:
-        cli = None
-    if cli is None:
-        for archivo in pendientes:
-            st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = "Lectura automática no disponible."
-        return 0, ["Lectura automática no disponible."]
-    contents = [
-        "Lee los horarios de todas las imágenes adjuntas. Devuelve SOLO JSON válido con forma "
-        '{"archivos":{"nombre exacto del archivo":[{"Día":"Lunes","Inicio":"08:00",'
-        '"Fin":"08:50","Grupo":"2A","Actividad":"Inglés","Responsable":""}]}}. '
-        "No inventes datos; deja campos vacíos si no se distinguen. Horas HH:MM de 24 horas."
-    ]
-    claves = []
+    leidas = 0
     for archivo in pendientes:
-        ext = archivo.name.rsplit(".", 1)[-1].lower()
-        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
-                "webp": "image/webp", "bmp": "image/bmp", "tif": "image/tiff", "tiff": "image/tiff"}.get(ext)
-        if not mime:
-            errores.append(f"{archivo.name}: formato no compatible para lectura automática.")
-            continue
-        etiqueta_archivo = f"{len(claves) + 1}::{archivo.name}"
-        contents.extend([f"Archivo: {etiqueta_archivo}", types.Part.from_bytes(data=archivo.getvalue(), mime_type=mime)])
-        claves.append((etiqueta_archivo, archivo))
-    if not claves:
-        return 0, errores
-    try:
-        response = cli.models.generate_content(
-            model=GEMINI_MODEL, contents=contents,
-            config={"temperature": 0, "response_mime_type": "application/json"},
-        )
-        raw = json.loads((response.text or "{}").strip())
-        resultado = raw.get("archivos", raw) if isinstance(raw, dict) else {}
-        leidas = 0
-        for etiqueta_archivo, archivo in claves:
-            filas = resultado.get(etiqueta_archivo, [])
-            if not filas:
-                errores.append(f"{archivo.name}: no se reconocieron bloques; puedes transcribirlos manualmente.")
-                st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = errores[-1]
-                continue
-            try:
-                st.session_state[_clave_imagen_horario(nombre, escuela, archivo)] = normalizar_tabla_horario(pd.DataFrame(filas))
-                leidas += 1
-            except Exception as exc:
-                errores.append(f"{archivo.name}: revisa la captura manual ({exc}).")
-                st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = errores[-1]
-        return leidas, errores
-    except Exception as exc:
-        detalle = str(exc)
-        aviso = _mensaje_ocr_corto(detalle)
-        for _etiqueta_archivo, archivo in claves:
-            st.session_state[f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}"] = aviso
-        return 0, [aviso]
+        clave = _clave_imagen_horario(nombre, escuela, archivo)
+        try:
+            st.session_state[clave] = _leer_imagen_ocr_local(archivo)
+            st.session_state.pop(f"ocr_error_{clave}", None)
+            leidas += 1
+        except Exception:
+            st.session_state[f"ocr_error_{clave}"] = "No se reconocieron bloques; puedes corregir o capturar la tabla."
+            errores.append(archivo.name)
+    return leidas, errores
+
+
+def _leer_imagen_horario(archivo):
+    """Compatibilidad para lectores internos; utiliza únicamente OCR local."""
+    return _leer_imagen_ocr_local(archivo)
 
 
 def _dia_desde_encabezado(texto):
@@ -1090,23 +1015,9 @@ def horarios_apoyo_page():
         else:
             st.success("Lectura lista. Revisa los bloques antes de guardarlos.")
         if (pendientes or hay_lectura_fallida) and st.button(etiqueta, type="primary", key=f"analizar_imagenes_{clave_identidad}_{version_carga}"):
-            leidas_local = 0
             with st.spinner("Leyendo las tablas de horario…"):
-                for archivo in imagenes:
-                    clave = _clave_imagen_horario(nombre, escuela, archivo)
-                    if clave in st.session_state:
-                        continue
-                    st.session_state.pop(f"ocr_error_{clave}", None)
-                    try:
-                        st.session_state[clave] = _leer_imagen_ocr_local(archivo)
-                        leidas_local += 1
-                    except Exception:
-                        # Solo los archivos difíciles recurren al servicio externo.
-                        pass
-                leidas_ia, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
-            if leidas_local or leidas_ia:
-                st.rerun()
-            if fallos:
+                leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
+            if leidas or fallos:
                 st.rerun()
     for archivo, tipo in referencias:
         if tipo == "imagen":
