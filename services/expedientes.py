@@ -8,7 +8,7 @@ from data import repository as repo
 from data.google import df_sheet
 from utils.ids import expediente_id
 from utils.text import normalizar_texto
-from services.alumnos import filtrar_alumnos_por_escuelas
+from services.alumnos import filtrar_alumnos_por_docente_compartido, filtrar_alumnos_por_escuelas
 
 
 def _grado_grupo(value):
@@ -76,7 +76,7 @@ def baps_de_alumno(registros, alumno_registro, incluir_inactivos=False):
     )
 
 
-def alumnos_visibles(rol, escuelas_permitidas):
+def alumnos_visibles(rol, escuelas_permitidas, nombre=""):
     df = repo.alumnos()
     if df.empty:
         return df
@@ -89,7 +89,10 @@ def alumnos_visibles(rol, escuelas_permitidas):
         return df.drop_duplicates(
             subset=["ID_Alumno"] if "ID_Alumno" in df.columns else None
         )
-    return filtrar_alumnos_por_escuelas(df, permitidas)
+    visibles = filtrar_alumnos_por_escuelas(df, permitidas)
+    if "APOYO" in rol:
+        return filtrar_alumnos_por_docente_compartido(visibles, nombre)
+    return visibles
 
 
 def alumno(df, id_alumno):
