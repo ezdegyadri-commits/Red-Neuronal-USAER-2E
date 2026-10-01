@@ -13,10 +13,8 @@ class AltaPermissionsTest(unittest.TestCase):
             "Maria del Rosario Perez Vitorin",
             "Dolores Eugenia Cortazar Navarrete",
             "Dianely de Sugeidy Caamal Tamay",
-            "Zu emmy del Carmen Perez Basto",
+            "Zuemmy del Carmen Perez Basto",
         ]
-        # La grafía de la cuenta de Zuemmy no lleva espacio interno.
-        maestras_y_apoyo[-1] = "Zuemmy del Carmen Perez Basto"
         for nombre in maestras_y_apoyo:
             with self.subTest(nombre=nombre):
                 self.assertTrue(puede_dar_alta_alumnos(nombre, "Apoyo"))
