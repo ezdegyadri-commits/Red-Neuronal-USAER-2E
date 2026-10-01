@@ -12,10 +12,32 @@ from services.cronogramas import perfil_especialista
 from ui.horarios_apoyo import (TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra,
     _avisos_maestra, _clave_imagen_horario, _leer_archivo, _leer_imagen_horario,
     _leer_imagenes_pendientes, _borrador_de_horario, _limpiar_lectura_imagen,
+    _limpiar_borradores_imagen_sin_carga, _interpretar_celda_horario,
     _bloques_desde_ocr_tsv, _bloques_desde_cuadricula, _mensaje_ocr_corto, _matriz_horario_a_frame)
 
 
 class HorariosApoyoTest(unittest.TestCase):
+    def test_grade_without_word_grado_uses_subject_from_ocr_title(self):
+        self.assertEqual(_interpretar_celda_horario("Cuarto"), ("4°", "Clase regular"))
+        self.assertEqual(_interpretar_celda_horario("4° B"), ("4°B", "Clase regular"))
+        words = [
+            ("HORARIO", 20, 10), ("MAYA", 100, 10),
+            ("Lunes", 130, 55), ("Martes", 280, 55),
+            ("07:30-08:15", 10, 115), ("Cuarto", 220, 110),
+        ]
+        data = {key: [] for key in ("text", "conf", "left", "top", "width", "height")}
+        for texto, x, y in words:
+            data["text"].append(texto)
+            data["conf"].append("90")
+            data["left"].append(x)
+            data["top"].append(y)
+            data["width"].append(45)
+            data["height"].append(12)
+        frame = _bloques_desde_ocr_tsv(data, 400, 200)
+        martes = frame.loc[frame["Dia"].eq("Martes")].iloc[0]
+        self.assertEqual(martes["Grupo"], "4°")
+        self.assertEqual(martes["Actividad"], "Maya")
+
     def test_grid_ocr_uses_cell_positions_and_subject_instead_of_mixing_columns(self):
         image = Image.new("RGB", (400, 160), "white")
         draw = ImageDraw.Draw(image)
@@ -281,6 +303,23 @@ class HorariosApoyoTest(unittest.TestCase):
         self.assertNotIn(clave, state)
         self.assertNotIn(f"ocr_error_{clave}", state)
         self.assertEqual(state["otra_clave"], "se conserva")
+
+    def test_no_image_clears_only_current_teachers_hidden_ocr_drafts(self):
+        prefix = "bloques_imagen_ZUEMMY PEREZ_ESCUELA_"
+        own_key = prefix + "123"
+        state = {
+            own_key: "borrador viejo",
+            "ocr_error_" + own_key: "fallo previo",
+            "revision_" + own_key + "_0": "tabla vieja",
+            "bloques_imagen_OTRA MAESTRA_ESCUELA_123": "otro borrador",
+            "horario_guardado": "no tocar",
+        }
+        with patch("ui.horarios_apoyo.st.session_state", state):
+            _limpiar_borradores_imagen_sin_carga("Zuemmy Perez", "Escuela")
+        self.assertFalse(any(key.startswith(prefix) or key.startswith("ocr_error_" + prefix)
+                             or key.startswith("revision_" + prefix) for key in state))
+        self.assertIn("bloques_imagen_OTRA MAESTRA_ESCUELA_123", state)
+        self.assertEqual(state["horario_guardado"], "no tocar")
 
     def test_local_ocr_failure_keeps_image_and_retry_state(self):
         class Uploaded:

@@ -77,6 +77,17 @@ def _limpiar_lectura_imagen(nombre, escuela, archivo):
         st.session_state.pop(key, None)
 
 
+def _limpiar_borradores_imagen_sin_carga(nombre, escuela):
+    """Retira solo borradores OCR ocultos cuando ya no hay archivos adjuntos."""
+    prefijo = f"bloques_imagen_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}_"
+    for key in list(st.session_state.keys()):
+        texto = str(key)
+        if (texto.startswith(prefijo)
+                or texto.removeprefix("ocr_error_").startswith(prefijo)
+                or texto.removeprefix("revision_").startswith(prefijo)):
+            st.session_state.pop(key, None)
+
+
 def _borrador_de_horario(filas):
     """Construye un borrador nuevo desde la versión vigente, sin mezclar residuos."""
     return {
@@ -86,7 +97,7 @@ def _borrador_de_horario(filas):
 
 
 def _interpretar_celda_horario(texto):
-    """Separa el grado de la actividad para que los avisos de choque sean específicos."""
+    """Separa el grado de la actividad aunque OCR omita la palabra «grado»."""
     original = " ".join(str(texto or "").split()).strip(" |·,;.-")
     clave = normalizar_texto(original)
     ordinales = {
@@ -97,15 +108,35 @@ def _interpretar_celda_horario(texto):
         "SEXTO": "6°", "SEXTA": "6°",
     }
     patron = re.compile(
-        r"\b(PRIMER[OA]?|SEGUND[OA]|TERCER[OA]?|CUART[OA]|QUINT[OA]|SEXT[OA])\s+GRADO\b",
+        r"\b(PRIMER[OA]?|SEGUND[OA]|TERCER[OA]?|CUART[OA]|QUINT[OA]|SEXT[OA]"
+        r"|[1-6]\s*(?:°|º|O)?)(?:\s+GRADO)?(?:\s*([A-F]))?\b"
     )
     coincidencia = patron.search(clave)
     if not coincidencia:
         return "", original or "Horario escolar"
-    grupo = ordinales.get(coincidencia.group(1), "")
+    token_grado = coincidencia.group(1).replace(" ", "")
+    grupo = ordinales.get(token_grado, "")
+    if not grupo and token_grado[:1].isdigit():
+        grupo = f"{token_grado[0]}°"
+    if grupo and coincidencia.group(2):
+        grupo += coincidencia.group(2)
     resto = (clave[:coincidencia.start()] + " " + clave[coincidencia.end():]).strip(" |·,;.-")
-    actividad = resto.title() if resto else "Clase regular"
-    return grupo, actividad
+    return grupo, resto.title() if resto else "Clase regular"
+
+
+def _materia_desde_titulo(texto):
+    """Detecta la asignatura en títulos habituales de horarios escolares."""
+    clave = normalizar_texto(texto)
+    for tokens, etiqueta in (
+        (("EDUCACION FISICA", "ED FISICA"), "Educación física"),
+        (("INGLES",), "Inglés"),
+        (("MAYA",), "Maya"),
+        (("ARTES", "EDUCACION ARTISTICA"), "Artes"),
+        (("CORO", "CANTOS"), "Coro y cantos"),
+    ):
+        if any(token in clave for token in tokens):
+            return etiqueta
+    return ""
 
 
 def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
@@ -158,6 +189,9 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
     if len(centros_dia) < 2:
         raise ValueError("No se reconocieron suficientes encabezados de días para ordenar el horario.")
     columnas = sorted(centros_dia.items(), key=lambda item: item[1])
+    primer_encabezado = min(y_encabezados) if y_encabezados else 0
+    titulo = " ".join(p["texto"] for p in palabras if p["y"] < primer_encabezado)
+    materia = _materia_desde_titulo(titulo)
     centros_x = [x for _dia, x in columnas]
     alto_medio = sorted(p["alto"] for p in palabras)[len(palabras) // 2]
     tolerancia_y = max(18, alto_medio * 2.0)
@@ -232,6 +266,8 @@ def _bloques_desde_ocr_tsv(datos, ancho_imagen, alto_imagen):
             actividad = " ".join(textos).strip()
             if actividad:
                 grupo, actividad = _interpretar_celda_horario(actividad)
+                if grupo and actividad == "Clase regular" and materia:
+                    actividad = materia
                 filas.append({
                     "Día": dia,
                     "Inicio": f"{fila['inicio'][0]:02d}:{fila['inicio'][1]:02d}",
@@ -326,10 +362,7 @@ def _bloques_desde_cuadricula(imagen, pytesseract, Output):
         lang="spa+eng", config="--psm 6",
     )
     clave_titulo = normalizar_texto(titulo)
-    materia = next((etiqueta for token, etiqueta in (
-        ("EDUCACION FISICA", "Educación física"), ("INGLES", "Inglés"),
-        ("MAYA", "Maya"), ("ARTES", "Artes"),
-    ) if token in clave_titulo), "Clase regular")
+    materia = _materia_desde_titulo(clave_titulo) or "Clase regular"
     filas = []
     for renglon in range(1, len(ys) - 1):
         hora = _texto_celda_ocr(palabras, xs[0], ys[renglon], xs[1], ys[renglon + 1])
@@ -990,12 +1023,10 @@ def horarios_apoyo_page():
             else:
                 errores.append(f"{archivo.name}: {exc}")
     imagenes = [archivo for archivo, tipo in referencias if tipo == "imagen"]
+    if not imagenes:
+        _limpiar_borradores_imagen_sin_carga(nombre, escuela)
     if imagenes:
         st.markdown(f"#### 🖼️ {len(imagenes)} imagen(es) cargada(s)")
-        hay_lectura_fallida = any(
-            f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" in st.session_state
-            for archivo in imagenes
-        )
         if st.button("🧹 Quitar esta carga y empezar de nuevo", key=f"limpiar_carga_{clave_identidad}_{version_carga}"):
             for archivo in imagenes:
                 _limpiar_lectura_imagen(nombre, escuela, archivo)
@@ -1004,21 +1035,28 @@ def horarios_apoyo_page():
         pendientes = [archivo for archivo in imagenes
                       if _clave_imagen_horario(nombre, escuela, archivo) not in st.session_state
                       and f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" not in st.session_state]
-        errores_guardados = [
-            st.session_state.get(f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}")
-            for archivo in imagenes
-        ]
-        if any(errores_guardados):
-            st.warning("No se pudieron leer algunas imágenes. Puedes reintentarlo o completar la tabla.")
-        if pendientes or hay_lectura_fallida:
-            etiqueta = "↻ Reintentar lectura" if hay_lectura_fallida else "✨ Leer horarios de las imágenes"
-        else:
-            st.success("Lectura lista. Revisa los bloques antes de guardarlos.")
-        if (pendientes or hay_lectura_fallida) and st.button(etiqueta, type="primary", key=f"analizar_imagenes_{clave_identidad}_{version_carga}"):
-            with st.spinner("Leyendo las tablas de horario…"):
+        if pendientes:
+            with st.spinner("Leyendo horarios…"):
                 leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
             if leidas or fallos:
                 st.rerun()
+        hay_lectura_fallida = any(
+            f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}" in st.session_state
+            for archivo in imagenes
+        )
+        if hay_lectura_fallida:
+            st.warning("No se pudo leer una parte. Puedes reintentar o completar la tabla.")
+            if st.button("↻ Reintentar lectura", type="primary", key=f"analizar_imagenes_{clave_identidad}_{version_carga}"):
+                for archivo in imagenes:
+                    st.session_state.pop(
+                        f"ocr_error_{_clave_imagen_horario(nombre, escuela, archivo)}", None,
+                    )
+                with st.spinner("Reintentando lectura…"):
+                    leidas, fallos = _leer_imagenes_pendientes(imagenes, nombre, escuela)
+                if leidas or fallos:
+                    st.rerun()
+        else:
+            st.success("Lectura lista. Revisa los bloques antes de guardarlos.")
     for archivo, tipo in referencias:
         if tipo == "imagen":
             clave_imagen = _clave_imagen_horario(nombre, escuela, archivo)
