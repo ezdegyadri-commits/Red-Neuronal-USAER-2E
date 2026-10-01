@@ -1,3 +1,5 @@
+import re
+
 from utils.text import normalizar_texto
 from config.settings import ESCUELAS_USAER
 
@@ -66,6 +68,35 @@ ASIGNACIONES_ESPECIALISTAS = {
 
     "DIEGO PERALTA TORRES": list(ESCUELAS_USAER.keys()),
 }
+
+
+PERSONAL_AUTORIZADO_ALTA = {
+    "CINDY MAYANIN BURGOS GONZALEZ",
+    "LUIS JORGE GARCIA HERRERA",
+    "MARYCRUZ CAAMAL CORAL",
+    "MARIA CECILIA SOLIS VAZQUEZ",
+    "MARIA DEL ROSARIO PEREZ VITORIN",
+    "DOLORES EUGENIA CORTAZAR NAVARRETE",
+    "DIANELY DE SUGEIDY CAAMAL TAMAY",
+    "ZUEMMY DEL CARMEN PEREZ BASTO",
+}
+DIRECTIVO_AUTORIZADO_ALTA = "EDGAR ADRIAN YAM BRICENO"
+
+
+def puede_dar_alta_alumnos(nombre, rol):
+    """Autoriza altas solo al personal indicado por Dirección, no a especialistas."""
+    rol_normalizado = normalizar_texto(rol)
+    if any(
+        perfil in rol_normalizado
+        for perfil in ("PSICOLOGIA", "COMUNICACION", "TRABAJO SOCIAL", "ESPECIALISTA")
+    ):
+        return False
+    identidad = normalizar_texto(nombre)
+    identidad = re.sub(r"^(?:MTRA|MAESTRA)\\.?\\s*", "", identidad).strip()
+    identidad = " ".join(identidad.replace(".", " ").split())
+    if identidad == DIRECTIVO_AUTORIZADO_ALTA and "DIRECTOR" in rol_normalizado:
+        return True
+    return "APOYO" in rol_normalizado and identidad in PERSONAL_AUTORIZADO_ALTA
 
 
 def _normalizar_nombre(nombre):
