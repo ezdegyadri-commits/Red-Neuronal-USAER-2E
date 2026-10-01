@@ -2,7 +2,7 @@ import streamlit as st
 from config.settings import PAGE_TITLE
 from data import repository as repo
 from services.expedientes import alumnos_visibles
-from services.asignaciones import es_especialista
+from services.asignaciones import es_especialista, puede_dar_alta_alumnos
 from services.cronogramas import perfil_especialista
 from ui.theme import inject
 from ui.auth import login, logout
@@ -36,8 +36,15 @@ with st.sidebar:
     menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos"]
     if es_especialista(rol) and perfil_especialista(st.session_state.get("nombre", ""), rol):
         menu += ["Cronograma mensual"]
-    if "DIRECTOR" in rol.upper(): menu += ["Panel de Dirección","Constancias de visita","Alta de alumnos"]
-    elif "APOYO" in rol.upper(): menu += ["Horarios de apoyo", "Alta de alumnos", "Oficios de comisión", "Anexo VII Derivación"]
+    if "DIRECTOR" in rol.upper():
+        menu += ["Panel de Dirección", "Constancias de visita"]
+        if puede_dar_alta_alumnos(st.session_state.get("nombre", ""), rol):
+            menu += ["Alta de alumnos"]
+    elif "APOYO" in rol.upper():
+        menu += ["Horarios de apoyo"]
+        if puede_dar_alta_alumnos(st.session_state.get("nombre", ""), rol):
+            menu += ["Alta de alumnos"]
+        menu += ["Oficios de comisión", "Anexo VII Derivación"]
     else: menu += ["Constancias de visita", "Anexo VII Derivación"]
     grupos_menu = {
         "Inicio": "🏠 Inicio",
