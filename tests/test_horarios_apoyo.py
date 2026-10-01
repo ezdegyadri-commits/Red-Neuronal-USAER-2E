@@ -13,7 +13,7 @@ from ui.horarios_apoyo import (TIPOS_ARCHIVO_HORARIOS, _alumnos_de_maestra,
     _avisos_maestra, _clave_imagen_horario, _leer_archivo, _leer_imagen_horario,
     _leer_imagenes_pendientes, _borrador_de_horario, _limpiar_lectura_imagen,
     _limpiar_borradores_imagen_sin_carga, _interpretar_celda_horario,
-    _bloques_desde_ocr_tsv, _bloques_desde_cuadricula, _mensaje_ocr_corto, _matriz_horario_a_frame)
+    _celda_ocr_util, _normalizar_actividad_ocr, _bloques_desde_ocr_tsv, _bloques_desde_cuadricula, _mensaje_ocr_corto, _matriz_horario_a_frame)
 
 
 class HorariosApoyoTest(unittest.TestCase):
@@ -37,6 +37,29 @@ class HorariosApoyoTest(unittest.TestCase):
         martes = frame.loc[frame["Dia"].eq("Martes")].iloc[0]
         self.assertEqual(martes["Grupo"], "4°")
         self.assertEqual(martes["Actividad"], "Maya")
+
+    def test_ocr_discards_time_fragments_and_corrects_only_clear_subject_typos(self):
+        self.assertFalse(_celda_ocr_util("7 :"))
+        self.assertTrue(_celda_ocr_util("Quinto", "5°"))
+        self.assertEqual(_normalizar_actividad_ocr("Gores y Cantos"), "Coros y Cantos")
+        self.assertEqual(_normalizar_actividad_ocr("Atención individual"), "Atención individual")
+
+        words = [
+            ("HORARIO", 20, 10), ("MAYA", 100, 10),
+            ("Lunes", 130, 55), ("Martes", 280, 55),
+            ("11:00-11:50", 10, 115), ("Quinto", 110, 110), ("7 :", 260, 110),
+        ]
+        data = {key: [] for key in ("text", "conf", "left", "top", "width", "height")}
+        for texto, x, y in words:
+            data["text"].append(texto)
+            data["conf"].append("90")
+            data["left"].append(x)
+            data["top"].append(y)
+            data["width"].append(45)
+            data["height"].append(12)
+        frame = _bloques_desde_ocr_tsv(data, 400, 200)
+        self.assertIn("Lunes", frame["Dia"].tolist())
+        self.assertNotIn("Martes", frame["Dia"].tolist())
 
     def test_grid_ocr_uses_cell_positions_and_subject_instead_of_mixing_columns(self):
         image = Image.new("RGB", (400, 160), "white")
