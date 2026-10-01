@@ -81,6 +81,18 @@ def drive_service():
         creds.refresh(Request())
     return build('drive', 'v3', credentials=creds)
 
+
+@st.cache_resource(show_spinner=False)
+def service_account_drive_service():
+    """Drive de solo lectura para recursos privados compartidos con la cuenta de servicio."""
+    from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+
+    info = _secret_dict('credenciales_json')
+    creds = ServiceAccountCredentials.from_service_account_info(
+        info, scopes=['https://www.googleapis.com/auth/drive.readonly']
+    )
+    return build('drive', 'v3', credentials=creds)
+
 def retry_google(operation, attempts=3):
     """Reintenta límites y fallos temporales de Google con espera progresiva."""
     last = None

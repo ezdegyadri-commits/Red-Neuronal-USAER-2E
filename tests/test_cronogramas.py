@@ -51,6 +51,22 @@ class CronogramasTest(unittest.TestCase):
         self.assertTrue(all(dia.weekday() < 5 for dia in dias))
         self.assertNotIn(date(2026, 9, 16), dias)
         self.assertNotIn(date(2026, 9, 25), dias)
+        cierres = [
+            ("2026-08", date(2026, 8, 24)),
+            ("2026-10", date(2026, 10, 30)),
+            ("2026-11", date(2026, 11, 16)),
+            ("2026-12", date(2026, 12, 21)),
+            ("2027-01", date(2027, 1, 6)),
+            ("2027-02", date(2027, 2, 26)),
+            ("2027-03", date(2027, 3, 22)),
+            ("2027-04", date(2027, 4, 1)),
+            ("2027-05", date(2027, 5, 5)),
+            ("2027-06", date(2027, 6, 25)),
+            ("2027-07", date(2027, 7, 12)),
+        ]
+        for mes, cierre in cierres:
+            with self.subTest(mes=mes, cierre=cierre):
+                self.assertNotIn(cierre, fechas_habiles(mes))
 
     def test_pdf_is_generated_with_the_official_assets(self):
         perfil = perfil_especialista("María José Cupul Realpozo", "Psicóloga")

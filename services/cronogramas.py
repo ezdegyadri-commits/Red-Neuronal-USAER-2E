@@ -35,15 +35,45 @@ NOMBRES_ESPECIALISTAS = {
     "DIEGO PERALTA TORRES": "Diego Peralta Torres",
 }
 
-DIAS_INHABILES = {
-    "2026-09-16": "Suspensión de labores docentes",
-    "2026-09-25": "Consejo Técnico Escolar",
-    "2026-10-30": "Consejo Técnico Escolar",
-    "2026-11-02": "Suspensión de labores docentes",
-    "2026-11-16": "Suspensión de labores docentes",
-    "2026-11-27": "Consejo Técnico Escolar",
-    "2026-12-25": "Suspensión de labores docentes",
-}
+DIAS_INHABILES = {}
+
+# Calendario Escolar 2026-2027, Educación Básica, SEGEY Yucatán.
+# Se guardan solo días hábiles dentro de los recesos; fines de semana ya se
+# excluyen por separado en fechas_habiles().
+def _registrar_rango_inhabil(inicio: str, fin: str, motivo: str) -> None:
+    fecha = date.fromisoformat(inicio)
+    limite = date.fromisoformat(fin)
+    while fecha <= limite:
+        if fecha.weekday() < 5:
+            DIAS_INHABILES[fecha.isoformat()] = motivo
+        fecha = date.fromordinal(fecha.toordinal() + 1)
+
+
+def _registrar_dia_inhabil(fecha: str, motivo: str) -> None:
+    DIAS_INHABILES[fecha] = motivo
+
+
+_registrar_rango_inhabil("2026-08-03", "2026-08-21", "Receso escolar de verano")
+_registrar_rango_inhabil("2026-08-24", "2026-08-28", "Consejo Técnico Escolar, fase intensiva")
+_registrar_dia_inhabil("2026-09-16", "Suspensión de labores docentes")
+_registrar_dia_inhabil("2026-09-25", "Consejo Técnico Escolar")
+_registrar_dia_inhabil("2026-10-30", "Consejo Técnico Escolar")
+_registrar_dia_inhabil("2026-11-02", "Suspensión de labores docentes")
+_registrar_dia_inhabil("2026-11-16", "Suspensión de labores docentes")
+_registrar_dia_inhabil("2026-11-27", "Consejo Técnico Escolar")
+_registrar_rango_inhabil("2026-12-21", "2026-12-31", "Receso escolar de invierno")
+_registrar_rango_inhabil("2027-01-01", "2027-01-05", "Receso escolar de invierno")
+_registrar_dia_inhabil("2027-01-06", "Suspensión de labores docentes")
+_registrar_dia_inhabil("2027-01-29", "Consejo Técnico Escolar")
+_registrar_dia_inhabil("2027-02-01", "Suspensión de labores docentes")
+_registrar_dia_inhabil("2027-02-26", "Consejo Técnico Escolar")
+_registrar_dia_inhabil("2027-03-15", "Suspensión de labores docentes")
+_registrar_rango_inhabil("2027-03-22", "2027-04-02", "Receso escolar de primavera")
+_registrar_dia_inhabil("2027-04-30", "Consejo Técnico Escolar")
+_registrar_dia_inhabil("2027-05-05", "Suspensión de labores docentes")
+_registrar_dia_inhabil("2027-05-28", "Consejo Técnico Escolar")
+_registrar_dia_inhabil("2027-06-25", "Consejo Técnico Escolar")
+_registrar_rango_inhabil("2027-07-10", "2027-07-31", "Receso escolar de verano")
 
 
 def perfil_especialista(nombre: str, rol: str) -> dict | None:
