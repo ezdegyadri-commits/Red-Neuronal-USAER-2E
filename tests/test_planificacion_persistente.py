@@ -77,8 +77,9 @@ class PlanificacionTest(unittest.TestCase):
     def test_calendar_ui_has_only_working_days_and_assigned_schools(self):
         app = AppTest.from_file(str(Path(__file__).parent / "fixtures" / "cronograma_calendar_app.py")).run()
         self.assertFalse(app.exception)
-        self.assertEqual(len(app.selectbox), len(cronogramas.fechas_habiles("2026-10")))
-        self.assertTrue(all(w.options == ["Elegir escuela o junta", "Ichcaanziho", "Junta · Sede USAER"] for w in app.selectbox))
+        self.assertEqual(len(app.selectbox), 3)
+        self.assertEqual(app.selectbox[1].options, ["Elegir escuela o junta", "Ichcaanziho", "Junta General (Sede)"])
+        self.assertEqual(len(app.selectbox[0].options), len(cronogramas.fechas_habiles("2026-10")))
         self.assertIn("Consejo Técnico Escolar", [c.value for c in app.caption])
 
     def test_visits_are_filtered_by_school_not_specialist(self):

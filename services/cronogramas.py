@@ -213,12 +213,13 @@ def _iso_fecha(valor: object) -> str:
     return texto[:10]
 
 
+@st.cache_data(ttl=20, show_spinner=False)
 def cargar_agenda(nombre: str, mes: str) -> dict[str, dict[str, str]]:
     _, headers, registros = _leer_registros()
     if not {"Especialista", "Fecha", "Escuela", "Actividad"}.issubset(headers):
         raise RuntimeError("La pestaña Registros no tiene las columnas esperadas.")
     agenda = {}
-    for row in registros:
+    for row in _versiones_vigentes(registros, mes):
         fecha_iso = _iso_fecha(row.get("Fecha"))
         if (
             row.get("Especialista", "").strip() == nombre
@@ -233,12 +234,27 @@ def cargar_agenda(nombre: str, mes: str) -> dict[str, dict[str, str]]:
     return agenda
 
 
+def _versiones_vigentes(registros, mes):
+    """Una publicación completa por autor/mes, incluso si falló marcar el historial."""
+    seleccionadas = [r for r in registros if _iso_fecha(r.get("Fecha")).startswith(mes)]
+    ultima = {}
+    for row in seleccionadas:
+        publicacion = str(row.get("ID_Publicacion", "")).strip()
+        if publicacion:
+            ultima[normalizar_texto(row.get("Especialista", ""))] = publicacion
+    return [r for r in seleccionadas
+            if str(r.get("Estado", "ACTIVO") or "ACTIVO").upper() not in {"SUSTITUIDO", "VACIO"}
+            and (normalizar_texto(r.get("Especialista", "")) not in ultima
+                 or str(r.get("ID_Publicacion", "")).strip() == ultima[normalizar_texto(r.get("Especialista", ""))])]
+
+
+@st.cache_data(ttl=20, show_spinner=False)
 def cargar_agenda_global(mes: str) -> list[dict[str, str]]:
     _, headers, registros = _leer_registros()
     if not {"Especialista", "Fecha", "Escuela"}.issubset(headers):
         raise RuntimeError("La pestaña Registros no tiene las columnas esperadas.")
     efectivos = {}
-    for row in registros:
+    for row in _versiones_vigentes(registros, mes):
         fecha_iso = _iso_fecha(row.get("Fecha"))
         if (
             fecha_iso.startswith(mes)
@@ -251,6 +267,7 @@ def cargar_agenda_global(mes: str) -> list[dict[str, str]]:
                 "Área": row.get("Área", "").strip(),
                 "Escuela": row.get("Escuela", "").strip(),
                 "Actividad": row.get("Actividad", "").strip(),
+                "ID_Publicacion": str(row.get("ID_Publicacion", "")).strip(),
             }
     return sorted(efectivos.values(), key=lambda row: (row["Fecha"], row["Especialista"]))
 
@@ -313,10 +330,18 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             "Estado": "ACTIVO",
             "ID_Publicacion": publicacion_id,
         })
-    if not filas_nuevas:
-        raise ValueError("Agrega al menos una actividad antes de guardar.")
-
     ws, headers, existentes = _leer_registros()
+    cantidad_actividades = len(filas_nuevas)
+    if not filas_nuevas:
+        if not any(row.get("Especialista", "").strip() == nombre
+                   and _iso_fecha(row.get("Fecha")).startswith(mes) for row in existentes):
+            raise ValueError("Agrega al menos una actividad antes de guardar.")
+        # Un mes vaciado también es una versión: no reaparecen actividades viejas.
+        filas_nuevas.append({
+            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S"),
+            "Especialista": nombre, "Área": area, "Fecha": f"{mes}-01",
+            "Estado": "VACIO", "ID_Publicacion": publicacion_id,
+        })
     requeridos = ["Especialista", "Área", "Escuela", "Fecha", "Actividad"]
     if not set(requeridos).issubset(headers):
         raise RuntimeError("La pestaña Registros no tiene las columnas esperadas.")
@@ -357,8 +382,10 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
         except Exception:
             aviso = "La agenda nueva se guardó; no se pudo marcar la versión anterior como sustituida. El historial se conserva y la vista usa la versión más reciente."
     cargar_publicacion.clear()
+    cargar_agenda.clear()
+    cargar_agenda_global.clear()
     _agenda_visitas_cache.clear()
-    return {"filas": len(filas_nuevas), "aviso": aviso, "publicacion_id": publicacion_id}
+    return {"filas": cantidad_actividades, "aviso": aviso, "publicacion_id": publicacion_id}
 
 
 @st.cache_data(ttl=30, show_spinner=False)
