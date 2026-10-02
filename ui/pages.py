@@ -2606,7 +2606,12 @@ def _visitas_visibles(registros, nombre, rol, escuelas):
     autorizadas = {normalizar_texto(escuela) for escuela in escuelas}
     if es_direccion(rol):
         autorizadas.add(normalizar_texto("Sede USAER"))
-    visibles = registros.loc[registros["Escuela"].fillna("").astype(str).map(normalizar_texto).isin(autorizadas)].copy()
+    mascara_escuela = registros["Escuela"].fillna("").astype(str).map(normalizar_texto).isin(autorizadas)
+    if es_especialista(rol) and "Tipo_Acta" in registros:
+        juntas = registros["Tipo_Acta"].fillna("").map(normalizar_texto).eq(normalizar_texto("Junta de USAER"))
+        sedes = registros["Escuela"].fillna("").map(normalizar_texto).isin({normalizar_texto(e) for e in ESCUELAS_USAER})
+        mascara_escuela = mascara_escuela | (juntas & sedes)
+    visibles = registros.loc[mascara_escuela].copy()
     if not es_direccion(rol):
         identidad = normalizar_texto(nombre).replace(".", "")
         visibles = visibles.loc[visibles["Personal"].fillna("").astype(str).map(
@@ -2641,6 +2646,7 @@ def _es_acta_reunion(registro):
     tipo = str(registro.get("Tipo_Acta", ""))
     return (
         normalizar_texto(tipo) == normalizar_texto("Reunión de trabajo")
+        or normalizar_texto(tipo) == normalizar_texto("Junta de USAER")
         or normalizar_texto("Reunión de trabajo") in normalizar_texto(motivo)
     )
 
@@ -2735,7 +2741,7 @@ def visitas_page(df):
                     registro_elegido = registros_historial[clave_elegida]
                     reunion_guardada = _es_acta_reunion(registro_elegido)
                     st.session_state["visita_tipo_acta"] = (
-                        "Reunión de trabajo" if reunion_guardada else "Constancia de visita"
+                        ("Junta de USAER" if registro_elegido.get("Tipo_Acta") == "Junta de USAER" else "Reunión de trabajo") if reunion_guardada else "Constancia de visita"
                     )
                     st.session_state["visita_lugar"] = str(
                         registro_elegido.get("Lugar", "") or "Sede USAER"
@@ -2764,11 +2770,11 @@ def visitas_page(df):
                     registro_recuperado = None
 
     tipo_guardado = (
-        "Reunión de trabajo" if registro_recuperado and _es_acta_reunion(registro_recuperado)
+        ("Junta de USAER" if registro_recuperado.get("Tipo_Acta") == "Junta de USAER" else "Reunión de trabajo") if registro_recuperado and _es_acta_reunion(registro_recuperado)
         else "Constancia de visita"
     )
     if especialista_acta:
-        opciones_tipo_acta = ["Constancia de visita", "Reunión de trabajo"]
+        opciones_tipo_acta = ["Constancia de visita", "Reunión de trabajo", "Junta de USAER"]
         tipo_inicial = tipo_guardado if registro_recuperado else st.session_state.get(
             "visita_tipo_acta", "Constancia de visita"
         )
@@ -2778,9 +2784,14 @@ def visitas_page(df):
             horizontal=True, key="visita_tipo_acta",
         )
     else:
-        tipo_acta = "Reunión de trabajo" if _es_acta_reunion(registro_recuperado or {}) else "Constancia de visita"
-        if tipo_acta == "Reunión de trabajo":
+        tipo_acta = ("Junta de USAER" if (registro_recuperado or {}).get("Tipo_Acta") == "Junta de USAER" else "Reunión de trabajo") if _es_acta_reunion(registro_recuperado or {}) else "Constancia de visita"
+        if tipo_acta in {"Reunión de trabajo", "Junta de USAER"}:
             st.info("Acta de reunión recuperada del historial.")
+
+    if tipo_acta == "Junta de USAER":
+        opciones_escuela = list(ESCUELAS_USAER)
+    if st.session_state.get("visita_escuela") not in opciones_escuela:
+        st.session_state.pop("visita_escuela", None)
 
     with st.form("form_constancia", clear_on_submit=False):
 
@@ -2788,12 +2799,14 @@ def visitas_page(df):
 
         with col1:
             escuela_seleccionada = st.selectbox(
-                "Escuela relacionada" if tipo_acta == "Reunión de trabajo" else "Escuela visitada",
+                "Escuela donde se realizó la junta" if tipo_acta == "Junta de USAER" else ("Escuela relacionada" if tipo_acta == "Reunión de trabajo" else "Escuela visitada"),
                 opciones_escuela,
                 key="visita_escuela"
             )
 
-        if tipo_acta == "Reunión de trabajo":
+        if tipo_acta == "Junta de USAER":
+            lugar_acta = escuela_seleccionada
+        elif tipo_acta in {"Reunión de trabajo", "Junta de USAER"}:
             lugar_acta = st.text_input(
                 "Lugar de la reunión",
                 value="Sede USAER",
@@ -2805,15 +2818,15 @@ def visitas_page(df):
 
         with col2:
             fecha_visita = st.date_input(
-                "Fecha de la reunión" if tipo_acta == "Reunión de trabajo" else "Fecha de la visita",
+                "Fecha de la reunión" if tipo_acta in {"Reunión de trabajo", "Junta de USAER"} else "Fecha de la visita",
                 date.today(),
                 key="visita_fecha"
             )
 
-        if tipo_acta == "Reunión de trabajo":
-            st.markdown("### Reunión de trabajo")
+        if tipo_acta in {"Reunión de trabajo", "Junta de USAER"}:
+            st.markdown("### " + tipo_acta)
             motivos_izq = []
-            motivos_der = ["Reunión de trabajo"]
+            motivos_der = [tipo_acta]
             opciones_intervencion = ["Reunión de trabajo"]
             detalles_motivos = st.text_input(
                 "Participantes o tema de trabajo (opcional)", key="visita_detalles_reunion"
@@ -2871,6 +2884,8 @@ def visitas_page(df):
             st.warning("El registro no tiene una fecha válida; no se reconstruyó para evitar una constancia con fecha incorrecta.")
             return
         escuela_guardada = str(registro_recuperado.get("Escuela", "")).strip()
+        if registro_recuperado.get("Tipo_Acta") == "Junta de USAER":
+            opciones_escuela = list(ESCUELAS_USAER)
         escuela_canonica = next(
             (escuela for escuela in opciones_escuela
              if normalizar_texto(escuela) == normalizar_texto(escuela_guardada)), None
@@ -2879,9 +2894,9 @@ def visitas_page(df):
             st.error("Esta escuela ya no está autorizada para tu cuenta.")
             return
         escuela_seleccionada = escuela_canonica
-        tipo_acta = "Reunión de trabajo" if _es_acta_reunion(registro_recuperado) else "Constancia de visita"
+        tipo_acta = ("Junta de USAER" if registro_recuperado.get("Tipo_Acta") == "Junta de USAER" else "Reunión de trabajo") if _es_acta_reunion(registro_recuperado) else "Constancia de visita"
         lugar_acta = str(registro_recuperado.get("Lugar", "") or (
-            "Sede USAER" if tipo_acta == "Reunión de trabajo" else escuela_seleccionada
+            "Sede USAER" if tipo_acta in {"Reunión de trabajo", "Junta de USAER"} else escuela_seleccionada
         )).strip()
         fecha_visita = fecha_guardada
         autor = str(registro_recuperado.get("Personal", "")).strip()
@@ -3004,7 +3019,7 @@ def visitas_page(df):
 
     motivos = motivos_izq + motivos_der
     motivos_completos = ", ".join(motivos)
-    if tipo_acta == "Reunión de trabajo" and not lugar_acta:
+    if tipo_acta in {"Reunión de trabajo", "Junta de USAER"} and not lugar_acta:
         st.error("Escribe el lugar de la reunión antes de generar el acta.")
         return
 
@@ -3087,7 +3102,7 @@ def visitas_page(df):
             f'{escape(str(cargo))}</td>'
         )
 
-    if tipo_acta == "Reunión de trabajo":
+    if tipo_acta in {"Reunión de trabajo", "Junta de USAER"}:
         firmas_reunion = _firmantes_reunion_trabajo(nombre_usuario, especialidad)
         firmas_html = "<tr>" + "".join(firma(nombre, cargo) for nombre, cargo in firmas_reunion) + "</tr>"
     elif es_director:
@@ -3139,9 +3154,9 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
 
     inicio_ciclo = fecha_visita.year if fecha_visita.month >= 9 else fecha_visita.year - 1
     ciclo_constancia = SCHOOL_YEAR if generar_acta else f"{inicio_ciclo} – {inicio_ciclo + 1}"
-    titulo_acta = "Acta de reunión de trabajo" if tipo_acta == "Reunión de trabajo" else "Constancia de visita"
-    etiqueta_fecha = "Fecha de la reunión" if tipo_acta == "Reunión de trabajo" else "Fecha de la visita"
-    etiqueta_escuela = "Escuela relacionada" if tipo_acta == "Reunión de trabajo" else "Escuela"
+    titulo_acta = "Acta de Junta de USAER" if tipo_acta == "Junta de USAER" else "Acta de reunión de trabajo" if tipo_acta in {"Reunión de trabajo", "Junta de USAER"} else "Constancia de visita"
+    etiqueta_fecha = "Fecha de la reunión" if tipo_acta in {"Reunión de trabajo", "Junta de USAER"} else "Fecha de la visita"
+    etiqueta_escuela = "Sede de la junta" if tipo_acta == "Junta de USAER" else "Escuela relacionada" if tipo_acta == "Reunión de trabajo" else "Escuela"
     ubicacion_html = f"""
 <div style="font-size:12px;margin-bottom:10px;">
     {etiqueta_escuela}: <u>{escape(escuela_seleccionada)}</u>
@@ -3191,7 +3206,7 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
 {ubicacion_html}
 
 <div style="font-size:12px;margin-bottom:3px;">
-    <b>{"Tipo de acta:" if tipo_acta == "Reunión de trabajo" else "Motivo de la visita:"}</b>
+    <b>{"Tipo de acta:" if tipo_acta in {"Reunión de trabajo", "Junta de USAER"} else "Motivo de la visita:"}</b>
 </div>
 
 <table style="
@@ -3277,7 +3292,7 @@ Otros: {detalle("Otros")}<br>
     font-size:12px;
     margin-bottom:5px;
 ">
-    <b>{"Temas tratados y acuerdos de trabajo:" if tipo_acta == "Reunión de trabajo" else "Breve descripción de las actividades desarrolladas:"}</b>
+    <b>{"Temas tratados y acuerdos de trabajo:" if tipo_acta in {"Reunión de trabajo", "Junta de USAER"} else "Breve descripción de las actividades desarrolladas:"}</b>
 </div>
 
 <div style="
