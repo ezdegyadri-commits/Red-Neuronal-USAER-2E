@@ -109,7 +109,7 @@ def generar_pdf_oficial(
     )
     cuerpo_estilo = ParagraphStyle(
         "RelatoriaCuerpo", parent=estilos["Normal"], fontName="Helvetica",
-        fontSize=11, leading=15, alignment=4, spaceAfter=7,
+        fontSize=10, leading=12, alignment=4, spaceAfter=5,
     )
     firma_estilo = ParagraphStyle(
         "RelatoriaFirma", parent=estilos["Normal"], fontName="Helvetica",
@@ -150,7 +150,10 @@ def generar_pdf_oficial(
         else:
             elementos.append(Paragraph(_texto_parrafo(limpio), cuerpo_estilo))
 
-    elementos.append(Spacer(1, 24))
+    # El último párrafo acompaña al cierre, nunca deja únicamente la firma.
+    if elementos:
+        elementos[-1].keepWithNext = True
+    elementos.append(Spacer(1, 10))
     if str(tipo_junta).strip().casefold() != "junta de zona":
         columna_firma = [
             Paragraph("___________________________________", firma_estilo),
@@ -175,9 +178,11 @@ def generar_pdf_oficial(
             ("TOPPADDING", (0, 0), (-1, -1), 4),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ]))
-        elementos.append(KeepTogether([Spacer(1, 12), bloque_direccion]))
+        cierre = KeepTogether([Spacer(1, 6), bloque_direccion])
+        cierre.keepWithNext = True
+        elementos.append(cierre)
     elementos.extend([
-        Spacer(1, 20),
+        Spacer(1, 8),
         Paragraph("FIRMAS DEL PERSONAL ASISTENTE", seccion_estilo),
         Spacer(1, 6),
     ])
@@ -187,7 +192,7 @@ def generar_pdf_oficial(
     tabla_asistencia = Table(
         filas,
         colWidths=[3.2 * inch, 1.7 * inch, 2.0 * inch],
-        rowHeights=[26] * len(filas),
+        rowHeights=[23] * len(filas),
         repeatRows=1,
     )
     tabla_asistencia.setStyle(TableStyle([
