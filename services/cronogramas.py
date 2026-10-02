@@ -118,6 +118,13 @@ def perfil_especialista(nombre: str, rol: str) -> dict | None:
     return None
 
 
+def lugares_cronograma(perfil):
+    """Destinos adicionales sin ampliar las escuelas del especialista."""
+    if perfil["area"] == "Dirección":
+        return ["Sede", "Junta de Zona", "Junta de USAER", "Reunión Académica", "Junta General (Sede)"]
+    return ["Junta General (Sede)"]
+
+
 def fechas_habiles(mes: str) -> list[date]:
     """Fechas de lunes a viernes que no estén marcadas como inhábiles oficiales."""
     try:
@@ -313,7 +320,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
     perfil = perfil_especialista(nombre, area)
     if not perfil:
         raise PermissionError("La cuenta no está autorizada para elaborar cronogramas.")
-    permitidas = {normalizar_texto(e) for e in perfil["escuelas"]} | {normalizar_texto("Junta General (Sede)")}
+    permitidas = {normalizar_texto(e) for e in [*perfil["escuelas"], *lugares_cronograma(perfil)]}
     dias_habiles = {f.isoformat() for f in fechas_habiles(mes)}
     filas_nuevas = []
     publicacion_id = uuid4().hex
@@ -418,6 +425,24 @@ def cargar_visitas_escuela(escuela, mes):
         raise PermissionError("La escuela no está asignada a esta cuenta.")
     return [r for r in _agenda_visitas_cache(mes)
             if normalizar_texto(r.get("Escuela", "")) == normalizar_texto(escuela)]
+
+
+def resumir_visitas_escuela(registros, escuela):
+    """Resumen sin otras escuelas, IDs internos ni cronogramas completos."""
+    dias = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+    resumen = []
+    for row in registros:
+        perfil = perfil_especialista(row.get("Especialista", ""), row.get("Área", ""))
+        if not perfil or perfil["area"] == "Dirección":
+            continue
+        asignadas = {normalizar_texto(e) for e in perfil["escuelas"]}
+        if normalizar_texto(escuela) not in asignadas or normalizar_texto(row.get("Escuela", "")) != normalizar_texto(escuela):
+            continue
+        fecha = date.fromisoformat(row["Fecha"])
+        resumen.append({"Fecha": fecha.strftime("%d/%m/%Y"), "Día": dias[fecha.weekday()],
+                        "Especialista": perfil["nombre"], "Área": perfil["area"],
+                        "Actividad": row.get("Actividad", "")})
+    return resumen
 
 
 def _columna_a1(numero: int) -> str:

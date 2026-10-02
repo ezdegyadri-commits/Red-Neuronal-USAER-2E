@@ -21,7 +21,9 @@ from services.cronogramas import (
     guardar_agenda,
     meses_con_cronograma,
     perfil_especialista,
+    lugares_cronograma,
 )
+from ui.calendario_eventos import eventos_mes, ventana_eventos, pendientes_mes
 from services.horarios import avisar_maestras_apoyo
 from utils.text import normalizar_texto
 
@@ -137,9 +139,10 @@ def _mover_dia(prefijo, origen, destino):
     st.session_state.pop("cronograma_pdf", None)
 
 
-def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False, editable=True):
+def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False, editable=True, lugares=None):
     """Campos dentro de cada día, sin botones de edición repetidos."""
     anio, numero = map(int, mes.split("-"))
+    eventos = eventos_mes(mes)
     clave_borrador = f"{prefijo}_dias"
     if not lectura and clave_borrador not in st.session_state:
         st.session_state[clave_borrador] = {dia: dict(datos) for dia, datos in guardadas.items()}
@@ -182,6 +185,7 @@ def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False, ed
                     st.markdown(f"<div style='background:{color};color:#183f46;border-radius:8px;padding:8px;text-align:right;font-weight:bold'>{etiqueta}</div>", unsafe_allow_html=True)
                     if fuera:
                         continue
+                    ventana_eventos(iso, eventos)
                     if motivo:
                         st.caption(motivo)
                         continue
@@ -195,7 +199,7 @@ def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False, ed
                             st.caption("Sin actividad")
                     else:
                         valor = borrador.get(iso, {})
-                        opciones = ["", *(escuelas or []), ESCUELA_JUNTA]
+                        opciones = ["", *(escuelas or []), *(lugares or [ESCUELA_JUNTA])]
                         anterior = next((e for e in opciones if normalizar_texto(e) == normalizar_texto(valor.get("escuela", ""))), "")
                         escuela = st.selectbox("Escuela o junta", opciones, index=opciones.index(anterior),
                             format_func=lambda e: "Junta · Sede USAER" if e == ESCUELA_JUNTA else e or "Elegir escuela",
@@ -211,6 +215,7 @@ def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False, ed
                             borrador[iso] = {"escuela": escuela, "actividad": actividad.strip()}
                         else:
                             borrador.pop(iso, None)
+    pendientes_mes(mes)
     if lectura:
         return []
     st.session_state[clave_borrador] = borrador
@@ -433,7 +438,7 @@ def cronogramas_page():
         st.session_state.pop("cronograma_pdf", None)
         st.rerun()
     agenda = _calendario_mes(mes, agenda_guardada, perfil["escuelas"], editor_key,
-                             editable=st.session_state[clave_edicion])
+                             editable=st.session_state[clave_edicion], lugares=lugares_cronograma(perfil))
     enviar = st.button("Guardar cambios y generar PDF", type="primary", width="stretch",
                        disabled=not st.session_state[clave_edicion])
 

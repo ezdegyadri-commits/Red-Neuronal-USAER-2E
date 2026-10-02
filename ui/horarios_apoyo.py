@@ -713,67 +713,40 @@ def _tabla_vista(frame):
 
 
 def _avisos_maestra(nombre, escuela):
-    from services.cronogramas import cargar_visitas_escuela
-    from ui.cronogramas import _meses_disponibles, _mes_actual, _calendario_mes
-    with st.expander("Visitas programadas del equipo a mi escuela"):
-        meses = dict(_meses_disponibles())
-        mes = st.selectbox("Mes de visitas", list(meses),
-                           index=list(meses).index(_mes_actual().strftime("%Y-%m")),
-                           format_func=meses.get, key=f"visitas_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}")
-        try:
-            visitas = cargar_visitas_escuela(escuela, mes)
-            agrupadas = {}
-            for visita in visitas:
-                agrupadas.setdefault(visita["Fecha"], []).append(visita)
-            _calendario_mes(mes, agrupadas, lectura=True)
-        except Exception:
-            st.caption("Las visitas no están disponibles en este momento. Puedes continuar con tu horario.")
+    from services.cronogramas import cargar_visitas_escuela, resumir_visitas_escuela
+    from ui.cronogramas import _meses_disponibles, _mes_actual
+    from ui.calendario_eventos import calendario_informativo
+    meses = dict(_meses_disponibles())
+    mes = st.selectbox("Mes de visitas y actividades", list(meses),
+                       index=list(meses).index(_mes_actual().strftime("%Y-%m")),
+                       format_func=meses.get, key=f"visitas_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}")
+    st.markdown("### Visitas del equipo especialista a mi escuela")
+    st.caption(escuela + " · Solo se muestran las visitas del calendario actualizado.")
     try:
-        avisos = cargar_avisos_apoyo(nombre)
+        visitas = resumir_visitas_escuela(cargar_visitas_escuela(escuela, mes), escuela)
+        if visitas:
+            st.dataframe(pd.DataFrame(visitas), hide_index=True, width="stretch")
+        else:
+            st.caption("Aún no hay visitas programadas para este mes.")
     except Exception:
-        st.warning(
-            "No se pudieron consultar los avisos de cronogramas en este momento. "
-            "Puedes continuar con tus horarios; no se modificó ni eliminó información. "
-            "Vuelve a intentarlo más tarde."
-        )
+        st.caption("Las visitas no están disponibles por ahora. Puedes continuar con tu horario.")
+    calendario_informativo(mes)
+    try:
+        avisos = [row for row in cargar_avisos_apoyo(nombre)
+                  if normalizar_texto(row.get("Escuela", "")) == normalizar_texto(escuela)
+                  and row.get("Mes", "") == mes]
+    except Exception:
+        st.warning("No se pudieron actualizar los avisos; no se modificó ni eliminó información.")
         return
-    avisos = [row for row in avisos if normalizar_texto(row.get("Escuela", "")) == normalizar_texto(escuela)]
-    if not avisos:
-        st.info("Aquí aparecerán los avisos del equipo especialista para esta escuela.")
-        return
-    st.markdown("### Avisos de cronogramas del equipo especialista")
-    tabla = pd.DataFrame([
-        {"Estado": row.get("Estado", ""), "Fecha": row.get("Fecha", ""), "Mes": row.get("Mes", ""),
-         "Escuela": row.get("Escuela", ""), "Especialista": row.get("Especialista", ""),
-         "Aviso": row.get("Resumen", "")}
-        for row in avisos
-    ])
-    st.dataframe(tabla, hide_index=True, width="stretch")
-    opciones = [row for row in avisos if str(row.get("ID_Publicacion", "")).strip()]
-    if opciones:
-        elegido = st.selectbox(
-            "Consultar cronograma recibido",
-            opciones,
-            format_func=lambda row: f"{row.get('Mes', '')} · {row.get('Especialista', '')} · {row.get('Estado', '')}",
-            key=f"aviso_cronograma_{normalizar_texto(escuela)}",
-        )
-        try:
-            detalle = cargar_publicacion(elegido["ID_Publicacion"])
-            detalle = [row for row in detalle if normalizar_texto(row.get("Escuela", "")) == normalizar_texto(escuela)]
-            if detalle:
-                st.dataframe(pd.DataFrame(detalle), hide_index=True, width="stretch")
-            else:
-                st.caption("El aviso se conserva. Esta versión histórica no tiene detalle consultable desde la hoja actual.")
-        except Exception as exc:
-            st.warning(f"El aviso permanece guardado; no se pudo cargar el detalle del cronograma: {exc}")
     pendientes = [row for row in avisos if str(row.get("Estado", "")).upper() == "PENDIENTE"]
-    if pendientes and st.button("Marcar avisos como vistos", key=f"marcar_avisos_{normalizar_texto(escuela)}"):
-        try:
-            marcar_avisos_leidos([row["ID_Aviso"] for row in pendientes])
-            st.success("Avisos marcados como vistos. El historial se conservó.")
-            st.rerun()
-        except Exception as exc:
-            st.error(f"No se pudo actualizar el estado de lectura: {exc}")
+    if pendientes:
+        st.caption(f"{len(pendientes)} aviso(s) nuevo(s) de cronogramas para tu escuela.")
+        if st.button("Marcar avisos como vistos", key=f"marcar_avisos_{normalizar_texto(escuela)}"):
+            try:
+                marcar_avisos_leidos([row["ID_Aviso"] for row in pendientes])
+                st.rerun()
+            except Exception:
+                st.info("No se pudo marcar el aviso. El cronograma sigue guardado.")
 
 
 def _persistir_plantilla(prefijo, nombre, escuela):
