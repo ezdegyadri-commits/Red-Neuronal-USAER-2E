@@ -234,6 +234,22 @@ def cargar_agenda(nombre: str, mes: str) -> dict[str, dict[str, str]]:
     return agenda
 
 
+@st.cache_data(ttl=20, show_spinner=False)
+def meses_con_cronograma(nombre: str) -> list[str]:
+    """Meses propios conservados, sin limitar la recuperación a los últimos doce."""
+    _, _, registros = _leer_registros()
+    meses = set()
+    for row in registros:
+        if str(row.get("Especialista", "")).strip() != nombre:
+            continue
+        try:
+            fecha = date.fromisoformat(_iso_fecha(row.get("Fecha")))
+        except ValueError:
+            continue
+        meses.add(fecha.strftime("%Y-%m"))
+    return sorted(meses, reverse=True)
+
+
 def _versiones_vigentes(registros, mes):
     """Una publicación completa por autor/mes, incluso si falló marcar el historial."""
     seleccionadas = [r for r in registros if _iso_fecha(r.get("Fecha")).startswith(mes)]
@@ -383,6 +399,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             aviso = "La agenda nueva se guardó; no se pudo marcar la versión anterior como sustituida. El historial se conserva y la vista usa la versión más reciente."
     cargar_publicacion.clear()
     cargar_agenda.clear()
+    meses_con_cronograma.clear()
     cargar_agenda_global.clear()
     _agenda_visitas_cache.clear()
     return {"filas": cantidad_actividades, "aviso": aviso, "publicacion_id": publicacion_id}
