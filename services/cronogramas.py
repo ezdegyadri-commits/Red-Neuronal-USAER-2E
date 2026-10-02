@@ -83,10 +83,21 @@ def perfil_especialista(nombre: str, rol: str) -> dict | None:
     # (p. ej. "Com." o "Psic."). Retíralo para buscar el nombre canónico,
     # conservando la lista cerrada de especialistas autorizados.
     tokens = normalizar_texto(nombre).replace(".", " ").split()
-    prefijos = {"COM", "COMUNICACION", "PSIC", "PSICOLOGA", "PSICOLOGO", "TS", "DIRECTOR"}
+    prefijos = {"COM", "COMUNICACION", "PSIC", "PSICOLOGA", "PSICOLOGO", "TS", "DIRECTOR", "LIC", "LTS", "MTRO", "MTRA"}
+    if tokens[:2] == ["T", "S"]:
+        tokens = tokens[2:]
     while tokens and tokens[0] in prefijos:
         tokens = tokens[1:]
     llave = " ".join(tokens).strip()
+
+    # Diego está autorizado por Dirección, aunque Usuarios use una etiqueta
+    # de rol distinta. La identidad completa evita habilitar otras cuentas.
+    if llave == "DIEGO PERALTA TORRES":
+        return {
+            "nombre": "Diego Peralta Torres",
+            "area": "Trabajo Social",
+            "escuelas": list(ESCUELAS_USAER.keys()),
+        }
 
     # Dirección genera su propio cronograma y consulta el mismo calendario
     # consolidado del equipo. La lista cerrada evita habilitar cuentas ajenas.
