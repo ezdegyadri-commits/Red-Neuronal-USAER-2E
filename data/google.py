@@ -114,7 +114,9 @@ def retry_google(operation, attempts=3):
             is_temporary_server_error = status in {500, 502, 503, 504}
             if not (is_quota or is_temporary_server_error) or attempt == attempts - 1:
                 raise
-            time.sleep(min(4, 0.75 * (2 ** attempt)) + random.uniform(0, 0.25))
+            # No insistir cada segundo contra una cuota que se repone por minuto.
+            espera = min(30, 8 * (2 ** attempt)) if is_quota else min(4, 0.75 * (2 ** attempt))
+            time.sleep(espera + random.uniform(0, 0.25))
     raise last
 
 
