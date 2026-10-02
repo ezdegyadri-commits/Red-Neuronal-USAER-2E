@@ -39,7 +39,8 @@ with st.sidebar:
     menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos"]
     if gestor_tramites() or puede_solicitar():
         menu += ["Trámites"]
-    if es_especialista(rol) and perfil_especialista(st.session_state.get("nombre", ""), rol):
+    perfil_cronograma = perfil_especialista(st.session_state.get("nombre", ""), rol)
+    if perfil_cronograma and perfil_cronograma["area"] != "Dirección":
         menu += ["Cronograma mensual"]
     if "DIRECTOR" in rol.upper():
         menu += ["Panel de Dirección", "Constancias de visita"]
