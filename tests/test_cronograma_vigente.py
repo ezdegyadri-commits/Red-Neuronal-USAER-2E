@@ -37,6 +37,19 @@ class CronogramaVigenteTest(unittest.TestCase):
             self.assertEqual([r["ID_Publicacion"] for r in horarios.cargar_avisos_apoyo("Cecilia")], ["nueva"])
         self.assertEqual(len(rows), 2)
 
+    def test_clearing_last_day_records_empty_version_without_deleting_history(self):
+        from unittest.mock import Mock
+        ws = Mock()
+        row = {"Especialista": "Abril de María Chable Ríos", "Fecha": "2026-10-01", "ID_Publicacion": "previa", "Estado": "ACTIVO", "_fila": 2}
+        with patch.object(cronogramas, "_leer_registros", return_value=(ws, cronogramas.ENCABEZADOS_CRONOGRAMA, [row])):
+            resultado = cronogramas.guardar_agenda(row["Especialista"], "Psicología", "2026-10", [], [])
+        self.assertEqual(resultado["filas"], 0)
+        nueva = dict(zip(cronogramas.ENCABEZADOS_CRONOGRAMA, ws.append_rows.call_args.args[0][0]))
+        self.assertEqual(nueva["Estado"], "VACIO")
+        self.assertEqual(cronogramas._versiones_vigentes([row, nueva], "2026-10"), [])
+        ws.clear.assert_not_called()
+        ws.delete_rows.assert_not_called()
+
     def test_titles_are_taken_from_directory_not_inferred(self):
         from data import repository
         perfil = {"nombre": "Abril de María Chable Ríos", "area": "Psicología"}
