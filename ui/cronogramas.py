@@ -283,8 +283,19 @@ def cronogramas_page():
 
     try:
         clave_agenda = f"agenda_inicial_{perfil['nombre']}_{mes}"
+        vigente = cargar_agenda(perfil["nombre"], mes)
         if clave_agenda not in st.session_state:
-            st.session_state[clave_agenda] = cargar_agenda(perfil["nombre"], mes)
+            st.session_state[clave_agenda] = vigente
+        elif st.session_state[clave_agenda] != vigente:
+            borrador = st.session_state.get(f"{editor_key}_dias", st.session_state[clave_agenda])
+            if borrador == st.session_state[clave_agenda]:
+                st.session_state[clave_agenda] = vigente
+                for clave in list(st.session_state):
+                    if clave.startswith(editor_key):
+                        st.session_state.pop(clave, None)
+                st.session_state.pop("cronograma_pdf", None)
+            else:
+                st.info("Hay cambios guardados desde otra sesión. Recarga el calendario para verlos; tu edición local sigue aquí.")
         agenda_guardada = st.session_state[clave_agenda]
     except Exception:
         st.error("No se pudo consultar el calendario. Inténtalo de nuevo en un momento.")
@@ -292,6 +303,7 @@ def cronogramas_page():
 
     st.caption("Elige un día para editarlo. Rosa: inhábil · Amarillo: CTE. Al guardar, todos verán el calendario actualizado.")
     if st.button("Recargar calendario guardado", key=f"{editor_key}_recargar"):
+        cargar_agenda.clear()
         st.session_state.pop(clave_agenda, None)
         for clave in list(st.session_state):
             if clave.startswith(editor_key):
@@ -356,7 +368,11 @@ def cronogramas_page():
             and st.session_state.get("cronograma_pdf_autor") == perfil["nombre"]):
         try:
             vigentes = [r for r in cargar_agenda_global(mes) if r["Especialista"] == perfil["nombre"]]
-            if (vigentes and st.session_state.get("cronograma_pdf_publicacion") != vigentes[-1].get("ID_Publicacion")):
+            if not vigentes:
+                st.session_state.pop("cronograma_pdf", None)
+                st.info("Este mes está guardado sin actividades.")
+                return
+            if st.session_state.get("cronograma_pdf_publicacion") != vigentes[-1].get("ID_Publicacion"):
                 st.session_state.pop("cronograma_pdf", None)
                 st.info("Hay una versión más reciente. Recarga el calendario guardado para consultarla.")
                 return
