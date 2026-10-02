@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
-from documents.cronogramas import generar_cronograma_pdf, guardar_pdf_drive
+from documents.cronogramas import generar_cronograma_pdf
 from services.cronogramas import (
     DIAS_INHABILES,
     cargar_agenda,
@@ -108,6 +108,10 @@ def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False):
     """Calendario real con días oficiales bloqueados y escuelas del perfil."""
     anio, numero = map(int, mes.split("-"))
     agenda = []
+    clave_borrador = f"{prefijo}_dias"
+    if not lectura and clave_borrador not in st.session_state:
+        st.session_state[clave_borrador] = {dia: dict(datos) for dia, datos in guardadas.items()}
+    borrador = st.session_state.get(clave_borrador, {}) if not lectura else {}
     for col, etiqueta in zip(st.columns(7), ("Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb")):
         col.markdown(f"**{etiqueta}**")
     for semana in calendar.Calendar(firstweekday=6).monthdatescalendar(anio, numero):
@@ -134,19 +138,69 @@ def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False):
                         if not entradas:
                             st.caption("Sin actividad")
                     else:
-                        valor = guardadas.get(iso, {})
-                        opciones = ["", *(escuelas or []), ESCUELA_JUNTA]
-                        anterior = next((opcion for opcion in opciones
-                                         if normalizar_texto(opcion) == normalizar_texto(valor.get("escuela", ""))), "")
-                        escuela = st.selectbox("Escuela o junta", opciones,
-                            index=opciones.index(anterior) if anterior in opciones else 0,
-                            format_func=lambda x: "Elegir escuela o junta" if not x else "Junta · Sede USAER" if x == ESCUELA_JUNTA else x,
-                            key=f"{prefijo}_{iso}_escuela", label_visibility="collapsed")
-                        actividad = st.text_area("Actividad del día", value=valor.get("actividad", ""),
-                            key=f"{prefijo}_{iso}_actividad", height=95, placeholder="¿Qué realizarás?",
-                            label_visibility="collapsed")
-                        agenda.append({"fecha": iso, "escuela": escuela, "actividad": actividad})
+                        valor = borrador.get(iso, {})
+                        st.text(valor.get("escuela", "") or "Sin actividad")
+                        if valor.get("actividad"):
+                            st.caption(valor["actividad"])
+                        if st.button("Editar", key=f"{prefijo}_{iso}_editar", width="stretch"):
+                            st.session_state[f"{prefijo}_fecha"] = iso
+    if not lectura:
+        st.markdown("### Editar un día")
+        dias = [dia.isoformat() for dia in fechas_habiles(mes)]
+        if not dias:
+            return []
+        fecha = st.selectbox("Día a editar", dias, key=f"{prefijo}_fecha",
+                             format_func=lambda d: date.fromisoformat(d).strftime("%d/%m/%Y"))
+        valor = borrador.get(fecha, {})
+        opciones = ["", *(escuelas or []), ESCUELA_JUNTA]
+        anterior = next((e for e in opciones if normalizar_texto(e) == normalizar_texto(valor.get("escuela", ""))), "")
+        with st.form(f"{prefijo}_editar_{fecha}"):
+            escuela = st.selectbox("Escuela o junta", opciones, index=opciones.index(anterior),
+                                   format_func=lambda e: e or "Elegir escuela o junta",
+                                   key=f"{prefijo}_{fecha}_escuela_amplia", width="stretch")
+            actividad = st.text_area("Actividad del día", value=valor.get("actividad", ""), height=110,
+                                     key=f"{prefijo}_{fecha}_actividad_amplia")
+            destino = st.selectbox("Mover a otra fecha (opcional)", ["", *[d for d in dias if d != fecha]],
+                                   format_func=lambda d: date.fromisoformat(d).strftime("%d/%m/%Y") if d else "Mantener esta fecha")
+            aplicar = st.form_submit_button("Aplicar al calendario", type="primary")
+            limpiar = st.form_submit_button("Dejar este día sin actividad")
+        if aplicar or limpiar:
+            if aplicar and destino and borrador.get(destino, {}).get("actividad"):
+                st.warning("La fecha elegida ya tiene actividad. Elige otra para no reemplazarla.")
+            elif aplicar and (not escuela or not actividad.strip()):
+                st.info("Elige la escuela y escribe la actividad.")
+            else:
+                borrador.pop(fecha, None)
+                if aplicar:
+                    borrador[destino or fecha] = {"escuela": escuela, "actividad": actividad.strip()}
+                st.session_state[clave_borrador] = borrador
+                for sufijo in ("escuela_amplia", "actividad_amplia"):
+                    st.session_state.pop(f"{prefijo}_{fecha}_{sufijo}", None)
+                st.session_state.pop("cronograma_pdf", None)
+                st.rerun()
+        agenda = [{"fecha": d, **datos} for d, datos in sorted(borrador.items())]
     return agenda
+
+
+def _perfil_profesional(perfil):
+    """Usa únicamente títulos explícitos del directorio; nunca inventa grados."""
+    from data import repository as repo
+    resultado = dict(perfil)
+    def identidad(nombre):
+        return re.sub(r"^(PSIC|LIC|MTRA|MTRO|DRA|DR|COM|TS)\s+", "", normalizar_texto(nombre).replace(".", " ").strip()).strip()
+    try:
+        personal = repo.personal().fillna("")
+        for row in personal.to_dict("records"):
+            nombre = str(row.get("Nombre_Completo", "")).strip()
+            if identidad(nombre) != identidad(perfil["nombre"]):
+                continue
+            campos = {normalizar_texto(k).replace("_", " "): str(v).strip() for k, v in row.items()}
+            titulo = next((campos[k] for k in ("TITULO PROFESIONAL", "TITULO", "GRADO ACADEMICO") if campos.get(k)), "")
+            resultado["nombre_profesional"] = f"{titulo} {nombre}" if titulo and not nombre.startswith(titulo) else nombre
+            break
+    except Exception:
+        pass
+    return resultado
 
 
 def cronogramas_direccion():
@@ -161,11 +215,9 @@ def cronogramas_direccion():
                        format_func=meses.get, key="direccion_cronogramas_mes")
     clave = f"direccion_agenda_{mes}"
     if st.button("Actualizar cronogramas", key="direccion_actualizar_cronogramas"):
-        st.session_state.pop(clave, None)
+        cargar_agenda_global.clear()
     try:
-        if clave not in st.session_state:
-            st.session_state[clave] = cargar_agenda_global(mes)
-        rows = st.session_state[clave]
+        rows = cargar_agenda_global(mes)
     except Exception:
         st.warning("No se pudo consultar el calendario. Reintenta en un momento.")
         return
@@ -179,25 +231,29 @@ def cronogramas_direccion():
         agrupadas.setdefault(row["Fecha"], []).append(row)
     _calendario_mes(mes, agrupadas, lectura=True)
     if filtradas:
-        st.dataframe(pd.DataFrame(filtradas), hide_index=True, width="stretch")
+        st.dataframe(pd.DataFrame(filtradas).drop(columns=["ID_Publicacion"], errors="ignore"), hide_index=True, width="stretch")
     if nombre != "Todo el equipo":
         originales = [r for r in rows if r["Especialista"] == nombre]
         if originales and st.button("Preparar PDF del cronograma", key="direccion_preparar_pdf"):
             autor = perfil_especialista(nombre, originales[-1].get("Área", "ESPECIALISTA"))
             if autor:
                 firma, visto, sello = _recursos_firma(autor)
-                contenido = generar_cronograma_pdf(autor, meses[mes], [
+                contenido = generar_cronograma_pdf(_perfil_profesional(autor), meses[mes], [
                     {"fecha": date.fromisoformat(r["Fecha"]).strftime("%d/%m/%Y"),
                      "escuela": r["Escuela"], "actividad": r["Actividad"]} for r in originales
                 ], firma, visto, sello)
-                st.session_state["direccion_pdf_cronograma"] = (nombre, mes, contenido)
+                st.session_state["direccion_pdf_cronograma"] = (nombre, mes, contenido, json.dumps(originales, sort_keys=True))
         archivo = st.session_state.get("direccion_pdf_cronograma")
-        if isinstance(archivo, tuple) and archivo[:2] == (nombre, mes):
+        if (isinstance(archivo, tuple) and len(archivo) == 4 and archivo[:2] == (nombre, mes)
+                and archivo[3] == json.dumps(originales, sort_keys=True)):
             st.download_button("Descargar cronograma oficial", archivo[2], f"Cronograma_{nombre}_{mes}.pdf", "application/pdf",
                                key="direccion_descargar_cronograma")
 
 
 def cronogramas_page():
+    # Descarta avisos de la integración retirada, incluso en sesiones abiertas.
+    for clave_drive in ("cronograma_pdf_drive_url", "cronograma_pdf_drive_aviso"):
+        st.session_state.pop(clave_drive, None)
     nombre = str(st.session_state.get("nombre", "")).strip()
     rol = str(st.session_state.get("rol", "")).strip()
     perfil = perfil_especialista(nombre, rol)
@@ -210,7 +266,7 @@ def cronogramas_page():
     if perfil["area"] == "Dirección":
         st.write("Genera tu propio cronograma y consulta el calendario consolidado de todo el equipo. Al publicar, las maestras de apoyo de las escuelas incluidas reciben el aviso en Horarios de apoyo.")
     else:
-        st.write("Selecciona una escuela y describe la actividad de cada día hábil. Las agendas anteriores se conservan al guardar una nueva versión.")
+        st.write("Edita cada día y guarda los cambios para actualizar el calendario de Dirección y los avisos de las maestras de apoyo.")
 
     meses = _meses_disponibles()
     llaves = [llave for llave, _ in meses]
@@ -230,15 +286,20 @@ def cronogramas_page():
         if clave_agenda not in st.session_state:
             st.session_state[clave_agenda] = cargar_agenda(perfil["nombre"], mes)
         agenda_guardada = st.session_state[clave_agenda]
-    except Exception as exc:
-        st.error(f"No se pudo leer el historial del cronograma: {exc}")
-        st.info("El libro de Cronogramas debe estar compartido con la cuenta de servicio configurada en la plataforma.")
+    except Exception:
+        st.error("No se pudo consultar el calendario. Inténtalo de nuevo en un momento.")
         return
 
-    with st.form(f"form_cronograma_{perfil['nombre']}_{mes}"):
-        st.caption("Elige escuela o junta y redacta la actividad. Rosa: inhábil · Amarillo: CTE.")
-        agenda = _calendario_mes(mes, agenda_guardada, perfil["escuelas"], editor_key)
-        enviar = st.form_submit_button("Guardar cronograma y generar PDF", type="primary", width="stretch")
+    st.caption("Elige un día para editarlo. Rosa: inhábil · Amarillo: CTE. Al guardar, todos verán el calendario actualizado.")
+    if st.button("Recargar calendario guardado", key=f"{editor_key}_recargar"):
+        st.session_state.pop(clave_agenda, None)
+        for clave in list(st.session_state):
+            if clave.startswith(editor_key):
+                st.session_state.pop(clave, None)
+        st.session_state.pop("cronograma_pdf", None)
+        st.rerun()
+    agenda = _calendario_mes(mes, agenda_guardada, perfil["escuelas"], editor_key)
+    enviar = st.button("Guardar cambios y generar PDF", type="primary", width="stretch")
 
     if enviar:
         try:
@@ -262,7 +323,7 @@ def cronogramas_page():
                     )
                     st.session_state["cronograma_publicacion_pendiente"] = None
                 except Exception as aviso_exc:
-                    aviso_notificaciones = f"El cronograma se guardó, pero no se pudieron registrar los avisos: {aviso_exc}"
+                    aviso_notificaciones = "Calendario guardado. Falta enviar el aviso; puedes reintentarlo abajo."
                 filas_pdf = [
                     {"fecha": date.fromisoformat(item["fecha"]).strftime("%d/%m/%Y"),
                      "escuela": item["escuela"], "actividad": item["actividad"]}
@@ -271,7 +332,7 @@ def cronogramas_page():
                 ]
                 firma_esp, firma_dir, sello = _recursos_firma(perfil)
                 pdf_bytes = generar_cronograma_pdf(
-                    perfil, next(etiqueta for llave, etiqueta in meses if llave == mes),
+                    _perfil_profesional(perfil), next(etiqueta for llave, etiqueta in meses if llave == mes),
                     filas_pdf, firma_esp, firma_dir, sello,
                 )
                 sello_tiempo = datetime.now(ZoneInfo("America/Mexico_City")).strftime("%Y%m%d_%H%M%S")
@@ -280,27 +341,28 @@ def cronogramas_page():
                 st.session_state["cronograma_pdf_nombre"] = nombre_archivo
                 st.session_state["cronograma_pdf_mes"] = mes
                 st.session_state["cronograma_pdf_autor"] = perfil["nombre"]
+                st.session_state["cronograma_pdf_publicacion"] = resultado.get("publicacion_id", "")
                 st.session_state["cronograma_pdf_firma_especialista"] = bool(
                     firma_esp or (perfil["area"] == "Dirección" and firma_dir)
                 )
                 st.session_state["cronograma_pdf_mensaje"] = f"Cronograma guardado: {resultado['filas']} actividades."
                 st.session_state["cronograma_pdf_aviso_historial"] = resultado.get("aviso", "")
                 st.session_state["cronograma_pdf_aviso_notificaciones"] = aviso_notificaciones
-                st.session_state["cronograma_pdf_drive_url"] = ""
-                st.session_state["cronograma_pdf_drive_aviso"] = ""
-                try:
-                    st.session_state["cronograma_pdf_drive_url"] = guardar_pdf_drive(pdf_bytes, nombre_archivo)
-                except Exception as drive_exc:
-                    st.session_state["cronograma_pdf_drive_aviso"] = (
-                        "La agenda quedó guardada y el PDF está listo para descargar, "
-                        f"pero no se guardó en Drive: {drive_exc}"
-                    )
             st.rerun()
         except Exception as exc:
             st.error(f"No se pudo completar el guardado del cronograma: {exc}")
 
     if (st.session_state.get("cronograma_pdf") and st.session_state.get("cronograma_pdf_mes") == mes
             and st.session_state.get("cronograma_pdf_autor") == perfil["nombre"]):
+        try:
+            vigentes = [r for r in cargar_agenda_global(mes) if r["Especialista"] == perfil["nombre"]]
+            if (vigentes and st.session_state.get("cronograma_pdf_publicacion") != vigentes[-1].get("ID_Publicacion")):
+                st.session_state.pop("cronograma_pdf", None)
+                st.info("Hay una versión más reciente. Recarga el calendario guardado para consultarla.")
+                return
+        except Exception:
+            st.caption("No se pudo verificar la versión del PDF. Reintenta antes de descargar.")
+            return
         st.success(st.session_state.get("cronograma_pdf_mensaje", "PDF generado."))
         if not st.session_state.get("cronograma_pdf_firma_especialista"):
             st.warning(
@@ -324,8 +386,6 @@ def cronogramas_page():
                     st.rerun()
                 except Exception as exc:
                     st.error(f"No fue posible registrar los avisos: {exc}")
-        if st.session_state.get("cronograma_pdf_drive_aviso"):
-            st.warning(st.session_state["cronograma_pdf_drive_aviso"])
         st.download_button(
             "Descargar PDF oficial",
             data=st.session_state["cronograma_pdf"],
@@ -334,9 +394,6 @@ def cronogramas_page():
             type="primary",
             width="stretch",
         )
-        drive_url = st.session_state.get("cronograma_pdf_drive_url", "")
-        if drive_url:
-            st.markdown(f"[Abrir copia guardada en Drive]({drive_url})")
 
     if perfil["area"] != "Dirección":
         return
@@ -352,7 +409,7 @@ def cronogramas_page():
         if st.session_state.get("cronograma_global_mes") == mes:
             global_rows = st.session_state.get("cronograma_global", [])
             if global_rows:
-                vista = pd.DataFrame(global_rows)
+                vista = pd.DataFrame(global_rows).drop(columns=["ID_Publicacion"], errors="ignore")
                 vista["Fecha"] = pd.to_datetime(vista["Fecha"]).dt.strftime("%d/%m/%Y")
                 st.dataframe(vista, hide_index=True, width="stretch")
             else:
