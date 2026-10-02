@@ -19,6 +19,7 @@ from services.cronogramas import (
     cargar_agenda_global,
     fechas_habiles,
     guardar_agenda,
+    meses_con_cronograma,
     perfil_especialista,
 )
 from services.horarios import avisar_maestras_apoyo
@@ -104,18 +105,73 @@ def _recursos_firma(perfil: dict):
 
 
 
-def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False):
-    """Calendario real con días oficiales bloqueados y escuelas del perfil."""
+def _actualizar_dia(prefijo, fecha):
+    """Actualiza únicamente el borrador local; publicar exige el botón Guardar."""
+    clave = f"{prefijo}_dias"
+    dias = dict(st.session_state.get(clave, {}))
+    escuela = st.session_state.get(f"{prefijo}_{fecha}_escuela", "")
+    actividad = st.session_state.get(f"{prefijo}_{fecha}_actividad", "").strip()
+    if escuela or actividad:
+        dias[fecha] = {"escuela": escuela, "actividad": actividad}
+    else:
+        dias.pop(fecha, None)
+    st.session_state[clave] = dias
+    st.session_state.pop("cronograma_pdf", None)
+
+
+def _mover_dia(prefijo, origen, destino):
+    """No reemplaza una fecha ocupada ni escribe registros de producción."""
+    dias = dict(st.session_state.get(f"{prefijo}_dias", {}))
+    if not origen or not destino or origen == destino or origen not in dias:
+        return
+    if dias.get(destino, {}).get("escuela") or dias.get(destino, {}).get("actividad"):
+        st.session_state[f"{prefijo}_error_mover"] = "La fecha elegida ya tiene actividad."
+        return
+    dias[destino] = dias.pop(origen)
+    st.session_state[f"{prefijo}_dias"] = dias
+    for fecha in (origen, destino):
+        valor = dias.get(fecha, {})
+        st.session_state[f"{prefijo}_{fecha}_escuela"] = valor.get("escuela", "")
+        st.session_state[f"{prefijo}_{fecha}_actividad"] = valor.get("actividad", "")
+    st.session_state.pop(f"{prefijo}_error_mover", None)
+    st.session_state.pop("cronograma_pdf", None)
+
+
+def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False, editable=True):
+    """Campos dentro de cada día, sin botones de edición repetidos."""
     anio, numero = map(int, mes.split("-"))
-    agenda = []
     clave_borrador = f"{prefijo}_dias"
     if not lectura and clave_borrador not in st.session_state:
         st.session_state[clave_borrador] = {dia: dict(datos) for dia, datos in guardadas.items()}
     borrador = st.session_state.get(clave_borrador, {}) if not lectura else {}
-    for col, etiqueta in zip(st.columns(7), ("Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb")):
+    if not lectura:
+        st.markdown("""
+        <style>
+        .stSelectbox [data-baseweb="select"] > div {height:auto;min-height:3rem;}
+        .stSelectbox [data-baseweb="select"] > div > div:first-child {
+            white-space:normal;overflow-wrap:break-word;text-overflow:clip;
+        }
+        [data-baseweb="popover"]:has([role="listbox"]) {
+            min-width:min(420px,90vw);max-width:90vw;
+        }
+        [role="listbox"] [role="option"] {white-space:normal;height:auto;}
+        [data-testid="stSelectboxVirtualDropdown"]:has([role="listbox"][aria-label="Escuela o junta"]) {
+            width:min(400px,calc(100vw - 24px)) !important;
+            max-width:calc(100vw - 24px);
+        }
+        [role="listbox"][aria-label="Escuela o junta"] [role="presentation"] {
+            width:100% !important;
+        }
+        [role="listbox"][aria-label="Escuela o junta"] [role="option"] div {
+            white-space:normal;text-overflow:clip;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    anchos = [0.55, 1, 1, 1, 1, 1, 0.55]
+    for col, etiqueta in zip(st.columns(anchos), ("Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb")):
         col.markdown(f"**{etiqueta}**")
     for semana in calendar.Calendar(firstweekday=6).monthdatescalendar(anio, numero):
-        for col, fecha in zip(st.columns(7), semana):
+        for col, fecha in zip(st.columns(anchos), semana):
             iso = fecha.isoformat()
             motivo = DIAS_INHABILES.get(iso, "Fin de semana" if fecha.weekday() >= 5 else "")
             fuera = fecha.month != numero
@@ -123,7 +179,7 @@ def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False):
                 with st.container(border=True):
                     color = "#f4f6f8" if fuera else ("#fff0d4" if "Consejo Técnico" in motivo else "#f9dddd" if motivo else "#eaf5f4")
                     etiqueta = "" if fuera else str(fecha.day)
-                    st.markdown(f"<div style='background:{color};border-radius:8px;padding:8px;text-align:right;font-weight:bold'>{etiqueta}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='background:{color};color:#183f46;border-radius:8px;padding:8px;text-align:right;font-weight:bold'>{etiqueta}</div>", unsafe_allow_html=True)
                     if fuera:
                         continue
                     if motivo:
@@ -139,47 +195,40 @@ def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False):
                             st.caption("Sin actividad")
                     else:
                         valor = borrador.get(iso, {})
-                        st.text(valor.get("escuela", "") or "Sin actividad")
-                        if valor.get("actividad"):
-                            st.caption(valor["actividad"])
-                        if st.button("Editar", key=f"{prefijo}_{iso}_editar", width="stretch"):
-                            st.session_state[f"{prefijo}_fecha"] = iso
-    if not lectura:
-        st.markdown("### Editar un día")
-        dias = [dia.isoformat() for dia in fechas_habiles(mes)]
-        if not dias:
-            return []
-        fecha = st.selectbox("Día a editar", dias, key=f"{prefijo}_fecha",
-                             format_func=lambda d: date.fromisoformat(d).strftime("%d/%m/%Y"))
-        valor = borrador.get(fecha, {})
-        opciones = ["", *(escuelas or []), ESCUELA_JUNTA]
-        anterior = next((e for e in opciones if normalizar_texto(e) == normalizar_texto(valor.get("escuela", ""))), "")
-        with st.form(f"{prefijo}_editar_{fecha}"):
-            escuela = st.selectbox("Escuela o junta", opciones, index=opciones.index(anterior),
-                                   format_func=lambda e: e or "Elegir escuela o junta",
-                                   key=f"{prefijo}_{fecha}_escuela_amplia", width="stretch")
-            actividad = st.text_area("Actividad del día", value=valor.get("actividad", ""), height=110,
-                                     key=f"{prefijo}_{fecha}_actividad_amplia")
-            destino = st.selectbox("Mover a otra fecha (opcional)", ["", *[d for d in dias if d != fecha]],
-                                   format_func=lambda d: date.fromisoformat(d).strftime("%d/%m/%Y") if d else "Mantener esta fecha")
-            aplicar = st.form_submit_button("Aplicar al calendario", type="primary")
-            limpiar = st.form_submit_button("Dejar este día sin actividad")
-        if aplicar or limpiar:
-            if aplicar and destino and borrador.get(destino, {}).get("actividad"):
-                st.warning("La fecha elegida ya tiene actividad. Elige otra para no reemplazarla.")
-            elif aplicar and (not escuela or not actividad.strip()):
-                st.info("Elige la escuela y escribe la actividad.")
-            else:
-                borrador.pop(fecha, None)
-                if aplicar:
-                    borrador[destino or fecha] = {"escuela": escuela, "actividad": actividad.strip()}
-                st.session_state[clave_borrador] = borrador
-                for sufijo in ("escuela_amplia", "actividad_amplia"):
-                    st.session_state.pop(f"{prefijo}_{fecha}_{sufijo}", None)
-                st.session_state.pop("cronograma_pdf", None)
-                st.rerun()
-        agenda = [{"fecha": d, **datos} for d, datos in sorted(borrador.items())]
-    return agenda
+                        opciones = ["", *(escuelas or []), ESCUELA_JUNTA]
+                        anterior = next((e for e in opciones if normalizar_texto(e) == normalizar_texto(valor.get("escuela", ""))), "")
+                        escuela = st.selectbox("Escuela o junta", opciones, index=opciones.index(anterior),
+                            format_func=lambda e: "Junta · Sede USAER" if e == ESCUELA_JUNTA else e or "Elegir escuela",
+                            key=f"{prefijo}_{iso}_escuela", disabled=not editable,
+                            on_change=_actualizar_dia, args=(prefijo, iso), width="stretch")
+                        if escuela:
+                            # Nombre completo visible también en pantallas estrechas.
+                            st.caption(escuela)
+                        actividad = st.text_area("Actividad", value=valor.get("actividad", ""),
+                            key=f"{prefijo}_{iso}_actividad", height=125, placeholder="¿Qué realizarás?",
+                            disabled=not editable, on_change=_actualizar_dia, args=(prefijo, iso))
+                        if escuela or actividad.strip():
+                            borrador[iso] = {"escuela": escuela, "actividad": actividad.strip()}
+                        else:
+                            borrador.pop(iso, None)
+    if lectura:
+        return []
+    st.session_state[clave_borrador] = borrador
+    if editable and borrador:
+        with st.expander("Mover una actividad a otra fecha"):
+            origen = st.selectbox("Actividad a mover", sorted(borrador),
+                format_func=lambda d: date.fromisoformat(d).strftime("%d/%m/%Y"),
+                key=f"{prefijo}_mover_origen")
+            destinos = [d.isoformat() for d in fechas_habiles(mes) if d.isoformat() != origen]
+            if destinos:
+                destino = st.selectbox("Nueva fecha", destinos,
+                    format_func=lambda d: date.fromisoformat(d).strftime("%d/%m/%Y"),
+                    key=f"{prefijo}_mover_destino")
+                st.button("Mover actividad", key=f"{prefijo}_mover",
+                    on_click=_mover_dia, args=(prefijo, origen, destino))
+                if st.session_state.get(f"{prefijo}_error_mover"):
+                    st.info(st.session_state[f"{prefijo}_error_mover"])
+    return [{"fecha": d, **datos} for d, datos in sorted(borrador.items())]
 
 
 def _perfil_profesional(perfil):
@@ -201,6 +250,66 @@ def _perfil_profesional(perfil):
     except Exception:
         pass
     return resultado
+
+
+def _etiqueta_mes(mes):
+    anio, numero = map(int, mes.split("-"))
+    return f"{MESES[numero - 1].capitalize()} {anio}"
+
+
+def _abrir_mes_guardado(nombre, mes):
+    st.session_state[f"cronograma_mes_{nombre}"] = mes
+    prefijo = f"cronograma_editor_{nombre}_{mes}"
+    for clave in list(st.session_state):
+        if clave.startswith(prefijo):
+            st.session_state.pop(clave, None)
+    st.session_state.pop(f"agenda_inicial_{nombre}_{mes}", None)
+    cargar_agenda.clear()
+    st.session_state[f"{prefijo}_editable"] = True
+    st.session_state.pop("cronograma_pdf", None)
+
+
+def _recuperar_cronogramas(perfil, historicos):
+    """Consulta y PDF de la versión guardada de un mes, sin volver a publicarla."""
+    clave = f"recuperar_cronogramas_{perfil['nombre']}"
+    if st.button("Recuperar cronogramas de meses pasados", key=clave, width="stretch"):
+        st.session_state[f"{clave}_abierto"] = not st.session_state.get(f"{clave}_abierto", False)
+    if not st.session_state.get(f"{clave}_abierto"):
+        return
+    anteriores = [m for m in historicos if m < _mes_actual().strftime("%Y-%m")]
+    if not anteriores:
+        st.info("Todavía no hay cronogramas guardados de meses anteriores.")
+        return
+    with st.container(border=True):
+        mes = st.selectbox("Mes guardado a recuperar", anteriores, format_func=_etiqueta_mes, key=f"{clave}_mes")
+        try:
+            agenda = cargar_agenda(perfil["nombre"], mes)
+        except Exception:
+            st.info("No se pudo recuperar este mes. Inténtalo de nuevo.")
+            return
+        agrupadas = {fecha: [{"Escuela": datos["escuela"], "Actividad": datos["actividad"]}]
+                     for fecha, datos in agenda.items()}
+        _calendario_mes(mes, agrupadas, lectura=True)
+        huella = json.dumps(agenda, sort_keys=True)
+        if agenda and st.button("Preparar PDF del mes recuperado", key=f"{clave}_preparar"):
+            with st.spinner("Preparando tu cronograma..."):
+                try:
+                    firma, visto, sello = _recursos_firma(perfil)
+                    pdf = generar_cronograma_pdf(_perfil_profesional(perfil), _etiqueta_mes(mes), [
+                        {"fecha": date.fromisoformat(fecha).strftime("%d/%m/%Y"),
+                         "escuela": datos["escuela"], "actividad": datos["actividad"]}
+                        for fecha, datos in sorted(agenda.items())], firma, visto, sello)
+                    st.session_state[f"{clave}_pdf"] = (mes, huella, pdf)
+                except Exception:
+                    st.info("No se pudo preparar el PDF. El cronograma sigue guardado.")
+        archivo = st.session_state.get(f"{clave}_pdf")
+        if archivo and archivo[:2] == (mes, huella):
+            st.download_button("Descargar cronograma recuperado", archivo[2],
+                f"Cronograma_{perfil['nombre']}_{mes}.pdf", "application/pdf", key=f"{clave}_descargar")
+        if not agenda:
+            st.caption("Este mes está guardado sin actividades.")
+        st.button("Abrir mes recuperado para editar", key=f"{clave}_abrir",
+                  on_click=_abrir_mes_guardado, args=(perfil["nombre"], mes))
 
 
 def cronogramas_direccion():
@@ -268,7 +377,13 @@ def cronogramas_page():
     else:
         st.write("Edita cada día y guarda los cambios para actualizar el calendario de Dirección y los avisos de las maestras de apoyo.")
 
-    meses = _meses_disponibles()
+    try:
+        historicos = meses_con_cronograma(perfil["nombre"])
+    except Exception:
+        historicos = []
+    disponibles = dict(_meses_disponibles())
+    disponibles.update({mes: _etiqueta_mes(mes) for mes in historicos})
+    meses = sorted(disponibles.items())
     llaves = [llave for llave, _ in meses]
     indice = llaves.index(_mes_actual().strftime("%Y-%m")) if _mes_actual().strftime("%Y-%m") in llaves else 12
     mes = st.selectbox(
@@ -301,7 +416,14 @@ def cronogramas_page():
         st.error("No se pudo consultar el calendario. Inténtalo de nuevo en un momento.")
         return
 
-    st.caption("Elige un día para editarlo. Rosa: inhábil · Amarillo: CTE. Al guardar, todos verán el calendario actualizado.")
+    st.caption("Escuela y actividad en cada día. Rosa: inhábil · Amarillo: CTE.")
+    clave_edicion = f"{editor_key}_editable"
+    if clave_edicion not in st.session_state:
+        st.session_state[clave_edicion] = not bool(agenda_guardada)
+    if st.button("Editar cronograma", key=f"{editor_key}_editar", type="primary",
+                 width="stretch", disabled=st.session_state[clave_edicion]):
+        st.session_state[clave_edicion] = True
+        st.rerun()
     if st.button("Recargar calendario guardado", key=f"{editor_key}_recargar"):
         cargar_agenda.clear()
         st.session_state.pop(clave_agenda, None)
@@ -310,14 +432,20 @@ def cronogramas_page():
                 st.session_state.pop(clave, None)
         st.session_state.pop("cronograma_pdf", None)
         st.rerun()
-    agenda = _calendario_mes(mes, agenda_guardada, perfil["escuelas"], editor_key)
-    enviar = st.button("Guardar cambios y generar PDF", type="primary", width="stretch")
+    agenda = _calendario_mes(mes, agenda_guardada, perfil["escuelas"], editor_key,
+                             editable=st.session_state[clave_edicion])
+    enviar = st.button("Guardar cambios y generar PDF", type="primary", width="stretch",
+                       disabled=not st.session_state[clave_edicion])
+
+    _recuperar_cronogramas(perfil, historicos)
 
     if enviar:
         try:
             with st.spinner("Guardando la agenda y preparando el PDF..."):
                 resultado = guardar_agenda(perfil["nombre"], perfil["area"], mes, perfil["escuelas"], agenda)
-                st.session_state.pop(clave_agenda, None)
+                st.session_state[clave_agenda] = {r["fecha"]: {"escuela": r["escuela"], "actividad": r["actividad"]}
+                                                for r in agenda}
+                st.session_state[clave_edicion] = False
                 st.session_state["cronograma_publicacion_pendiente"] = {
                     "id": resultado.get("publicacion_id", ""),
                     "especialista": perfil["nombre"],
