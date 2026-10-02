@@ -364,7 +364,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             raise ValueError("Solo puede guardarse una actividad por día en el cronograma.")
         dias_vistos.add(fecha_iso)
         filas_nuevas.append({
-            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S"),
+            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S.%f"),
             "Especialista": nombre,
             "Área": area,
             "Modalidad": "Sede Base",
@@ -382,7 +382,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             raise ValueError("Agrega al menos una actividad antes de guardar.")
         # Un mes vaciado también es una versión: no reaparecen actividades viejas.
         filas_nuevas.append({
-            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S"),
+            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S.%f"),
             "Especialista": nombre, "Área": area, "Fecha": f"{mes}-01",
             "Estado": "VACIO", "ID_Publicacion": publicacion_id,
         })
