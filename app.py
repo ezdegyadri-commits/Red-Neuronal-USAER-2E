@@ -12,7 +12,7 @@ from ui.direccion_oficios import configuracion_oficios_direccion
 from ui.direccion_rapida import direccion_page_rapida
 from ui.sugerencias import anexo4_page
 from ui.estadisticas import estadisticas_page
-from ui.cronogramas import cronogramas_page
+from ui.cronogramas import cronogramas_page, cronogramas_direccion
 from ui.horarios_apoyo import horarios_apoyo_page, horarios_apoyo_direccion
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
@@ -93,15 +93,18 @@ elif page=="Panel de Dirección":
     st.divider()
     st.subheader("Cronogramas del equipo")
     st.caption("Desde aquí puedes elaborar tu propio cronograma y consultar los publicados por Psicología, Comunicación y Trabajo Social.")
-    if st.button("Abrir cronograma de Dirección y del equipo", type="primary", key="abrir_cronograma_direccion"):
+    if st.button("Revisar cronogramas de todo el equipo", type="primary", key="abrir_cronograma_direccion"):
         st.session_state["mostrar_cronograma_direccion"] = True
     if st.session_state.get("mostrar_cronograma_direccion"):
         if st.button("Cerrar cronogramas", key="cerrar_cronograma_direccion"):
             st.session_state["mostrar_cronograma_direccion"] = False
             st.rerun()
-        cronogramas_page()
+        consulta, elaborar = st.tabs(["Revisar cronogramas del equipo", "Mi cronograma de Dirección"])
+        with consulta:
+            cronogramas_direccion()
+        with elaborar:
+            cronogramas_page()
 elif page=="Constancias de visita": visitas_page(authorized)
 elif page=="Alta de alumnos": alta_page(authorized)
 elif page=="Oficios de comisión": oficios_comision_page()
 elif page=="Anexo VII Derivación": derivacion_page(authorized)
-
