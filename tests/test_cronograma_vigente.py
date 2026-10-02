@@ -14,6 +14,7 @@ class CronogramaVigenteTest(unittest.TestCase):
     def test_month_save_has_no_drive_warning_and_renders_latest_pdf(self):
         app = AppTest.from_file(str(Path(__file__).parent / "fixtures" / "cronograma_guardar_app.py")).run()
         self.assertFalse(app.exception)
+        next(b for b in app.button if b.label == "Editar cronograma").click().run()
         next(b for b in app.button if b.label == "Guardar cambios y generar PDF").click().run()
         self.assertFalse(app.exception)
         self.assertTrue(app.success)
@@ -58,22 +59,53 @@ class CronogramaVigenteTest(unittest.TestCase):
         with patch.object(repository, "personal", return_value=pd.DataFrame()):
             self.assertNotIn("nombre_profesional", _perfil_profesional(perfil))
 
-    def test_day_editor_can_apply_move_and_clear_without_replacing_occupied_date(self):
+    def test_inline_editor_can_move_and_clear_a_day(self):
         app = AppTest.from_file(str(Path(__file__).parent / "fixtures" / "cronograma_calendar_app.py")).run()
-        app.selectbox[1].select("Ichcaanziho")
-        app.text_area[0].input("Acompañamiento")
-        next(b for b in app.button if b.label == "Aplicar al calendario").click().run()
+        app.selectbox[0].select("Ichcaanziho").run()
+        app.text_area[0].input("Acompañamiento").run()
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state["test_dias"]["2026-10-01"]["actividad"], "Acompañamiento")
-        app.selectbox[2].select("02/10/2026")
-        next(b for b in app.button if b.label == "Aplicar al calendario").click().run()
+        next(w for w in app.selectbox if w.label == "Nueva fecha").select("02/10/2026").run()
+        next(b for b in app.button if b.label == "Mover actividad").click().run()
         self.assertFalse(app.exception)
         self.assertNotIn("2026-10-01", app.session_state["test_dias"])
         self.assertIn("2026-10-02", app.session_state["test_dias"])
-        app.selectbox[0].select("02/10/2026").run()
-        next(b for b in app.button if b.label == "Dejar este día sin actividad").click().run()
+        next(w for w in app.selectbox if w.key == "test_2026-10-02_escuela").select("Elegir escuela").run()
+        next(w for w in app.text_area if w.key == "test_2026-10-02_actividad").input("").run()
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state["test_dias"], {})
+
+    def test_editing_is_enabled_with_one_button_for_entire_month(self):
+        app = AppTest.from_file(str(Path(__file__).parent / "fixtures" / "cronograma_guardar_app.py")).run()
+        fields = [w for w in app.selectbox if w.label == "Escuela o junta"]
+        self.assertTrue(all(w.disabled for w in fields))
+        self.assertEqual(len([b for b in app.button if b.label == "Editar cronograma"]), 1)
+        self.assertFalse(any(b.label == "Editar" for b in app.button))
+        next(b for b in app.button if b.label == "Editar cronograma").click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(all(not w.disabled for w in app.selectbox if w.label == "Escuela o junta"))
+
+    def test_history_can_open_months_older_than_twelve_months(self):
+        app = AppTest.from_file(str(Path(__file__).parent / "fixtures" / "cronograma_guardar_app.py")).run()
+        next(b for b in app.button if b.label == "Recuperar cronogramas de meses pasados").click().run()
+        historia = next(w for w in app.selectbox if w.label == "Mes guardado a recuperar")
+        self.assertEqual(historia.options, ["Septiembre 2026", "Abril 2024"])
+        historia.select("Abril 2024").run()
+        next(b for b in app.button if b.label == "Abrir mes recuperado para editar").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["cronograma_mes_Abril de María Chable Ríos"], "2024-04")
+
+    def test_historical_month_lookup_is_own_and_read_only(self):
+        from unittest.mock import Mock
+        ws = Mock()
+        rows = [{"Especialista": "Abril", "Fecha": "2024-04-01", "Estado": "SUSTITUIDO"},
+                {"Especialista": "Abril", "Fecha": "01/09/2026"},
+                {"Especialista": "Diego", "Fecha": "2023-01-03"}]
+        cronogramas.meses_con_cronograma.clear()
+        with patch.object(cronogramas, "_leer_registros", return_value=(ws, [], rows)):
+            self.assertEqual(cronogramas.meses_con_cronograma("Abril"), ["2026-09", "2024-04"])
+        ws.append_rows.assert_not_called()
+        ws.clear.assert_not_called()
 
 
 if __name__ == "__main__":
