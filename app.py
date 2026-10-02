@@ -15,6 +15,8 @@ from ui.estadisticas import estadisticas_page
 from ui.cronogramas import cronogramas_page, cronogramas_direccion
 from ui.horarios_apoyo import horarios_apoyo_page, horarios_apoyo_direccion
 from ui.calendario_eventos import eventos_direccion
+from ui.tramites import tramites_page
+from services.tramites import gestor as gestor_tramites, puede_solicitar
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -35,6 +37,8 @@ with st.sidebar:
     st.caption(f"Sesión: {st.session_state.get('nombre','')}")
     st.divider()
     menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos"]
+    if gestor_tramites() or puede_solicitar():
+        menu += ["Trámites"]
     if es_especialista(rol) and perfil_especialista(st.session_state.get("nombre", ""), rol):
         menu += ["Cronograma mensual"]
     if "DIRECTOR" in rol.upper():
@@ -58,6 +62,7 @@ with st.sidebar:
         "Cronograma mensual": "🗓️ Equipo especialista · Cronograma",
         "Horarios de apoyo": "🕒 Maestras de apoyo · Horarios y avisos",
         "Panel de Dirección": "⚙️ Dirección · Panel",
+        "Trámites": "📨 Trámites · Solicitudes de expedientes",
         "Constancias de visita": "🗓️ Equipo · Constancias de visita",
         "Alta de alumnos": "➕ Captura · Alta de alumnos",
         "Oficios de comisión": "🧾 Apoyo · Oficios de comisión",
@@ -86,6 +91,7 @@ elif page=="Estadística": estadisticas_page(authorized)
 elif page=="Documentos": documentos_page(authorized)
 elif page=="Cronograma mensual": cronogramas_page()
 elif page=="Horarios de apoyo": horarios_apoyo_page()
+elif page=="Trámites": tramites_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
     horarios_apoyo_direccion()
