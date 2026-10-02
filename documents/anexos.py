@@ -5,6 +5,7 @@ import pandas as pd
 from io import BytesIO
 from pathlib import Path
 from fpdf import FPDF
+from documents.paginacion import texto_con_cierre
 from fpdf.enums import MethodReturnValue
 from config.settings import ESCUELAS_USAER, SERVICE_NAME, SCHOOL_YEAR
 
@@ -60,9 +61,9 @@ def anexo4_html(alumno, rows):
         "img{max-width:100%}.header{text-align:center;margin-bottom:12px}"
         ".hoja{page-break-after:always}.meta{margin:10px 0 14px}"
         ".campo{border:1px solid #222;padding:8px;margin:5px 0 12px;white-space:pre-wrap}"
-        ".sugerencias{min-height:150px}.resultados{min-height:45px}"
-        ".firmas{width:72%;margin:22px auto 0;text-align:center}"
-        ".firma{min-height:58px;border:1px solid #222;padding:12px;margin:8px 0}"
+        ".sugerencias{min-height:60px}.resultados{min-height:24px;break-after:avoid;page-break-after:avoid}"
+        ".firmas{width:100%;margin:12px auto 0;text-align:center;break-inside:avoid;page-break-inside:avoid}"
+        ".firma{display:inline-block;width:43%;min-height:48px;border:1px solid #222;padding:8px;margin:6px 1%;vertical-align:top}"
         "@media print{.hoja:last-child{page-break-after:auto}}"
         "</style></head><body>"
     ]
@@ -159,14 +160,14 @@ def anexo4_pdf(alumno, rows):
         pdf.set_font("Helvetica", "", 10)
         sugerencias = _fpdf_text(registro.get("Sugerencias", "") or " ")
         pdf.multi_cell(
-            disponible, 5, sugerencias + "\n\n\n\n",
+            disponible, 4.5, sugerencias,
             border=1, new_x="LMARGIN", new_y="NEXT",
         )
         pdf.ln(2)
         resultados = _fpdf_text(registro.get("Nivel_Cumplimiento_Resultados", "") or " ")
         lineas_resultados = max(1, len(pdf.multi_cell(disponible, 5, resultados, dry_run=True, output=MethodReturnValue.LINES)))
         # Mantén el cierre de resultados y el bloque completo de firmas juntos.
-        if pdf.get_y() + 6 + lineas_resultados * 5 + 42 > pdf.page_break_trigger:
+        if pdf.get_y() + 6 + min(lineas_resultados, 2) * 4.5 + 38 > pdf.page_break_trigger:
             pdf.add_page()
         pdf.set_font("Helvetica", "B", 9)
         pdf.cell(
@@ -174,13 +175,9 @@ def anexo4_pdf(alumno, rows):
             new_x="LMARGIN", new_y="NEXT",
         )
         pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(
-            disponible, 5,
-            resultados,
-            border=1, new_x="LMARGIN", new_y="NEXT",
-        )
+        texto_con_cierre(pdf, disponible, 4.5, resultados, 38, border=1)
         pdf.ln(5)
-        ancho_firmas = 132
+        ancho_firmas = disponible
         x_firmas = 15 + (disponible - ancho_firmas) / 2
         pdf.set_x(x_firmas)
         pdf.set_font("Helvetica", "B", 9)
@@ -188,20 +185,15 @@ def anexo4_pdf(alumno, rows):
             ancho_firmas, 5, "Firmas",
             align="C", new_x="LMARGIN", new_y="NEXT",
         )
-        pdf.set_xy(x_firmas, pdf.get_y())
+        y_firmas = pdf.get_y()
         pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(
-            ancho_firmas, 5,
-            "______________________________\nNombre y firma de quien recibe",
-            border=1, align="C", new_x="LMARGIN", new_y="NEXT",
-        )
-        pdf.set_xy(x_firmas, pdf.get_y())
-        pdf.multi_cell(
-            ancho_firmas, 5,
-            "______________________________\nNombre y firma de quien brinda\n"
-            + _fpdf_text(registro.get("Quien_Brinda_Sugerencias", "")),
-            border=1, align="C", new_x="LMARGIN", new_y="NEXT",
-        )
+        for x, etiqueta, persona in (
+            (15, "Nombre y firma de quien recibe", ""),
+            (110, "Nombre y firma de quien brinda", _fpdf_text(registro.get("Quien_Brinda_Sugerencias", ""))),
+        ):
+            pdf.set_xy(x, y_firmas + 12)
+            pdf.multi_cell(85, 4.5, "__________________________\n" + etiqueta + "\n" + persona,
+                           align="C", new_x="LMARGIN", new_y="NEXT")
 
     return bytes(pdf.output())
 
@@ -267,12 +259,12 @@ def anexo5_pdf(alumno, rows):
             texto = _fpdf_text(registro.get("Evento", ""))
             pdf.set_font("Helvetica", "", 10)
             lineas_evento = max(1, len(pdf.multi_cell(0, 5, texto, dry_run=True, output=MethodReturnValue.LINES)))
-            if pdf.get_y() + 23 + lineas_evento * 5 > pdf.page_break_trigger:
+            if pdf.get_y() + 23 + min(lineas_evento, 2) * 5 > pdf.page_break_trigger:
                 pdf.add_page()
             pdf.set_font("Helvetica", "B", 10)
             pdf.cell(0, 6, f"Fecha: {fecha}     Personal: {autor}", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
-            pdf.multi_cell(0, 5, texto, border=1, new_x="LMARGIN", new_y="NEXT")
+            texto_con_cierre(pdf, 0, 5, texto, 17, border=1)
             pdf.ln(2)
             pdf.set_font("Helvetica", "", 9)
             pdf.cell(0, 5, "____________________________", align="R", new_x="LMARGIN", new_y="NEXT")
@@ -623,8 +615,12 @@ def anexo7_pdf(registro):
         ("Aspecto relevante no contemplado", str(registro.get("Aspecto_Relevante", ""))),
     ]
 
-    for etiqueta, valor in complementos:
+    for indice, (etiqueta, valor) in enumerate(complementos):
         pdf.set_x(pdf.l_margin)
+        if indice == len(complementos) - 1:
+            texto_con_cierre(pdf, 192, 5,
+                f"{etiqueta}: {valor or '________________________________________'}", 23, border=1)
+            continue
         pdf.multi_cell(
             192,
             5,
