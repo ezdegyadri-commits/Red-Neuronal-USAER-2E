@@ -45,101 +45,22 @@ def _texto(item, campo, fallback=""):
     return _fpdf_text("" if value is None else value)
 
 
+def _nombre_breve(nombre):
+    """Padrón institucional: apellido paterno, materno y nombre(s). Solo impresión."""
+    palabras = str(nombre).strip().split()
+    return " ".join((palabras[2], palabras[0])) if len(palabras) > 2 else " ".join(palabras)
+
+
 def generar_horario_apoyo_pdf(escuela: str, docente: str, filas: list[dict]) -> bytes:
-    """Genera horario de trabajo con encabezado, pie institucional y espacios de firma."""
     if not filas:
         raise ValueError("No hay sesiones para generar el horario.")
-
-    pdf = _HorarioPDF(orientation="L", unit="mm", format="letter")
-    pdf.set_margins(12, 12, 12)
-    pdf.set_auto_page_break(auto=False)
-
-    def iniciar_pagina(titulo=True, encabezado_tabla=True):
-        pdf.add_page()
-        if titulo:
-            pdf.set_y(31)
-            pdf.set_font("Helvetica", "B", 14)
-            pdf.set_text_color(22, 56, 82)
-            pdf.cell(PAGE_WIDTH, 8, _fpdf_text("HORARIO SEMANAL DE ATENCIÓN DE APOYO"), align="C", new_x="LMARGIN", new_y="NEXT")
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(31, 6, _fpdf_text("Escuela:"))
-            pdf.set_font("Helvetica", "", 9)
-            pdf.cell(145, 6, _texto({"value": escuela}, "value"))
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(28, 6, _fpdf_text("Ciclo escolar:"))
-            pdf.set_font("Helvetica", "", 9)
-            pdf.cell(PAGE_WIDTH - 204, 6, _fpdf_text(SCHOOL_YEAR), new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(39, 6, _fpdf_text("Docente que elabora:"))
-            pdf.set_font("Helvetica", "", 9)
-            pdf.cell(PAGE_WIDTH - 39, 6, _texto({"value": docente}, "value"), new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font("Helvetica", "I", 8)
-            pdf.cell(PAGE_WIDTH, 5, _fpdf_text("Atención organizada por día, horario, grado/grupo, modalidad y espacio de trabajo."), new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(3)
-        if encabezado_tabla:
-            tabla_encabezado()
-
-    def tabla_encabezado():
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.set_fill_color(226, 235, 242)
-        for width, label in zip(TABLE_WIDTHS, TABLE_LABELS):
-            pdf.cell(width, 8, _fpdf_text(label), border=1, align="C", fill=True)
-        pdf.ln()
-        pdf.set_font("Helvetica", "", 8)
-
-    iniciar_pagina()
-    for row in filas:
-        cells = [
-            _texto(row, "Dia"),
-            f"{_texto(row, 'Inicio')} - {_texto(row, 'Fin')}",
-            _texto(row, "Grupo"),
-            _texto(row, "Modalidad"),
-            _texto(row, "Espacio"),
-            _texto(row, "Actividad"),
-        ]
-        line_counts = [
-            max(1, len(pdf.multi_cell(width - 3, 4.2, value, dry_run=True, output=MethodReturnValue.LINES)))
-            for width, value in zip(TABLE_WIDTHS, cells)
-        ]
-        row_height = max(line_counts) * 4.2 + 3
-        # Reserva el espacio de validación desde antes del cierre de tabla para
-        # mantener firmas y último bloque juntos en la misma página.
-        if pdf.get_y() + row_height + 48 > 181:
-            iniciar_pagina(titulo=False)
-        start_x, start_y = pdf.get_x(), pdf.get_y()
-        for width, value in zip(TABLE_WIDTHS, cells):
-            x = pdf.get_x()
-            pdf.rect(x, start_y, width, row_height)
-            pdf.set_xy(x + 1.5, start_y + 1.5)
-            pdf.multi_cell(width - 3, 4.2, value)
-            pdf.set_xy(x + width, start_y)
-        pdf.set_xy(start_x, start_y + row_height)
-
-    pdf.ln(6)
-    y = pdf.get_y()
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(PAGE_WIDTH, 6, _fpdf_text("VALIDACIÓN"), align="C", new_x="LMARGIN", new_y="NEXT")
-    firmas = (
-        (12, 120, "DOCENTE DE APOYO QUE ELABORA", docente),
-        (147.4, 120, "VO. BO. DIRECTOR DE LA USAER 02-E", "Psic. Edgar Adrián Yam Briceño MD\nDirector de la USAER 02-E"),
-    )
-    for x, width, titulo, nombre in firmas:
-        pdf.set_xy(x, y + 9)
-        pdf.set_font("Helvetica", "", 8)
-        pdf.cell(width, 5, _fpdf_text(titulo), align="C", new_x="LMARGIN", new_y="NEXT")
-        pdf.set_xy(x + 12, y + 24)
-        pdf.cell(width - 24, 5, "________________________________________", align="C", new_x="LMARGIN", new_y="NEXT")
-        pdf.set_xy(x, y + 30)
-        pdf.set_font("Helvetica", "", 8)
-        pdf.multi_cell(width, 4, _fpdf_text(nombre), align="C")
-
-    pdf.set_creation_date(datetime.now(ZoneInfo("America/Mexico_City")))
-    return bytes(pdf.output())
+    franjas = sorted({(str(r.get("Inicio", "")), str(r.get("Fin", ""))) for r in filas})
+    return generar_horario_apoyo_cuadricula_pdf(escuela, docente, filas, franjas)
 
 
 def generar_horario_apoyo_cuadricula_pdf(
     escuela: str, docente: str, filas: list[dict], franjas: list[tuple[str, str]],
+    franjas_por_dia: dict | None = None,
 ) -> bytes:
     """Horario institucional horizontal con lunes a viernes y firmas al final."""
     if not franjas:
@@ -160,55 +81,74 @@ def generar_horario_apoyo_cuadricula_pdf(
         pdf.set_y(31)
         pdf.set_font("Helvetica", "B", 13)
         pdf.set_text_color(22, 56, 82)
-        pdf.cell(PAGE_WIDTH, 8, _fpdf_text("HORARIO SEMANAL DE ATENCIÓN DE APOYO"),
+        pdf.cell(PAGE_WIDTH, 7, _fpdf_text("HORARIO SEMANAL DE ATENCIÓN DE APOYO"),
                  align="C", new_x="LMARGIN", new_y="NEXT")
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Helvetica", "", 9)
-        pdf.cell(PAGE_WIDTH, 6, _fpdf_text(f"Escuela: {escuela}   |   Docente: {docente}"),
+        pdf.cell(PAGE_WIDTH, 5, _fpdf_text(f"Escuela: {escuela}   |   Docente: {docente}"),
                  new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(PAGE_WIDTH, 6, _fpdf_text(f"USAER 02-E   |   Ciclo escolar {SCHOOL_YEAR}"),
+        pdf.cell(PAGE_WIDTH, 5, _fpdf_text(f"USAER 02-E   |   Ciclo escolar {SCHOOL_YEAR}"),
                  new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(3)
+        pdf.ln(2)
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_fill_color(218, 232, 242)
-        pdf.cell(ancho_hora, 9, "HORARIO", border=1, align="C", fill=True)
+        pdf.cell(ancho_hora, 7, "HORARIO", border=1, align="C", fill=True)
         for dia in dias:
-            pdf.cell(ancho_dia, 9, _fpdf_text(dia.upper()), border=1, align="C", fill=True)
+            pdf.cell(ancho_dia, 7, _fpdf_text(dia.upper()), border=1, align="C", fill=True)
         pdf.ln()
 
     nueva_pagina()
-    for inicio, fin in franjas:
+    celdas = []
+    diarios = franjas_por_dia or {dia: franjas for dia in dias}
+    distintos = len({tuple(diarios.get(dia, [])) for dia in dias}) > 1
+    posiciones = range(max(len(diarios.get(dia, [])) for dia in dias)) if distintos else range(len(franjas))
+    for posicion in posiciones:
+        inicio, fin = (f"Módulo {posicion + 1}", "") if distintos else franjas[posicion]
         textos = []
         for dia in dias:
             partes = []
-            for item in por_celda.get((dia, inicio, fin), []):
+            intervalos = diarios.get(dia, [])
+            if distintos and posicion >= len(intervalos):
+                textos.append("")
+                continue
+            desde, hasta = intervalos[posicion] if distintos else (inicio, fin)
+            if distintos:
+                partes.append(f"{desde} - {hasta}")
+            for item in por_celda.get((dia, desde, hasta), []):
                 partes.append("\n".join(filter(None, (
-                    str(item.get("Grupo", "")).strip(),
-                    str(item.get("Alumnos", "")).strip(),
-                    str(item.get("Actividad", "")).strip(),
+                    str(item.get("Grupo", "")).strip() if not str(item.get("Alumnos", "")).strip() else "",
+                    "; ".join(_nombre_breve(n) for n in str(item.get("Alumnos", "")).split(";") if n.strip()),
+                    str(item.get("Actividad", "")).strip() if not (str(item.get("Alumnos", "")).strip() or str(item.get("Grupo", "")).strip()) else "",
                 ))))
-            textos.append(_fpdf_text("\n\n".join(partes)))
-        pdf.set_font("Helvetica", "", 7.5)
-        lineas = [len(pdf.multi_cell(ancho_dia - 4, 4, t, dry_run=True,
-                                     output=MethodReturnValue.LINES)) if t else 1 for t in textos]
-        alto = max(17, 4 * max(lineas) + 4)
-        # Reserva en cada salto suficiente espacio para que validación no quede sola.
-        if pdf.get_y() + alto + 47 > 181:
+            textos.append(_fpdf_text("\n".join(partes)))
+        celdas.append((inicio, fin, textos))
+    # Medir antes de imprimir: reduce aire y tipografía solo hasta un mínimo legible.
+    for fuente, interlineado, minimo in ((8.5, 3.8, 11), (8, 3.5, 9), (7.5, 3.3, 7), (7, 3.1, 6)):
+        pdf.set_font("Helvetica", "", fuente)
+        alturas = [max(minimo, interlineado * max(
+            len(pdf.multi_cell(ancho_dia - 4, interlineado, t, dry_run=True,
+                              output=MethodReturnValue.LINES)) if t else 1 for t in textos
+        ) + 2) for _, _, textos in celdas]
+        if sum(alturas) <= 181 - pdf.get_y() - 40:
+            break
+    for indice, ((inicio, fin, textos), alto) in enumerate(zip(celdas, alturas)):
+        reserva = 40 if indice == len(celdas) - 1 else 0
+        if pdf.get_y() + alto + reserva > 181:
             nueva_pagina()
-            pdf.set_font("Helvetica", "", 7.5)
+        pdf.set_font("Helvetica", "", fuente)
         x0, y0 = pdf.get_x(), pdf.get_y()
         pdf.set_fill_color(245, 248, 251)
         pdf.rect(x0, y0, ancho_hora, alto, style="DF")
-        pdf.set_xy(x0 + 1, y0 + 5)
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.multi_cell(ancho_hora - 2, 5, f"{inicio}\n{fin}", align="C")
-        pdf.set_font("Helvetica", "", 7.5)
+        pdf.set_xy(x0 + 1, y0 + 1.5)
+        pdf.set_font("Helvetica", "B", fuente)
+        pdf.multi_cell(ancho_hora - 2, interlineado, f"{inicio} - {fin}" if fin else inicio, align="C")
+        pdf.set_font("Helvetica", "", fuente)
         for indice, texto_celda in enumerate(textos):
             x = x0 + ancho_hora + indice * ancho_dia
             pdf.rect(x, y0, ancho_dia, alto)
-            pdf.set_xy(x + 2, y0 + 2)
+            pdf.set_xy(x + 2, y0 + 1)
             if texto_celda:
-                pdf.multi_cell(ancho_dia - 4, 4, texto_celda, align="C")
+                pdf.multi_cell(ancho_dia - 4, interlineado, texto_celda, align="C")
         pdf.set_xy(x0, y0 + alto)
 
     y = pdf.get_y() + 4
@@ -220,11 +160,11 @@ def generar_horario_apoyo_cuadricula_pdf(
         (148, "VO. BO. DIRECTOR DE LA USAER 02-E", "Psic. Edgar Adrián Yam Briceño MD"),
     ):
         pdf.set_font("Helvetica", "", 8)
-        pdf.set_xy(x, y + 11)
+        pdf.set_xy(x, y + 8)
         pdf.cell(119, 5, _fpdf_text(titulo), align="C")
-        pdf.set_xy(x + 13, y + 25)
+        pdf.set_xy(x + 13, y + 22)
         pdf.cell(93, 5, "_____________________________________", align="C")
-        pdf.set_xy(x, y + 32)
+        pdf.set_xy(x, y + 29)
         pdf.cell(119, 5, _fpdf_text(nombre), align="C")
     pdf.set_creation_date(datetime.now(ZoneInfo("America/Mexico_City")))
     return bytes(pdf.output())

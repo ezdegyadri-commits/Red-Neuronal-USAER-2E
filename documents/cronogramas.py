@@ -40,7 +40,7 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(ANCHO_UTIL, 6, _fpdf_text(f"Mes: {mes_label}"), align="C",
                  new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(5)
+        pdf.ln(2)
 
     def pie():
         ruta = ROOT / "pie_pagina.png"
@@ -52,12 +52,12 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         encabezado()
 
     def encabezado_tabla():
-        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(235, 238, 242)
         for ancho, texto in ((31, "Fecha"), (54, "Escuela"), (95, "Actividad")):
-            pdf.cell(ancho, 8, _fpdf_text(texto), border=1, align="C", fill=True)
+            pdf.cell(ancho, 6, _fpdf_text(texto), border=1, align="C", fill=True)
         pdf.ln()
-        pdf.set_font("Helvetica", "", 9)
+        pdf.set_font("Helvetica", "", 8)
 
     nueva_pagina()
     encabezado_tabla()
@@ -66,11 +66,11 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         escuela = _fpdf_text(item.get("escuela", ""))
         actividad = _fpdf_text(item.get("actividad", ""))
         alturas = [
-            len(pdf.multi_cell(31, 5, fecha, dry_run=True, output=MethodReturnValue.LINES)),
-            len(pdf.multi_cell(54, 5, escuela, dry_run=True, output=MethodReturnValue.LINES)),
-            len(pdf.multi_cell(95, 5, actividad, dry_run=True, output=MethodReturnValue.LINES)),
+            len(pdf.multi_cell(28, 4, fecha, dry_run=True, output=MethodReturnValue.LINES)),
+            len(pdf.multi_cell(51, 4, escuela, dry_run=True, output=MethodReturnValue.LINES)),
+            len(pdf.multi_cell(92, 4, actividad, dry_run=True, output=MethodReturnValue.LINES)),
         ]
-        alto = max(alturas + [1]) * 5 + 3
+        alto = max(alturas + [1]) * 4 + 2
         reserva_firma = 47 if indice == len(filas) - 1 else 0
         if pdf.get_y() + alto + reserva_firma > 250:
             pie()
@@ -81,11 +81,11 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
             x = pdf.get_x()
             pdf.rect(x, y0, ancho, alto)
             pdf.set_xy(x + 1.5, y0 + 1.5)
-            pdf.multi_cell(ancho - 3, 5, texto, border=0)
+            pdf.multi_cell(ancho - 3, 4, texto, border=0)
             pdf.set_xy(x + ancho, y0)
         pdf.set_xy(x0, y0 + alto)
 
-    pdf.ln(8)
+    pdf.ln(5)
     y_firma = pdf.get_y()
     pdf.set_font("Helvetica", "", 9)
     if perfil.get("area") == "Dirección":
@@ -134,4 +134,3 @@ def guardar_pdf_drive(pdf_bytes: bytes, nombre_archivo: str) -> str:
         supportsAllDrives=True,
     ).execute()
     return str(archivo.get("webViewLink", ""))
-

@@ -3061,11 +3061,12 @@ def visitas_page(df):
     # ---------------------------------------------------------
 
     descripcion_html = (
-        descripcion_actividad
+        "<p style='margin:0 0 4px;orphans:2;widows:2'>" + descripcion_actividad
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
-        .replace("\n", "<br>")
+        .replace("\n", "</p><p style='margin:0 0 4px;orphans:2;widows:2'>")
+        + "</p>"
         if descripcion_actividad
         else "<br><br><br><br>"
     )
@@ -3281,7 +3282,7 @@ Otros: {detalle("Otros")}<br>
 
 <div style="
     font-size:12px;
-    min-height:65px;
+    min-height:24px;
     line-height:1.35;
 ">
     {descripcion_html}
@@ -3291,11 +3292,11 @@ Otros: {detalle("Otros")}<br>
     width:100%;
     font-size:11px;
     text-align:center;
-    margin-top:30px;
+    margin-top:14px;
     break-inside:avoid;
     page-break-inside:avoid;
     border-collapse:separate;
-    border-spacing:14px 26px;
+    border-spacing:14px 12px;
 ">
 {firmas_html}
 
@@ -3327,6 +3328,10 @@ Otros: {detalle("Otros")}<br>
         -webkit-print-color-adjust:exact;
         print-color-adjust:exact;
     }}
+
+    p {{ orphans:2; widows:2; }}
+    p:last-child {{ break-after:avoid; page-break-after:avoid; }}
+    tr {{ break-inside:avoid; page-break-inside:avoid; }}
 
     table td {{
         border:1px dashed #ccc !important;
@@ -3382,4 +3387,3 @@ Otros: {detalle("Otros")}<br>
     )
 
     st.caption("Registro_Visitas conserva el historial; descargar no añade ni modifica filas.")
-
