@@ -531,7 +531,21 @@ def _leer_avisos_cache():
 
 def cargar_avisos_apoyo(nombre):
     rows = _leer_avisos_cache()
-    return [row for row in rows if normalizar_texto(row.get("Destinatario", "")) == normalizar_texto(nombre)]
+    propias = [row for row in rows if normalizar_texto(row.get("Destinatario", "")) == normalizar_texto(nombre)]
+    from services.cronogramas import cargar_agenda_global
+    vigentes = {}
+    for mes in {str(row.get("Mes", "")) for row in propias}:
+        if not re.fullmatch(r"\d{4}-\d{2}", mes):
+            continue
+        vigentes[mes] = {str(r.get("ID_Publicacion", "")) for r in cargar_agenda_global(mes)}
+    ultimas = {}
+    for row in propias:
+        mes = str(row.get("Mes", ""))
+        if str(row.get("ID_Publicacion", "")) not in vigentes.get(mes, set()):
+            continue
+        llave = (mes, normalizar_texto(row.get("Especialista", "")), normalizar_texto(row.get("Escuela", "")))
+        ultimas[llave] = row
+    return list(ultimas.values())
 
 
 def marcar_avisos_leidos(ids_aviso):
