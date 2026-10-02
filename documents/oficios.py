@@ -2,6 +2,7 @@ from datetime import date
 from pathlib import Path
 import unicodedata
 
+from documents.paginacion import texto_con_cierre
 from fpdf import FPDF
 from fpdf.enums import MethodReturnValue
 
@@ -178,7 +179,7 @@ def generar_oficio_comision(registro):
     # Anticipa el cierre con firma para que no se desprenda al final de página.
     if pdf.get_y() + lineas_texto * 6 + 52 > pdf.page_break_trigger:
         pdf.add_page()
-    pdf.multi_cell(0, 6, texto, align="J")
+    texto_con_cierre(pdf, 0, 6, texto, 52)
     pdf.ln(12)
 
     firma = _archivo("firma.png")
