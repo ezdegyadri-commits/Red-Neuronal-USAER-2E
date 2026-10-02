@@ -7,10 +7,11 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import streamlit as st
 
 from config.settings import CRONOGRAMAS_SPREADSHEET_ID, ESCUELAS_USAER
 from data.google import drive_oauth_google_client, retry_google, service_account_client
-from services.asignaciones import ASIGNACIONES_ESPECIALISTAS, es_direccion, es_especialista
+from services.asignaciones import ASIGNACIONES_ESPECIALISTAS, es_direccion, es_especialista, escuelas_asignadas
 from utils.text import normalizar_texto
 
 
@@ -254,6 +255,7 @@ def cargar_agenda_global(mes: str) -> list[dict[str, str]]:
     return sorted(efectivos.values(), key=lambda row: (row["Fecha"], row["Especialista"]))
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def cargar_publicacion(publicacion_id: str) -> list[dict[str, str]]:
     """Lee las actividades de una versión publicada del cronograma sin alterar historial."""
     _, headers, registros = _leer_registros()
@@ -275,7 +277,11 @@ def cargar_publicacion(publicacion_id: str) -> list[dict[str, str]]:
 def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda: list[dict]) -> dict:
     """Anexa la nueva versión y marca la anterior como sustituida, sin borrar filas."""
     mes_date = datetime.strptime(mes, "%Y-%m")
-    permitidas = set(escuelas) | {"Junta General (Sede)"}
+    perfil = perfil_especialista(nombre, area)
+    if not perfil:
+        raise PermissionError("La cuenta no está autorizada para elaborar cronogramas.")
+    permitidas = {normalizar_texto(e) for e in perfil["escuelas"]} | {normalizar_texto("Junta General (Sede)")}
+    dias_habiles = {f.isoformat() for f in fechas_habiles(mes)}
     filas_nuevas = []
     publicacion_id = uuid4().hex
     dias_vistos = set()
@@ -287,7 +293,9 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             continue
         if not fecha_iso.startswith(mes_date.strftime("%Y-%m")):
             raise ValueError("Hay una actividad cuya fecha no corresponde al mes seleccionado.")
-        if escuela not in permitidas:
+        if fecha_iso not in dias_habiles:
+            raise ValueError("No se pueden programar actividades en fines de semana, CTE o días inhábiles.")
+        if normalizar_texto(escuela) not in permitidas:
             raise ValueError("La escuela seleccionada no pertenece al ámbito autorizado.")
         if not actividad:
             raise ValueError(f"Escribe la actividad del {fecha_iso} o deja vacía toda esa fila.")
@@ -330,7 +338,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
     # Primero se escribe la versión nueva. Si falla, el historial anterior sigue activo.
     retry_google(lambda: ws.append_rows(
         [[row.get(header, "") for header in headers] for row in filas_nuevas],
-        value_input_option="USER_ENTERED",
+        value_input_option="RAW",
     ))
 
     columnas = []
@@ -348,7 +356,24 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             retry_google(lambda: ws.batch_update(columnas, value_input_option="RAW"))
         except Exception:
             aviso = "La agenda nueva se guardó; no se pudo marcar la versión anterior como sustituida. El historial se conserva y la vista usa la versión más reciente."
+    cargar_publicacion.clear()
+    _agenda_visitas_cache.clear()
     return {"filas": len(filas_nuevas), "aviso": aviso, "publicacion_id": publicacion_id}
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _agenda_visitas_cache(mes):
+    return cargar_agenda_global(mes)
+
+
+def cargar_visitas_escuela(escuela, mes):
+    """Solo expone visitas publicadas de una escuela autorizada de la cuenta."""
+    nombre, rol = st.session_state.get("nombre", ""), st.session_state.get("rol", "")
+    permitidas = escuelas_asignadas(nombre, rol)
+    if normalizar_texto(escuela) not in {normalizar_texto(e) for e in permitidas}:
+        raise PermissionError("La escuela no está asignada a esta cuenta.")
+    return [r for r in _agenda_visitas_cache(mes)
+            if normalizar_texto(r.get("Escuela", "")) == normalizar_texto(escuela)]
 
 
 def _columna_a1(numero: int) -> str:
@@ -357,4 +382,3 @@ def _columna_a1(numero: int) -> str:
         numero, resto = divmod(numero - 1, 26)
         letras = chr(65 + resto) + letras
     return letras
-
