@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fpdf import FPDF
 from fpdf.enums import MethodReturnValue
+from PIL import Image
 
 from config.settings import CRONOGRAMAS_FOLDER_ID
 from documents.anexos import _fpdf_text
@@ -35,7 +36,7 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         pdf.set_text_color(0, 0, 0)
         pdf.ln(2)
         pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(ANCHO_UTIL, 6, _fpdf_text(f"{perfil['nombre']}  |  {perfil['area']}"), align="C",
+        pdf.cell(ANCHO_UTIL, 6, _fpdf_text(f"{perfil.get('nombre_profesional', perfil['nombre'])}  |  {perfil['area']}"), align="C",
                  new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(ANCHO_UTIL, 6, _fpdf_text(f"Mes: {mes_label}"), align="C",
@@ -45,7 +46,9 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
     def pie():
         ruta = ROOT / "pie_pagina.png"
         if ruta.exists():
-            pdf.image(str(ruta), x=15, y=267, w=ANCHO_UTIL)
+            with Image.open(ruta) as original:
+                alto_pie = ANCHO_UTIL * original.height / original.width
+            pdf.image(str(ruta), x=15, y=pdf.h - alto_pie - 5, w=ANCHO_UTIL)
 
     def nueva_pagina():
         pdf.add_page()
@@ -71,7 +74,7 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
             len(pdf.multi_cell(92, 4, actividad, dry_run=True, output=MethodReturnValue.LINES)),
         ]
         alto = max(alturas + [1]) * 4 + 2
-        reserva_firma = 47 if indice == len(filas) - 1 else 0
+        reserva_firma = 54 if indice == len(filas) - 1 else 0
         if pdf.get_y() + alto + reserva_firma > 250:
             pie()
             nueva_pagina()
@@ -94,7 +97,7 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         ]
     else:
         bloques_firma = [
-            (15, "Elaboró", perfil["nombre"], firma_especialista),
+            (15, "Elaboró", perfil.get("nombre_profesional", perfil["nombre"]) + "\n" + perfil["area"], firma_especialista),
             (109, "Vo. Bo.", "Psic. Edgar Adrián Yam Briceño MD\nDirector de la USAER 02-E", firma_direccion),
         ]
     for x, titulo, nombre, imagen in bloques_firma:
@@ -104,17 +107,21 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         pdf.set_xy(x, y_firma + 6)
         if imagen:
             try:
-                pdf.image(BytesIO(imagen), x=x + 23, y=y_firma + 5, w=40)
+                with Image.open(BytesIO(imagen)) as original:
+                    iw, ih = original.size
+                escala = min((48 if x == 109 else 60) / iw, 22 / ih)
+                ancho, alto = iw * escala, ih * escala
+                centro = x + (36 if x == 109 else 43)
+                pdf.image(BytesIO(imagen), x=centro - ancho / 2,
+                          y=y_firma + 29 - alto, w=ancho, h=alto)
             except Exception:
                 pass
-        pdf.set_xy(x, y_firma + 22)
-        pdf.cell(ancho_firma, 5, "____________________________", align="C",
-                 new_x="LMARGIN", new_y="NEXT")
-        pdf.set_xy(x, y_firma + 28)
+        pdf.line(x + 8, y_firma + 30, x + 78, y_firma + 30)
+        pdf.set_xy(x, y_firma + 33)
         pdf.multi_cell(ancho_firma, 4.5, _fpdf_text(nombre), align="C")
         if x == 109 and sello:
             try:
-                pdf.image(BytesIO(sello), x=x + 66, y=y_firma + 8, w=18)
+                pdf.image(BytesIO(sello), x=x + 67, y=y_firma + 10, w=17, h=19, keep_aspect_ratio=True)
             except Exception:
                 pass
     pie()
