@@ -479,7 +479,7 @@ def cronogramas_page():
 
     if f"{editor_key}_respaldo" not in st.session_state:
         try:
-            respaldo = cargar_borrador(perfil["nombre"], mes)
+            respaldo = cargar_borrador(perfil["nombre"], mes, agenda_guardada)
             if respaldo is not None:
                 st.session_state[f"{editor_key}_dias"] = respaldo
                 st.session_state[f"{editor_key}_respaldado"] = json.dumps(respaldo, ensure_ascii=False, sort_keys=True)
