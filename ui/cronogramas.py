@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import calendar
 import re
+import time
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -25,6 +26,7 @@ from services.cronogramas import (
 )
 from ui.calendario_eventos import eventos_mes, ventana_eventos, pendientes_mes
 from services.horarios import avisar_maestras_apoyo
+from services.borradores_cronogramas import cargar_borrador, guardar_borrador
 from utils.text import normalizar_texto
 
 
@@ -107,6 +109,58 @@ def _recursos_firma(perfil: dict):
 
 
 
+def _respaldar_editor(prefijo):
+    contexto = st.session_state.get(f"{prefijo}_respaldo")
+    if not contexto:
+        return
+    nombre, mes = contexto
+    dias = st.session_state.get(f"{prefijo}_dias", {})
+    huella = json.dumps(dias, ensure_ascii=False, sort_keys=True)
+    if st.session_state.get(f"{prefijo}_respaldado") == huella:
+        return
+    try:
+        st.session_state[f"{prefijo}_respaldo_intento"] = time.monotonic()
+        guardar_borrador(nombre, mes, dias)
+        st.session_state[f"{prefijo}_respaldado"] = huella
+        st.session_state.pop(f"{prefijo}_respaldo_pendiente", None)
+    except Exception:
+        st.session_state[f"{prefijo}_respaldo_pendiente"] = True
+
+
+@st.fragment(run_every="60s")
+def _estado_respaldo(prefijo):
+    if (st.session_state.get(f"{prefijo}_respaldo_pendiente")
+            and time.monotonic() - st.session_state.get(f"{prefijo}_respaldo_intento", -60) >= 60):
+        _respaldar_editor(prefijo)
+    if st.session_state.get(f"{prefijo}_respaldo_pendiente"):
+        st.info("Respaldo pendiente. Mantén esta página abierta; reintentaremos automáticamente.")
+    else:
+        st.caption("Borrador respaldado al terminar de editar cada campo. Solo se publica al guardar el cronograma.")
+
+
+@st.fragment(run_every="60s")
+def _avisos_automaticos(perfil, mes):
+    """La publicación central es la cola durable: recuperable en una sesión nueva."""
+    key = f"cronograma_avisos_{perfil['nombre']}_{mes}"
+    if time.monotonic() - st.session_state.get(key + "_intento", -60) < 60:
+        return
+    st.session_state[key + "_intento"] = time.monotonic()
+    try:
+        filas = [r for r in cargar_agenda_global(mes) if r["Especialista"] == perfil["nombre"]]
+        if not filas:
+            return
+        publicacion = filas[-1].get("ID_Publicacion", "")
+        if not publicacion or st.session_state.get(key + "_enviada") == publicacion:
+            return
+        avisar_maestras_apoyo(publicacion, perfil["nombre"], mes, [
+            {"fecha": r["Fecha"], "escuela": r["Escuela"], "actividad": r["Actividad"]} for r in filas])
+        st.session_state[key + "_enviada"] = publicacion
+        st.session_state.pop("cronograma_publicacion_pendiente", None)
+        st.session_state["cronograma_pdf_aviso_notificaciones"] = "Avisos registrados en la plataforma."
+    except Exception:
+        st.caption("El aviso sigue pendiente y se reintentará automáticamente. Tu calendario se conserva.")
+
+
 def _actualizar_dia(prefijo, fecha):
     """Actualiza únicamente el borrador local; publicar exige el botón Guardar."""
     clave = f"{prefijo}_dias"
@@ -119,6 +173,7 @@ def _actualizar_dia(prefijo, fecha):
         dias.pop(fecha, None)
     st.session_state[clave] = dias
     st.session_state.pop("cronograma_pdf", None)
+    _respaldar_editor(prefijo)
 
 
 def _mover_dia(prefijo, origen, destino):
@@ -137,6 +192,7 @@ def _mover_dia(prefijo, origen, destino):
         st.session_state[f"{prefijo}_{fecha}_actividad"] = valor.get("actividad", "")
     st.session_state.pop(f"{prefijo}_error_mover", None)
     st.session_state.pop("cronograma_pdf", None)
+    _respaldar_editor(prefijo)
 
 
 def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False, editable=True, lugares=None):
@@ -421,6 +477,20 @@ def cronogramas_page():
         st.error("No se pudo consultar el calendario. Inténtalo de nuevo en un momento.")
         return
 
+    if f"{editor_key}_respaldo" not in st.session_state:
+        try:
+            respaldo = cargar_borrador(perfil["nombre"], mes, agenda_guardada)
+            if respaldo is not None:
+                st.session_state[f"{editor_key}_dias"] = respaldo
+                st.session_state[f"{editor_key}_respaldado"] = json.dumps(respaldo, ensure_ascii=False, sort_keys=True)
+                if respaldo != agenda_guardada:
+                    st.session_state[f"{editor_key}_editable"] = True
+                    st.caption("Recuperamos tu borrador pendiente.")
+            st.session_state[f"{editor_key}_respaldo"] = (perfil["nombre"], mes)
+        except Exception:
+            st.info("No se pudo recuperar el respaldo. Reintenta antes de comenzar otra edición.")
+            return
+
     st.caption("Escuela y actividad en cada día. Rosa: inhábil · Amarillo: CTE.")
     clave_edicion = f"{editor_key}_editable"
     if clave_edicion not in st.session_state:
@@ -429,16 +499,15 @@ def cronogramas_page():
                  width="stretch", disabled=st.session_state[clave_edicion]):
         st.session_state[clave_edicion] = True
         st.rerun()
-    if st.button("Recargar calendario guardado", key=f"{editor_key}_recargar"):
+    if st.button("Actualizar calendario sin perder mi borrador", key=f"{editor_key}_recargar"):
         cargar_agenda.clear()
         st.session_state.pop(clave_agenda, None)
-        for clave in list(st.session_state):
-            if clave.startswith(editor_key):
-                st.session_state.pop(clave, None)
         st.session_state.pop("cronograma_pdf", None)
         st.rerun()
     agenda = _calendario_mes(mes, agenda_guardada, perfil["escuelas"], editor_key,
                              editable=st.session_state[clave_edicion], lugares=lugares_cronograma(perfil))
+    _estado_respaldo(editor_key)
+    _avisos_automaticos(perfil, mes)
     enviar = st.button("Guardar cambios y generar PDF", type="primary", width="stretch",
                        disabled=not st.session_state[clave_edicion])
 
@@ -446,6 +515,7 @@ def cronogramas_page():
 
     if enviar:
         try:
+            _respaldar_editor(editor_key)
             with st.spinner("Guardando la agenda y preparando el PDF..."):
                 resultado = guardar_agenda(perfil["nombre"], perfil["area"], mes, perfil["escuelas"], agenda)
                 st.session_state[clave_agenda] = {r["fecha"]: {"escuela": r["escuela"], "actividad": r["actividad"]}
@@ -464,11 +534,12 @@ def cronogramas_page():
                     aviso_notificaciones = (
                         f"Se avisó a {notificadas} maestra(s) de apoyo."
                         if notificadas else
-                        "El cronograma se guardó; no se encontraron cuentas de maestras de apoyo asignadas a esas escuelas."
+                        "Calendario guardado. Se conservaron los avisos ya registrados."
                     )
                     st.session_state["cronograma_publicacion_pendiente"] = None
+                    st.session_state[f"cronograma_avisos_{perfil['nombre']}_{mes}_enviada"] = resultado.get("publicacion_id", "")
                 except Exception as aviso_exc:
-                    aviso_notificaciones = "Calendario guardado. Falta enviar el aviso; puedes reintentarlo abajo."
+                    aviso_notificaciones = "Calendario guardado. El aviso pendiente se reintentará automáticamente."
                 filas_pdf = [
                     {"fecha": date.fromisoformat(item["fecha"]).strftime("%d/%m/%Y"),
                      "escuela": item["escuela"], "actividad": item["actividad"]}
@@ -534,7 +605,7 @@ def cronogramas_page():
                     st.session_state["cronograma_publicacion_pendiente"] = None
                     st.rerun()
                 except Exception as exc:
-                    st.error(f"No fue posible registrar los avisos: {exc}")
+                    st.info("El aviso sigue pendiente. Reintentaremos automáticamente; tu calendario se conserva.")
         st.download_button(
             "Descargar PDF oficial",
             data=st.session_state["cronograma_pdf"],

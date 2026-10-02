@@ -488,7 +488,8 @@ def avisar_maestras_apoyo(publicacion_id, especialista, mes, agenda):
     usuarios = repo.usuarios()
     if usuarios is None or usuarios.empty:
         return 0
-    ws, headers, existentes = _leer("Avisos_Cronogramas", AVISOS_HEADERS)
+    ws = _hoja_avisos()
+    headers, existentes = _datos_avisos_cache()
     llaves = {(str(row.get("ID_Publicacion", "")), normalizar_texto(row.get("Destinatario", "")), normalizar_texto(row.get("Escuela", ""))) for row in existentes}
     nuevos = []
     now = datetime.now(ZONA).isoformat(timespec="seconds")
@@ -518,14 +519,28 @@ def avisar_maestras_apoyo(publicacion_id, especialista, mes, agenda):
             value_input_option="USER_ENTERED",
         ))
         _leer_avisos_cache.clear()
-        clear_cache("Avisos_Cronogramas")
+        _datos_avisos_cache.clear()
     return len(nuevos)
 
 
-@st.cache_data(ttl=20, show_spinner=False)
+@st.cache_resource(ttl=600, show_spinner=False)
+def _hoja_avisos():
+    return _ws("Avisos_Cronogramas", AVISOS_HEADERS)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _datos_avisos_cache():
+    values = retry_google(_hoja_avisos().get_all_values)
+    if not values:
+        return list(AVISOS_HEADERS), []
+    headers = values[0]
+    return headers, [dict(zip(headers, row + [""] * max(0, len(headers) - len(row)))) for row in values[1:]]
+
+
+@st.cache_data(ttl=60, show_spinner=False)
 def _leer_avisos_cache():
     """Reduce lecturas repetidas de la hoja durante los reruns de Streamlit."""
-    _, _, rows = _leer("Avisos_Cronogramas", AVISOS_HEADERS)
+    _, rows = _datos_avisos_cache()
     return rows
 
 
@@ -565,5 +580,5 @@ def marcar_avisos_leidos(ids_aviso):
     if updates:
         retry_google(lambda: ws.batch_update(updates, value_input_option="USER_ENTERED"))
         _leer_avisos_cache.clear()
-        clear_cache("Avisos_Cronogramas")
+        _datos_avisos_cache.clear()
     return len(updates) // 2

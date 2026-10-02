@@ -93,6 +93,7 @@ class CronogramasTest(unittest.TestCase):
         )
 
     def test_cronogramas_uses_service_account_directly_before_oauth(self):
+        cronogramas._worksheet.clear()
         worksheet = object()
         workbook = type("Workbook", (), {"worksheet": lambda self, name: worksheet})()
         client = type("Client", (), {"open_by_key": lambda self, key: workbook})()
@@ -104,6 +105,7 @@ class CronogramasTest(unittest.TestCase):
         oauth.assert_not_called()
 
     def test_cronogramas_falls_back_to_oauth_if_service_account_fails(self):
+        cronogramas._worksheet.clear()
         worksheet = object()
         workbook = type("Workbook", (), {"worksheet": lambda self, name: worksheet})()
         client = type("Client", (), {"open_by_key": lambda self, key: workbook})()
@@ -191,4 +193,3 @@ class CronogramasTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

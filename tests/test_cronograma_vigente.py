@@ -102,6 +102,7 @@ class CronogramaVigenteTest(unittest.TestCase):
                 {"Especialista": "Abril", "Fecha": "01/09/2026"},
                 {"Especialista": "Diego", "Fecha": "2023-01-03"}]
         cronogramas.meses_con_cronograma.clear()
+        cronogramas._registros_cache.clear()
         with patch.object(cronogramas, "_leer_registros", return_value=(ws, [], rows)):
             self.assertEqual(cronogramas.meses_con_cronograma("Abril"), ["2026-09", "2024-04"])
         ws.append_rows.assert_not_called()

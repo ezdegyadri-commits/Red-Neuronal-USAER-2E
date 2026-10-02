@@ -156,6 +156,7 @@ def fechas_habiles(mes: str) -> list[date]:
     return dias
 
 
+@st.cache_resource(ttl=600, show_spinner=False)
 def _worksheet():
     errores = []
     # Preferir la cuenta de servicio para evitar depender del token OAuth de
@@ -165,6 +166,8 @@ def _worksheet():
         libro = service_account_client().open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
         return retry_google(lambda: libro.worksheet("Registros"))
     except Exception as exc:
+        if "429" in str(exc) or "quota exceeded" in str(exc).lower():
+            raise  # Una cuota agotada no es un fallo de autenticación.
         errores.append(("cuenta de servicio", exc))
     try:
         libro = drive_oauth_google_client().open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
@@ -219,6 +222,13 @@ def _leer_registros():
     return ws, headers, registros
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _registros_cache():
+    """Una lectura compartida para agenda, historial y paneles de todo el equipo."""
+    _, headers, registros = _leer_registros()
+    return headers, registros
+
+
 def _iso_fecha(valor: object) -> str:
     texto = str(valor or "").strip().lstrip("'")
     if not texto:
@@ -233,7 +243,7 @@ def _iso_fecha(valor: object) -> str:
 
 @st.cache_data(ttl=20, show_spinner=False)
 def cargar_agenda(nombre: str, mes: str) -> dict[str, dict[str, str]]:
-    _, headers, registros = _leer_registros()
+    headers, registros = _registros_cache()
     if not {"Especialista", "Fecha", "Escuela", "Actividad"}.issubset(headers):
         raise RuntimeError("La pestaña Registros no tiene las columnas esperadas.")
     agenda = {}
@@ -255,7 +265,7 @@ def cargar_agenda(nombre: str, mes: str) -> dict[str, dict[str, str]]:
 @st.cache_data(ttl=20, show_spinner=False)
 def meses_con_cronograma(nombre: str) -> list[str]:
     """Meses propios conservados, sin limitar la recuperación a los últimos doce."""
-    _, _, registros = _leer_registros()
+    _, registros = _registros_cache()
     meses = set()
     for row in registros:
         if str(row.get("Especialista", "")).strip() != nombre:
@@ -284,7 +294,7 @@ def _versiones_vigentes(registros, mes):
 
 @st.cache_data(ttl=20, show_spinner=False)
 def cargar_agenda_global(mes: str) -> list[dict[str, str]]:
-    _, headers, registros = _leer_registros()
+    headers, registros = _registros_cache()
     if not {"Especialista", "Fecha", "Escuela"}.issubset(headers):
         raise RuntimeError("La pestaña Registros no tiene las columnas esperadas.")
     efectivos = {}
@@ -309,7 +319,7 @@ def cargar_agenda_global(mes: str) -> list[dict[str, str]]:
 @st.cache_data(ttl=30, show_spinner=False)
 def cargar_publicacion(publicacion_id: str) -> list[dict[str, str]]:
     """Lee las actividades de una versión publicada del cronograma sin alterar historial."""
-    _, headers, registros = _leer_registros()
+    headers, registros = _registros_cache()
     if "ID_Publicacion" not in headers:
         return []
     return [
@@ -354,7 +364,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             raise ValueError("Solo puede guardarse una actividad por día en el cronograma.")
         dias_vistos.add(fecha_iso)
         filas_nuevas.append({
-            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S"),
+            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S.%f"),
             "Especialista": nombre,
             "Área": area,
             "Modalidad": "Sede Base",
@@ -372,7 +382,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             raise ValueError("Agrega al menos una actividad antes de guardar.")
         # Un mes vaciado también es una versión: no reaparecen actividades viejas.
         filas_nuevas.append({
-            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S"),
+            "Marca temporal": datetime.now(ZoneInfo("America/Mexico_City")).strftime("%d/%m/%Y %H:%M:%S.%f"),
             "Especialista": nombre, "Área": area, "Fecha": f"{mes}-01",
             "Estado": "VACIO", "ID_Publicacion": publicacion_id,
         })
@@ -415,6 +425,7 @@ def guardar_agenda(nombre: str, area: str, mes: str, escuelas: list[str], agenda
             retry_google(lambda: ws.batch_update(columnas, value_input_option="RAW"))
         except Exception:
             aviso = "La agenda nueva se guardó; no se pudo marcar la versión anterior como sustituida. El historial se conserva y la vista usa la versión más reciente."
+    _registros_cache.clear()
     cargar_publicacion.clear()
     cargar_agenda.clear()
     meses_con_cronograma.clear()
