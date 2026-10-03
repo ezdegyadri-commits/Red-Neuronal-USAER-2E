@@ -1,0 +1,63 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{margin:0;font:16px/1.4 system-ui,sans-serif;color:#18313a;background:transparent}
+button{width:100%;min-height:50px;padding:12px 16px;border-radius:12px;border:1px solid #087e8b;background:#087e8b;color:#fff;font:inherit;cursor:pointer}
+button:disabled{opacity:.7;cursor:default}button:focus-visible{outline:3px solid #e7a83e;outline-offset:2px}
+p{font-size:14px;margin:8px 0 0}
+</style></head><body>
+<button id="access" type="button" disabled>Preparando acceso seguro…</button><p id="message" role="status" aria-live="polite"></p>
+<script>
+(() => {
+  const button=document.getElementById('access'), message=document.getElementById('message');
+  let args=null, busy=false, supported=false;
+  const target=(() => { try{return new URL(document.referrer).origin;}catch(_){return location.origin;} })();
+  const send=(type,fields={})=>parent.postMessage({isStreamlitMessage:true,type,...fields},target);
+  const resize=()=>send('streamlit:setFrameHeight',{height:message.textContent?110:60});
+  const decode=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)).buffer;
+  const encode=b=>b==null?null:btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  function options(input){
+    const p=structuredClone(input);p.challenge=decode(p.challenge);
+    if(p.user)p.user.id=decode(p.user.id);
+    for(const list of ['allowCredentials','excludeCredentials'])for(const c of p[list]||[])c.id=decode(c.id);
+    return p;
+  }
+  function pack(c){
+    const r=c.response, response={clientDataJSON:encode(r.clientDataJSON)};
+    for(const k of ['attestationObject','authenticatorData','signature','userHandle'])if(k in r)response[k]=encode(r[k]);
+    if(r.getTransports)response.transports=r.getTransports();
+    return {id:c.id,rawId:encode(c.rawId),type:c.type,response,
+      authenticatorAttachment:c.authenticatorAttachment,clientExtensionResults:c.getClientExtensionResults()};
+  }
+  function update(){
+    button.disabled=busy||!args||!supported;
+    button.textContent=busy?'Espera un momento…':args?.kind==='register'?'Confirmar con mi teléfono':'Entrar con huella o rostro';
+    resize();
+  }
+  window.addEventListener('message',event=>{
+    if(event.source!==parent||event.origin!==target||event.data?.type!=='streamlit:render')return;
+    const next=event.data.args;
+    if(args?.request!==next.request)message.textContent='';
+    args=next;update();
+  });
+  button.addEventListener('click',async()=>{
+    if(busy||!supported||!args)return;
+    busy=true;const current=args;message.textContent='';update();
+    try{
+      const publicKey=options(current.options);
+      const credential=current.kind==='register'?await navigator.credentials.create({publicKey}):await navigator.credentials.get({publicKey});
+      if(!credential)throw Error('cancelled');
+      send('streamlit:setComponentValue',{value:{request:current.request,credential:pack(credential)},dataType:'json'});
+      message.textContent='Verificando tu acceso…';
+    }catch(error){
+      message.textContent=error.name==='InvalidStateError'?'Esta llave ya existe. Puedes usarla al entrar.':'No se completó. Puedes entrar con usuario y contraseña.';
+      send('streamlit:setComponentValue',{value:{request:current.request,error:'cancelled'},dataType:'json'});
+    }finally{busy=false;update();}
+  });
+  send('streamlit:componentReady',{apiVersion:1});
+  (async()=>{
+    try{supported=Boolean(isSecureContext&&window.PublicKeyCredential&&await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());}catch(_){supported=false;}
+    if(!supported)message.textContent='Usa usuario y contraseña. Este navegador no ofrece acceso seguro del dispositivo.';
+    update();
+  })();
+})();
+</script></body></html>

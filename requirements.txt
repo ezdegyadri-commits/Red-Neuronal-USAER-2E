@@ -13,3 +13,4 @@ reportlab
 python-docx
 pytesseract
 pymupdf
+webauthn==3.0.1

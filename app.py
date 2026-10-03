@@ -6,6 +6,7 @@ from services.asignaciones import es_especialista, puede_dar_alta_alumnos
 from services.cronogramas import perfil_especialista
 from ui.theme import inject
 from ui.mobile_install import install_metadata, installation_help
+from ui.passkeys import configure_passkey
 from ui.auth import login, logout
 from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page, documentos_page, direccion_page, visitas_page, derivacion_page
 from ui.oficios import oficios_comision_page
@@ -38,6 +39,7 @@ with st.sidebar:
     st.markdown("<div class='brand'><h1>USAER 02E</h1><p>Gestión integral de intervención educativa</p></div>",unsafe_allow_html=True)
     st.caption(f"Sesión: {st.session_state.get('nombre','')}")
     installation_help()
+    configure_passkey()
     st.divider()
     menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos"]
     if gestor_tramites() or puede_solicitar():
