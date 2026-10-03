@@ -1,6 +1,8 @@
 """Gestión cronológica del Anexo IV por alumno y escuela."""
 
 from datetime import date
+import hashlib
+import inspect
 
 import pandas as pd
 import streamlit as st
@@ -14,6 +16,79 @@ from services.asignaciones import es_direccion, escuelas_asignadas
 from services.expedientes import sugerencias_de_alumno
 from ui.components import hero
 from utils.text import normalizar_texto
+from services.sugerencias_fisicas import leer_sugerencia
+
+
+def _cargar_hoja(prefijo):
+    abierta = st.session_state.get(prefijo + '_carga', False)
+    etiqueta = 'Ocultar carga de hoja física' if abierta else 'Cargar hoja física entregada a padres'
+    if st.button(etiqueta, key=prefijo + '_abrir_carga'):
+        st.session_state[prefijo + '_carga'] = not abierta
+    if not st.session_state.get(prefijo + '_carga'):
+        return
+    limite = {'max_upload_size': 8} if 'max_upload_size' in inspect.signature(st.file_uploader).parameters else {}
+    archivo = st.file_uploader('Foto de la hoja', type=['png', 'jpg', 'jpeg', 'webp'], key=prefijo + '_archivo',
+                               help='Fotos de hasta 8 MB. Revisa la lectura antes de guardar.', **limite)
+    if archivo is None:
+        return
+    st.image(archivo, caption='Original para cotejar', width=450)
+    st.caption('Lectura local, sin enviar la hoja a servicios externos. Revisa especialmente la letra manuscrita.')
+    st.checkbox('Reemplazar el texto actual con esta lectura', key=prefijo + '_reemplazar')
+    if st.button('Leer y pasar al borrador', key=prefijo + '_leer'):
+        if str(st.session_state.get(prefijo + '_texto', '')).strip() and not st.session_state.get(prefijo + '_reemplazar', False):
+            st.info('El texto actual se conserva. Marca reemplazar si deseas sustituirlo.')
+            return
+        huella = hashlib.sha256(archivo.getvalue()).hexdigest()
+        clave = prefijo + '_lectura_' + huella
+        try:
+            with st.spinner('Leyendo la hoja…'):
+                if clave not in st.session_state:
+                    st.session_state[clave] = leer_sugerencia(archivo.getvalue(), archivo.type)
+                st.session_state[prefijo + '_texto'] = st.session_state[clave]
+            st.success('Texto listo para revisar. Aún no se ha guardado.')
+        except Exception:
+            st.warning('No se pudo leer la hoja. Prueba con una foto más cercana.')
+
+
+def _sugerencias_grupales(alumnos, escuelas, autor):
+    escuela = st.selectbox('Escuela del grupo', escuelas, key='sug_grupal_escuela')
+    disponibles = alumnos_de_escuela(alumnos, escuela)
+    grupos = sorted({f"{fila.get('Grado', '')} {fila.get('Grupo', '')}".strip()
+                     for fila in disponibles.to_dict('records') if str(fila.get('Grado', '')).strip()})
+    if not grupos:
+        st.info('No hay grupos disponibles en esta escuela.')
+        return
+    grupo = st.selectbox('Grado y grupo', grupos, key='sug_grupal_grupo')
+    prefijo = 'sug_grupal_' + hashlib.sha256(f'{autor}|{escuela}|{grupo}'.encode()).hexdigest()[:18]
+    _cargar_hoja(prefijo)
+    area = st.text_input('Área / especialidad', key=prefijo + '_area')
+    motivo = st.text_area('Motivo de la sugerencia grupal', key=prefijo + '_motivo')
+    texto = st.text_area('Sugerencias para el grupo', height=200, key=prefijo + '_texto')
+    fecha = st.date_input('Fecha de entrega', value=date.today(), key=prefijo + '_fecha')
+    seguimiento = st.text_input('Plazo o fecha de seguimiento', key=prefijo + '_seguimiento')
+    st.caption('Revisa el texto y el grupo antes de guardar. Se compartirá solo en esta escuela y grupo.')
+    if st.button('Guardar sugerencia grupal', type='primary', key=prefijo + '_guardar'):
+        if not texto.strip():
+            st.warning('Escribe o revisa la sugerencia antes de guardarla.')
+        else:
+            try:
+                repo.save_anexo4({'ID_Alumno': '', 'Nombre_Alumno': 'Grupo ' + grupo, 'Grado_Grupo': grupo,
+                    'Escuela': escuela, 'Servicio_EE': SERVICE_NAME, 'Sugerencias_Area': area.strip(),
+                    'Motivo': motivo.strip(), 'Sugerencias': texto.strip(), 'Fecha_Elaboracion': str(fecha),
+                    'Fecha_Seguimiento': seguimiento.strip(), 'Quien_Brinda_Sugerencias': autor,
+                    'Nivel_Cumplimiento_Resultados': 'Pendiente de revisión', 'Estado': 'ACTIVO'})
+                st.success('Sugerencia grupal guardada en la base central.')
+            except Exception:
+                st.error('No se pudo guardar. Tu texto permanece en el borrador.')
+    todos = repo.anexo4()
+    if not todos.empty and {'Escuela', 'Nombre_Alumno'}.issubset(todos.columns):
+        filas = todos.loc[todos['Escuela'].map(normalizar_texto).eq(normalizar_texto(escuela)) & todos['Nombre_Alumno'].eq('Grupo ' + grupo)]
+        if 'Estado' in filas:
+            filas = filas.loc[~filas['Estado'].astype(str).str.upper().isin({'ANULADO', 'ELIMINADO', 'DUPLICADO', 'RETIRADO'})]
+        st.dataframe(filas, hide_index=True, use_container_width=True)
+        if not filas.empty:
+            st.download_button('Descargar sugerencias grupales PDF', anexo4_pdf({'Nombre_Completo': 'Grupo ' + grupo, 'Nombre_Escuela': escuela, 'Grado': grupo}, filas),
+                               'Sugerencias_grupales.pdf', 'application/pdf', key=prefijo + '_pdf')
 
 
 def _school_code(value):
@@ -61,6 +136,17 @@ def anexo4_page(df):
         return
     if df is None or df.empty:
         st.info("No hay alumnos disponibles en tus escuelas asignadas.")
+        return
+
+    col_ind, col_grupo = st.columns(2)
+    with col_ind:
+        if st.button('Sugerencias individuales', key='sug_modo_individual'):
+            st.session_state['sug_modo'] = 'individual'
+    with col_grupo:
+        if st.button('Sugerencias grupales', key='sug_modo_grupal'):
+            st.session_state['sug_modo'] = 'grupal'
+    if st.session_state.get('sug_modo') == 'grupal':
+        _sugerencias_grupales(df, escuelas_permitidas, nombre_usuario)
         return
 
     if es_direccion(rol):
@@ -118,7 +204,8 @@ def anexo4_page(df):
     st.caption(f"{grado_grupo or 'Grado/grupo no capturado'} · {escuela_alumno} · {len(activas)} sugerencia(s) activa(s)")
     if any(str(valor).strip().startswith("Grupo ") for valor in activas.get("Nombre_Alumno", pd.Series(dtype=str)).fillna("")):
         st.caption("Las sugerencias de contexto grupal se comparten con los alumnos del mismo grupo y escuela; una corrección se reflejará en esas hojas.")
-    key_prefix = f"anexo4_nueva_{id_alumno}"
+    autor_clave = hashlib.sha256(nombre_usuario.encode()).hexdigest()[:12]
+    key_prefix = f"anexo4_nueva_{autor_clave}_{id_alumno}"
     if st.session_state.pop(f"{key_prefix}_reset", False):
         for suffix, value in (("area", ""), ("motivo", ""), ("texto", ""), ("seguimiento", "")):
             st.session_state[f"{key_prefix}_{suffix}"] = value
@@ -128,6 +215,7 @@ def anexo4_page(df):
     fecha = date.today()
     guardar = False
     with st.expander("➕ Añadir nueva sugerencia", expanded=True):
+        _cargar_hoja(key_prefix)
         st.caption(
             "Escribe una sugerencia para este alumno. Al guardarla aparecerá en la misma hoja "
             "que consulta la maestra de apoyo y el equipo especialista."
@@ -271,5 +359,4 @@ def anexo4_page(df):
                 st.rerun()
             except Exception as ex:
                 st.error(f"No fue posible reactivar la sugerencia: {ex}")
-
 
