@@ -22,6 +22,7 @@ from services.tramites import gestor as gestor_tramites, puede_solicitar
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
+# Instaladores móviles 1.0.0 disponibles en ingreso y barra lateral.
 install_metadata()
 
 if not st.session_state.get("autenticado"):
