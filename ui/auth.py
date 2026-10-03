@@ -3,6 +3,7 @@ import streamlit as st
 from data.repository import usuarios
 from services.asignaciones import escuelas_asignadas
 from utils.text import normalizar_texto
+from ui.mobile_install import installation_help
 
 
 def login():
@@ -41,6 +42,7 @@ def login():
             })
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
+    installation_help()
 
 
 def logout(key="cerrar_sesion"):
