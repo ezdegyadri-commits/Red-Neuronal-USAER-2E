@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8">
+<style>
+body{margin:0;font:16px system-ui,sans-serif;color:#18313a}
+button{font:inherit;background:#087e8b;color:white;border:0;border-radius:12px;padding:13px 18px;min-height:48px;cursor:pointer;width:100%}
+button:focus-visible{outline:3px solid #e7a83e;outline-offset:2px}
+</style>
+<button id="install" type="button">Cómo instalar en mi teléfono</button>
+<script>
+(() => {
+  const button = document.getElementById('install');
+  let host;
+  try { host = window.parent; void host.document.head; }
+  catch (_) { button.textContent = 'Usa el menú del navegador para instalar'; button.disabled = true; return; }
+  const doc = host.document;
+  // Do not write metadata into a cross-origin Community Cloud wrapper.
+  if (host.location.origin !== window.location.origin && window.location.origin !== 'null') return;
+  function meta(name, content) {
+    let item = doc.head.querySelector(`meta[name="${name}"]`);
+    if (!item) { item = doc.createElement('meta'); item.name = name; doc.head.append(item); }
+    item.content = content;
+  }
+  function link(rel, path) {
+    let item = doc.head.querySelector(`link[data-usaer="${rel}"]`);
+    if (!item) { item = doc.createElement('link'); item.rel = rel; item.dataset.usaer = rel; doc.head.append(item); }
+    item.href = new URL(path, host.location.origin).href;
+  }
+  if (!host.__usaerInstall) {
+    host.__usaerInstall = {prompt: null};
+    host.addEventListener('beforeinstallprompt', event => {
+      event.preventDefault(); host.__usaerInstall.prompt = event;
+      host.dispatchEvent(new Event('usaer-install-state'));
+    });
+    host.addEventListener('appinstalled', () => {
+      host.__usaerInstall.prompt = null;
+      host.__usaerInstall.installed = true;
+      host.dispatchEvent(new Event('usaer-install-state'));
+    });
+    link('manifest', '/app/static/usaer-manifest.json');
+    link('apple-touch-icon', '/app/static/usaer-icon-180.png');
+    meta('theme-color', '#087E8B');
+    meta('apple-mobile-web-app-capable', 'yes');
+    meta('apple-mobile-web-app-title', 'USAER 02E');
+    meta('apple-mobile-web-app-status-bar-style', 'default');
+  }
+  function installed() {
+    return host.matchMedia('(display-mode: standalone)').matches ||
+      host.navigator.standalone === true || host.__usaerInstall.installed;
+  }
+  function update() {
+    button.disabled = Boolean(installed());
+    button.textContent = installed() ? 'Ya estás usando la aplicación' :
+      host.__usaerInstall.prompt ? 'Instalar USAER 02E' : 'Cómo instalar en mi teléfono';
+  }
+  const controller = new AbortController();
+  host.addEventListener('usaer-install-state', update, {signal: controller.signal});
+  window.addEventListener('pagehide', () => controller.abort(), {once: true});
+  button.addEventListener('click', async () => {
+    const request = host.__usaerInstall.prompt;
+    if (request) {
+      host.__usaerInstall.prompt = null;
+      button.disabled = true;
+      try { await request.prompt(); await request.userChoice; }
+      catch (_) { /* Manual instructions remain available. */ }
+      finally { update(); }
+      return;
+    }
+    let dialog = doc.getElementById('usaer-install-help');
+    if (!dialog) {
+      dialog = doc.createElement('dialog'); dialog.id = 'usaer-install-help';
+      dialog.setAttribute('aria-labelledby', 'usaer-install-title');
+      dialog.style.cssText = 'max-width:440px;width:calc(100% - 48px);box-sizing:border-box;border:1px solid #d5e2e4;border-radius:18px;padding:24px;background:#fff;color:#18313a;font:16px/1.5 system-ui;';
+      dialog.innerHTML = '<h2 id="usaer-install-title" style="font-size:22px;margin-top:0">Instalar USAER 02E</h2><p><strong>iPhone:</strong> en Safari, toca Compartir y Añadir a pantalla de inicio. Activa Abrir como app si aparece.</p><p><strong>Android:</strong> en Chrome, abre el menú y elige Instalar aplicación o Añadir a pantalla de inicio.</p><p>Si abriste el enlace desde WhatsApp, ábrelo primero en Safari o Chrome.</p><button type="button" style="font:inherit;min-height:48px;background:#087e8b;color:#fff;border:0;border-radius:12px;padding:12px 24px">Entendido</button>';
+      dialog.querySelector('button').addEventListener('click', () => dialog.close());
+      doc.body.append(dialog);
+    }
+    dialog.showModal();
+  });
+  update();
+})();
+</script></html>
