@@ -13,7 +13,7 @@ class MobileInstallationTest(unittest.TestCase):
         self.assertEqual(manifest['display'], 'standalone')
         self.assertFalse(manifest['prefer_related_applications'])
         for icon in manifest['icons']:
-            self.assertTrue(icon['src'].startswith('/app/static/'))
+            self.assertNotIn('/', icon['src'])
             self.assertTrue((ROOT / 'static' / Path(icon['src']).name).exists())
 
     def test_no_credentials_or_private_cache(self):

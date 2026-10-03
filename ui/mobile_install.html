@@ -9,8 +9,19 @@ button:focus-visible{outline:3px solid #e7a83e;outline-offset:2px}
 <script>
 (() => {
   const button = document.getElementById('install');
-  let host;
-  try { host = window.parent; void host.document.head; }
+  let host, app;
+  try {
+    app = window.parent; host = app; void app.document.head;
+    // Community Cloud uses a same-origin /~/+/ frame. Install metadata must
+    // live in the top document, while assets must resolve under the app frame.
+    while (host.parent !== host) {
+      try {
+        if (host.parent.location.origin !== app.location.origin) break;
+        void host.parent.document.head;
+        host = host.parent;
+      } catch (_) { break; }
+    }
+  }
   catch (_) { button.textContent = 'Usa el menú del navegador para instalar'; button.disabled = true; return; }
   const doc = host.document;
   // Do not write metadata into a cross-origin Community Cloud wrapper.
@@ -23,7 +34,7 @@ button:focus-visible{outline:3px solid #e7a83e;outline-offset:2px}
   function link(rel, path) {
     let item = doc.head.querySelector(`link[data-usaer="${rel}"]`);
     if (!item) { item = doc.createElement('link'); item.rel = rel; item.dataset.usaer = rel; doc.head.append(item); }
-    item.href = new URL(path, host.location.origin).href;
+    item.href = new URL(path, app.location.href).href;
   }
   if (!host.__usaerInstall) {
     host.__usaerInstall = {prompt: null};
@@ -36,8 +47,8 @@ button:focus-visible{outline:3px solid #e7a83e;outline-offset:2px}
       host.__usaerInstall.installed = true;
       host.dispatchEvent(new Event('usaer-install-state'));
     });
-    link('manifest', '/app/static/usaer-manifest.json');
-    link('apple-touch-icon', '/app/static/usaer-icon-180.png');
+    link('manifest', './app/static/usaer-manifest.json');
+    link('apple-touch-icon', './app/static/usaer-icon-180.png');
     meta('theme-color', '#087E8B');
     meta('apple-mobile-web-app-capable', 'yes');
     meta('apple-mobile-web-app-title', 'USAER 02E');
