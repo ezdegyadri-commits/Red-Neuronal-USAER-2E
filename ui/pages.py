@@ -16,6 +16,7 @@ from documents.anexos import anexo3_html, anexo3_pdf, anexo4_html, anexo4_pdf, a
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from documents.oficios import generar_oficio_comision
 from ui.components import hero, card
+from documents.visitas import visita_pdf
 from utils.ids import expediente_id
 from utils.text import normalizar_texto
 
@@ -2673,7 +2674,9 @@ def visitas_page(df):
         st.session_state.get("rol", "")
     ).strip()
     es_director = es_direccion(rol_usuario)
-    especialista_acta = es_especialista(rol_usuario)
+    from services.cronogramas import perfil_especialista
+    perfil_visita = perfil_especialista(nombre_usuario, rol_usuario)
+    especialista_acta = es_especialista(rol_usuario) or bool(perfil_visita and perfil_visita['area'] != 'Dirección')
 
     escuelas_permitidas = escuelas_asignadas(
         nombre_usuario,
@@ -2681,6 +2684,9 @@ def visitas_page(df):
     )
 
     opciones_escuela = list(escuelas_permitidas)
+    if perfil_visita:
+        escuelas_permitidas = perfil_visita['escuelas']
+        opciones_escuela = list(escuelas_permitidas)
     if es_director:
         opciones_escuela.append("Sede USAER")
 
@@ -2997,7 +3003,9 @@ def visitas_page(df):
 
     rol_n = normalizar_texto(rol_usuario)
 
-    if "PSICOLOG" in rol_n:
+    if perfil_visita:
+        especialidad = f"Área de {perfil_visita['area']} - USAER 02-E"
+    elif "PSICOLOG" in rol_n:
         especialidad = "Área de Psicología - USAER 02-E"
     elif "COMUNICACI" in rol_n:
         especialidad = "Área de Comunicación - USAER 02-E"
@@ -3104,6 +3112,7 @@ def visitas_page(df):
 
     if tipo_acta in {"Reunión de trabajo", "Junta de USAER"}:
         firmas_reunion = _firmantes_reunion_trabajo(nombre_usuario, especialidad)
+        firmantes_pdf = firmas_reunion
         firmas_html = "<tr>" + "".join(firma(nombre, cargo) for nombre, cargo in firmas_reunion) + "</tr>"
     elif es_director:
         firma_director_usaer = firma(
@@ -3115,12 +3124,18 @@ def visitas_page(df):
             "Supervisora de la Zona 01",
         )
         if es_sede_usaer:
+            firmantes_pdf = [('Psic. Edgar Adrián Yam Briceño MD', 'Director de la USAER 02-E'),
+                             ('Dra. Diana Durán González', 'Supervisora de la Zona 01')]
             firmas_html = (
                 "<tr>"
                 f"{firma_director_usaer}{firma_supervisora}"
                 "</tr>"
             )
         else:
+            firmantes_pdf = [(datos_escuela['director'], datos_escuela['cargo_director'] + ' de la primaria'),
+                             (datos_escuela['apoyo'], 'Maestra(o) de apoyo'),
+                             ('Psic. Edgar Adrián Yam Briceño MD', 'Director de la USAER 02-E'),
+                             ('Dra. Diana Durán González', 'Supervisora de la Zona 01')]
             firmas_html = (
                 "<tr>"
                 f"{firma(datos_escuela['director'], datos_escuela['cargo_director'] + ' de la primaria')}"
@@ -3151,6 +3166,12 @@ ___________________________<br><b>{escape(nombre_usuario)}</b><br>
 </td>
 </tr>
 """
+
+    if tipo_acta not in {'Reunión de trabajo', 'Junta de USAER'} and not es_director:
+        firmantes_pdf = [(datos_escuela['director'], datos_escuela['cargo_director'] + ' de la primaria'),
+                         (datos_escuela['apoyo'], 'Maestra(o) de apoyo'),
+                         ('Psic. Edgar Adrián Yam Briceño MD', 'Director de la USAER 02-E'),
+                         (nombre_usuario, especialidad)]
 
     inicio_ciclo = fecha_visita.year if fecha_visita.month >= 9 else fecha_visita.year - 1
     ciclo_constancia = SCHOOL_YEAR if generar_acta else f"{inicio_ciclo} – {inicio_ciclo + 1}"
@@ -3389,15 +3410,18 @@ Otros: {detalle("Otros")}<br>
     )
 
     st.download_button(
-        label="🖨️ Descargar Constancia para Imprimir",
-        data=html_impresion,
+        label="Descargar acta en PDF",
+        data=visita_pdf(titulo=titulo_acta, folio=id_visita, escuela=escuela_seleccionada,
+                        lugar=lugar_acta, fecha=fecha_visita.strftime('%d/%m/%Y'),
+                        ciclo=ciclo_constancia, especialidad=especialidad, motivos=motivos,
+                        detalles=detalles_motivos, descripcion=descripcion_actividad, firmantes=firmantes_pdf),
         file_name=(
             f"Constancia_Visita_"
             f"{escuela_seleccionada.replace(' ', '_')}_"
             f"{fecha_visita.strftime('%Y%m%d')}_"
-            f"{re.sub(r'[^A-Za-z0-9_-]', '_', str(id_visita))}.html"
+            f"{re.sub(r'[^A-Za-z0-9_-]', '_', str(id_visita))}.pdf"
         ),
-        mime="text/html",
+        mime="application/pdf",
         use_container_width=True,
     )
 

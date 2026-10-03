@@ -7,6 +7,7 @@ from services.cronogramas import perfil_especialista
 from ui.theme import inject
 from ui.mobile_install import install_metadata, installation_help
 from ui.passkeys import configure_passkey
+from ui.escritura import activar_revision
 from ui.auth import login, logout
 from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page, documentos_page, direccion_page, visitas_page, derivacion_page
 from ui.oficios import oficios_comision_page
@@ -28,6 +29,8 @@ install_metadata()
 if not st.session_state.get("autenticado"):
     login()
     st.stop()
+
+activar_revision()
 
 cabecera_izquierda, cabecera_derecha = st.columns([5, 1])
 with cabecera_derecha:
