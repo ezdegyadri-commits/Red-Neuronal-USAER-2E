@@ -33,6 +33,7 @@ from services.horarios import (
     guardar_restricciones_lote,
     marcar_avisos_leidos,
     normalizar_tabla_horario,
+    actualizar_bloques_borrador,
 )
 from utils.text import normalizar_texto
 
@@ -758,13 +759,13 @@ def _persistir_plantilla(prefijo, nombre, escuela):
     widgets = {}
     for key, value in st.session_state.items():
         if "|" in key and not any(key.endswith(f"_{st.session_state.get(f'{prefijo}_editor_version', 0)}_{campo}")
-                                 for campo in ("modo", "grupo", "alumnos", "actividad", "modalidad", "espacio", "ampliar")):
+                                 for campo in ("modo", "grupo", "alumnos", "actividad", "modalidad", "espacio", "ampliar", "bloque_inicio", "bloque_fin", "semana")):
             continue
         if key.startswith(prefijo + "_") and (
                 key in {f"{prefijo}_inicio", f"{prefijo}_fin", f"{prefijo}_descanso_inicio",
                         f"{prefijo}_descanso_fin", f"{prefijo}_dia", f"{prefijo}_modulo"}
                 or key.startswith(f"{prefijo}_dur_")
-                or key.endswith(("_modo", "_grupo", "_alumnos", "_actividad", "_modalidad", "_espacio", "_ampliar"))):
+                or key.endswith(("_modo", "_grupo", "_alumnos", "_actividad", "_modalidad", "_espacio", "_ampliar", "_bloque_inicio", "_bloque_fin", "_semana"))):
             widgets[key[len(prefijo) + 1:]] = value.isoformat() if isinstance(value, time) else value
     datos = {"widgets": widgets, "bloques": st.session_state.get(f"{prefijo}_filas", {}),
              "editor_version": st.session_state.get(f"{prefijo}_editor_version", 0)}
@@ -841,9 +842,16 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
         except ValueError as exc:
             st.error(str(exc))
             return
+    borrador = st.session_state.setdefault(clave_filas, {})
+    # Las franjas editadas se muestran y se imprimen aunque no coincidan con
+    # la duración inicial. No se elimina ningún bloque al cambiar configuración.
+    from services.horarios import _hora_minutos
+    for dia in DIAS:
+        ocupados=[(str(r['Inicio']),str(r['Fin'])) for r in borrador.values() if r.get('Dia')==dia]
+        libres=[f for f in franjas_por_dia[dia] if f in pausas or not any(_hora_minutos(f[0])<_hora_minutos(o[1]) and _hora_minutos(o[0])<_hora_minutos(f[1]) for o in ocupados)]
+        franjas_por_dia[dia]=sorted(set(libres+ocupados))
     franjas = sorted({franja for diario in franjas_por_dia.values() for franja in diario})
     st.session_state[clave_franjas] = franjas
-    borrador = st.session_state.setdefault(clave_filas, {})
     propia = (horarios_equipo.loc[horarios_equipo["Maestra"].astype(str).eq(nombre)].copy()
               if not horarios_equipo.empty and "Maestra" in horarios_equipo else pd.DataFrame())
     if not propia.empty and st.button("Cargar mi horario vigente para editarlo en esta plantilla", key=f"{prefijo}_cargar"):
@@ -898,10 +906,10 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     if not choques.empty:
         st.error("Se detectaron choques con materias u otros bloques. Revisa la tabla antes de guardar.")
         st.dataframe(choques, hide_index=True, width="stretch")
-    fuera = [row for row in filas if (str(row.get("Inicio", "")), str(row.get("Fin", "")))
-             not in franjas_por_dia.get(row.get("Dia"), [])]
+    fuera = [row for row in filas if _hora_minutos(row['Inicio'])<_hora_minutos(inicio) or _hora_minutos(row['Fin'])>_hora_minutos(fin)
+             or (descanso_inicio and descanso_fin and _hora_minutos(row['Inicio'])<_hora_minutos(descanso_fin) and _hora_minutos(descanso_inicio)<_hora_minutos(row['Fin']))]
     if fuera:
-        st.warning(f"Hay {len(fuera)} bloque(s) de un diseño anterior fuera de las franjas visibles; se conservan en el borrador.")
+        st.warning(f"Hay {len(fuera)} bloque(s) fuera de la jornada o dentro del descanso. Edítalos; tu borrador se conserva.")
         st.dataframe(pd.DataFrame(fuera), hide_index=True, width="stretch")
 
     st.markdown("#### Capturar o editar un espacio")
@@ -910,15 +918,23 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     if not franjas_dia:
         st.info("Este día solo tiene descanso; ajusta la jornada para añadir módulos.")
         return
-    if st.session_state.get(f"{prefijo}_modulo") not in franjas_dia:
+    opciones_modulo=[*franjas_dia,('Nuevo bloque','')]
+    if st.session_state.get(f"{prefijo}_modulo") not in opciones_modulo:
         st.session_state.pop(f"{prefijo}_modulo", None)
-    franja_elegida = st.selectbox("Módulo", franjas_dia,
-                                format_func=lambda x: f"{x[0]} – {x[1]}", key=f"{prefijo}_modulo")
+    franja_elegida = st.selectbox("Módulo", opciones_modulo,
+                                format_func=lambda x: 'Nuevo bloque con horario libre' if not x[1] else f"{x[0]} – {x[1]}", key=f"{prefijo}_modulo")
     desde, hasta = franja_elegida
     clave = f"{dia_elegido}|{desde}|{hasta}"
     actual = borrador.get(clave, {})
     version = st.session_state.get(f"{prefijo}_editor_version", 0)
     clave_editor = f"{prefijo}_{clave}_{version}"
+    c_desde,c_hasta=st.columns(2)
+    desde_editado=c_desde.text_input('Inicio del bloque · HH:MM',value=desde if hasta else inicio.strftime('%H:%M'),key=clave_editor+'_bloque_inicio',**cambio)
+    hasta_editado=c_hasta.text_input('Fin del bloque · HH:MM',value=hasta if hasta else fin.strftime('%H:%M'),key=clave_editor+'_bloque_fin',**cambio)
+    semana=st.checkbox('La misma actividad de lunes a viernes, en este horario',key=clave_editor+'_semana',**cambio)
+    dias_destino=list(DIAS) if semana else [dia_elegido]
+    if semana:st.caption('Se repiten también el grupo o alumnos, la modalidad y el espacio. Se revisan las horas y choques de cada día.')
+    reemplazar=st.checkbox('Reemplazar otros bloques que tengan exactamente este horario',key=clave_editor+'_reemplazar',help='No reemplaza bloques con horas distintas ni elimina registros publicados.') if semana else False
     modo_inicial = 1 if str(actual.get("ID_Alumnos", "")).strip() else (0 if str(actual.get("Grupo", "")).strip() else 2)
     modo = st.radio("Qué atenderás en este espacio", ["Grado/grupo", "Alumno(s)", "Actividad libre"],
                     index=modo_inicial, horizontal=True, key=f"{clave_editor}_modo", **cambio)
@@ -971,25 +987,26 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
                                  if str(row.get("ID_Alumno", "")) in set(ids) and _grupo_alumno(row)})
         grupo_candidato = ", ".join(grupos_alumnos)
     candidato = {
-        "Dia": dia_elegido, "Inicio": desde, "Fin": hasta,
+        "Dia": dia_elegido, "Inicio": desde_editado, "Fin": hasta_editado,
         "Grupo": grupo_candidato,
         "ID_Alumnos": ",".join(ids) or str(actual.get("ID_Alumnos", "")),
         "Actividad": actividad.strip() or str(actual.get("Actividad", "")), "Maestra": nombre,
     }
-    filas_en_vivo = [row for row in filas if not (row.get("Dia") == dia_elegido and row.get("Inicio") == desde and row.get("Fin") == hasta)]
     if candidato["Actividad"] or grupo or ids:
-        filas_en_vivo.append(candidato)
         try:
+            vista_borrador=actualizar_bloques_borrador(borrador,clave,candidato,dias_destino,inicio,fin,descanso_inicio,descanso_fin,reemplazar)
+            filas_en_vivo=list(vista_borrador.values())
             choques_en_vivo = detectar_choques(filas_en_vivo, restricciones, horarios_equipo)
-            horario_objetivo = f"{desde}–{hasta}"
-            conflictos_bloque = [r for r in choques_en_vivo.to_dict("records") if r.get("Día") == dia_elegido and str(r.get("Horario propuesto", "")).replace(" ", "").replace("-", "–") == horario_objetivo]
+            conflictos_bloque = [r for r in choques_en_vivo.to_dict("records") if r.get("Día") in dias_destino]
             if conflictos_bloque:
                 st.error("⚠️ Conflicto de horario en este módulo. Ajusta día/hora o revisa los horarios de referencia antes de guardar.")
                 st.dataframe(pd.DataFrame(conflictos_bloque), hide_index=True, width="stretch")
             else:
                 st.success("✓ Sin choque detectado en este módulo.")
-        except Exception as exc:
-            st.warning(f"No se pudo validar el módulo en vivo: {exc}")
+        except ValueError as exc:
+            st.info(str(exc))
+        except Exception:
+            st.warning('No se pudo verificar el bloque. Tu borrador se conserva.')
     c_guardar, c_vaciar = st.columns(2)
     with c_guardar:
         if st.button("Añadir o actualizar este bloque", type="primary", key=f"{prefijo}_guardar_{clave}"):
@@ -1003,16 +1020,21 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
                 por_id = {str(row.get("ID_Alumno", "")): row for row in visibles.to_dict("records")}
                 elegidos = [por_id[x] for x in ids]
                 grupos = sorted({_grupo_alumno(row) for row in elegidos if _grupo_alumno(row)})
-                borrador[clave] = {
-                    "Dia": dia_elegido, "Inicio": desde, "Fin": hasta,
+                bloque = {
+                    "Dia": dia_elegido, "Inicio": desde_editado, "Fin": hasta_editado,
                     "Grupo": grupo or ", ".join(grupos),
                     "Alumnos": "; ".join(str(row.get("Nombre_Completo", "")) for row in elegidos),
                     "ID_Alumnos": ",".join(ids),
                     "Actividad": actividad.strip() or ("Atención individual" if len(ids) == 1 else "Atención de apoyo"),
                     "Modalidad": modalidad, "Espacio": espacio, "Maestra": nombre,
                 }
-                _persistir_plantilla(prefijo, nombre, escuela)
-                st.rerun()
+                try:
+                    actualizado=actualizar_bloques_borrador(borrador,clave,bloque,dias_destino,inicio,fin,descanso_inicio,descanso_fin,reemplazar)
+                    st.session_state[clave_filas]=actualizado
+                    st.session_state[f'{prefijo}_editor_version']=version+1
+                    _persistir_plantilla(prefijo, nombre, escuela)
+                    st.rerun()
+                except ValueError as exc:st.info(str(exc))
     with c_vaciar:
         if actual and st.button("Quitar este bloque del borrador", key=f"{prefijo}_vaciar_{clave}"):
             borrador.pop(clave, None)

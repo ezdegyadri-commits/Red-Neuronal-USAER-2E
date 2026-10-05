@@ -16,11 +16,16 @@ class CurriculoTests(unittest.TestCase):
         self.assertEqual({s['organismo'] for s in data['fuentes']},{'SEP'})
         for r in data['registros']:
             self.assertGreater(r['pagina_pdf'],0);self.assertTrue(r['pda']);self.assertTrue(r['contenido'])
-    def test_no_mezcla_grados(self):
+    def test_permite_referentes_de_otro_grado_sin_cambiar_padron(self):
         opts=opciones(documento(),'Lenguajes')
-        self.assertTrue(opts);self.assertEqual({r['grado'] for r in opts},{1})
+        self.assertTrue(opts);self.assertEqual({r['grado'] for r in opts},set(range(1,7)))
         other=next(r for r in catalogo()['registros'] if r['grado']==2 and r['campo']=='Lenguajes')
-        with self.assertRaises(ValueError):vincular(documento(),'Lenguajes',['Inclusión'],[other['id']])
+        doc=vincular(documento(),'Lenguajes',['Inclusión'],[other['id']],adaptaciones={other['id']:{'pda':'Identifica palabras con apoyo visual','contenido':'Lectura con apoyos'}})
+        self.assertEqual(doc['datos']['Alumnos'][0]['Grado'],'1')
+        self.assertEqual(doc['metadatos']['curriculo']['registros'][0]['pda'],other['pda'])
+        self.assertEqual(contexto_ia(doc)['referentes_por_grado'][0]['grado'],2)
+        self.assertEqual(doc['metadatos']['curriculo']['adaptaciones'][other['id']]['pda'],'Identifica palabras con apoyo visual')
+        self.assertEqual({r['grado'] for r in opciones(doc,'Lenguajes',[3])},{3})
     def test_ia_tiene_fuentes_y_sin_nombre(self):
         d=documento();r=opciones(d,'Lenguajes')[0]
         d=vincular(d,'Lenguajes',['Inclusión'],[r['id']])
@@ -56,4 +61,3 @@ class CurriculoTests(unittest.TestCase):
         self.assertTrue(any(b.label=='Volver a editar' for b in at.button))
 
 if __name__=='__main__':unittest.main()
-

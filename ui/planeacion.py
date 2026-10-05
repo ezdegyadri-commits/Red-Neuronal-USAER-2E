@@ -1,7 +1,9 @@
 """Panel de trabajo y revisión. Claves de sesión separadas por cuenta."""
 from copy import deepcopy
 import hashlib
+import inspect
 import json
+import re
 import time
 import pandas as pd
 import streamlit as st
@@ -11,41 +13,107 @@ from ai.planeacion import proponer, MODEL
 from ai.planeacion_prompt import huella, VERSION_PROMPT
 from documents.planeacion import generar_pdf
 from services.curriculo import CAMPOS, EJES, FUENTES_BASE, opciones, vincular, contexto_ia, catalogo
+from services.materiales_planeacion import TIPOS, leer_material, incorporar, fuentes_materiales
+
+
+def _resumen_complementos(current):
+    base=re.split(r'\n\n(?:MATERIALES|ADAPTACIONES|COMPLEMENTOS) REVISADOS:\n',current['metadatos'].get('resumen_educativo',''),maxsplit=1)[0]
+    complementos=[{**m,'texto':m['texto'][:600]} for m in fuentes_materiales(current)]
+    complementos.extend({'referencia':'ADAPTACIÓN-'+i,'alcance':'redacción docente, no texto oficial ni resultado',
+                         'texto':'Contenido: '+a.get('contenido','')[:150]+'\nObjetivo adaptado: '+a.get('pda','')[:400]}
+                        for i,a in current['metadatos'].get('curriculo',{}).get('adaptaciones',{}).items())
+    resumen=servicio.resumen_previo(current,complementos) if complementos else ''
+    current['metadatos']['resumen_educativo']=base[:5500]+('\n\nCOMPLEMENTOS REVISADOS:\n'+resumen[:6200] if resumen else '')
+    return current
+
+
+def _actualizar_materiales(prefix,current):
+    """Conserva el resumen docente y sustituye solo la sección de materiales."""
+    fuentes=[f for f in current['metadatos'].get('fuentes',[]) if f.get('tipo')!='MATERIAL']
+    materiales=fuentes_materiales(current)
+    current['metadatos']['fuentes']=fuentes+materiales
+    current=_resumen_complementos(current)
+    _open(prefix,current);_persist(prefix);st.rerun()
+
+
+def _materiales(prefix,doc):
+    with st.expander('Añadir documentos o imágenes a mi planeación'):
+        st.caption('Word, PDF, imágenes, texto, hojas de cálculo y presentaciones. Lectura local: no se envían originales a la IA. Hasta 8 MB por archivo; PDF de hasta 12 páginas.')
+        limite={'max_upload_size':8} if 'max_upload_size' in inspect.signature(st.file_uploader).parameters else {}
+        archivos=st.file_uploader('Materiales de apoyo',type=TIPOS,accept_multiple_files=True,key=prefix+'_material_upload',**limite)
+        if archivos and st.button('Transcribir archivos',key=prefix+'_material_read'):
+            leidos=st.session_state.setdefault(prefix+'_material_readings',{})
+            for archivo in archivos:
+                digest=hashlib.sha256(archivo.getvalue()).hexdigest()
+                if digest in leidos:continue
+                try:
+                    with st.spinner('Leyendo '+archivo.name+'…'):
+                        leidos[digest]=leer_material(archivo.name,archivo.getvalue())
+                except Exception as exc:
+                    st.warning(archivo.name+': '+(str(exc) if isinstance(exc,ValueError) else 'No se pudo transcribir. Usa una copia más clara o un PDF con texto.'))
+        presentes={hashlib.sha256(a.getvalue()).hexdigest() for a in archivos or []}
+        for digest,material in st.session_state.get(prefix+'_material_readings',{}).items():
+            if digest not in presentes:continue
+            with st.expander('Revisar lectura · '+material['nombre'],expanded=True):
+                for aviso in material['avisos']:st.caption(aviso)
+                texto=st.text_area('Texto útil para esta planeación: corrige o selecciona lo pertinente',value=material['texto'],max_chars=20000,height=200,key=prefix+'_material_text_'+digest)
+                st.caption('El material se vincula solo a esta planeación. Confirma qué información corresponde al alumno o al grupo. Para IA se preparan extractos que revisarás en el resumen educativo.')
+                revisado=st.checkbox('Revisé el texto y su pertinencia',key=prefix+'_material_review_'+digest)
+                if st.button('Incorporar texto revisado',disabled=not revisado or not texto.strip(),key=prefix+'_material_apply_'+digest):
+                    try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],material,texto))
+                    except ValueError as exc:st.info(str(exc))
+        for material in doc['metadatos'].get('materiales',[]):
+            with st.expander('Material incorporado · '+material['nombre']):
+                texto=st.text_area('Editar material incorporado',value=material['texto'],max_chars=20000,height=180,key=f"{prefix}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")
+                if st.button('Guardar cambios del material',key=prefix+'_material_update_'+material['id']):
+                    try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],material,texto))
+                    except ValueError as exc:st.info(str(exc))
+
+
 def _curriculo(prefix,doc):
     generation=st.session_state.get(prefix+'_generation',0)
     key=f'{prefix}_{generation}_curriculum'
     seleccion=doc['metadatos'].get('curriculo',{})
     with st.expander('Campos, ejes y referentes oficiales',expanded=not bool(seleccion)):
-        st.caption('Elige los referentes que corresponden a las necesidades documentadas. La adaptación se redacta aparte; el PDA conserva su fuente.')
+        st.caption('Puedes trabajar contenidos de otro grado según las necesidades del alumno. Su grado escolar no cambia; el texto oficial y tu adaptación se conservan por separado.')
         campos=list(CAMPOS)
         campo=st.selectbox('Campo formativo',campos,index=campos.index(seleccion['campo']) if seleccion.get('campo') in campos else None,placeholder='Elige el campo que trabajarás',key=key+'_campo')
         ejes=st.multiselect('Ejes articuladores pertinentes',list(EJES),default=seleccion.get('ejes',['Inclusión']),key=key+'_ejes')
         if campo:
             st.caption(CAMPOS[campo]);rows=opciones(doc,campo);by_id={r['id']:r for r in rows}
+            grado=st.selectbox('Explorar referentes de', ['Todos los grados',1,2,3,4,5,6],format_func=lambda g:g if isinstance(g,str) else f'{g}° de primaria',key=key+'_grado')
             query=st.text_input('Encontrar contenidos por palabra: lectura, números, convivencia…',key=key+'_query')
+            visibles=[r for r in rows if grado=='Todos los grados' or r['grado']==grado]
             if query:
                 from utils.text import normalizar_texto
                 tokens=normalizar_texto(query).split()
-                filtradas=[r for r in rows if all(t in normalizar_texto(r['contenido']+' '+r['pda']) for t in tokens)]
-            else:filtradas=rows
+                filtradas=[r for r in visibles if all(t in normalizar_texto(r['contenido']+' '+r['pda']) for t in tokens)]
+            else:filtradas=visibles
             anteriores=[r['id'] for r in seleccion.get('registros',[]) if r['id'] in by_id]
             selector_key=key+'_ids_'+campo
             elegidos=[i for i in st.session_state.get(selector_key,anteriores) if i in by_id]
             opciones_ids=list(dict.fromkeys([r['id'] for r in filtradas]+elegidos+anteriores))
             ids=st.multiselect('Contenido y PDA por grado (hasta seis referentes)',opciones_ids,default=elegidos,format_func=lambda i:f"{by_id[i]['grado']}° · {by_id[i]['contenido']} · p. {by_id[i]['pagina_pdf']}",max_selections=6,key=selector_key)
+            adaptaciones={}
             for i in ids:
                 r=by_id[i];source=next(s for s in catalogo()['fuentes'] if s['id']==r['fuente'])
                 with st.expander(f"PDA de {r['grado']}° · {r['contenido']}"):
                     st.write(r['pda']);st.caption('Extracto de la tabla oficial; consulta la página para verificar su continuidad.')
                     st.link_button(f"SEP · Fase {r['fase']} · página PDF {r['pagina_pdf']}",source['url']+'#page='+str(r['pagina_pdf']))
+                    ajuste=seleccion.get('adaptaciones',{}).get(i,{})
+                    adaptaciones[i]={
+                        'contenido':st.text_area('Contenido para mi planeación',value=ajuste.get('contenido',r['contenido']),key=key+'_contenido_'+i),
+                        'pda':st.text_area('PDA adaptado / objetivo de trabajo',value=ajuste.get('pda',r['pda']),key=key+'_pda_'+i)}
+                    st.caption('Tu redacción es editable y se imprime como adaptación docente, no como cita oficial.')
             local=st.text_area('Contextualización: programa analítico de la escuela, lengua y entorno de la comunidad',value=seleccion.get('contexto_local',''),key=key+'_local')
             st.caption('No se presume que el programa analítico de cada escuela ya esté cargado. Aquí puedes añadir su referencia y los acuerdos pertinentes.')
             if st.button('Incorporar referentes al borrador',key=key+'_save'):
-                updated=vincular(st.session_state[prefix+'_doc'],campo,ejes,ids,local)
+                updated=vincular(st.session_state[prefix+'_doc'],campo,ejes,ids,local,adaptaciones)
                 if local:
                     local_resumen=servicio.resumen_previo(updated,[{'referencia':'CONTEXTO-ESCOLAR','alcance':'contextualización declarada; confirmar con el programa analítico','texto':local}])
                     previous=updated['metadatos'].get('resumen_educativo','')
                     updated['metadatos']['resumen_educativo']=previous[:8000]+'\n\n'+local_resumen[:3500]
+                updated=_resumen_complementos(updated)
                 _open(prefix,updated);_persist(prefix);st.rerun()
         for source in FUENTES_BASE:st.link_button(source['organismo']+' · '+source['titulo'],source['url'])
 
@@ -215,6 +283,8 @@ def _editor(prefix):
     with st.expander('Datos precargados de los alumnos'):
         st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,use_container_width=True)
     st.caption('Autoguardado de cambios confirmados cada 15 segundos mientras trabajas. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
+    st.markdown('#### Referentes y materiales para trabajar')
+    _materiales(prefix,doc)
     _curriculo(prefix,doc)
     if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
     with st.expander('Evidencias del expediente y referente curricular'):
