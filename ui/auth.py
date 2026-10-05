@@ -21,7 +21,13 @@ def start_session(match):
 
 
 def login():
-    st.markdown("<div style='max-width:620px;margin:8vh auto'><div class='hero'><h1>USAER 02E</h1><p>Gestión integral de la intervención educativa</p></div>", unsafe_allow_html=True)
+    with st.container(key="institutional_login"):
+        _login_content()
+
+
+def _login_content():
+    st.markdown("<div class='hero'><div class='eyebrow'>Educación especial · Yucatán</div><h1>USAER 02-E</h1><p>Plataforma de gestión e intervención educativa</p></div>", unsafe_allow_html=True)
+    st.subheader("Acceso al equipo")
     login_passkey(start_session)
     with st.form("login"):
         user = st.text_input("Usuario")
@@ -40,8 +46,8 @@ def login():
         else:
             start_session(match)
             st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
     installation_help()
+    st.markdown("<p class='institution-footnote'>USAER 02-E · Zona 001<br>Información educativa de uso exclusivo del personal autorizado.</p>", unsafe_allow_html=True)
 
 
 def logout(key="cerrar_sesion"):

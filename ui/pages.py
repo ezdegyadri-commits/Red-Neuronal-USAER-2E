@@ -137,14 +137,14 @@ def _panel_analisis_atencion(anexos, key, alcance):
 
 
 def inicio(df):
-    hero("Centro de gestión USAER 02-E", "Una sola plataforma para capturar, decidir, intervenir y dar seguimiento.")
+    hero("Tu espacio de trabajo", "Consulta los expedientes y continúa la planeación y el seguimiento educativo de tu equipo.")
     c1,c2,c3,c4=st.columns(4)
     with c1: card("Alumnos visibles",len(df))
     with c2: card("Anexos 3",len(repo.anexo3()))
     with c3: card("Sugerencias",len(repo.anexo4()))
     with c4: card("Eventos",len(repo.anexo5()))
-    st.markdown("### Principio operativo")
-    st.info("**Capturar una vez, reutilizar siempre.** El expediente es el eje: BAP → IA → sugerencia oficial → acción → evento → resultado → seguimiento.")
+    st.markdown("### Información conectada")
+    st.caption("Lo que documentas en el expediente acompaña la planeación, la intervención y el seguimiento. No necesitas volver a capturar la misma información.")
     st.markdown("### Ruta de trabajo")
     cols=st.columns(5)
     for c,t in zip(cols,["1. Expediente","2. BAP","3. IA + revisión","4. Seguimiento","5. Evidencia"]):

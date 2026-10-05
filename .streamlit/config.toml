@@ -5,3 +5,11 @@ disconnectedSessionTTL = 86400
 # Relatorías de reuniones pueden usar archivos de hasta 400 MB.
 maxUploadSize = 400
 maxMessageSize = 400
+
+[theme]
+base = "light"
+primaryColor = "#254F60"
+backgroundColor = "#F6F5F1"
+secondaryBackgroundColor = "#ECEFED"
+textColor = "#243A43"
+font = "sans serif"

@@ -41,7 +41,7 @@ rol=st.session_state.get("rol","")
 escuelas=st.session_state.get("escuelas_permitidas","")
 
 with st.sidebar:
-    st.markdown("<div class='brand'><h1>USAER 02E</h1><p>Gestión integral de intervención educativa</p></div>",unsafe_allow_html=True)
+    st.markdown("<div class='brand'><p class='brand-overline'>Educación especial</p><h1>USAER 02-E</h1><p>Yucatán · Zona 001<br>Gestión e intervención educativa</p></div>",unsafe_allow_html=True)
     st.caption(f"Sesión: {st.session_state.get('nombre','')}")
     installation_help()
     configure_passkey()
@@ -65,21 +65,21 @@ with st.sidebar:
         menu += ["Oficios de comisión", "Anexo VII Derivación"]
     else: menu += ["Constancias de visita", "Anexo VII Derivación"]
     grupos_menu = {
-        "Inicio": "🏠 Inicio",
-        "Expedientes": "📁 Expedientes",
-        "Anexo III BAP": "🧭 Captura · Anexo III BAP",
-        "Anexo IV Hoja de sugerencias": "📝 Anexo IV · Hoja de sugerencias",
-        "Anexo V Eventos significativos": "📌 Anexo V · Hoja de eventos significativos",
-        "Estadística": "📊 Consulta · Estadística y listado nominal",
-        "Documentos": "📄 Consulta · Documentos",
-        "Cronograma mensual": "🗓️ Equipo especialista · Cronograma",
-        "Horarios de apoyo": "🕒 Maestras de apoyo · Horarios y avisos",
-        "Panel de Dirección": "⚙️ Dirección · Panel",
-        "Trámites": "📨 Trámites · Solicitudes de expedientes",
-        "Constancias de visita": "🗓️ Equipo · Constancias de visita",
-        "Alta de alumnos": "➕ Captura · Alta de alumnos",
-        "Oficios de comisión": "🧾 Apoyo · Oficios de comisión",
-        "Anexo VII Derivación": "🔎 Derivación · Anexo VII",
+        "Inicio": "Inicio",
+        "Expedientes": "Expedientes",
+        "Anexo III BAP": "Anexo III · Barreras para el Aprendizaje y la Participación",
+        "Anexo IV Hoja de sugerencias": "Anexo IV · Hoja de sugerencias",
+        "Anexo V Eventos significativos": "Anexo V · Eventos significativos",
+        "Estadística": "Estadística y listado nominal",
+        "Documentos": "Documentos",
+        "Cronograma mensual": "Equipo especialista · Cronograma",
+        "Horarios de apoyo": "Maestras de apoyo · Horarios y avisos",
+        "Panel de Dirección": "Dirección · Panel",
+        "Trámites": "Trámites y solicitudes de expedientes",
+        "Constancias de visita": "Equipo · Constancias de visita",
+        "Alta de alumnos": "Alta de alumnos",
+        "Oficios de comisión": "Oficios de comisión",
+        "Anexo VII Derivación": "Anexo VII · Derivación",
     }
     page=st.radio(
         "Ir al apartado",
