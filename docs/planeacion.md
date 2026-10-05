@@ -7,6 +7,8 @@ Panel integrado en la navegación de apoyo, Psicología, Comunicación, Trabajo 
 - XXV: formato específico de Trabajo Social.
 - Datos de identidad precargados desde el padrón autorizado; no se mezclan escuelas ni asignaciones de Marycruz/Cecilia.
 - Evidencias: BAP, sugerencias, eventos con ID explícito y actas como contexto escolar. No atribuye una visita escolar a intervención individual.
+- El borrador recupera automáticamente el contexto al crearse: evidencia individual y grupal, eventos históricos resueltos por el expediente, seguimientos y versiones más recientes de planes/planeaciones enviados o validados, únicamente de alumnos seleccionados. Fuentes grupales duplicadas se reúnen sin convertirlas en logros individuales. La desconexión de una fuente conserva el contexto previo y avisa de lo pendiente. Actualizar el expediente no solicita IA automáticamente.
+- Guía visible en tres pasos, indicadores breves y evidencias desplegables. El resumen se prepara localmente y requiere revisión antes de enviarse; cambiarlo invalida el consentimiento y la propuesta anterior.
 - Autoguardado de cambios confirmados cada 15 segundos mientras la sesión permanece activa. Guardar borrador confirma de inmediato. El texto aún no confirmado por el navegador y cambios pendientes pueden perderse si se cierra abruptamente; no se promete trabajo sin conexión.
 - Respaldo JSON editable, recuperación por cuenta y consulta de versiones. Guardado aditivo en `Planeaciones_Versiones` del libro central, sin depender de Drive OAuth.
 - Envío y revisión por Dirección; devolver observaciones o validar sin reescribir el trabajo del autor. La validación no estampa una firma manuscrita automática.

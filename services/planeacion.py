@@ -16,6 +16,8 @@ from services.expedientes import alumnos_visibles, baps_de_alumno, sugerencias_d
 from services.cronogramas import perfil_especialista
 from services.planeacion_modelo import crear_plantilla, texto, FORMATOS
 from utils.text import normalizar_texto
+from utils.ids import expediente_id
+from data.google import df_sheet
 
 HOJA = 'Planeaciones_Versiones'
 HEADERS = ['Documento','Revision','Anterior','Fecha','Cuenta','Autor','Escuela_ID','Alumnos_JSON',
@@ -267,20 +269,80 @@ def evidencias(doc):
         for nombre,frame in [('III',baps_de_alumno(frames['III'],a)),('IV',sugerencias_de_alumno(frames['IV'],a))]:
             fields=['BAP_Fisicas','BAP_Actitudinales','BAP_Pedagogicas','BAP_Organizativas'] if nombre=='III' else ['Motivo','Sugerencias','Nivel_Cumplimiento_Resultados']
             for r in frame.to_dict('records'):
+                grupal=texto(r.get('ID_Alumno')).startswith('GRUPO-') or texto(r.get('Nombre_Alumno')).startswith('Grupo ')
                 fuentes.append({'tipo':nombre,'alumno':a['ID_Alumno'],'fecha':texto(r.get('Fecha',r.get('Fecha_Elaboracion'))),
                                 'registro':texto(r.get('ID_Anexo3',r.get('ID_Anexo4'))),
-                                'texto':'\n'.join(f'{k}: {texto(r.get(k))}' for k in fields if texto(r.get(k))), 'alcance':'individual o grupo vinculado'})
-    # Solo IDs explícitos; el legado no se adjudica por semejanza de nombre.
-    for r in frames['V'].to_dict('records'):
-        if texto(r.get('ID_Alumno')) in elegidos and texto(r.get('ID_Escuela')) in {'',doc['datos']['ID_Escuela']} and texto(r.get('Estado')).upper() not in {'RETIRADO','ELIMINADO','ANULADO','DUPLICADO'}:
-            fuentes.append({'tipo':'V','alumno':r['ID_Alumno'],'fecha':texto(r.get('Fecha')),'registro':texto(r.get('ID_Evento')),'texto':texto(r.get('Evento')),'alcance':'individual'})
+                                'texto':'\n'.join(f'{k}: {texto(r.get(k))}' for k in fields if texto(r.get(k))), 'alcance':'grupo vinculado' if grupal else 'individual'})
+    # Reutiliza la resolución histórica del expediente: IDs, relaciones y legado
+    # exacto no ambiguo. No atribuye eventos de homónimos a otro alumno.
+    try:
+        referencia=repo.alumnos()
+        for a in alumnos:
+            if texto(a.get('ID_Alumno')) not in elegidos:continue
+            events=repo.eventos_alumno(a['ID_Alumno'],texto(a.get('Nombre_Completo')),
+                id_escuela=doc['datos']['ID_Escuela'],escuela=doc['datos']['Escuela regular'],alumnos_referencia=referencia)
+            for r in events.to_dict('records'):
+                if texto(r.get('ID_Escuela')) not in {'',doc['datos']['ID_Escuela']}:continue
+                fuentes.append({'tipo':'V','alumno':a['ID_Alumno'],'fecha':texto(r.get('Fecha')),'registro':texto(r.get('ID_Evento')),'texto':texto(r.get('Evento')),'alcance':'individual; vínculo resuelto por el expediente'})
+    except Exception:
+        fallas.append('V')
+        for r in frames['V'].to_dict('records'):
+            if texto(r.get('ID_Alumno')) in elegidos and texto(r.get('ID_Escuela')) in {'',doc['datos']['ID_Escuela']} and texto(r.get('Estado')).upper() not in {'RETIRADO','ELIMINADO','ANULADO','DUPLICADO'}:
+                fuentes.append({'tipo':'V','alumno':r['ID_Alumno'],'fecha':texto(r.get('Fecha')),'registro':texto(r.get('ID_Evento')),'texto':texto(r.get('Evento')),'alcance':'individual'})
     escuela=normalizar_texto(doc['datos']['Escuela regular'])
     for r in frames['ACTA'].to_dict('records'):
         if normalizar_texto(r.get('Escuela',''))==escuela and texto(r.get('Estatus')).upper() not in {'ANULADO','ELIMINADO','RETIRADO'}:
             fuentes.append({'tipo':'ACTA','alumno':'','fecha':texto(r.get('Fecha')),'registro':texto(r.get('ID_Visita')),'texto':texto(r.get('Observaciones')),'alcance':'contexto escolar; no atribuye atención individual'})
+    try:
+        ultimas={d['id']:d for d in versiones_actuales()}
+        for plan in ultimas.values():
+            ids_plan={a['ID_Alumno'] for a in plan['datos']['Alumnos']}
+            if plan['id']==doc['id'] or plan['datos']['ID_Escuela']!=doc['datos']['ID_Escuela'] or not (ids_plan&elegidos):continue
+            if plan['estado'] not in {'ENVIADO','VALIDADO'}:continue
+            autorizar(plan)
+            contenido={'tablas':plan['tablas'],'textos':plan['textos'],'necesidades_documentadas':plan['metadatos'].get('necesidades_confirmadas','')}
+            fuentes.append({'tipo':'PLAN','alumno':','.join(sorted(ids_plan&elegidos)),'fecha':plan.get('guardado_en','')[:10],'registro':plan['id'],'revision':plan['revision'],'texto':json.dumps(contenido,ensure_ascii=False),'alcance':('plan o planeación anterior enviada' if ids_plan.issubset(elegidos) else 'planeación previa del grupo; contexto grupal')+'; no equivale a resultado alcanzado'})
+    except Exception:fallas.append('PLAN')
+    try:
+        timeline=df_sheet('Linea_Tiempo')
+        exp_ids={expediente_id(i) for i in elegidos}
+        for r in timeline.to_dict('records'):
+            if texto(r.get('Estado')).upper() in {'ANULADO','ELIMINADO','RETIRADO','DUPLICADO'}:continue
+            if texto(r.get('ID_Escuela')) not in {'',doc['datos']['ID_Escuela']}:continue
+            alumno=texto(r.get('ID_Alumno'))
+            if (alumno and alumno in elegidos) or (not alumno and texto(r.get('ID_Expediente')) in exp_ids):
+                if any(f['tipo']=='V' and f['fecha']==texto(r.get('Fecha')) and f['texto']==texto(r.get('Descripcion')) for f in fuentes):continue
+                fuentes.append({'tipo':'SEGUIMIENTO','alumno':alumno,'fecha':texto(r.get('Fecha')),'registro':texto(r.get('ID_Evento',r.get('ID_Expediente'))),'texto':texto(r.get('Descripcion')),'alcance':'seguimiento del expediente'})
+    except Exception:fallas.append('SEGUIMIENTO')
+    fuentes=unificar_fuentes(fuentes)
     for i,r in enumerate(fuentes):
         r['referencia']='E'+str(i+1)
-    return fuentes,fallas
+    return fuentes,list(dict.fromkeys(fallas))
+
+
+def unificar_fuentes(fuentes):
+    unicas={}
+    for f in fuentes:
+        if not texto(f.get('texto')):continue
+        key=(f['tipo'],f.get('registro',''),f.get('fecha',''),f['texto'])
+        if key not in unicas:unicas[key]=deepcopy(f)
+        else:
+            ids=set(unicas[key].get('alumno','').split(','))|set(f.get('alumno','').split(','))
+            unicas[key]['alumno']=','.join(sorted(ids-{''}))
+    return list(unicas.values())
+
+
+def preparar_contexto(doc):
+    fuentes,fallas=evidencias(doc)
+    resultado=deepcopy(doc)
+    # Una desconexión no borra el contexto previamente recuperado.
+    previas=[f for f in doc['metadatos'].get('fuentes',[]) if f.get('tipo') in fallas]
+    fuentes=unificar_fuentes(fuentes+previas)
+    for i,f in enumerate(fuentes):f['referencia']='E'+str(i+1)
+    resultado['metadatos'].update(fuentes=fuentes,contexto_cargado=True,fuentes_pendientes=fallas)
+    if not resultado['metadatos'].get('resumen_educativo'):
+        resultado['metadatos']['resumen_educativo']=resumen_previo(resultado,fuentes)
+    return resultado
 
 
 def resumen_previo(doc,fuentes):

@@ -37,6 +37,10 @@ def _field(prefix,key,section,field):
     doc=deepcopy(st.session_state[prefix+'_doc'])
     doc[section][field]=st.session_state[key]
     st.session_state[prefix+'_doc']=doc
+    if section=='metadatos' and field=='resumen_educativo':
+        st.session_state.pop(prefix+'_ia',None)
+        consent_key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_consent'
+        if consent_key in st.session_state:st.session_state[consent_key]=False
     _persist(prefix,automatic=True)
 
 
@@ -84,7 +88,7 @@ def _text(prefix,section,field,label=None):
 def _ai(prefix,doc,revision=False):
     st.caption('Solo se envía el resumen que revises aquí; no se envían el padrón ni los archivos originales.')
     _text(prefix,'metadatos','resumen_educativo','Resumen educativo sin nombres, CURP, contactos ni identificadores')
-    approved=st.checkbox('Revisé el resumen: no contiene datos que identifiquen a las personas.',key=prefix+'_consent')
+    approved=st.checkbox('Revisé el resumen: no contiene datos que identifiquen a las personas.',key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_consent')
     if st.button('Revisar con IA' if revision else 'Proponer actividades con IA',disabled=not approved,key=prefix+'_ai_button'):
         try:
             with st.spinner('Preparando propuestas…'):
@@ -98,7 +102,8 @@ def _ai(prefix,doc,revision=False):
     for missing in result['faltantes']:st.caption(missing)
     for i,proposal in enumerate(result['propuestas']):
         with st.expander(proposal['objetivo'] or f'Propuesta {i+1}'):
-            st.write(proposal)
+            for field,label in [('necesidad','Necesidad documentada a confirmar'),('descriptor','Cómo reconocer el avance'),('actividad','Actividad sugerida'),('contexto','Dónde'),('temporalidad','Cuándo'),('recursos','Con qué apoyos'),('evaluacion','Cómo dar seguimiento')]:
+                if proposal.get(field):st.write(label+': '+proposal[field])
             if not revision and st.button('Añadir al borrador',key=prefix+'_apply_'+str(i)):
                 current=deepcopy(st.session_state[prefix+'_doc']);tables=current['tablas'];fmt=current['formato']
                 if fmt=='XXIII':
@@ -118,23 +123,28 @@ def _editor(prefix):
     st.subheader(FORMATOS[doc['formato']]['titulo'])
     st.write(doc['datos']['Escuela regular']+' · '+doc['datos'].get('CCT',''))
     if not doc['datos'].get('CCT'):_text(prefix,'datos','CCT','CCT no registrado: verifica y completa')
-    st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,use_container_width=True)
+    alumnos_col,fuentes_col,estado_col=st.columns(3)
+    alumnos_col.metric('Alumnos seleccionados',len(doc['datos']['Alumnos']))
+    fuentes_col.metric('Evidencias recuperadas',len(doc['metadatos'].get('fuentes',[])))
+    estado_col.metric('Tu trabajo',{'BORRADOR':'Borrador','ENVIADO':'Enviado','VALIDADO':'Revisado','CON_OBSERVACIONES':'Por ajustar'}.get(doc['estado'],doc['estado']))
+    with st.expander('Datos precargados de los alumnos'):
+        st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,use_container_width=True)
     st.caption('Autoguardado de cambios confirmados cada 15 segundos mientras trabajas. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
     if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
     with st.expander('Evidencias del expediente y referente curricular'):
-        if st.button('Consultar evidencia registrada',key=prefix+'_sources'):
-            st.session_state[prefix+'_fuentes']=servicio.evidencias(doc)
-            sources,_=st.session_state[prefix+'_fuentes']
-            current=deepcopy(st.session_state[prefix+'_doc'])
-            current['metadatos']['fuentes']=sources
+        if st.button('Actualizar información del expediente',key=prefix+'_sources'):
+            current=servicio.preparar_contexto(st.session_state[prefix+'_doc'])
             st.session_state[prefix+'_doc']=current
+            st.session_state[prefix+'_fuentes']=(current['metadatos']['fuentes'],current['metadatos']['fuentes_pendientes'])
             _persist(prefix)
+        if prefix+'_fuentes' not in st.session_state and doc['metadatos'].get('contexto_cargado'):
+            st.session_state[prefix+'_fuentes']=(doc['metadatos'].get('fuentes',[]),doc['metadatos'].get('fuentes_pendientes',[]))
         if prefix+'_fuentes' in st.session_state:
             sources,failed=st.session_state[prefix+'_fuentes']
             if failed:st.info('Parte de la evidencia no está disponible. Puedes continuar sin modificar esos registros.')
             for source in sources:
-                st.caption(source['referencia']+' · '+source['tipo']+' · '+source['fecha']+' · '+source['alcance'])
-                st.write(source['texto'])
+                with st.expander(source['referencia']+' · '+source['tipo']+' · '+source['fecha']+' · '+source['alcance']):
+                    st.write(source['texto'])
             if not sources:st.caption('No hay evidencia vinculada disponible. No se inferirán necesidades o resultados.')
             elif st.button('Preparar resumen educativo para revisar',key=prefix+'_summary'):
                 current=deepcopy(st.session_state[prefix+'_doc'])
@@ -151,7 +161,15 @@ def _editor(prefix):
         for field in ('Necesidades educativas específicas asociadas a','Maestro de grupo','Vigencia en cursos escolares'):
             _text(prefix,'datos',field)
     for name,headers in FORMATOS[doc['formato']]['tablas'].items():
-        st.markdown('#### '+name.replace('_',' ').capitalize())
+        guias={'barreras':('Barreras y apoyos','¿Qué dificulta participar? Describe el apoyo que ayudará a reducir esa barrera.'),
+               'aprendizajes':('¿Qué queremos que logren?','Ejemplo: El alumno identifica palabras frecuentes con apoyo visual. Define cómo observarás el avance.'),
+               'necesidades':('Necesidades y objetivos','Parte del IEPP: necesidad, acción observable, apoyo y seguimiento.'),
+               'curriculo':('Apoyos en el aula regular','Vincula el aprendizaje priorizado con el programa verificado y los ajustes necesarios.'),
+               'dosificacion':('¿Cómo lo trabajaremos?','Describe una actividad concreta, dónde se realizará, cuándo y con qué recursos.'),
+               'evaluacion_final':('Resultados al finalizar','No necesitas llenar este apartado al comenzar.'),
+               'participantes':('¿Quiénes participarán?','Anota a las personas implicadas y su función.')}
+        titulo,ayuda=guias[name]
+        st.markdown('#### '+titulo);st.caption(ayuda)
         if name=='evaluacion_final':st.caption('Completar solo con resultados documentados al finalizar; no con predicciones.')
         key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_table_{name}'
         basekey=key+'_base'
@@ -223,6 +241,7 @@ def direccion_panel():
 def planeacion_page():
     actor=servicio.identidad();prefix=_prefix()
     st.title('Planeación e intervención')
+    st.caption('1. Elige a quién acompañar  →  2. Revisa lo que ya sabemos  →  3. Planea, guarda y comparte con Dirección')
     editar,recuperar,revisar=st.tabs(['Mi trabajo','Recuperar documentos','Revisión directiva'] if actor['director'] else ['Mi trabajo','Recuperar documentos','Guía'])
     with recuperar:
         backup=st.file_uploader('Recuperar un respaldo editable (.json)',type=['json'],key=prefix+'_import')
@@ -266,6 +285,8 @@ def planeacion_page():
             trimestre=st.selectbox('Trimestre',[1,2,3],format_func=lambda t:{1:'Octubre–diciembre',2:'Enero–marzo',3:'Abril–junio'}[t],key=prefix+'_quarter')
             if st.button('Crear y guardar borrador',key=prefix+'_create',disabled=not ids):
                 try:
-                    _open(prefix,servicio.nueva(formato,ids,int(ciclo),trimestre));_persist(prefix);st.rerun()
+                    with st.spinner('Reuniendo la información que ya registró el equipo…'):
+                        doc=servicio.preparar_contexto(servicio.nueva(formato,ids,int(ciclo),trimestre))
+                    _open(prefix,doc);_persist(prefix);st.rerun()
                 except (ValueError,PermissionError) as exc:st.warning(str(exc))
         if prefix+'_doc' in st.session_state:_editor(prefix)
