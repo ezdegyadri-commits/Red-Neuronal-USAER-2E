@@ -7,11 +7,10 @@ import pandas as pd
 import streamlit as st
 from services import planeacion as servicio
 from services.planeacion_modelo import FORMATOS, revisar_redaccion
-from ai.planeacion import proponer
+from ai.planeacion import proponer, MODEL
+from ai.planeacion_prompt import huella, VERSION_PROMPT
 from documents.planeacion import generar_pdf
 from services.curriculo import CAMPOS, EJES, FUENTES_BASE, opciones, vincular, contexto_ia, catalogo
-
-
 def _curriculo(prefix,doc):
     generation=st.session_state.get(prefix+'_generation',0)
     key=f'{prefix}_{generation}_curriculum'
@@ -139,16 +138,47 @@ def _text(prefix,section,field,label=None):
 
 
 def _ai(prefix,doc,revision=False):
-    st.caption('Solo se envía el resumen que revises aquí; no se envían el padrón ni los archivos originales.')
+    st.caption('La IA se usa solo cuando solicitas propuestas. El expediente y los datos del formato se preparan automáticamente.')
     _text(prefix,'metadatos','resumen_educativo','Resumen educativo sin nombres, CURP, contactos ni identificadores')
+    current=st.session_state[prefix+'_doc']
+    resumen=current['metadatos'].get('resumen_educativo','')
+    contexto=contexto_ia(current)
+    try:
+        firma=huella(resumen,current['formato'],current['datos']['Función'],revision,contexto) if resumen.strip() else ''
+    except ValueError as exc:
+        firma=''
+        st.info(str(exc))
+    record=(st.session_state.get(prefix+'_revision_ia_guardada',{}) if revision
+            else current['metadatos'].get('propuestas_ia_guardadas',{}))
+    coinciden=bool(firma and record.get('huella')==firma and record.get('motor')==MODEL)
+    if coinciden:
+        st.session_state[prefix+'_ia']=record['resultado']
+        st.caption('Estas propuestas ya están guardadas. Consultarlas y editar tu planeación no genera otra solicitud de IA.')
+    else:
+        st.session_state.pop(prefix+'_ia',None)
     approved=st.checkbox('Revisé el resumen: no contiene datos que identifiquen a las personas.',key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_consent')
-    if st.button('Revisar con IA' if revision else 'Proponer actividades con IA',disabled=not approved,key=prefix+'_ai_button'):
+    label=('Revisar nuevamente con IA' if revision else 'Generar nuevas propuestas con IA') if coinciden else ('Revisar con IA' if revision else 'Proponer actividades con IA')
+    if st.button(label,disabled=not approved or not firma,key=prefix+'_ai_button'):
         try:
             with st.spinner('Preparando propuestas…'):
-                current=st.session_state[prefix+'_doc']
-                st.session_state[prefix+'_ia']=proponer(current['metadatos'].get('resumen_educativo',''),doc['formato'],doc['datos']['Función'],revision,curriculo=contexto_ia(current))
+                result=proponer(resumen,current['formato'],current['datos']['Función'],revision,curriculo=contexto)
+                st.session_state[prefix+'_ia']=result
+                guardado={'huella':firma,'motor':MODEL,'version_prompt':VERSION_PROMPT,'resultado':result}
+                if revision:
+                    st.session_state[prefix+'_revision_ia_guardada']=guardado
+                else:
+                    current=deepcopy(st.session_state[prefix+'_doc'])
+                    current['metadatos']['propuestas_ia_guardadas']=guardado
+                    st.session_state[prefix+'_doc']=current
+                    _persist(prefix,automatic=True)
         except (ValueError,RuntimeError) as exc:
             st.info(str(exc))
+    diagnostico=st.session_state.get('planeacion_ia_diagnostico')
+    if diagnostico and servicio.identidad()['director']:
+        with st.expander('Diagnóstico de la última solicitud de IA'):
+            st.write('Motor: '+diagnostico['motor'])
+            st.write('Código: '+str(diagnostico['codigo'] or 'No disponible'))
+            st.write('Tipo de incidencia: '+diagnostico['tipo'])
     result=st.session_state.get(prefix+'_ia')
     if not result:return
     st.write(result['observaciones'])
@@ -158,7 +188,8 @@ def _ai(prefix,doc,revision=False):
             for field,label in [('necesidad','Necesidad documentada a confirmar'),('descriptor','Cómo reconocer el avance'),('actividad','Actividad sugerida'),('contexto','Dónde'),('temporalidad','Cuándo'),('recursos','Con qué apoyos'),('evaluacion','Cómo dar seguimiento'),('fundamento','Fundamento curricular y local')]:
                 if proposal.get(field):st.write(label+': '+proposal[field])
             if proposal.get('fuentes'):st.caption('Fuentes verificadas: '+', '.join(proposal['fuentes']))
-            if not revision and st.button('Añadir al borrador',key=prefix+'_apply_'+str(i)):
+            incluida=proposal in st.session_state[prefix+'_doc']['metadatos'].get('Propuestas IA revisadas',[])
+            if not revision and st.button('Ya añadida al borrador' if incluida else 'Añadir al borrador',disabled=incluida,key=prefix+'_apply_'+str(i)):
                 current=deepcopy(st.session_state[prefix+'_doc']);tables=current['tablas'];fmt=current['formato']
                 if fmt=='XXIII':
                     tables['aprendizajes'].append({'Necesidades educativas específicas':proposal['necesidad'],'Aprendizaje y/u objetivo':proposal['objetivo'],'Descriptor de logro':proposal['descriptor']})
@@ -349,4 +380,3 @@ def planeacion_page():
                     _open(prefix,doc);_persist(prefix);st.rerun()
                 except (ValueError,PermissionError) as exc:st.warning(str(exc))
         if prefix+'_doc' in st.session_state:_editor(prefix)
-
