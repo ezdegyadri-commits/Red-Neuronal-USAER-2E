@@ -50,9 +50,10 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None):
     except Exception as exc:
         raise RuntimeError(_fallo(exc)) from None
     try:
-        raw = re.sub(r'^```(?:json)?\\s*|\\s*```$', '', (response.text or '').strip())
+        raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', (response.text or '').strip())
         result = validar_respuesta(json.loads(raw), curriculo)
     except (ValueError, TypeError, AttributeError):
         raise RuntimeError('La propuesta llegó incompleta o sin un fundamento verificable. Tu borrador se conserva.') from None
     st.session_state.pop('planeacion_ia_diagnostico', None)
     return result
+
