@@ -32,7 +32,7 @@ def generar_pdf(doc):
             alumnos_table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.4,colors.grey),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#dceeee')),('VALIGN',(0,0),(-1,-1),'TOP')]))
             story.append(alumnos_table)
         elif k!='ID_Escuela':
-            datos.append(p(f'{k.replace("_"," ")}: {v}'))
+            datos.append(p(f'{k.replace("_"," ")}: {"" if v is None else v}'))
     if len(datos)%2:datos.append(p(''))
     metadata=Table([datos[i:i+2] for i in range(0,len(datos),2)],colWidths=[available/2]*2)
     metadata.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0)]))
@@ -85,3 +85,4 @@ def generar_pdf(doc):
         canvas.drawRightString(width-30,86,f'Página {canvas.getPageNumber()}')
     SimpleDocTemplate(output,pagesize=(width,height),leftMargin=30,rightMargin=30,topMargin=110,bottomMargin=100).build(story,onFirstPage=footer,onLaterPages=footer)
     return output.getvalue()
+
