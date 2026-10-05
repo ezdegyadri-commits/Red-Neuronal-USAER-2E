@@ -20,6 +20,7 @@ from ui.horarios_apoyo import horarios_apoyo_page, horarios_apoyo_direccion
 from ui.calendario_eventos import eventos_direccion
 from ui.tramites import tramites_page
 from services.tramites import gestor as gestor_tramites, puede_solicitar
+from ui.planeacion import planeacion_page, direccion_panel
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -49,6 +50,8 @@ with st.sidebar:
     if gestor_tramites() or puede_solicitar():
         menu += ["Trámites"]
     perfil_cronograma = perfil_especialista(st.session_state.get("nombre", ""), rol)
+    if perfil_cronograma or "APOYO" in rol.upper():
+        menu += ["Planeación e intervención"]
     if perfil_cronograma and perfil_cronograma["area"] != "Dirección":
         menu += ["Cronograma mensual"]
     if "DIRECTOR" in rol.upper():
@@ -102,8 +105,12 @@ elif page=="Documentos": documentos_page(authorized)
 elif page=="Cronograma mensual": cronogramas_page()
 elif page=="Horarios de apoyo": horarios_apoyo_page()
 elif page=="Trámites": tramites_page()
+elif page=="Planeación e intervención": planeacion_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
+    with st.expander("Planes de intervención y planeaciones del equipo"):
+        if st.checkbox("Consultar entregas y revisar",key="consultar_planeaciones_director"):
+            direccion_panel()
     horarios_apoyo_direccion()
     st.divider()
     configuracion_oficios_direccion()
