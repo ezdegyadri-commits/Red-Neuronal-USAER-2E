@@ -9,6 +9,57 @@ from services import planeacion as servicio
 from services.planeacion_modelo import FORMATOS, revisar_redaccion
 from ai.planeacion import proponer
 from documents.planeacion import generar_pdf
+from services.curriculo import CAMPOS, EJES, FUENTES_BASE, opciones, vincular, contexto_ia, catalogo
+
+
+def _curriculo(prefix,doc):
+    generation=st.session_state.get(prefix+'_generation',0)
+    key=f'{prefix}_{generation}_curriculum'
+    seleccion=doc['metadatos'].get('curriculo',{})
+    with st.expander('Campos, ejes y referentes oficiales',expanded=not bool(seleccion)):
+        st.caption('Elige los referentes que corresponden a las necesidades documentadas. La adaptación se redacta aparte; el PDA conserva su fuente.')
+        campos=list(CAMPOS)
+        campo=st.selectbox('Campo formativo',campos,index=campos.index(seleccion['campo']) if seleccion.get('campo') in campos else None,placeholder='Elige el campo que trabajarás',key=key+'_campo')
+        ejes=st.multiselect('Ejes articuladores pertinentes',list(EJES),default=seleccion.get('ejes',['Inclusión']),key=key+'_ejes')
+        if campo:
+            st.caption(CAMPOS[campo]);rows=opciones(doc,campo);by_id={r['id']:r for r in rows}
+            query=st.text_input('Encontrar contenidos por palabra: lectura, números, convivencia…',key=key+'_query')
+            if query:
+                from utils.text import normalizar_texto
+                tokens=normalizar_texto(query).split()
+                filtradas=[r for r in rows if all(t in normalizar_texto(r['contenido']+' '+r['pda']) for t in tokens)]
+            else:filtradas=rows
+            anteriores=[r['id'] for r in seleccion.get('registros',[]) if r['id'] in by_id]
+            selector_key=key+'_ids_'+campo
+            elegidos=[i for i in st.session_state.get(selector_key,anteriores) if i in by_id]
+            opciones_ids=list(dict.fromkeys([r['id'] for r in filtradas]+elegidos+anteriores))
+            ids=st.multiselect('Contenido y PDA por grado (hasta seis referentes)',opciones_ids,default=elegidos,format_func=lambda i:f"{by_id[i]['grado']}° · {by_id[i]['contenido']} · p. {by_id[i]['pagina_pdf']}",max_selections=6,key=selector_key)
+            for i in ids:
+                r=by_id[i];source=next(s for s in catalogo()['fuentes'] if s['id']==r['fuente'])
+                with st.expander(f"PDA de {r['grado']}° · {r['contenido']}"):
+                    st.write(r['pda']);st.caption('Extracto de la tabla oficial; consulta la página para verificar su continuidad.')
+                    st.link_button(f"SEP · Fase {r['fase']} · página PDF {r['pagina_pdf']}",source['url']+'#page='+str(r['pagina_pdf']))
+            local=st.text_area('Contextualización: programa analítico de la escuela, lengua y entorno de la comunidad',value=seleccion.get('contexto_local',''),key=key+'_local')
+            st.caption('No se presume que el programa analítico de cada escuela ya esté cargado. Aquí puedes añadir su referencia y los acuerdos pertinentes.')
+            if st.button('Incorporar referentes al borrador',key=key+'_save'):
+                updated=vincular(st.session_state[prefix+'_doc'],campo,ejes,ids,local)
+                if local:
+                    local_resumen=servicio.resumen_previo(updated,[{'referencia':'CONTEXTO-ESCOLAR','alcance':'contextualización declarada; confirmar con el programa analítico','texto':local}])
+                    previous=updated['metadatos'].get('resumen_educativo','')
+                    updated['metadatos']['resumen_educativo']=previous[:8000]+'\n\n'+local_resumen[:3500]
+                _open(prefix,updated);_persist(prefix);st.rerun()
+        for source in FUENTES_BASE:st.link_button(source['organismo']+' · '+source['titulo'],source['url'])
+
+
+def _preview(prefix,pdf):
+    import pymupdf
+    with pymupdf.open(stream=pdf,filetype='pdf') as pages:
+        st.subheader('Vista previa del formato para imprimir')
+        total=len(pages)
+        page=st.selectbox('Página del documento',range(total),format_func=lambda i,n=total:f'{i+1} de {n}',key=prefix+'_preview_page')
+        pixmap=pages[page].get_pixmap(matrix=pymupdf.Matrix(1.6,1.6))
+        st.image(pixmap.tobytes('png'),use_container_width=True)
+    st.caption('Para corregir, modifica los campos anteriores y prepara de nuevo el PDF. Para imprimir, descarga el archivo y usa la opción Imprimir de tu lector PDF.')
 
 
 def _prefix():
@@ -37,6 +88,7 @@ def _field(prefix,key,section,field):
     doc=deepcopy(st.session_state[prefix+'_doc'])
     doc[section][field]=st.session_state[key]
     st.session_state[prefix+'_doc']=doc
+    st.session_state.pop(prefix+'_pdf',None)
     if section=='metadatos' and field=='resumen_educativo':
         st.session_state.pop(prefix+'_ia',None)
         consent_key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_consent'
@@ -56,6 +108,7 @@ def _table(prefix,key,name,base):
     rows=[{h:str(r.get(h,'') or '') for h in headers} for r in rows]
     doc=deepcopy(st.session_state[prefix+'_doc']);doc['tablas'][name]=rows
     st.session_state[prefix+'_doc']=doc
+    st.session_state.pop(prefix+'_pdf',None)
     _persist(prefix,automatic=True)
 
 
@@ -93,7 +146,7 @@ def _ai(prefix,doc,revision=False):
         try:
             with st.spinner('Preparando propuestas…'):
                 current=st.session_state[prefix+'_doc']
-                st.session_state[prefix+'_ia']=proponer(current['metadatos'].get('resumen_educativo',''),doc['formato'],doc['datos']['Función'],revision)
+                st.session_state[prefix+'_ia']=proponer(current['metadatos'].get('resumen_educativo',''),doc['formato'],doc['datos']['Función'],revision,curriculo=contexto_ia(current))
         except (ValueError,RuntimeError) as exc:
             st.info(str(exc))
     result=st.session_state.get(prefix+'_ia')
@@ -102,8 +155,9 @@ def _ai(prefix,doc,revision=False):
     for missing in result['faltantes']:st.caption(missing)
     for i,proposal in enumerate(result['propuestas']):
         with st.expander(proposal['objetivo'] or f'Propuesta {i+1}'):
-            for field,label in [('necesidad','Necesidad documentada a confirmar'),('descriptor','Cómo reconocer el avance'),('actividad','Actividad sugerida'),('contexto','Dónde'),('temporalidad','Cuándo'),('recursos','Con qué apoyos'),('evaluacion','Cómo dar seguimiento')]:
+            for field,label in [('necesidad','Necesidad documentada a confirmar'),('descriptor','Cómo reconocer el avance'),('actividad','Actividad sugerida'),('contexto','Dónde'),('temporalidad','Cuándo'),('recursos','Con qué apoyos'),('evaluacion','Cómo dar seguimiento'),('fundamento','Fundamento curricular y local')]:
                 if proposal.get(field):st.write(label+': '+proposal[field])
+            if proposal.get('fuentes'):st.caption('Fuentes verificadas: '+', '.join(proposal['fuentes']))
             if not revision and st.button('Añadir al borrador',key=prefix+'_apply_'+str(i)):
                 current=deepcopy(st.session_state[prefix+'_doc']);tables=current['tablas'];fmt=current['formato']
                 if fmt=='XXIII':
@@ -130,6 +184,7 @@ def _editor(prefix):
     with st.expander('Datos precargados de los alumnos'):
         st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,use_container_width=True)
     st.caption('Autoguardado de cambios confirmados cada 15 segundos mientras trabajas. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
+    _curriculo(prefix,doc)
     if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
     with st.expander('Evidencias del expediente y referente curricular'):
         if st.button('Actualizar información del expediente',key=prefix+'_sources'):
@@ -195,10 +250,14 @@ def _editor(prefix):
     if middle.button('Enviar a Dirección',key=prefix+'_send',disabled=bool(faltas)):
         _persist(prefix,'ENVIADO');st.rerun()
     if right.button('Preparar PDF',key=prefix+'_makepdf'):
-        st.session_state[prefix+'_pdf']=generar_pdf(current)
+        _persist(prefix)
+        st.session_state[prefix+'_pdf']=generar_pdf(st.session_state[prefix+'_doc'])
     _autosave(prefix)
     st.download_button('Descargar respaldo editable',json.dumps(current,ensure_ascii=False,indent=2),file_name='planeacion-'+current['id']+'.json',mime='application/json',key=prefix+'_backup')
     if prefix+'_pdf' in st.session_state:
+        _preview(prefix,st.session_state[prefix+'_pdf'])
+        if st.button('Volver a editar',key=prefix+'_edit_again'):
+            st.session_state.pop(prefix+'_pdf',None);st.rerun()
         st.download_button('Descargar PDF',st.session_state[prefix+'_pdf'],file_name='planeacion-'+current['id']+'.pdf',mime='application/pdf',key=prefix+'_download')
 
 
@@ -226,7 +285,7 @@ def direccion_panel():
         consent=st.checkbox('Revisé que el resumen no identifica personas.',key=prefix+'_ia_consent_'+doc['id'])
         if st.button('Analizar áreas de mejora',disabled=not consent,key=prefix+'_ia_revisar'):
             try:
-                result=proponer(resumen,doc['formato'],doc['datos']['Función'],True)
+                result=proponer(resumen,doc['formato'],doc['datos']['Función'],True,curriculo=contexto_ia(doc))
                 st.write(result['observaciones'])
                 for item in result['faltantes']:st.caption(item)
             except (ValueError,RuntimeError) as exc:st.info(str(exc))
@@ -290,3 +349,4 @@ def planeacion_page():
                     _open(prefix,doc);_persist(prefix);st.rerun()
                 except (ValueError,PermissionError) as exc:st.warning(str(exc))
         if prefix+'_doc' in st.session_state:_editor(prefix)
+

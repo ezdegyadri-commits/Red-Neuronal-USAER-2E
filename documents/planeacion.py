@@ -1,18 +1,23 @@
 """Exportación legible: conserva todos los apartados, sin recortar contenido."""
 from io import BytesIO
 from html import escape
+from pathlib import Path
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
 from services.planeacion_modelo import FORMATOS
+from services.curriculo import contexto_ia
 
 
 def generar_pdf(doc):
     output=BytesIO(); width,height=landscape(letter); available=width-60
     styles=getSampleStyleSheet()
+    styles['Heading2'].keepWithNext=True
+    styles['Heading2'].fontSize=11
+    styles['Heading2'].leading=14
     small=ParagraphStyle('Celda',parent=styles['Normal'],fontSize=8,leading=10)
-    title=ParagraphStyle('TituloPlaneacion',parent=styles['Title'],fontSize=17,leading=20)
+    title=ParagraphStyle('TituloPlaneacion',parent=styles['Title'],fontSize=14,leading=17)
     def p(value,style=small):
         return Paragraph(escape(str(value or '')).replace('\n','<br/>') or ' ',style)
     story=[p('USAER 02-E · '+FORMATOS[doc['formato']]['titulo'],title),
@@ -20,10 +25,13 @@ def generar_pdf(doc):
     datos=[]
     for k,v in doc['datos'].items():
         if k=='Alumnos':
-            story.append(p('Alumnos seleccionados',styles['Heading2']))
-            for alumno in v:
-                story.append(p(' · '.join(f'{key}: {value}' for key,value in alumno.items() if value is not None and value!='')))
-        elif v is not None and v!='':
+            story.append(p('Nombre del alumno/a, grado, grupo y condición',styles['Heading2']))
+            rows=[[p(h) for h in ('Nombre del alumno/a','Grado','Grupo','Condición')]]
+            rows.extend([[p(a.get(k,'')) for k in ('Nombre del alumno','Grado','Grupo','Condición')] for a in v])
+            alumnos_table=Table(rows,colWidths=[available*.46,available*.10,available*.10,available*.34],repeatRows=1,splitInRow=1)
+            alumnos_table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.4,colors.grey),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#dceeee')),('VALIGN',(0,0),(-1,-1),'TOP')]))
+            story.append(alumnos_table)
+        elif k!='ID_Escuela':
             datos.append(p(f'{k.replace("_"," ")}: {v}'))
     if len(datos)%2:datos.append(p(''))
     metadata=Table([datos[i:i+2] for i in range(0,len(datos),2)],colWidths=[available/2]*2)
@@ -33,6 +41,13 @@ def generar_pdf(doc):
     for key in ('fuente_iepp','necesidades_confirmadas','referente_curricular'):
         if meta.get(key):
             story.append(p(key.replace('_',' ').capitalize()+': '+str(meta[key])))
+    curricular=meta.get('curriculo',{})
+    if curricular:
+        story.extend([p('Vinculación curricular',styles['Heading2']),p('Campo formativo: '+curricular.get('campo','')),p('Ejes articuladores: '+', '.join(curricular.get('ejes',[])))])
+        for r in curricular.get('registros',[]):
+            story.append(p(f"Fase {r['fase']} · Grado {r['grado']} · {r['fuente']} · Página PDF {r['pagina_pdf']}"))
+            story.extend([p('Contenido: '+r['contenido']),p('PDA (extracto oficial por grado): '+r['pda'])])
+        if curricular.get('contexto_local'):story.append(p('Contextualización escolar y comunitaria: '+curricular['contexto_local']))
     for key,headers in FORMATOS[doc['formato']]['tablas'].items():
         story.extend([Spacer(1,10),p(key.replace('_',' ').capitalize(),styles['Heading2'])])
         rows=doc['tablas'][key] or [{}]
@@ -43,7 +58,7 @@ def generar_pdf(doc):
              ('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4)]))
         story.append(table)
     for k,v in doc['textos'].items():
-        story.extend([p(k,styles['Heading2']),p(v)])
+        story.append(KeepTogether([p(k,styles['Heading2']),p(v)]))
     if doc.get('observaciones_director'):
         story.extend([p('Observaciones de Dirección',styles['Heading2']),p(doc['observaciones_director'])])
     firmas=[]
@@ -55,9 +70,18 @@ def generar_pdf(doc):
     bloque=Table([firmas],colWidths=[available/len(firmas)]*len(firmas))
     bloque.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP')]))
     story.extend([Spacer(1,14),KeepTogether([bloque])])
+    if curricular:
+        story.append(p('Fuentes oficiales de fundamentación',styles['Heading2']))
+        for source in contexto_ia(doc)['fuentes']:
+            story.append(p(source['titulo']+' · '+source['organismo']+' · '+source['edicion']+' · '+source['url']))
+        story.append(p('Los extractos de SEP se reproducen con reconocimiento de autoría para uso educativo no comercial. Las propuestas pedagógicas son adaptaciones revisables, no texto oficial ni resultados alcanzados.'))
     def footer(canvas,_):
+        root=Path(__file__).resolve().parents[1]
+        header=root/'encabezado.png';footer_image=root/'pie_pagina.png'
+        if header.exists():canvas.drawImage(str(header),(width-620)/2,height-94,width=620,height=74,preserveAspectRatio=True,anchor='c',mask='auto')
+        if footer_image.exists():canvas.drawImage(str(footer_image),(width-490)/2,12,width=490,height=72,preserveAspectRatio=True,anchor='c',mask='auto')
         canvas.setFont('Helvetica',8)
-        canvas.drawString(30,18,'USAER 02-E · Documento educativo · '+doc['estado'])
-        canvas.drawRightString(width-30,18,f'Página {canvas.getPageNumber()}')
-    SimpleDocTemplate(output,pagesize=(width,height),leftMargin=30,rightMargin=30,topMargin=26,bottomMargin=32).build(story,onFirstPage=footer,onLaterPages=footer)
+        canvas.drawString(30,86,'USAER 02-E · Documento educativo · '+doc['estado'])
+        canvas.drawRightString(width-30,86,f'Página {canvas.getPageNumber()}')
+    SimpleDocTemplate(output,pagesize=(width,height),leftMargin=30,rightMargin=30,topMargin=110,bottomMargin=100).build(story,onFirstPage=footer,onLaterPages=footer)
     return output.getvalue()

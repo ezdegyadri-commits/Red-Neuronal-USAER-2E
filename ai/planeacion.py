@@ -6,7 +6,7 @@ import streamlit as st
 MODEL=os.environ.get('PLANEACION_GEMINI_MODEL','gemini-2.5-flash')
 
 
-def proponer(resumen, formato, area, revisar=False):
+def proponer(resumen, formato, area, revisar=False, curriculo=None):
     resumen=str(resumen).strip()
     if not resumen or len(resumen)>12000:
         raise ValueError('Escribe un resumen educativo de hasta 12 000 caracteres.')
@@ -25,16 +25,28 @@ def proponer(resumen, formato, area, revisar=False):
             'Distingue BAP del contexto y necesidades; no atribuyas actas escolares a atención individual. '
             'Las propuestas son revisables, no acuerdos ni aprobación. Respeta el anexo '+formato+
             ' y el área '+area+'. '+('Revisa áreas de mejora del trabajo descrito. ' if revisar else '')+
+            'Fundamenta cada propuesta en las fuentes oficiales incluidas, relacionando campo, ejes y contenido/PDA del grado pertinente. '
+            'Cita solo IDs de fuentes suministradas. No inventes acuerdos locales ni PDA. Explica cómo el apoyo facilita el acceso al referente, '
+            'sin afirmar que el alumno ya lo logró ni copiar objetivos de otro grado. REFERENTES OFICIALES:\n'+json.dumps(curriculo or {},ensure_ascii=False)+'\n'+
             'Devuelve JSON: {"observaciones":"...","faltantes":["..."],"propuestas":[{'
             '"necesidad":"...","objetivo":"...","descriptor":"...","actividad":"...",'
-            '"contexto":"...","temporalidad":"...","recursos":"...","evaluacion":"..."}]}. '
+            '"contexto":"...","temporalidad":"...","recursos":"...","evaluacion":"...","fundamento":"...","fuentes":["ID fuente"],"referentes":["ID referente"]}]}. '
             'Máximo 4 propuestas, sin identificar personas. RESUMEN:\n'+resumen)
         response=cli.models.generate_content(model=MODEL,contents=prompt,
                        config={'temperature':0.2,'response_mime_type':'application/json'})
         raw=re.sub(r'^```(?:json)?\s*|\s*```$','',(response.text or '').strip())
         data=json.loads(raw)
-        campos=('necesidad','objetivo','descriptor','actividad','contexto','temporalidad','recursos','evaluacion')
+        campos=('necesidad','objetivo','descriptor','actividad','contexto','temporalidad','recursos','evaluacion','fundamento')
         propuestas=[{k:str(p.get(k,''))[:2000] for k in campos} for p in data.get('propuestas',[])[:4] if isinstance(p,dict)]
+        allowed={s['id'] for s in (curriculo or {}).get('fuentes',[])}
+        refs={r['id'] for r in (curriculo or {}).get('referentes_por_grado',[])}
+        for parsed,raw_proposal in zip(propuestas,[p for p in data.get('propuestas',[])[:4] if isinstance(p,dict)]):
+            parsed['fuentes']=[str(s) for s in raw_proposal.get('fuentes',[]) if str(s) in allowed]
+            parsed['referentes']=[str(r) for r in raw_proposal.get('referentes',[]) if str(r) in refs]
+            if allowed and (not parsed['fuentes'] or not parsed['fundamento']):
+                raise RuntimeError('La propuesta no incluyó un fundamento verificable. Tu borrador se conserva.')
+            if refs and not parsed['referentes']:
+                raise RuntimeError('La propuesta no vinculó un referente seleccionado. Tu borrador se conserva.')
         return {'observaciones':str(data.get('observaciones',''))[:4000],
                 'faltantes':[str(v)[:500] for v in data.get('faltantes',[])[:8]],'propuestas':propuestas}
     except ValueError:

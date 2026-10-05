@@ -197,6 +197,10 @@ def guardar(doc, estado='BORRADOR', observaciones=None):
             if faltas:
                 raise ValueError('Antes de enviar: '+ '; '.join(faltas[:3]))
         saved=deepcopy(doc); saved['estado']=estado
+        curricular=saved['metadatos'].get('curriculo')
+        if curricular:
+            from services.curriculo import vincular
+            saved=vincular(saved,curricular.get('campo',''),curricular.get('ejes',[]),[r['id'] for r in curricular.get('registros',[])],curricular.get('contexto_local',''))
         saved.pop('_orden',None)
         if observaciones is not None:
             saved['observaciones_director']=str(observaciones)
