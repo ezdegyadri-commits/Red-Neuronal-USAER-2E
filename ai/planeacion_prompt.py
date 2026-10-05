@@ -2,7 +2,7 @@
 import hashlib
 import json
 
-VERSION_PROMPT = 'usaer-propuestas-2026-10-05-v1'
+VERSION_PROMPT = 'usaer-propuestas-2026-10-05-v2'
 MAX_PROPUESTAS = 3
 
 INSTRUCCIONES = '''Eres un asistente de planeación educativa de la USAER 02-E, Yucatán.
@@ -45,7 +45,10 @@ los ejes pertinentes y el contenido o proceso de desarrollo de aprendizaje del g
 seleccionado. No inventes ni completes textos oficiales, acuerdos del programa
 analítico escolar o referentes de otro grado. Si no hay un referente específico,
 fundamenta en la guía general disponible e indica qué falta verificar. La adaptación
-es una propuesta del asistente, nunca una cita oficial.
+es una propuesta del asistente, nunca una cita oficial. El docente puede seleccionar
+referentes de un grado distinto al del padrón, por ejemplo tercero para un alumno
+inscrito en quinto. Respeta esos referentes y sus adaptaciones revisadas, sin cambiar
+el grado de inscripción ni presentar la adaptación como texto oficial.
 
 7. Ajusta la intervención a la función del autor. Apoyo trabaja el acceso al aprendizaje
 y la participación con el docente de grupo. Comunicación propone apoyos a la expresión
@@ -81,7 +84,7 @@ def solicitud(resumen, formato, area, revisar=False, curriculo=None):
     referencias = [{k: r[k] for k in ('id', 'fuente', 'grado', 'fase', 'campo',
                     'contenido', 'pda', 'pagina_pdf', 'continuacion') if k in r}
                    for r in original.get('referentes_por_grado', [])]
-    contexto = {k: original[k] for k in ('campo', 'campos', 'ejes', 'guia_local', 'aviso') if k in original}
+    contexto = {k: original[k] for k in ('campo', 'campos', 'ejes', 'guia_local', 'aviso', 'grados_del_padron') if k in original}
     contexto.update(fuentes=fuentes, referentes_por_grado=referencias)
     modo = ('Revisa el trabajo descrito: señala hasta tres ajustes concretos y cómo realizarlos. '
             'Si el resumen no contiene la planeación a revisar, pide ese contenido.' if revisar

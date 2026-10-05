@@ -184,6 +184,39 @@ def _claves_grupo(valor):
     return claves
 
 
+def actualizar_bloques_borrador(borrador,clave_original,candidato,dias,inicio_jornada,fin_jornada,descanso_inicio='',descanso_fin='',reemplazar=False):
+    """Edición atómica local: horarios flexibles, semana completa y sin pérdida silenciosa."""
+    from copy import deepcopy
+    desde,hasta=_hora_minutos(candidato['Inicio']),_hora_minutos(candidato['Fin'])
+    if hasta<=desde:raise ValueError('El bloque debe terminar después de iniciar.')
+    if desde<_hora_minutos(inicio_jornada) or hasta>_hora_minutos(fin_jornada):
+        raise ValueError('El bloque debe quedar dentro de la jornada configurada.')
+    if descanso_inicio and descanso_fin and desde<_hora_minutos(descanso_fin) and _hora_minutos(descanso_inicio)<hasta:
+        raise ValueError('El bloque coincide con el descanso. Ajusta la hora o la configuración del descanso.')
+    if not dias or not set(dias).issubset(DIAS):raise ValueError('Elige días de lunes a viernes.')
+    result=deepcopy(borrador)
+    original=result.get(clave_original,{})
+    # Al mover una actividad repetida, reconoce las copias idénticas por contenido,
+    # sin quitar otros bloques que solo coincidan en la franja.
+    for dia in dias:
+        vieja=f"{dia}|{original.get('Inicio',candidato['Inicio'])}|{original.get('Fin',candidato['Fin'])}"
+        previa=result.get(vieja,{})
+        campos=('Actividad','ID_Alumnos','Grupo','Modalidad','Espacio')
+        if vieja==clave_original or (original and previa and all(previa.get(k,'')==original.get(k,'') for k in campos)):
+            result.pop(vieja,None)
+    result.pop(clave_original,None)
+    for dia in dict.fromkeys(dias):
+        nueva=f"{dia}|{desde//60:02d}:{desde%60:02d}|{hasta//60:02d}:{hasta%60:02d}"
+        if nueva in result and not reemplazar:
+            raise ValueError(f'{dia} ya tiene un bloque en ese horario. Confirma si deseas reemplazarlo.')
+        for key,row in result.items():
+            if key==nueva or row.get('Dia')!=dia:continue
+            if desde<_hora_minutos(row['Fin']) and _hora_minutos(row['Inicio'])<hasta:
+                raise ValueError(f"{dia}: se superpone con el bloque {row['Inicio']}–{row['Fin']}. Ajusta sus horas antes de repetir.")
+        result[nueva]={**deepcopy(candidato),'Dia':dia,'Inicio':f'{desde//60:02d}:{desde%60:02d}','Fin':f'{hasta//60:02d}:{hasta%60:02d}'}
+    return result
+
+
 def _coinciden_grupos(primero, segundo):
     a, b = _claves_grupo(primero), _claves_grupo(segundo)
     return any(x[0] == y[0] and (not x[1] or not y[1] or x[1] == y[1])

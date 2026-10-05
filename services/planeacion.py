@@ -337,11 +337,12 @@ def unificar_fuentes(fuentes):
 
 
 def preparar_contexto(doc):
+    from services.materiales_planeacion import fuentes_materiales
     fuentes,fallas=evidencias(doc)
     resultado=deepcopy(doc)
     # Una desconexión no borra el contexto previamente recuperado.
     previas=[f for f in doc['metadatos'].get('fuentes',[]) if f.get('tipo') in fallas]
-    fuentes=unificar_fuentes(fuentes+previas)
+    fuentes=unificar_fuentes(fuentes+previas+fuentes_materiales(doc))
     for i,f in enumerate(fuentes):f['referencia']='E'+str(i+1)
     resultado['metadatos'].update(fuentes=fuentes,contexto_cargado=True,fuentes_pendientes=fallas)
     if not resultado['metadatos'].get('resumen_educativo'):

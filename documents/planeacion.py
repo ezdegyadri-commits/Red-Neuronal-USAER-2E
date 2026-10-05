@@ -47,6 +47,9 @@ def generar_pdf(doc):
         for r in curricular.get('registros',[]):
             story.append(p(f"Fase {r['fase']} · Grado {r['grado']} · {r['fuente']} · Página PDF {r['pagina_pdf']}"))
             story.extend([p('Contenido: '+r['contenido']),p('PDA (extracto oficial por grado): '+r['pda'])])
+            ajuste=curricular.get('adaptaciones',{}).get(r['id'],{})
+            if ajuste:
+                story.extend([p('Adaptación docente del contenido: '+ajuste.get('contenido','')),p('PDA adaptado / objetivo de trabajo (redacción docente): '+ajuste.get('pda',''))])
         if curricular.get('contexto_local'):story.append(p('Contextualización escolar y comunitaria: '+curricular['contexto_local']))
     for key,headers in FORMATOS[doc['formato']]['tablas'].items():
         story.extend([Spacer(1,10),p(key.replace('_',' ').capitalize(),styles['Heading2'])])
@@ -85,4 +88,3 @@ def generar_pdf(doc):
         canvas.drawRightString(width-30,86,f'Página {canvas.getPageNumber()}')
     SimpleDocTemplate(output,pagesize=(width,height),leftMargin=30,rightMargin=30,topMargin=110,bottomMargin=100).build(story,onFirstPage=footer,onLaterPages=footer)
     return output.getvalue()
-
