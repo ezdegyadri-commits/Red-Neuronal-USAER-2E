@@ -134,15 +134,19 @@ def incorporar(doc,material,texto):
     texto=str(texto).strip()
     if not texto or len(texto)>MAX_TEXTO:raise ValueError('Revisa el texto: máximo 100 000 caracteres por material.')
     result=deepcopy(doc)
+    alumnos=list(dict.fromkeys(material.get('alumnos',[])))
+    autorizados={a['ID_Alumno'] for a in doc['datos']['Alumnos']}
+    if not set(alumnos)<=autorizados:raise PermissionError('Este material incluye alumnos fuera de la planeación.')
     materiales=[m for m in result['metadatos'].get('materiales',[]) if m['id']!=material['id']]
     if len(materiales)>=10:raise ValueError('Puedes conservar hasta diez materiales por planeación. Resume o reemplaza uno.')
     if sum(len(m['texto']) for m in materiales)+len(texto)>MAX_TOTAL_TEXTO:
         raise ValueError('El borrador admite 120 000 caracteres de materiales en total. Selecciona los fragmentos útiles; los originales no se modifican.')
-    materiales.append({'id':material['id'],'nombre':material['nombre'],'texto':texto,'revisado':True})
+    materiales.append({'id':material['id'],'nombre':material['nombre'],'texto':texto,'revisado':True,'alumnos':alumnos})
     result['metadatos']['materiales']=materiales
     return result
 
 def fuentes_materiales(doc):
     return [{'tipo':'MATERIAL','registro':m['id'],'referencia':'M'+str(i+1),'fecha':'',
+             'alumno':','.join(m.get('alumnos',[])),'vinculo_verificado':bool(m.get('alumnos')),
              'texto':m['texto'][:6000],'alcance':'extracto del material revisado por docente (hasta 6 000 caracteres); el texto incorporado completo permanece en Materiales; no resultado ni fuente oficial automática'}
             for i,m in enumerate(doc['metadatos'].get('materiales',[])) if m.get('revisado') and m.get('texto')]

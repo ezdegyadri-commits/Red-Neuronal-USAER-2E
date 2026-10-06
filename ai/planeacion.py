@@ -44,8 +44,8 @@ def _fallo(exc, modelo=None):
     return 'No se completó la propuesta. Dirección puede revisar el diagnóstico; tu borrador se conserva.'
 
 
-def proponer(resumen, formato, area, revisar=False, curriculo=None):
-    prompt = solicitud(resumen, formato, area, revisar, curriculo)
+def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=None, _schema=None, _validador=None, _max_tokens=4000):
+    prompt = _prompt or solicitud(resumen, formato, area, revisar, curriculo)
     modelo = modelo_configurado()
     if time.monotonic() < st.session_state.get('planeacion_ia_reintentar_desde', 0):
         raise RuntimeError('Espera unos 30 segundos antes de volver a solicitar IA. Puedes seguir editando tu borrador.')
@@ -60,7 +60,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None):
         cli = genai.Client(api_key=key, http_options=types.HttpOptions(
             timeout=45000, retry_options=types.HttpRetryOptions(attempts=1)))
         config = {'temperature': 0.2, 'response_mime_type': 'application/json',
-                  'max_output_tokens': 4000}
+                  'max_output_tokens': min(int(_max_tokens),6000)}
         textos = ('necesidad', 'objetivo', 'descriptor', 'actividad', 'contexto',
                   'temporalidad', 'recursos', 'evaluacion', 'fundamento')
         config['response_schema'] = {
@@ -73,6 +73,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None):
                     'properties': {**{t: {'type': 'string'} for t in textos},
                         'fuentes': {'type': 'array', 'items': {'type': 'string'}},
                         'referentes': {'type': 'array', 'items': {'type': 'string'}}}}}}}
+        if _schema is not None:config['response_schema']=_schema
         if modelo.startswith('gemini-2.5-flash'):
             config['thinking_config'] = {'thinking_budget': 0}
         # Un solo reintento breve. Nunca cambia de proveedor ni repite errores de
@@ -93,7 +94,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None):
         raise RuntimeError(_fallo(exc, modelo)) from None
     try:
         raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', (response.text or '').strip())
-        result = validar_respuesta(json.loads(raw), curriculo)
+        result = _validador(json.loads(raw)) if _validador else validar_respuesta(json.loads(raw), curriculo)
     except (ValueError, TypeError, AttributeError):
         st.session_state['planeacion_ia_diagnostico'] = {
             'codigo': None, 'tipo': 'RespuestaNoVerificable', 'motor': modelo}
