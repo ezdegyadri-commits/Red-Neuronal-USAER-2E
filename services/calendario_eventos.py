@@ -54,7 +54,17 @@ def cargar_eventos(mes):
     return [e for e in eventos_vigentes(_eventos_guardados()) if e["Fecha"].startswith(mes + "-")]
 
 
+def desplazar_mes(mes, pasos):
+    fecha=date.fromisoformat(mes+'-01')
+    numero=fecha.year*12+fecha.month-1+int(pasos)
+    anio,indice=divmod(numero,12)
+    if not 1900<=anio<=2100:raise ValueError('Elige un mes entre 1900 y 2100.')
+    return f'{anio:04d}-{indice+1:02d}'
+
+
 def guardar_evento(fecha, titulo, detalle="", id_evento=None, revision_esperada=None):
+    if not st.session_state.get('autenticado'):
+        raise PermissionError('Inicia sesión como Dirección para publicar actividades.')
     perfil = perfil_especialista(st.session_state.get("nombre", ""), st.session_state.get("rol", ""))
     if not perfil or perfil["area"] != "Dirección":
         raise PermissionError("Solo Dirección puede publicar eventos para el equipo.")
@@ -67,7 +77,7 @@ def guardar_evento(fecha, titulo, detalle="", id_evento=None, revision_esperada=
     _eventos_guardados.clear()
     existentes = eventos_vigentes(_eventos_guardados())
     anterior = next((e for e in existentes if e["ID_Evento"] == id_evento), None)
-    if revision_esperada is not None and (not anterior or anterior.get("Revision") != revision_esperada):
+    if revision_esperada is not None and (not anterior or anterior.get("Revision",'base') != revision_esperada):
         raise ValueError("Este evento cambió en otra sesión. Recarga antes de editarlo.")
     # Reenviar el mismo formulario no duplica el evento ni su versión.
     if anterior and (anterior["Fecha"], anterior["Titulo"], anterior.get("Detalle", "")) == (fecha, titulo, detalle):
