@@ -3,7 +3,7 @@ from io import BytesIO
 from unittest.mock import patch
 from copy import deepcopy
 from docx import Document
-from services.materiales_planeacion import leer_material, incorporar, fuentes_materiales, MAX_BYTES
+from services.materiales_planeacion import leer_material, incorporar, fuentes_materiales, MAX_BYTES, MAX_TEXTO
 from services.planeacion_modelo import crear_plantilla
 from services import planeacion
 
@@ -37,7 +37,30 @@ class MaterialesTests(unittest.TestCase):
     def test_sin_texto_limites_y_formato_invalido(self):
         for nombre,data in [('material.exe',b'no ejecutar'),('grande.txt',b'a'*(MAX_BYTES+1)),('vacio.txt',b'')]:
             with self.assertRaises(ValueError):leer_material(nombre,data)
-        self.assertIn('parcial',leer_material('largo.txt',b'x'*21000)['avisos'][0])
+        self.assertEqual(len(leer_material('largo.txt',b'x'*50000)['texto']),50000)
+        self.assertIn('parcial',leer_material('largo.txt',b'x'*(MAX_TEXTO+1))['avisos'][0])
+    def test_pdf_largo_y_lectura_por_intervalo(self):
+        import pymupdf
+        with pymupdf.open() as doc:
+            for i in range(150):doc.new_page().insert_text((30,30),f'Pagina {i+1}: actividad educativa con instrucciones claras y apoyos visuales.')
+            data=doc.tobytes()
+        result=leer_material('guia.pdf',data)
+        self.assertIn('Página 150',result['texto'])
+        parcial=leer_material('guia.pdf',data,140,150)
+        self.assertIn('Página 140',parcial['texto']);self.assertNotIn('Página 139',parcial['texto'])
+    def test_pdf_escaneado_limita_ocr_y_avisa(self):
+        import pymupdf
+        with pymupdf.open() as doc:
+            for _ in range(14):doc.new_page()
+            data=doc.tobytes()
+        with patch('services.materiales_planeacion._ocr',return_value='Texto revisable para trabajar') as ocr:
+            result=leer_material('escaneo.pdf',data)
+        self.assertEqual(ocr.call_count,10)
+        self.assertTrue(any('sin transcribir' in w for w in result['avisos']))
+    def test_presupuesto_de_materiales_protege_respaldo(self):
+        d=documento();material=leer_material('uno.txt',b'x'*80000);d=incorporar(d,material,material['texto'])
+        otro=leer_material('dos.txt',b'y'*80000)
+        with self.assertRaisesRegex(ValueError,'120 000'):incorporar(d,otro,otro['texto'])
     def test_material_revisado_persistente_idempotente_y_contexto(self):
         source=documento();material=leer_material('guia.txt','Apoyo visual documentado'.encode())
         doc=incorporar(source,material,'Texto revisado por docente')

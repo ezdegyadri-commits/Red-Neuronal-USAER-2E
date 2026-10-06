@@ -296,6 +296,8 @@ def cargar_restricciones(escuela):
     _, _, rows = _leer("Horarios_Restricciones", RESTRICCIONES_HEADERS)
     activos = [row for row in rows if _coincide_escuela(row, escuela)
                and str(row.get("Estado", "ACTIVO")).upper() == "ACTIVO"]
+    ultimas={str(r.get('Archivo','')):str(r.get('ID_Version','')) for r in activos}
+    activos=[r for r in activos if str(r.get('ID_Version',''))==ultimas[str(r.get('Archivo',''))]]
     return pd.DataFrame(activos).drop(columns=["_fila"], errors="ignore")
 
 
@@ -304,7 +306,7 @@ def guardar_restricciones(escuela, cargado_por, archivo, frame):
     return guardar_restricciones_lote(escuela, cargado_por, [(archivo, frame)])
 
 
-def guardar_restricciones_lote(escuela, cargado_por, archivos_frames):
+def guardar_restricciones_lote(escuela, cargado_por, archivos_frames, versiones_esperadas=None):
     """Guarda una carga de varios archivos en una sola operación de escritura."""
     entradas = []
     for archivo, frame in archivos_frames:
@@ -314,6 +316,11 @@ def guardar_restricciones_lote(escuela, cargado_por, archivos_frames):
     if not entradas:
         raise ValueError("No hay filas de horario para guardar.")
     ws, headers, existentes = _leer("Horarios_Restricciones", RESTRICCIONES_HEADERS)
+    if versiones_esperadas is not None:
+        for archivo,esperada in versiones_esperadas.items():
+            activas=[r for r in existentes if _coincide_escuela(r,escuela) and str(r.get('Archivo',''))==archivo and str(r.get('Estado','ACTIVO')).upper()=='ACTIVO']
+            if not activas or str(activas[-1].get('ID_Version',''))!=esperada:
+                raise RuntimeError('Otra cuenta cambió esta referencia. Actualiza los horarios antes de guardar tu corrección.')
     version = uuid4().hex
     now = datetime.now(ZONA).isoformat(timespec="seconds")
     nuevos = []
@@ -354,6 +361,23 @@ def guardar_restricciones_lote(escuela, cargado_por, archivos_frames):
     clear_cache("Horarios_Restricciones")
     cargar_restricciones.clear()
     return version, len(nuevos)
+
+
+def editar_referencia(escuela, archivo, frame, version_esperada):
+    nombre=str(st.session_state.get('nombre','')).strip()
+    rol=str(st.session_state.get('rol','')).strip()
+    if not st.session_state.get('autenticado') or 'APOYO' not in normalizar_texto(rol):
+        raise PermissionError('Solo una cuenta de apoyo autenticada puede corregir sus referencias escolares.')
+    if normalizar_texto(escuela) not in {normalizar_texto(e) for e in escuelas_asignadas(nombre,rol)}:
+        raise PermissionError('Esta escuela no pertenece a tu cuenta.')
+    revisado=normalizar_tabla_horario(frame)
+    return guardar_restricciones_lote(escuela,nombre,[(archivo,revisado)],versiones_esperadas={archivo:version_esperada})
+
+
+def _referencia_general(bloque):
+    grupo=normalizar_texto(bloque.get('Grupo',''))
+    actividad=normalizar_texto(bloque.get('Actividad',''))
+    return grupo in {'TODOS','TODOS LOS GRUPOS','TODA LA ESCUELA'} or (not grupo and actividad in {'DESCANSO','RECREO','JORNADA ESCOLAR','SUSPENSION DE LABORES','CTE'})
 
 
 @st.cache_data(ttl=45, show_spinner=False)
@@ -434,11 +458,14 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
                     "Horario existente": f"{anterior.get('Inicio')}–{anterior.get('Fin')}",
                 })
         for _, bloque in restricciones.iterrows() if not restricciones.empty else []:
+            # Una clase sin grupo es información por confirmar, no una prohibición
+            # para todos. Las tareas sin alumnos no se cruzan con sus materias.
+            if not grupo and not str(item.get('ID_Alumnos','')).strip():continue
             if normalizar_dia(bloque.get("Dia", "")) != dia:
                 continue
             b_ini, b_fin = _hora_minutos(bloque.get("Inicio")), _hora_minutos(bloque.get("Fin"))
             b_grupo = normalizar_texto(bloque.get("Grupo", ""))
-            mismo_grupo_o_general = not b_grupo or _coinciden_grupos(bloque.get("Grupo", ""), item.get("Grupo", ""))
+            mismo_grupo_o_general = _referencia_general(bloque) or (bool(b_grupo) and _coinciden_grupos(bloque.get("Grupo", ""), item.get("Grupo", "")))
             if mismo_grupo_o_general and ini < b_fin and b_ini < fin:
                 conflictos.append({
                     "Día": dia, "Grupo": item.get("Grupo", ""),

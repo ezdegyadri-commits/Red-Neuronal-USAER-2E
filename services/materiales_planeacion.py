@@ -7,12 +7,15 @@ import zipfile
 from xml.etree import ElementTree as ET
 
 TIPOS = ['docx','pdf','png','jpg','jpeg','webp','bmp','tif','tiff','txt','md','csv','json','rtf','odt','xlsx','pptx','odp']
-MAX_BYTES = 8 * 1024 * 1024
-MAX_TEXTO = 20000
+MAX_BYTES = 32 * 1024 * 1024
+MAX_TEXTO = 100000
+MAX_PAGINAS = 1000
+MAX_OCR = 10
+MAX_TOTAL_TEXTO = 120000
 
 def _zip(data):
     archive=zipfile.ZipFile(BytesIO(data))
-    if len(archive.infolist())>2000 or sum(i.file_size for i in archive.infolist())>32*1024*1024:
+    if len(archive.infolist())>5000 or sum(i.file_size for i in archive.infolist())>128*1024*1024:
         archive.close()
         raise ValueError('El documento es demasiado grande al abrirlo. Divide el material en partes.')
     return archive
@@ -40,8 +43,9 @@ def _ocr(image):
         lines.setdefault(line,[]).append(str(word) if conf>=50 else '[ilegible]')
     return '\n'.join(' '.join(words) for words in lines.values()) if reliable>=2 else ''
 
-def leer_material(nombre,data):
-    if not data or len(data)>MAX_BYTES:raise ValueError('Usa archivos de hasta 8 MB.')
+def leer_material(nombre,data,pagina_inicio=1,pagina_fin=None):
+    if not data or len(data)>MAX_BYTES:raise ValueError('Usa archivos de hasta 32 MB.')
+    if pagina_inicio<1 or (pagina_fin is not None and pagina_fin<pagina_inicio):raise ValueError('Revisa el intervalo de páginas.')
     extension=Path(nombre).suffix.lower().lstrip('.')
     if extension not in TIPOS:raise ValueError('Convierte este archivo a PDF, Word (.docx), texto o imagen.')
     warnings=[];parts=[]
@@ -85,22 +89,35 @@ def leer_material(nombre,data):
             from PIL import Image
             with pymupdf.open(stream=data,filetype='pdf') as pdf:
                 if pdf.needs_pass:raise ValueError('Quita la contraseña del PDF antes de cargarlo.')
-                if len(pdf)>12:raise ValueError('Divide el PDF en archivos de hasta 12 páginas.')
-                for i,page in enumerate(pdf):
+                if len(pdf)>MAX_PAGINAS:raise ValueError('El PDF admite hasta 1 000 páginas. Selecciona o divide documentos mayores.')
+                if pagina_inicio>len(pdf):raise ValueError('La página inicial no existe en este PDF.')
+                fin=min(pagina_fin or len(pdf),len(pdf));ocr_usados=0;omitidas=[];caracteres=0
+                for i in range(pagina_inicio-1,fin):
+                    page=pdf[i]
                     text=page.get_text().strip()
                     if len(re.sub(r'\W','',text))<30:
+                        if ocr_usados>=MAX_OCR:
+                            omitidas.append(i+1);continue
+                        ocr_usados+=1
                         pix=page.get_pixmap(matrix=pymupdf.Matrix(1.5,1.5),alpha=False)
                         try:text=_ocr(Image.open(BytesIO(pix.tobytes('png'))))
                         except Exception:
                             text='';warnings.append(f'No se pudo transcribir la página {i+1}; el resto se conserva.')
                     parts.append(f'Página {i+1}\n'+(text or '[página sin texto legible]'))
+                    caracteres+=len(parts[-1])
+                    if caracteres>=MAX_TEXTO:
+                        warnings.append(f'Se detuvo la lectura en la página {i+1} al alcanzar el límite de texto. Elige otro intervalo para continuar.');break
+                if omitidas:warnings.append(f'Quedan {len(omitidas)} páginas escaneadas sin transcribir, desde la {omitidas[0]}. Selecciona ese intervalo: se procesan hasta diez páginas escaneadas por lectura.')
         else:
             from PIL import Image
             with Image.open(BytesIO(data)) as image:
                 frames=getattr(image,'n_frames',1)
-                if frames>12:raise ValueError('Divide la imagen multipágina en archivos de hasta 12 páginas.')
-                for i in range(frames):
+                if frames>MAX_PAGINAS:raise ValueError('La imagen multipágina admite hasta 1 000 páginas.')
+                if pagina_inicio>frames:raise ValueError('La página inicial no existe en esta imagen.')
+                fin=min(pagina_fin or frames,frames,pagina_inicio-1+MAX_OCR)
+                for i in range(pagina_inicio-1,fin):
                     image.seek(i);parts.append(_ocr(image.copy()))
+                if fin<frames:warnings.append(f'Lectura hasta la página {fin}. Selecciona otro intervalo para continuar.')
             warnings.append('Revisa la transcripción, especialmente la letra manuscrita y las marcas [ilegible].')
     except (ValueError,RuntimeError):raise
     except Exception as exc:
@@ -109,21 +126,23 @@ def leer_material(nombre,data):
     if not text or not re.sub(r'\[página sin texto legible\]|\[ilegible\]|Página \d+','',text).strip():
         raise ValueError('No hay texto legible para incorporar. Prueba otra copia o escribe el contenido.')
     if len(text)>MAX_TEXTO:
-        text=text[:MAX_TEXTO];warnings.append('Lectura parcial: primeros 20 000 caracteres. Divide el archivo para incorporar el resto.')
+        text=text[:MAX_TEXTO];warnings.append('Lectura parcial: hasta 100 000 caracteres. Selecciona las páginas o el extracto pertinente.')
     return {'id':hashlib.sha256(data).hexdigest(),'nombre':Path(nombre).name[:160], 'texto':text,'avisos':warnings}
 
 def incorporar(doc,material,texto):
     from copy import deepcopy
     texto=str(texto).strip()
-    if not texto or len(texto)>MAX_TEXTO:raise ValueError('Revisa el texto: máximo 20 000 caracteres por material.')
+    if not texto or len(texto)>MAX_TEXTO:raise ValueError('Revisa el texto: máximo 100 000 caracteres por material.')
     result=deepcopy(doc)
     materiales=[m for m in result['metadatos'].get('materiales',[]) if m['id']!=material['id']]
-    if len(materiales)>=5:raise ValueError('Puedes conservar hasta cinco materiales por planeación. Resume o reemplaza uno.')
+    if len(materiales)>=10:raise ValueError('Puedes conservar hasta diez materiales por planeación. Resume o reemplaza uno.')
+    if sum(len(m['texto']) for m in materiales)+len(texto)>MAX_TOTAL_TEXTO:
+        raise ValueError('El borrador admite 120 000 caracteres de materiales en total. Selecciona los fragmentos útiles; los originales no se modifican.')
     materiales.append({'id':material['id'],'nombre':material['nombre'],'texto':texto,'revisado':True})
     result['metadatos']['materiales']=materiales
     return result
 
 def fuentes_materiales(doc):
     return [{'tipo':'MATERIAL','registro':m['id'],'referencia':'M'+str(i+1),'fecha':'',
-             'texto':m['texto'],'alcance':'material aportado y revisado por docente; confirmar pertinencia al alumno o grupo, no resultado ni fuente oficial automática'}
+             'texto':m['texto'][:6000],'alcance':'extracto del material revisado por docente (hasta 6 000 caracteres); el texto incorporado completo permanece en Materiales; no resultado ni fuente oficial automática'}
             for i,m in enumerate(doc['metadatos'].get('materiales',[])) if m.get('revisado') and m.get('texto')]
