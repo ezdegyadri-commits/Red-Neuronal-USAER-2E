@@ -8,16 +8,28 @@ import random
 import streamlit as st
 from ai.planeacion_prompt import solicitud, validar_respuesta
 
-MODEL = os.environ.get('PLANEACION_GEMINI_MODEL', 'gemini-2.5-flash')
+DEFAULT_MODEL = 'gemini-3.5-flash-lite'
+MODEL = os.environ.get('PLANEACION_GEMINI_MODEL', DEFAULT_MODEL)
+# Migración explícita de la configuración heredada: un único motor vigente,
+# sin cadena de intentos ni cambio de proveedor o contratación de servicios.
+MODELOS_HEREDADOS = {'gemini-2.5-flash','gemini-2.5-flash-preview-09-2025',
+                    'gemini-3.1-flash-lite-preview'}
 logger = logging.getLogger(__name__)
 
 
-def modelo_configurado():
+def configuracion_modelo():
     """La configuración del portal tiene prioridad; no cambia facturación ni claves."""
     try:
-        return str(st.secrets.get('PLANEACION_GEMINI_MODEL', MODEL)).strip() or MODEL
+        pedido = str(st.secrets.get('PLANEACION_GEMINI_MODEL', MODEL)).strip() or DEFAULT_MODEL
     except FileNotFoundError:
-        return MODEL
+        pedido = MODEL.strip() or DEFAULT_MODEL
+    pedido = pedido.removeprefix('models/')
+    elegido = DEFAULT_MODEL if pedido in MODELOS_HEREDADOS else pedido
+    return {'solicitado':pedido,'efectivo':elegido,'migrado':pedido!=elegido}
+
+
+def modelo_configurado():
+    return configuracion_modelo()['efectivo']
 
 
 def _fallo(exc, modelo=None):
@@ -36,7 +48,7 @@ def _fallo(exc, modelo=None):
     if codigo in (401, 403):
         return 'La conexión de IA requiere revisión de Dirección. Tu borrador se conserva.'
     if codigo == 404:
-        return 'El motor de IA configurado no está disponible. Dirección debe revisar la configuración.'
+        return 'Google no encontró el modelo '+str(modelo or modelo_configurado())+' para esta conexión. No es un error del borrador; Dirección debe comprobar el acceso al modelo con la clave del proyecto.'
     if codigo in (500, 502, 503):
         return 'El servicio de IA está ocupado. Tu borrador se conserva.'
     if codigo == 504 or isinstance(exc, TimeoutError) or 'Timeout' in type(exc).__name__:

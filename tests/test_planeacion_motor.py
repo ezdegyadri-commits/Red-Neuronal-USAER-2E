@@ -6,6 +6,18 @@ from unittest.mock import patch, Mock
 from ai import planeacion as motor
 
 class MotorTests(unittest.TestCase):
+    def test_migra_configuracion_heredada_sin_cambiar_clave(self):
+        secretos={'GEMINI_API_KEY':'clave-ficticia','PLANEACION_GEMINI_MODEL':'models/gemini-2.5-flash'}
+        with patch.object(motor.st,'secrets',secretos):
+            self.assertEqual(motor.modelo_configurado(),'gemini-3.5-flash-lite')
+            self.assertTrue(motor.configuracion_modelo()['migrado'])
+        self.assertEqual(secretos['GEMINI_API_KEY'],'clave-ficticia')
+    def test_default_vigente_y_modelo_explicito_preservado(self):
+        with patch.object(motor.st,'secrets',{}),patch.object(motor,'MODEL','gemini-3.5-flash-lite'):
+            self.assertEqual(motor.modelo_configurado(),'gemini-3.5-flash-lite')
+        with patch.object(motor.st,'secrets',{'PLANEACION_GEMINI_MODEL':'gemini-3.6-flash'}):
+            self.assertEqual(motor.modelo_configurado(),'gemini-3.6-flash')
+            self.assertFalse(motor.configuracion_modelo()['migrado'])
     def llamada(self,respuesta=None,error=None):
         client=Mock()
         client.models.generate_content.return_value=SimpleNamespace(text=respuesta)
