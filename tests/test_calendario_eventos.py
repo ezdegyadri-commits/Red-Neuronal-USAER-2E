@@ -8,10 +8,27 @@ from streamlit.testing.v1 import AppTest
 from services import calendario_eventos as eventos
 from services import cronogramas
 
-DIRECTOR = {"nombre": "Psic. Edgar Adrián Yam Briceño MD", "rol": "DIRECTOR"}
+DIRECTOR = {"nombre": "Director ficticio", "rol": "DIRECTOR",'autenticado':True}
+
+def perfil_director_ficticio():
+    return {'nombre':DIRECTOR['nombre'],'area':'Dirección','escuelas':['Escuela ficticia '+str(i) for i in range(1,9)]}
+
+def perfil_ficticio(nombre,rol):
+    if nombre==DIRECTOR['nombre'] and rol in ('DIRECTOR','Dirección'):return perfil_director_ficticio()
+    datos={'Especialista ficticio':('Psicología',range(1,5)),
+           'Especialista alterno ficticio':('Psicología',range(5,9)),
+           'Trabajador social ficticio':('Trabajo Social',range(1,9))}
+    if nombre not in datos:return None
+    area,indices=datos[nombre]
+    return {'nombre':nombre,'area':area,'escuelas':['Escuela ficticia '+str(i) for i in indices]}
 
 
 class CalendarioEventosTest(unittest.TestCase):
+    def setUp(self):
+        p=patch.object(eventos,'perfil_especialista',side_effect=lambda nombre,rol:perfil_director_ficticio() if nombre==DIRECTOR['nombre'] and rol=='DIRECTOR' else None)
+        p.start();self.addCleanup(p.stop)
+        p2=patch.object(cronogramas,'perfil_especialista',side_effect=perfil_ficticio)
+        p2.start();self.addCleanup(p2.stop)
     def test_source_has_all_dated_occurrences_and_one_undated_campaign(self):
         fuente = eventos.calendario_base()
         self.assertEqual(len(fuente["eventos"]), 134)
@@ -44,13 +61,31 @@ class CalendarioEventosTest(unittest.TestCase):
         self.assertEqual(len(latest), 134)
 
     def test_only_director_can_write_even_if_ui_is_bypassed(self):
-        for perfil in ({"nombre": "Abril de María Chable Ríos", "rol": "Psicología"},
-                       {"nombre": "Marycruz Caamal Coral", "rol": "APOYO"},
+        for perfil in ({"nombre": "Especialista ficticio", "rol": "Psicología"},
+                       {"nombre": "Docente ficticia", "rol": "APOYO"},
                        {"nombre": "Persona ajena", "rol": "DIRECTOR"}):
             with patch.object(eventos, "st", SimpleNamespace(session_state=perfil)), patch.object(eventos, "ensure_headers") as write:
                 with self.assertRaises(PermissionError):
                     eventos.guardar_evento("2026-10-02", "Reunión")
                 write.assert_not_called()
+
+    def test_director_sin_sesion_no_escribe(self):
+        with patch.object(eventos,'st',SimpleNamespace(session_state={**DIRECTOR,'autenticado':False})),patch.object(eventos,'ensure_headers') as write:
+            with self.assertRaises(PermissionError):eventos.guardar_evento('2026-10-05','Actividad')
+            write.assert_not_called()
+
+    def test_cambio_de_mes_cruza_anio_y_no_usa_dias_invalidos(self):
+        self.assertEqual(eventos.desplazar_mes('2026-12',1),'2027-01')
+        self.assertEqual(eventos.desplazar_mes('2027-01',-1),'2026-12')
+        self.assertEqual(eventos.desplazar_mes('2027-03',-1),'2027-02')
+
+    def test_actualizar_evento_base_conserva_historial_y_revision(self):
+        base=eventos.calendario_base()['eventos'][0];writes=[]
+        ws=SimpleNamespace(row_values=lambda _:eventos.HEADERS,append_rows=lambda rows,**kw:writes.extend(rows))
+        with patch.object(eventos,'st',SimpleNamespace(session_state=DIRECTOR)),patch.object(eventos,'_eventos_guardados',return_value=[]),patch.object(eventos,'ensure_headers',return_value=ws):
+            eventos.guardar_evento(base['Fecha'],'Actividad ajustada',id_evento=base['ID_Evento'],revision_esperada='base')
+        self.assertEqual(len(writes),1)
+        self.assertEqual(base['Titulo'],eventos.calendario_base()['eventos'][0]['Titulo'])
 
     def test_director_save_is_raw_append_only_and_accepts_weekend_event(self):
         ws = SimpleNamespace(row_values=lambda n: eventos.HEADERS, append_rows=lambda rows, **kw: writes.append((rows, kw)))
@@ -84,8 +119,9 @@ class CalendarioEventosTest(unittest.TestCase):
             write.assert_not_called()
 
     def test_director_options_are_not_granted_to_specialists(self):
-        director = cronogramas.perfil_especialista(DIRECTOR["nombre"], DIRECTOR["rol"])
-        especialista = cronogramas.perfil_especialista("Abril de María Chable Ríos", "Psicología")
+        director = perfil_director_ficticio()
+        nombre='Especialista ficticio'
+        especialista = cronogramas.perfil_especialista(nombre, "Psicología")
         self.assertEqual(len(director["escuelas"]), 8)
         self.assertTrue({"Sede", "Junta de Zona", "Junta de USAER", "Reunión Académica"}.issubset(cronogramas.lugares_cronograma(director)))
         self.assertNotIn("Junta de Zona", cronogramas.lugares_cronograma(especialista))
@@ -96,13 +132,17 @@ class CalendarioEventosTest(unittest.TestCase):
             write.assert_not_called()
 
     def test_school_summary_never_exposes_other_schools_or_unassigned_people(self):
+        personas=['Especialista ficticio','Especialista alterno ficticio']
+        asignada='Escuela ficticia 1'
+        otra='Escuela ficticia 2'
+        social='Trabajador social ficticio'
         rows = [
-            {"Fecha": "2026-10-02", "Especialista": "María José Cupul Realpozo", "Área": "Psicología", "Escuela": "Ichcaanziho", "Actividad": "Evaluación", "ID_Publicacion": "privado"},
-            {"Fecha": "2026-10-02", "Especialista": "Abril de María Chable Ríos", "Área": "Psicología", "Escuela": "Ichcaanziho", "Actividad": "No asignada"},
-            {"Fecha": "2026-10-02", "Especialista": "María José Cupul Realpozo", "Área": "Psicología", "Escuela": "Damián Carmona", "Actividad": "Otra escuela"},
-            {"Fecha": "2026-10-02", "Especialista": "Diego Peralta Torres", "Área": "Trabajo Social", "Escuela": "Ichcaanziho", "Actividad": "Seguimiento"},
+            {"Fecha": "2026-10-02", "Especialista": personas[0], "Área": "Psicología", "Escuela": asignada, "Actividad": "Evaluación ficticia", "ID_Publicacion": "version-ficticia"},
+            {"Fecha": "2026-10-02", "Especialista": personas[1], "Área": "Psicología", "Escuela": asignada, "Actividad": "No asignada"},
+            {"Fecha": "2026-10-02", "Especialista": personas[0], "Área": "Psicología", "Escuela": otra, "Actividad": "Otra escuela"},
+            {"Fecha": "2026-10-02", "Especialista": social, "Área": "Trabajo Social", "Escuela": asignada, "Actividad": "Seguimiento ficticio"},
         ]
-        resumen = cronogramas.resumir_visitas_escuela(rows, "Ichcaanziho")
+        resumen = cronogramas.resumir_visitas_escuela(rows, asignada)
         self.assertEqual(len(resumen), 2)
         self.assertEqual(resumen[0]["Fecha"], "02/10/2026")
         self.assertEqual(resumen[0]["Día"], "Viernes")
@@ -112,11 +152,11 @@ class CalendarioEventosTest(unittest.TestCase):
     def test_director_can_save_all_four_extra_destinations(self):
         writes = []
         ws = SimpleNamespace(append_rows=lambda rows, **kw: writes.extend(rows))
-        perfil = cronogramas.perfil_especialista(DIRECTOR["nombre"], DIRECTOR["rol"])
+        perfil = perfil_director_ficticio()
         destinos = ["Sede", "Junta de Zona", "Junta de USAER", "Reunión Académica"]
         agenda = [{"fecha": f"2026-10-{dia}", "escuela": lugar, "actividad": "Actividad directiva"}
                   for dia, lugar in zip(("02", "05", "06", "07"), destinos)]
-        with patch.object(cronogramas, "_leer_registros", return_value=(ws, cronogramas.ENCABEZADOS_CRONOGRAMA, [])):
+        with patch.object(cronogramas, "_leer_registros", return_value=(ws, cronogramas.ENCABEZADOS_CRONOGRAMA, [])),patch.object(cronogramas,'perfil_especialista',return_value=perfil):
             resultado = cronogramas.guardar_agenda(perfil["nombre"], "Dirección", "2026-10", perfil["escuelas"], agenda)
         self.assertEqual(resultado["filas"], 4)
         self.assertEqual([row[4] for row in writes], destinos)
@@ -145,7 +185,7 @@ class CalendarioEventosTest(unittest.TestCase):
         self.assertTrue(any(w.value == "Actividad común de prueba" for w in app.markdown))
         tabla = app.dataframe[0].value
         self.assertEqual(len(tabla), 1)
-        self.assertEqual(tabla.iloc[0]["Especialista"], "María José Cupul Realpozo")
+        self.assertEqual(tabla.iloc[0]["Especialista"], "Especialista ficticio")
         self.assertNotIn("Escuela", tabla.columns)
         self.assertNotIn("ID_Publicacion", tabla.columns)
 

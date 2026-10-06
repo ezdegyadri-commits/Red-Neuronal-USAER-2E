@@ -721,12 +721,10 @@ def _tabla_vista(frame):
 
 def _avisos_maestra(nombre, escuela):
     from services.cronogramas import cargar_visitas_escuela, resumir_visitas_escuela
-    from ui.cronogramas import _meses_disponibles, _mes_actual
-    from ui.calendario_eventos import calendario_informativo
-    meses = dict(_meses_disponibles())
-    mes = st.selectbox("Mes de visitas y actividades", list(meses),
-                       index=list(meses).index(_mes_actual().strftime("%Y-%m")),
-                       format_func=meses.get, key=f"visitas_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}")
+    from ui.cronogramas import _mes_actual
+    from ui.calendario_eventos import calendario_informativo, selector_mes
+    clave=f"visitas_{normalizar_texto(nombre)}_{normalizar_texto(escuela)}"
+    mes=selector_mes(_mes_actual().strftime('%Y-%m'),clave,label='Mes de visitas y actividades')
     st.markdown("### Visitas del equipo especialista a mi escuela")
     st.caption(escuela + " · Solo se muestran las visitas del calendario actualizado.")
     try:
@@ -737,7 +735,7 @@ def _avisos_maestra(nombre, escuela):
             st.caption("Aún no hay visitas programadas para este mes.")
     except Exception:
         st.caption("Las visitas no están disponibles por ahora. Puedes continuar con tu horario.")
-    calendario_informativo(mes)
+    calendario_informativo(mes,clave=clave+'_actividades',navegable=False)
     try:
         avisos = [row for row in cargar_avisos_apoyo(nombre)
                   if normalizar_texto(row.get("Escuela", "")) == normalizar_texto(escuela)

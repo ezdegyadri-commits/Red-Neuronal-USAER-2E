@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import streamlit as st
 
-from services.calendario_eventos import cargar_eventos, calendario_base, guardar_evento
+from services.calendario_eventos import cargar_eventos, calendario_base, guardar_evento, desplazar_mes
 from services.cronogramas import perfil_especialista
 
 
@@ -39,8 +39,42 @@ def pendientes_mes(mes):
             st.caption(f"Por definir: {e['titulo']} (sin fecha asignada).")
 
 
-def calendario_informativo(mes):
+_MESES=('enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre')
+
+
+def _etiqueta(mes):
+    anio,numero=map(int,mes.split('-'))
+    return _MESES[numero-1]+' de '+str(anio)
+
+
+def _mover_mes(clave,pasos):
+    st.session_state[clave]=desplazar_mes(st.session_state[clave],pasos)
+
+
+def _mes_hoy(clave):
+    st.session_state[clave]=datetime.now(ZoneInfo('America/Mexico_City')).strftime('%Y-%m')
+
+
+def selector_mes(mes,clave,label='Mes para consultar'):
+    date.fromisoformat(mes+'-01')
+    key=clave+'_mes_navegacion'
+    if key not in st.session_state or st.session_state.get(clave+'_origen')!=mes:
+        st.session_state[key]=mes;st.session_state[clave+'_origen']=mes
+    actual=st.session_state[key]
+    hoy=datetime.now(ZoneInfo('America/Mexico_City')).strftime('%Y-%m')
+    opciones=sorted({desplazar_mes(hoy,i) for i in range(-12,25)}|{actual,mes})
+    anterior,centro,siguiente=st.columns([1,3,1])
+    anterior.button('◀ Mes anterior',key=clave+'_anterior',on_click=_mover_mes,args=(key,-1),disabled=actual=='1900-01',use_container_width=True)
+    centro.selectbox(label,opciones,key=key,format_func=_etiqueta)
+    siguiente.button('Mes siguiente ▶',key=clave+'_siguiente',on_click=_mover_mes,args=(key,1),disabled=actual=='2100-12',use_container_width=True)
+    st.button('Volver al mes actual',key=clave+'_hoy',on_click=_mes_hoy,args=(key,))
+    return st.session_state[key]
+
+
+def calendario_informativo(mes,clave='calendario_comun',navegable=True):
     st.markdown("#### Actividades del mes · USAER")
+    if navegable:mes=selector_mes(mes,clave)
+    st.markdown('##### '+_etiqueta(mes).capitalize())
     st.caption("Abre los avisos del día para ver los detalles. No modifican tu horario.")
     eventos = eventos_mes(mes)
     anio, numero = map(int, mes.split("-"))
@@ -56,18 +90,22 @@ def calendario_informativo(mes):
                     else:
                         st.caption("—")
     pendientes_mes(mes)
+    if not eventos:st.caption('No hay actividades publicadas para este mes.')
+    return mes
 
 
 def eventos_direccion():
     perfil = perfil_especialista(st.session_state.get("nombre", ""), st.session_state.get("rol", ""))
-    if not perfil or perfil["area"] != "Dirección":
+    if not st.session_state.get('autenticado') or not perfil or perfil["area"] != "Dirección":
         st.error("Apartado exclusivo de Dirección.")
         return
     st.subheader("Publicar actividades para todo el equipo")
     st.caption("Visibles para especialistas y maestras de apoyo. Son avisos informativos, no bloqueos.")
     hoy = datetime.now(ZoneInfo("America/Mexico_City")).date()
-    mes_fecha = st.date_input("Mes de actividades", value=hoy.replace(day=1), key="eventos_director_mes")
-    mes = mes_fecha.strftime("%Y-%m")
+    mes=selector_mes(hoy.strftime('%Y-%m'),'eventos_director',label='Mes de actividades')
+    mes_fecha=date.fromisoformat(mes+'-01')
+    mensaje=st.session_state.pop('evento_director_confirmado','')
+    if mensaje:st.success('Actividad publicada para todo el equipo: '+mensaje)
     try:
         eventos = cargar_eventos(mes)
     except Exception:
@@ -75,8 +113,9 @@ def eventos_direccion():
         return
     seleccionado = st.selectbox("Añadir o actualizar", [None, *eventos],
         format_func=lambda e: "Nueva actividad" if e is None else f"{e['Fecha'][8:]} · {e['Titulo']}",
-        key="evento_director_elegido")
-    identificador = seleccionado["ID_Evento"] if seleccionado else st.session_state.setdefault("evento_director_nuevo_id", uuid4().hex)
+        key="evento_director_elegido_"+mes)
+    clave_nuevo='evento_director_nuevo_id_'+mes
+    identificador = seleccionado["ID_Evento"] if seleccionado else st.session_state.setdefault(clave_nuevo, uuid4().hex)
     version = seleccionado.get("Revision", "base") if seleccionado else "nuevo"
     with st.form(f"publicar_evento_{identificador}_{version}"):
         fecha = st.date_input("Fecha de la actividad", value=date.fromisoformat(seleccionado["Fecha"]) if seleccionado else mes_fecha)
@@ -86,10 +125,23 @@ def eventos_direccion():
     if publicar:
         try:
             guardar_evento(fecha, titulo, detalle, identificador, seleccionado.get("Revision", "base") if seleccionado else None)
-            st.session_state.pop("evento_director_nuevo_id", None)
-            st.success("Actividad publicada para todo el equipo.")
+            st.session_state.pop(clave_nuevo, None)
+            st.session_state['evento_director_confirmado']=titulo
+            st.rerun()
         except (ValueError, PermissionError) as exc:
             st.info(str(exc))
         except Exception:
             st.error("No se pudo publicar la actividad. Inténtalo de nuevo.")
-    calendario_informativo(mes)
+    calendario_informativo(mes,clave='eventos_director_vista',navegable=False)
+
+
+def calendario_page():
+    if not st.session_state.get('autenticado'):
+        st.error('Inicia sesión para consultar el calendario.');return
+    st.title('Calendario de actividades')
+    st.caption('Actividades comunes de la USAER. Explora otros meses y abre los avisos de cada día; no cambian tu horario ni tu planeación.')
+    perfil=perfil_especialista(st.session_state.get('nombre',''),st.session_state.get('rol',''))
+    if perfil and perfil['area']=='Dirección':eventos_direccion()
+    else:
+        mes=datetime.now(ZoneInfo('America/Mexico_City')).strftime('%Y-%m')
+        calendario_informativo(mes,clave='calendario_personal')

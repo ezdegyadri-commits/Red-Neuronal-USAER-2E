@@ -17,7 +17,7 @@ from ui.sugerencias import anexo4_page
 from ui.estadisticas import estadisticas_page
 from ui.cronogramas import cronogramas_page, cronogramas_direccion
 from ui.horarios_apoyo import horarios_apoyo_page, horarios_apoyo_direccion
-from ui.calendario_eventos import eventos_direccion
+from ui.calendario_eventos import eventos_direccion, calendario_page
 from ui.tramites import tramites_page
 from services.tramites import gestor as gestor_tramites, puede_solicitar
 from ui.planeacion import planeacion_page, direccion_panel
@@ -46,7 +46,7 @@ with st.sidebar:
     installation_help()
     configure_passkey()
     st.divider()
-    menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos"]
+    menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos","Calendario de actividades"]
     if gestor_tramites() or puede_solicitar():
         menu += ["Trámites"]
     perfil_cronograma = perfil_especialista(st.session_state.get("nombre", ""), rol)
@@ -102,6 +102,7 @@ elif page=="Anexo IV Hoja de sugerencias": anexo4_page(authorized)
 elif page=="Anexo V Eventos significativos": eventos_page(authorized)
 elif page=="Estadística": estadisticas_page(authorized)
 elif page=="Documentos": documentos_page(authorized)
+elif page=="Calendario de actividades": calendario_page()
 elif page=="Cronograma mensual": cronogramas_page()
 elif page=="Horarios de apoyo": horarios_apoyo_page()
 elif page=="Trámites": tramites_page()
