@@ -37,6 +37,15 @@ def limites(doc):
 
 
 def validar(doc):
+    if 'grupal_zona' in doc['metadatos']:
+        ids={a['ID_Alumno'] for a in doc['datos']['Alumnos']}
+        rows=doc['metadatos']['grupal_zona']
+        if not isinstance(rows,list) or any(not isinstance(r,dict) for r in rows):
+            raise ValueError('La tabla grupal no tiene un formato válido.')
+        if any(r.get('ID_Alumno') not in ids for r in rows):
+            raise PermissionError('La planeación grupal incluye otro alumno.')
+        if {r.get('ID_Alumno') for r in rows}!=ids or len(rows)!=len(ids):
+            raise ValueError('La tabla grupal debe conservar una fila por alumno seleccionado.')
     if not aplica(doc) or 'equipo' not in doc['metadatos']:return
     e=doc['metadatos']['equipo'];ids={a['ID_Alumno'] for a in doc['datos']['Alumnos']}
     if e.get('version')!=1:raise ValueError('Versión de organización del equipo no válida.')
@@ -109,6 +118,7 @@ def sincronizar(doc):
         if s['competencias']:actividad+='\nCompetencias: '+', '.join(s['competencias'])
         if s['apoyos']:actividad+='\nApoyos: '+s['apoyos']
         actividad+='\nSeguimiento: '+s['seguimiento']
+        if s.get('duracion'):actividad+='\nDuración propuesta: '+str(s['duracion'])+' minutos'
         filas.append({'Contextos':s['contexto'],'Actividades':actividad,
                       'Fecha' if result['formato']=='XXV' else 'Temporalidad':s['fecha'],
                       'Recursos':s['recursos'],'_sesion_equipo':s['id']})
@@ -137,7 +147,7 @@ def revisar(doc):
 
 
 def contexto_zona(doc):
-    if not aplica(doc):return {}
+    if doc['formato'] not in ('XXIII','XXV') or doc['datos'].get('Función') not in (*AREAS,'Aprendizaje'):return {}
     psicologia=doc['datos']['Función']=='Psicología'
     fuentes=[FUENTES[0],FUENTES[2]]+([FUENTES[1]] if psicologia else [])
     guia='La planeación grupal ajustada de zona dispone actividades, situación inicial y situación final en filas horizontales. No anticipar la situación final. El plan de intervención se llena anualmente en el formato modificado de zona; esta planeación trimestral no lo sustituye.'
@@ -148,11 +158,15 @@ def contexto_zona(doc):
 
 
 def tablas_salida(doc):
-    if not aplica(doc) or 'equipo' not in doc['metadatos']:return []
-    e=doc['metadatos']['equipo'];alumnos={a['ID_Alumno']:a for a in doc['datos']['Alumnos']}
+    e=doc['metadatos'].get('equipo') if aplica(doc) else None
+    if not e and doc['metadatos'].get('grupal_zona'):
+        e={'subgrupos':[],'competencias':[],'grupal':doc['metadatos']['grupal_zona']}
+    if not e:return []
+    alumnos={a['ID_Alumno']:a for a in doc['datos']['Alumnos']}
     tablas=[('Organización de subgrupos',['Subgrupo','Alumnos','Grado y grupo'],[
         {'Subgrupo':g['nombre'],'Alumnos':', '.join(alumnos[i]['Nombre del alumno'] for i in g['alumnos'] if i in alumnos),
          'Grado y grupo':', '.join(sorted({str(alumnos[i]['Grado'])+' '+str(alumnos[i]['Grupo']) for i in g['alumnos'] if i in alumnos}))} for g in e['subgrupos']])]
+    if not e['subgrupos']:tablas=[]
     if e['competencias']:tablas.append(('Competencias emocionales',['Competencia','Necesidad documentada','Descriptor de logro','Actividad prevista'],e['competencias']))
     headers=['Nombre del alumno','Discapacidad o condición','Fecha derivación','Área','Actividades','Situación inicial','Situación final']
     filas=[]

@@ -61,7 +61,7 @@ def generar_pdf(doc):
         rows=doc['tablas'][key] or [{}]
         data=[[p(h) for h in headers]]+[[p(row.get(h,'')) for h in headers] for row in rows]
         anchos=[available/len(headers)]*len(headers)
-        if es_equipo and key=='dosificacion':anchos=[available*n for n in (.15,.51,.14,.20)]
+        if key=='dosificacion':anchos=[available*n for n in (.15,.51,.14,.20)]
         table=Table(data,colWidths=anchos,repeatRows=1,splitInRow=1)
         table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#dceeee')),
              ('GRID',(0,0),(-1,-1),.4,colors.grey),('VALIGN',(0,0),(-1,-1),'TOP'),

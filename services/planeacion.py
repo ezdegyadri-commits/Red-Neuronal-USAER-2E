@@ -379,7 +379,8 @@ def preparar_contexto(doc):
     if migrar:
         resultado['metadatos'].pop('propuestas_ia_guardadas',None)
         resultado['metadatos']['aviso_contexto']='El expediente se revisó por alumno. Las actividades ya redactadas se conservan; confirma su pertinencia antes de enviar.'
-    return resultado
+    from services.planeacion_generacion import prellenar
+    return prellenar(resultado)
 
 
 def resumen_previo(doc,fuentes):

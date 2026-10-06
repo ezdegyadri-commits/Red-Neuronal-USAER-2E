@@ -11,7 +11,7 @@ class PlaneacionUITests(unittest.TestCase):
         next(b for b in at.button if b.label=='Crear y guardar borrador').click().run()
         self.assertFalse(at.exception)
         self.assertTrue({'1. Conocer y elegir','2. Preparar actividades','3. Revisar y compartir'}.issubset({t.label for t in at.tabs}))
-        at.text_area[0].set_value('Necesidad educativa documentada').run()
+        next(t for t in at.text_area if t.label=='Necesidades y apoyos documentados (incluye la referencia de origen)').set_value('Necesidad educativa documentada').run()
         next(b for b in at.button if b.label=='Guardar borrador').click().run()
         self.assertEqual(at.session_state.fixture_versions[-1]['metadatos']['necesidades_confirmadas'],'Necesidad educativa documentada')
         next(b for b in at.button if b.label=='Preparar PDF').click().run()

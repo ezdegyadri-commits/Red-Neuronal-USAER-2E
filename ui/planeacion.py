@@ -72,15 +72,17 @@ def _materiales(prefix,doc):
                 texto=st.text_area('Texto útil para esta planeación: corrige o selecciona lo pertinente',value=material['texto'],max_chars=MAX_TEXTO,height=200,key=prefix+'_material_text_'+digest)
                 st.caption('El material se vincula solo a esta planeación. Confirma qué información corresponde al alumno o al grupo. Para IA se preparan extractos que revisarás en el resumen educativo.')
                 revisado=st.checkbox('Revisé el texto y su pertinencia',key=prefix+'_material_review_'+digest)
+                nombres={a['ID_Alumno']:a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
+                asignados=st.multiselect('Si es un registro individual, ¿a qué alumnos corresponde? Deja vacío para material general.',list(nombres),format_func=nombres.get,key=prefix+'_material_alumnos_'+digest)
                 if st.button('Incorporar texto revisado',disabled=not revisado or not texto.strip(),key=prefix+'_material_apply_'+digest):
-                    try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],material,texto))
-                    except ValueError as exc:st.info(str(exc))
+                    try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],{**material,'alumnos':asignados},texto))
+                    except (ValueError,PermissionError) as exc:st.info(str(exc))
         for material in doc['metadatos'].get('materiales',[]):
             with st.expander('Material incorporado · '+material['nombre']):
                 texto=st.text_area('Editar material incorporado',value=material['texto'],max_chars=MAX_TEXTO,height=180,key=f"{prefix}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")
                 if st.button('Guardar cambios del material',key=prefix+'_material_update_'+material['id']):
                     try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],material,texto))
-                    except ValueError as exc:st.info(str(exc))
+                    except (ValueError,PermissionError) as exc:st.info(str(exc))
 
 
 def _curriculo(prefix,doc):
@@ -136,6 +138,7 @@ def _preview(prefix,pdf):
     with pymupdf.open(stream=pdf,filetype='pdf') as pages:
         st.subheader('Vista previa del formato para imprimir')
         total=len(pages)
+        if st.session_state.get(prefix+'_preview_page',0)>=total:st.session_state[prefix+'_preview_page']=0
         page=st.selectbox('Página del documento',range(total),format_func=lambda i,n=total:f'{i+1} de {n}',key=prefix+'_preview_page')
         pixmap=pages[page].get_pixmap(matrix=pymupdf.Matrix(1.6,1.6))
         st.image(pixmap.tobytes('png'),use_container_width=True)
@@ -169,7 +172,8 @@ def _field(prefix,key,section,field):
     doc[section][field]=st.session_state[key]
     st.session_state[prefix+'_doc']=doc
     st.session_state.pop(prefix+'_pdf',None)
-    if section=='metadatos' and field=='resumen_educativo':
+    if section=='metadatos' and field in ('resumen_educativo','necesidades_confirmadas','referente_curricular'):
+        st.session_state[prefix+'_doc']['metadatos'].pop('resumen_ia_completo',None)
         st.session_state.pop(prefix+'_ia',None)
         consent_key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_consent'
         if consent_key in st.session_state:st.session_state[consent_key]=False
@@ -194,8 +198,20 @@ def _table(prefix,key,name,base):
     _persist(prefix,automatic=True)
 
 
+def _grupal_zona(prefix,key,base):
+    doc=deepcopy(st.session_state[prefix+'_doc']);rows=deepcopy(base)
+    permitidos={'Fecha derivación','Actividades','Situación inicial','Situación final'}
+    for i,values in st.session_state.get(key,{}).get('edited_rows',{}).items():
+        if 0<=int(i)<len(rows):rows[int(i)].update({k:str(v or '') for k,v in values.items() if k in permitidos})
+    doc['metadatos']['grupal_zona']=rows
+    st.session_state[prefix+'_doc']=doc
+    st.session_state.pop(prefix+'_pdf',None)
+    _persist(prefix,automatic=True)
+
+
 def _open(prefix,doc):
-    st.session_state[prefix+'_doc']=deepcopy(doc)
+    from services.planeacion_generacion import prellenar
+    st.session_state[prefix+'_doc']=prellenar(doc)
     st.session_state[prefix+'_generation']=st.session_state.get(prefix+'_generation',0)+1
     for suffix in ('_error','_pdf','_fuentes','_ia'):
         st.session_state.pop(prefix+suffix,None)
@@ -288,7 +304,7 @@ def _ai(prefix,doc,revision=False):
                 _open(prefix,current);_persist(prefix);st.rerun()
 
 
-def _editor(prefix):
+def _editor_contenido(prefix):
     doc=st.session_state[prefix+'_doc']; servicio.autorizar(doc,True)
     if doc['metadatos'].get('version_contexto')!=servicio.VERSION_CONTEXTO:
         doc=servicio.preparar_contexto(doc)
@@ -305,6 +321,8 @@ def _editor(prefix):
     with st.expander('Datos precargados de los alumnos'):
         st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,use_container_width=True)
     st.caption('Autoguardado de cambios confirmados cada 15 segundos mientras trabajas. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
+    from ui.planeacion_generacion import panel_generacion
+    panel_generacion(prefix,_persist,_open)
     conocer,planear,revisar=st.tabs(['1. Conocer y elegir','2. Preparar actividades','3. Revisar y compartir'])
     with conocer:
         st.caption('Revisa el expediente, elige qué aprendizaje trabajarás y añade materiales solo si los necesitas. Los datos del alumno ya están completos cuando existen en el padrón.')
@@ -344,8 +362,20 @@ def _editor(prefix):
     with planear:
         from ui.planeacion_equipo import panel as panel_equipo
         panel_equipo(prefix,st.session_state[prefix+'_doc'],_persist,_open)
+        grupal=st.session_state[prefix+'_doc']['metadatos'].get('grupal_zona')
+        if grupal is not None:
+            st.markdown('#### Planeación grupal · formato de zona')
+            st.caption('Revisa y edita lo generado por alumno. La situación final se completa con resultados documentados, no con predicciones.')
+            key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_grupal_zona'
+            basekey=key+'_base'
+            if basekey not in st.session_state:st.session_state[basekey]=deepcopy(grupal)
+            base=st.session_state[basekey]
+            nombres={a['ID_Alumno']:a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
+            visibles=[{'Alumno':nombres.get(r['ID_Alumno'],''),**{k:v for k,v in r.items() if k!='ID_Alumno'}} for r in base]
+            st.data_editor(pd.DataFrame(visibles).fillna(''),disabled=['Alumno'],num_rows='fixed',hide_index=True,
+                use_container_width=True,key=key,on_change=_grupal_zona,args=(prefix,key,base))
         st.caption('Empieza por una actividad posible en tu jornada: qué hará el alumno, qué apoyo necesita y cómo reconocerás su avance. Puedes escribirla tú o pedir hasta tres ideas al asistente.')
-        with st.expander('Asistente de redacción y propuestas'):
+        with st.expander('Ideas adicionales y ayuda para redactar'):
             st.caption('Guía: el alumno identifica / relaciona / resuelve / explica… Evita verbos poco observables como “comprender”. Define evidencia y plazo.')
             for row in st.session_state[prefix+'_doc']['tablas'].get('aprendizajes',st.session_state[prefix+'_doc']['tablas'].get('necesidades',[])):
                 descriptor=row.get('Descriptor de logro',row.get('Descriptor de Logro',''))
@@ -399,6 +429,26 @@ def _editor(prefix):
         if st.button('Volver a editar',key=prefix+'_edit_again'):
             st.session_state.pop(prefix+'_pdf',None);st.rerun()
         st.download_button('Descargar PDF',st.session_state[prefix+'_pdf'],file_name='planeacion-'+current['id']+'.pdf',mime='application/pdf',key=prefix+'_download')
+
+
+def _editor(prefix):
+    editar,vista=st.columns([1.15,1],gap='large')
+    with editar:_editor_contenido(prefix)
+    with vista:
+        st.subheader('Vista previa de tu planeación')
+        st.caption('Se actualiza al confirmar cada cambio en un campo o tabla. Esta vista usa el mismo PDF que descargarás; no llama a IA ni escribe en la base central.')
+        if prefix+'_doc' not in st.session_state:return
+        try:
+            doc=st.session_state[prefix+'_doc']
+            digest=hashlib.sha256(json.dumps(doc,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+            if st.session_state.get(prefix+'_live_digest')!=digest:
+                st.session_state[prefix+'_live_pdf']=generar_pdf(doc)
+                st.session_state[prefix+'_live_digest']=digest
+            pdf=st.session_state[prefix+'_live_pdf']
+            _preview(prefix+'_live',pdf)
+            st.download_button('Descargar planeación en PDF',pdf,file_name='planeacion-'+doc['id']+'.pdf',mime='application/pdf',key=prefix+'_live_download')
+        except Exception:
+            st.info('La vista previa no pudo actualizarse. Tu borrador y los campos editables se conservan; vuelve a intentar Preparar PDF.')
 
 
 def direccion_panel():
