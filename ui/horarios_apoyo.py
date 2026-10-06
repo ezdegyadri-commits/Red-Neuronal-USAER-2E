@@ -33,6 +33,8 @@ from services.horarios import (
     guardar_restricciones_lote,
     editar_referencia,
     _referencia_general,
+    aceptar_cruces,
+    leer_acuerdos,
     marcar_avisos_leidos,
     normalizar_tabla_horario,
     actualizar_bloques_borrador,
@@ -709,6 +711,8 @@ def _leer_archivo(archivo):
 def _tabla_vista(frame):
     columnas = [col for col in ("Dia", "Inicio", "Fin", "Grupo", "Alumnos", "Modalidad", "Espacio", "Actividad", "Responsable", "Maestra") if col in frame.columns]
     salida = frame[columnas].copy()
+    if 'Cruces_Aceptados_JSON' in frame:
+        salida['Acuerdos de cruces breves']=frame.apply(lambda r:'; '.join(f"{a.get('actividad','')} · {a.get('minutos','')} min · {a.get('motivo','')}" for a in leer_acuerdos(r).values() if isinstance(a,dict)),axis=1)
     if "Dia" in salida:
         salida["_orden"] = salida["Dia"].map({day: i for i, day in enumerate(DIAS)})
         salida = salida.sort_values(["_orden", "Inicio", "Grupo"], kind="stable").drop(columns="_orden")
@@ -874,14 +878,16 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     except ValueError as exc:
         st.error(f"Hay una hora o día inválido en el borrador: {exc}")
         return
-    celdas_conflicto = {(str(row["Día"]), str(row["Horario propuesto"]).replace("–", "|"))
-                        for row in choques.to_dict("records")} if not choques.empty else set()
+    pendientes=choques.loc[~choques['Aceptado']] if not choques.empty else choques
+    acuerdos=choques.loc[choques['Aceptado']] if not choques.empty else choques
+    celdas_conflicto = {(str(row["Día"]), str(row["Horario propuesto"]).replace("–", "|")) for row in pendientes.to_dict('records')}
+    celdas_acuerdo = {(str(row['Día']),str(row['Horario propuesto']).replace('–','|')) for row in acuerdos.to_dict('records')}
     dias = list(DIAS)
     tabla = ["<style>.horario-apoyo-grid{width:100%;min-width:850px;border-collapse:collapse;table-layout:fixed;font-family:Arial,sans-serif}"
              ".horario-apoyo-grid th{background:#d9eaf6;color:#173b57;padding:12px;border:1px solid #a9bfce;font-size:16px}"
              ".horario-apoyo-grid td{height:86px;vertical-align:top;border:1px solid #a9bfce;padding:9px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}"
              ".horario-apoyo-grid .hora{background:#f0f5f9;text-align:center;font-weight:bold;width:12%}"
-             ".horario-apoyo-grid .ocupado{background:#eef8f1}.horario-apoyo-grid .choque{background:#ffe5e5}"
+             ".horario-apoyo-grid .ocupado{background:#eef8f1}.horario-apoyo-grid .choque{background:#ffe5e5}.horario-apoyo-grid .acuerdo{background:#fff1bf;color:#6f5200}"
              ".horario-apoyo-grid .descanso{background:#fff1bf;color:#6f5200;text-align:center;font-weight:bold}"
              ".horario-apoyo-grid .inactivo{background:#f7f9fb;color:#c2cbd2;text-align:center}"
              ".horario-apoyo-grid .vacio{color:#8195a6}</style>",
@@ -899,15 +905,33 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
                 str(item.get("Actividad", "")).strip() if item else "",
             ))) if item else ""
             descanso = (desde, hasta) in pausas and (desde, hasta) in franjas_por_dia[dia]
-            clase = "descanso" if descanso else ("choque" if conflicto else ("ocupado" if item else ("vacio" if (desde, hasta) in franjas_por_dia[dia] else "inactivo")))
+            aceptada=(dia,f'{desde}|{hasta}') in celdas_acuerdo
+            clase = "descanso" if descanso else ("choque" if conflicto else ('acuerdo' if aceptada else ("ocupado" if item else ("vacio" if (desde, hasta) in franjas_por_dia[dia] else "inactivo"))))
             etiqueta = "DESCANSO" if descanso else (html.escape(contenido) if contenido else ("Sin capturar" if (desde, hasta) in franjas_por_dia[dia] else "—"))
+            if aceptada:etiqueta+='\nCruce breve aceptado'
             tabla.append(f"<td class='{clase}'>{etiqueta}</td>")
         tabla.append("</tr>")
     tabla.append("</tbody></table></div>")
     st.markdown("".join(tabla), unsafe_allow_html=True)
-    if not choques.empty:
-        st.error("Se detectaron choques con materias u otros bloques. Revisa la tabla antes de guardar.")
-        st.dataframe(choques, hide_index=True, width="stretch")
+    if not pendientes.empty:
+        st.warning('Hay cruces pendientes. Se permiten acuerdos para todas las materias, incluida Educación Física, hasta diez minutos totales por bloque. Los solapes con otras sesiones de apoyo y los descansos no admiten excepción.')
+        st.dataframe(pendientes.drop(columns=['Clave','Bloque']),hide_index=True,width='stretch')
+        flexibles=pendientes.loc[pendientes['Permite acuerdo']]
+        if not flexibles.empty:
+            with st.expander('Aceptar cruces breves con un acuerdo'):
+                st.caption('Confirma la coordinación y el regreso a clase. No se acepta automáticamente ni se justifica retirar a un alumno por su condición o por su nivel de aprendizaje.')
+                seleccion=[]
+                for cruce in flexibles.to_dict('records'):
+                    if st.checkbox(f"{cruce['Día']} · {cruce['Horario propuesto']} · {cruce['Actividad que se cruza']} · {cruce['Grupo']} · {cruce['Minutos de cruce']} minutos",key=prefijo+'_acuerdo_'+cruce['Clave']):seleccion.append(cruce['Clave'])
+                motivo=st.text_input('Acuerdo y regreso a clase',placeholder='Ejemplo: acordado con el docente; regresa a su clase a las 08:00.',max_chars=300,key=prefijo+'_motivo_acuerdo')
+                if st.button('Confirmar los cruces seleccionados',disabled=not seleccion or len(motivo.strip())<10,key=prefijo+'_aceptar_cruces'):
+                    try:
+                        st.session_state[clave_filas]=aceptar_cruces(borrador,choques,seleccion,motivo,nombre)
+                        _persistir_plantilla(prefijo,nombre,escuela);st.rerun()
+                    except ValueError as exc:st.warning(str(exc))
+    if not acuerdos.empty:
+        st.info('Los cruces aceptados se conservan en amarillo, con motivo y docente responsable. Si cambian los alumnos, las horas o la referencia, deben revisarse nuevamente.')
+        st.dataframe(acuerdos.drop(columns=['Clave','Bloque']),hide_index=True,width='stretch')
     fuera = [row for row in filas if _hora_minutos(row['Inicio'])<_hora_minutos(inicio) or _hora_minutos(row['Fin'])>_hora_minutos(fin)
              or (descanso_inicio and descanso_fin and _hora_minutos(row['Inicio'])<_hora_minutos(descanso_fin) and _hora_minutos(descanso_inicio)<_hora_minutos(row['Fin']))]
     if fuera:
@@ -993,16 +1017,17 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
         "Grupo": grupo_candidato,
         "ID_Alumnos": ",".join(ids),
         "Actividad": actividad.strip() or str(actual.get("Actividad", "")), "Maestra": nombre,
+        "Cruces_Aceptados_JSON":actual.get('Cruces_Aceptados_JSON',''),
     }
     if candidato["Actividad"] or grupo or ids:
         try:
             vista_borrador=actualizar_bloques_borrador(borrador,clave,candidato,dias_destino,inicio,fin,descanso_inicio,descanso_fin,reemplazar)
             filas_en_vivo=list(vista_borrador.values())
             choques_en_vivo = detectar_choques(filas_en_vivo, restricciones, horarios_equipo)
-            conflictos_bloque = [r for r in choques_en_vivo.to_dict("records") if r.get("Día") in dias_destino]
+            conflictos_bloque = [r for r in choques_en_vivo.to_dict("records") if r.get("Día") in dias_destino and not r.get('Aceptado')]
             if conflictos_bloque:
-                st.error("⚠️ Conflicto de horario en este módulo. Ajusta día/hora o revisa los horarios de referencia antes de guardar.")
-                st.dataframe(pd.DataFrame(conflictos_bloque), hide_index=True, width="stretch")
+                st.warning('Este bloque tiene cruces pendientes. Puedes añadirlo al borrador y aceptar los cruces breves permitidos debajo de la cuadrícula, o ajustar sus horas. Aún no se publica.')
+                st.dataframe(pd.DataFrame(conflictos_bloque).drop(columns=['Clave','Bloque']),hide_index=True,width='stretch')
             else:
                 st.success("✓ Sin choque detectado en este módulo.")
         except ValueError as exc:
@@ -1029,6 +1054,7 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
                     "ID_Alumnos": ",".join(ids),
                     "Actividad": actividad.strip() or ("Atención individual" if len(ids) == 1 else "Atención de apoyo"),
                     "Modalidad": modalidad, "Espacio": espacio, "Maestra": nombre,
+                    "Cruces_Aceptados_JSON":actual.get('Cruces_Aceptados_JSON',''),
                 }
                 try:
                     actualizado=actualizar_bloques_borrador(borrador,clave,bloque,dias_destino,inicio,fin,descanso_inicio,descanso_fin,reemplazar)
@@ -1046,7 +1072,7 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
 
     confirmada = st.checkbox("Confirmo que revisé los bloques y que el horario está listo",
                              key=f"{prefijo}_confirmado")
-    listo = bool(borrador) and confirmada and choques.empty and not fuera
+    listo = bool(borrador) and confirmada and pendientes.empty and not fuera
     if listo:
         try:
             filas_pdf = filas + [

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import json
+import hashlib
 from datetime import date, datetime, time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -22,7 +24,7 @@ DIAS = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes")
 HORARIOS_APOYO_HEADERS = [
     "ID_Version", "Guardado_En", "Maestra", "ID_Escuela", "Escuela",
     "Dia", "Inicio", "Fin", "Grupo", "Modalidad", "Espacio", "Actividad", "Estado",
-    "Alumnos", "ID_Alumnos",
+    "Alumnos", "ID_Alumnos", "Cruces_Aceptados_JSON",
 ]
 RESTRICCIONES_HEADERS = [
     "ID_Version", "Cargado_En", "Cargado_Por", "ID_Escuela", "Escuela",
@@ -397,6 +399,15 @@ def guardar_horario_apoyo(maestra, escuela, frame):
     rows = frame.to_dict("records") if isinstance(frame, pd.DataFrame) else list(frame)
     if not rows:
         raise ValueError("Agrega al menos una sesión al horario.")
+    if any(leer_acuerdos(r) for r in rows):
+        rol=str(st.session_state.get('rol',''))
+        if not st.session_state.get('autenticado') or normalizar_texto(st.session_state.get('nombre',''))!=normalizar_texto(maestra) or 'APOYO' not in normalizar_texto(rol):
+            raise PermissionError('Los acuerdos deben guardarse desde la cuenta de la docente que elabora.')
+        if normalizar_texto(escuela) not in {normalizar_texto(e) for e in escuelas_asignadas(maestra,rol)} or any(str(r.get('Maestra',''))!=maestra for r in rows):
+            raise PermissionError('El acuerdo no pertenece a esta docente o escuela.')
+    conflictos=detectar_choques(rows,cargar_restricciones(escuela),cargar_horarios_apoyo(escuela))
+    if not conflictos.empty and not conflictos['Aceptado'].all():
+        raise ValueError('Quedan cruces sin resolver. Ajusta el horario o confirma los cruces breves permitidos antes de guardar.')
     ws, headers, _ = _leer("Horarios_Apoyo", HORARIOS_APOYO_HEADERS)
     version = uuid4().hex
     now = datetime.now(ZONA).isoformat(timespec="seconds")
@@ -419,6 +430,7 @@ def guardar_horario_apoyo(maestra, escuela, frame):
             "Actividad": actividad, "Estado": "ACTIVO",
             "Alumnos": str(item.get("Alumnos", "")).strip(),
             "ID_Alumnos": str(item.get("ID_Alumnos", "")).strip(),
+            "Cruces_Aceptados_JSON": json.dumps(leer_acuerdos(item),ensure_ascii=False),
         })
     if not nuevos:
         raise ValueError("No hay sesiones completas para guardar.")
@@ -429,6 +441,34 @@ def guardar_horario_apoyo(maestra, escuela, frame):
     clear_cache("Horarios_Apoyo")
     cargar_horarios_apoyo.clear()
     return version, len(nuevos)
+
+
+MAX_CRUCE_BREVE = 10
+
+
+def leer_acuerdos(item):
+    value=item.get('Cruces_Aceptados_JSON',{})
+    try:value=json.loads(value) if isinstance(value,str) and value.strip() else value
+    except (ValueError,TypeError):return {}
+    return value if isinstance(value,dict) else {}
+
+
+def aceptar_cruces(borrador, conflictos, claves, motivo, docente):
+    from copy import deepcopy
+    if len(str(motivo).strip())<10 or len(str(motivo))>300:
+        raise ValueError('Describe brevemente el acuerdo y el regreso a la clase (10 a 300 caracteres).')
+    if not claves:raise ValueError('Selecciona al menos un cruce breve.')
+    result=deepcopy(borrador);por_clave={r['Clave']:r for r in conflictos.to_dict('records')}
+    for clave in claves:
+        r=por_clave.get(clave)
+        if not r or not r['Permite acuerdo'] or r['Bloque'] not in result:
+            raise ValueError('Ese cruce no admite excepción. Ajusta el horario.')
+        acuerdos=leer_acuerdos(result[r['Bloque']])
+        acuerdos[clave]={'motivo':str(motivo).strip(),'docente':str(docente),
+                         'fecha':datetime.now(ZONA).isoformat(timespec='seconds'),
+                         'minutos':int(r['Minutos de cruce']),'actividad':r['Actividad que se cruza']}
+        result[r['Bloque']]['Cruces_Aceptados_JSON']=json.dumps(acuerdos,ensure_ascii=False)
+    return result
 
 
 def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
@@ -449,6 +489,7 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
             mismo_grupo = _coinciden_grupos(anterior.get("Grupo", ""), item.get("Grupo", ""))
             if ini < a_fin and a_ini < fin:
                 conflictos.append({
+                    '_item':item,'Origen':'Otra sesión propia',
                     "Día": dia, "Grupo": item.get("Grupo", ""),
                     "Horario propuesto": f"{item.get('Inicio')}–{item.get('Fin')}",
                     "Actividad que se cruza": (
@@ -468,6 +509,7 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
             mismo_grupo_o_general = _referencia_general(bloque) or (bool(b_grupo) and _coinciden_grupos(bloque.get("Grupo", ""), item.get("Grupo", "")))
             if mismo_grupo_o_general and ini < b_fin and b_ini < fin:
                 conflictos.append({
+                    '_item':item,'Origen':'Referencia escolar','_referencia':dict(bloque),
                     "Día": dia, "Grupo": item.get("Grupo", ""),
                     "Horario propuesto": f"{item.get('Inicio')}–{item.get('Fin')}",
                     "Actividad que se cruza": str(bloque.get("Actividad", "Horario escolar")),
@@ -485,12 +527,43 @@ def detectar_choques(propuesta, restricciones=None, horarios_apoyo=None):
                 b_ini, b_fin = _hora_minutos(bloque.get("Inicio")), _hora_minutos(bloque.get("Fin"))
                 if ini < b_fin and b_ini < fin:
                     conflictos.append({
+                        '_item':item,'Origen':'Otra maestra',
                         "Día": dia, "Grupo": item.get("Grupo", ""),
                         "Horario propuesto": f"{item.get('Inicio')}–{item.get('Fin')}",
                         "Actividad que se cruza": f"Horario de apoyo de {bloque.get('Maestra', 'otra maestra')}",
                         "Horario existente": f"{bloque.get('Inicio')}–{bloque.get('Fin')}",
                     })
-    return pd.DataFrame(conflictos, columns=["Día", "Grupo", "Horario propuesto", "Actividad que se cruza", "Horario existente"])
+    for r in conflictos:
+        item=r.pop('_item');referencia=r.pop('_referencia',{})
+        horas=r['Horario existente'].split('–')
+        minutos=min(_hora_minutos(item['Fin']),_hora_minutos(horas[1]))-max(_hora_minutos(item['Inicio']),_hora_minutos(horas[0]))
+        actividad=normalizar_texto(r['Actividad que se cruza'])
+        # La autorización de Dirección incluye todas las materias, también
+        # Educación Física. No se omiten descansos o suspensiones generales.
+        protegido=(any(t in actividad.split() for t in ('DESCANSO','RECREO','CTE','SUSPENSION')) or actividad=='JORNADA ESCOLAR')
+        permite=r['Origen']=='Referencia escolar' and 0<minutos<=MAX_CRUCE_BREVE and not protegido
+        identidad={k:str(item.get(k,'')) for k in ('Dia','Inicio','Fin','Grupo','Maestra')}
+        identidad['ID_Alumnos']=','.join(sorted(x.strip() for x in str(item.get('ID_Alumnos','')).split(',') if x.strip()))
+        firma=json.dumps({'sesion':identidad,'referencia':{k:str(referencia.get(k,'')) for k in ('ID_Version','Archivo','Dia','Inicio','Fin','Grupo','Actividad','Responsable')},'origen':r['Origen'],'existente':r['Horario existente']},sort_keys=True,ensure_ascii=False)
+        clave=hashlib.sha256(firma.encode()).hexdigest()
+        acuerdo=leer_acuerdos(item).get(clave,{})
+        aceptado=permite and isinstance(acuerdo,dict) and 10<=len(str(acuerdo.get('motivo','')).strip())<=300 and acuerdo.get('docente')==str(item.get('Maestra',''))
+        r.update({'Minutos de cruce':minutos,'Permite acuerdo':permite,'Aceptado':bool(aceptado),'Clave':clave,'Bloque':f"{item['Dia']}|{item['Inicio']}|{item['Fin']}"})
+        r['_intervalo']=(max(_hora_minutos(item['Inicio']),_hora_minutos(horas[0])),min(_hora_minutos(item['Fin']),_hora_minutos(horas[1])))
+    intervalos={}
+    for r in conflictos:
+        if r['Origen']=='Referencia escolar':intervalos.setdefault(r['Bloque'],[]).append(r['_intervalo'])
+    totales={}
+    for bloque,partes in intervalos.items():
+        total=0;fin=-1
+        for a,b in sorted(partes):
+            total+=max(0,b-max(a,fin));fin=max(fin,b)
+        totales[bloque]=total
+    for r in conflictos:
+        r.pop('_intervalo')
+        if totales.get(r['Bloque'],0)>MAX_CRUCE_BREVE:
+            r['Permite acuerdo']=False;r['Aceptado']=False
+    return pd.DataFrame(conflictos, columns=["Día", "Grupo", "Horario propuesto", "Actividad que se cruza", "Horario existente",'Origen','Minutos de cruce','Permite acuerdo','Aceptado','Clave','Bloque'])
 
 
 def proponer_horario(grupos, sesiones_por_grupo, duracion, inicio, fin, restricciones, apoyo_existente,
