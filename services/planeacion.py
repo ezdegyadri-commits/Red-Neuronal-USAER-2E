@@ -77,7 +77,8 @@ def nueva(formato, ids, ciclo=2026, trimestre=1):
     doc.update({'id':uuid4().hex,'revision':'','cuenta':actor['cuenta'],'observaciones_director':''})
     doc['metadatos'].update({'resumen_educativo':'','fuente_iepp':'','necesidades_confirmadas':'',
                              'referente_curricular':'','revisado_por':''})
-    return doc
+    from services.planeacion_equipo import preparar
+    return preparar(doc)
 
 
 def autorizar(doc, escribir=False):
@@ -188,6 +189,10 @@ def refrescar():
 
 def guardar(doc, estado='BORRADOR', observaciones=None):
     actor=autorizar(doc,True)
+    from services.planeacion_equipo import validar, sincronizar, aplica
+    validar(doc)
+    if aplica(doc) and 'equipo' in doc['metadatos']:
+        doc=sincronizar(doc)
     if estado not in ESTADOS:
         raise ValueError('Estado no válido.')
     if estado in {'CON_OBSERVACIONES','VALIDADO'} and not actor['director']:
@@ -270,7 +275,8 @@ def revisar(doc):
         faltas.append('describir actividades, tiempos y recursos')
     if doc['formato']=='XXIII' and not texto(doc['textos'].get('Evaluación')):
         faltas.append('describir la evaluación formativa')
-    return faltas
+    from services.planeacion_equipo import revisar as revisar_equipo
+    return faltas+revisar_equipo(doc)
 
 
 def evidencias(doc):

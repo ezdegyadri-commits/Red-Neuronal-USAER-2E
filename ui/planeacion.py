@@ -186,7 +186,9 @@ def _table(prefix,key,name,base):
     rows.extend(patch.get('added_rows',[]))
     headers=FORMATOS[st.session_state[prefix+'_doc']['formato']]['tablas'][name]
     rows=[{h:str(r.get(h,'') or '') for h in headers} for r in rows]
-    doc=deepcopy(st.session_state[prefix+'_doc']);doc['tablas'][name]=rows
+    doc=deepcopy(st.session_state[prefix+'_doc'])
+    generadas=[r for r in doc['tablas'][name] if r.get('_sesion_equipo')]
+    doc['tablas'][name]=rows+generadas
     st.session_state[prefix+'_doc']=doc
     st.session_state.pop(prefix+'_pdf',None)
     _persist(prefix,automatic=True)
@@ -340,6 +342,8 @@ def _editor(prefix):
             for field in ('Necesidades educativas específicas asociadas a','Maestro de grupo','Vigencia en cursos escolares'):
                 _text(prefix,'datos',field)
     with planear:
+        from ui.planeacion_equipo import panel as panel_equipo
+        panel_equipo(prefix,st.session_state[prefix+'_doc'],_persist,_open)
         st.caption('Empieza por una actividad posible en tu jornada: qué hará el alumno, qué apoyo necesita y cómo reconocerás su avance. Puedes escribirla tú o pedir hasta tres ideas al asistente.')
         with st.expander('Asistente de redacción y propuestas'):
             st.caption('Guía: el alumno identifica / relaciona / resuelve / explica… Evita verbos poco observables como “comprender”. Define evidencia y plazo.')
@@ -362,10 +366,15 @@ def _editor(prefix):
             key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_table_{name}'
             basekey=key+'_base'
             if basekey not in st.session_state:
-                st.session_state[basekey]=deepcopy(st.session_state[prefix+'_doc']['tablas'][name])
+                st.session_state[basekey]=deepcopy([r for r in st.session_state[prefix+'_doc']['tablas'][name] if not r.get('_sesion_equipo')])
             base=st.session_state[basekey]
             st.data_editor(pd.DataFrame(base,columns=headers).fillna(''),num_rows='dynamic',hide_index=True,
                   use_container_width=True,key=key,on_change=_table,args=(prefix,key,name,base))
+            if name=='dosificacion':
+                automaticas=[r for r in st.session_state[prefix+'_doc']['tablas'][name] if r.get('_sesion_equipo')]
+                if automaticas:
+                    st.caption('Sesiones vinculadas: edítalas en Calendarizar y editar sesiones; no se duplican al guardar.')
+                    st.dataframe(pd.DataFrame(automaticas).drop(columns=['_sesion_equipo']),hide_index=True,use_container_width=True)
     with revisar:
         st.caption('Completa las notas del formato y prepara el PDF para revisarlo. Puedes regresar a cualquiera de los pasos sin crear otro documento.')
         for field in doc['textos']:_text(prefix,'textos',field)
@@ -409,6 +418,11 @@ def direccion_panel():
     if doc['metadatos'].get('version_contexto')!=servicio.VERSION_CONTEXTO:
         doc=servicio.preparar_contexto(doc)
     st.write(doc['datos']);
+    from services.planeacion_equipo import tablas_salida, revisar as revisar_equipo
+    for titulo,headers,rows in tablas_salida(doc):
+        st.markdown('#### '+titulo)
+        st.dataframe(pd.DataFrame(rows,columns=headers),hide_index=True,use_container_width=True)
+    for pendiente in revisar_equipo(doc):st.caption('Acuerdos de zona: '+pendiente)
     for name,rows in doc['tablas'].items():
         st.markdown('#### '+name.replace('_',' ').capitalize());st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
     for name,value in doc['textos'].items():st.write(name+': '+value)
@@ -445,7 +459,7 @@ def direccion_panel():
 
 def planeacion_page():
     actor=servicio.identidad();prefix=_prefix()
-    st.title('Planeación e intervención')
+    st.title('Planeación del equipo · '+actor['area'] if actor['area'] in ('Psicología','Comunicación','Trabajo Social') else 'Planeación e intervención')
     st.caption('1. Elige a quién acompañar  →  2. Revisa lo que ya sabemos  →  3. Planea, guarda y comparte con Dirección')
     editar,recuperar,revisar=st.tabs(['Mi trabajo','Recuperar documentos','Revisión directiva'] if actor['director'] else ['Mi trabajo','Recuperar documentos','Guía'])
     with recuperar:

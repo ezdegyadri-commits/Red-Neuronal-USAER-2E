@@ -56,6 +56,16 @@ def vincular(doc,campo,ejes,ids,contexto_local='',adaptaciones=None):
     return result
 
 def contexto_ia(doc):
+    from services.planeacion_equipo import contexto_zona
+    contexto=_contexto_ia_base(doc)
+    zona=contexto_zona(doc)
+    if zona:
+        contexto['fuentes']=contexto['fuentes']+zona['fuentes']
+        contexto['guia_local']=contexto.get('guia_local','')+' '+zona['guia']
+    return contexto
+
+
+def _contexto_ia_base(doc):
     seleccion=doc['metadatos'].get('curriculo',{})
     campo=seleccion.get('campo','')
     if campo not in CAMPOS:return {'fuentes':FUENTES_BASE,'campos':CAMPOS,'ejes':EJES,'aviso':'Sin contenido o PDA seleccionado: no atribuir un PDA específico a una actividad.'}
