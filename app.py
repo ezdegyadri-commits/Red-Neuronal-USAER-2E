@@ -21,6 +21,7 @@ from ui.calendario_eventos import eventos_direccion, calendario_page
 from ui.tramites import tramites_page
 from services.tramites import gestor as gestor_tramites, puede_solicitar
 from ui.planeacion import planeacion_page, direccion_panel
+from ui.novedades_supervision import novedades_page
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 inject()
@@ -55,7 +56,7 @@ with st.sidebar:
     if perfil_cronograma and perfil_cronograma["area"] != "Dirección":
         menu += ["Cronograma mensual"]
     if "DIRECTOR" in rol.upper():
-        menu += ["Panel de Dirección", "Constancias de visita"]
+        menu += ["Panel de Dirección", "Novedades de supervisión", "Constancias de visita"]
         if puede_dar_alta_alumnos(st.session_state.get("nombre", ""), rol):
             menu += ["Alta de alumnos"]
     elif "APOYO" in rol.upper():
@@ -107,8 +108,12 @@ elif page=="Cronograma mensual": cronogramas_page()
 elif page=="Horarios de apoyo": horarios_apoyo_page()
 elif page=="Trámites": tramites_page()
 elif page=="Planeación e intervención": planeacion_page()
+elif page=="Novedades de supervisión": novedades_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
+    with st.expander("Novedades de supervisión · ATP"):
+        if st.checkbox("Consultar documentos y novedades",key="consultar_novedades_director"):
+            novedades_page()
     with st.expander("Planes de intervención y planeaciones del equipo"):
         if st.checkbox("Consultar entregas y revisar",key="consultar_planeaciones_director"):
             direccion_panel()
