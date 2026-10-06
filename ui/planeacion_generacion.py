@@ -3,7 +3,7 @@ from copy import deepcopy
 import streamlit as st
 from services import planeacion_generacion as g
 from ai.planeacion_completa import generar_completa
-from ai.planeacion import modelo_configurado
+from ai.planeacion import modelo_configurado, configuracion_modelo
 
 
 def _ajuste(prefix,key,campo,persist):
@@ -28,6 +28,10 @@ def panel_generacion(prefix,persist,abrir):
     doc=st.session_state[prefix+'_doc']
     if doc['formato'] not in ('XXIII','XXV'):return
     st.markdown('#### Generar mi planeación trimestral')
+    conexion=configuracion_modelo()
+    st.caption('Motor de IA: '+conexion['efectivo']+'. Solo se solicita al pulsar Generar; editar o ver el PDF no consume IA.')
+    if conexion['migrado']:
+        st.info('Se actualizó la configuración heredada '+conexion['solicitado']+' a '+conexion['efectivo']+'. Se conserva el proveedor y la clave; no se activó facturación.')
     st.caption('Configura las sesiones y ajustes. El sistema reúne la información documentada, propone actividades y completa el formato; después puedes editarlo. No redacta resultados futuros ni coloca firmas automáticamente.')
     ajustes=doc['metadatos'].get('configuracion_generacion',g.configuracion(doc))
     generation=st.session_state.get(prefix+'_generation',0);base=f'{prefix}_{generation}_generar'
@@ -87,7 +91,7 @@ def panel_generacion(prefix,persist,abrir):
                 abrir(prefix,generado);persist(prefix);st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.info(str(exc))
     diagnostico=st.session_state.get('planeacion_ia_diagnostico')
-    if diagnostico:st.caption('Diagnóstico de IA: '+str(diagnostico.get('codigo') or diagnostico.get('tipo'))+' · Tu borrador se conserva.')
+    if diagnostico:st.caption('Diagnóstico de IA: '+str(diagnostico.get('codigo') or diagnostico.get('tipo'))+' · Modelo: '+str(diagnostico.get('motor',''))+' · Tu borrador se conserva.')
     if previo:
         st.success('Formato preparado como borrador editable. Revisa actividades, destinatarios, apoyos y fechas antes de compartir con Dirección.')
         for pregunta in previo.get('pendientes',[]):st.caption('Por confirmar: '+pregunta)
