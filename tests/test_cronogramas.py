@@ -78,13 +78,30 @@ class CronogramasTest(unittest.TestCase):
         self.assertTrue(contenido.startswith(b"%PDF"))
         self.assertGreater(len(contenido), 1000)
 
-    def test_director_pdf_has_single_authorization_signature_block(self):
+    def test_director_pdf_separates_author_and_supervisor(self):
         perfil = perfil_especialista("Edgar Adrián Yam Briceño MD", "DIRECTOR")
         contenido = generar_cronograma_pdf(
             perfil, "Septiembre 2026",
             [{"fecha": "01/09/2026", "escuela": "DAMIÁN CARMONA", "actividad": "Reunión"}],
         )
         self.assertTrue(contenido.startswith(b"%PDF"))
+        import pymupdf
+        with pymupdf.open(stream=contenido,filetype='pdf') as documento:
+            texto='\n'.join(p.get_text() for p in documento)
+            self.assertIn('Elaboró',texto)
+            self.assertIn('Vo. Bo.',texto)
+            self.assertIn('Dra. Diana Durán González',texto)
+            self.assertIn('Supervisora de la Zona 001',texto)
+            self.assertNotIn('Elaboró y da Vo. Bo.',texto)
+
+    def test_specialist_pdf_keeps_director_visto_bueno(self):
+        import pymupdf
+        perfil=perfil_especialista('Diego Peralta Torres','TS')
+        contenido=generar_cronograma_pdf(perfil,'Octubre 2026',[])
+        with pymupdf.open(stream=contenido,filetype='pdf') as documento:
+            texto='\n'.join(p.get_text() for p in documento)
+            self.assertIn('Director de la USAER 02-E',texto)
+            self.assertNotIn('Diana Durán',texto)
 
     def test_google_access_diagnostics_do_not_expose_credentials(self):
         self.assertEqual(

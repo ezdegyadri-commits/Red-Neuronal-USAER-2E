@@ -93,7 +93,8 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
     pdf.set_font("Helvetica", "", 9)
     if perfil.get("area") == "Dirección":
         bloques_firma = [
-            (62, "Elaboró y da Vo. Bo.", perfil["nombre"] + "\nDirector de la USAER 02-E", firma_especialista or firma_direccion)
+            (15, "Elaboró", perfil.get("nombre_profesional", perfil["nombre"]) + "\nDirector de la USAER 02-E", firma_especialista or firma_direccion),
+            (109, "Vo. Bo.", "Dra. Diana Durán González\nSupervisora de la Zona 001", None),
         ]
     else:
         bloques_firma = [
@@ -102,6 +103,9 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         ]
     for x, titulo, nombre, imagen in bloques_firma:
         ancho_firma = 86
+        # El sello corresponde a Dirección: a la izquierda cuando el director
+        # elabora, a la derecha cuando da visto bueno a un especialista.
+        lleva_sello = x == (15 if perfil.get("area") == "Dirección" else 109)
         pdf.set_xy(x, y_firma)
         pdf.cell(ancho_firma, 5, _fpdf_text(titulo), align="C", new_x="LMARGIN", new_y="NEXT")
         pdf.set_xy(x, y_firma + 6)
@@ -109,9 +113,9 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
             try:
                 with Image.open(BytesIO(imagen)) as original:
                     iw, ih = original.size
-                escala = min((48 if x == 109 else 60) / iw, 22 / ih)
+                escala = min((48 if lleva_sello else 60) / iw, 22 / ih)
                 ancho, alto = iw * escala, ih * escala
-                centro = x + (36 if x == 109 else 43)
+                centro = x + (36 if lleva_sello else 43)
                 pdf.image(BytesIO(imagen), x=centro - ancho / 2,
                           y=y_firma + 29 - alto, w=ancho, h=alto)
             except Exception:
@@ -119,7 +123,7 @@ def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firm
         pdf.line(x + 8, y_firma + 30, x + 78, y_firma + 30)
         pdf.set_xy(x, y_firma + 33)
         pdf.multi_cell(ancho_firma, 4.5, _fpdf_text(nombre), align="C")
-        if x == 109 and sello:
+        if lleva_sello and sello:
             try:
                 pdf.image(BytesIO(sello), x=x + 67, y=y_firma + 10, w=17, h=19, keep_aspect_ratio=True)
             except Exception:
