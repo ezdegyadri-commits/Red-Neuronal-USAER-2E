@@ -9,11 +9,11 @@ import pandas as pd
 import streamlit as st
 from services import planeacion as servicio
 from services.planeacion_modelo import FORMATOS, revisar_redaccion
-from ai.planeacion import proponer, MODEL
+from ai.planeacion import proponer, modelo_configurado
 from ai.planeacion_prompt import huella, VERSION_PROMPT
 from documents.planeacion import generar_pdf
 from services.curriculo import CAMPOS, EJES, FUENTES_BASE, opciones, vincular, contexto_ia, catalogo
-from services.materiales_planeacion import TIPOS, leer_material, incorporar, fuentes_materiales
+from services.materiales_planeacion import TIPOS, MAX_TEXTO, leer_material, incorporar, fuentes_materiales
 
 
 def _resumen_complementos(current):
@@ -38,25 +38,38 @@ def _actualizar_materiales(prefix,current):
 
 def _materiales(prefix,doc):
     with st.expander('Añadir documentos o imágenes a mi planeación'):
-        st.caption('Word, PDF, imágenes, texto, hojas de cálculo y presentaciones. Lectura local: no se envían originales a la IA. Hasta 8 MB por archivo; PDF de hasta 12 páginas.')
-        limite={'max_upload_size':8} if 'max_upload_size' in inspect.signature(st.file_uploader).parameters else {}
+        st.caption('Hasta 32 MB por archivo y PDF de hasta 1 000 páginas. Lectura local, sin enviar originales a IA. Puedes elegir páginas; hasta diez páginas escaneadas por lectura y 100 000 caracteres de transcripción. Incorpora solo el texto pertinente a esta planeación.')
+        limite={'max_upload_size':32} if 'max_upload_size' in inspect.signature(st.file_uploader).parameters else {}
         archivos=st.file_uploader('Materiales de apoyo',type=TIPOS,accept_multiple_files=True,key=prefix+'_material_upload',**limite)
+        desde,hasta=1,0
+        if archivos and any(a.name.lower().endswith(('.pdf','.tif','.tiff')) for a in archivos):
+            col1,col2=st.columns(2)
+            desde=col1.number_input('Leer desde la página',min_value=1,max_value=1000,value=1,key=prefix+'_material_from')
+            hasta=col2.number_input('Hasta la página (0: todas)',min_value=0,max_value=1000,value=0,key=prefix+'_material_to')
+            st.caption('El intervalo se aplica a los PDF e imágenes multipágina. Cambia las páginas y vuelve a transcribir para continuar un documento largo.')
+        def clave_lectura(a):
+            intervalo=f':{desde}:{hasta}' if a.name.lower().endswith(('.pdf','.tif','.tiff')) else ''
+            return hashlib.sha256(a.getvalue()+intervalo.encode()).hexdigest()
         if archivos and st.button('Transcribir archivos',key=prefix+'_material_read'):
             leidos=st.session_state.setdefault(prefix+'_material_readings',{})
             for archivo in archivos:
-                digest=hashlib.sha256(archivo.getvalue()).hexdigest()
+                digest=clave_lectura(archivo)
                 if digest in leidos:continue
                 try:
                     with st.spinner('Leyendo '+archivo.name+'…'):
-                        leidos[digest]=leer_material(archivo.name,archivo.getvalue())
+                        multipagina=archivo.name.lower().endswith(('.pdf','.tif','.tiff'))
+                        leidos[digest]=leer_material(archivo.name,archivo.getvalue(),desde if multipagina else 1,(hasta or None) if multipagina else None)
+                        if multipagina:
+                            leidos[digest]['id']=digest
+                            leidos[digest]['nombre']+=f' · páginas {desde}–{hasta or "final"}'
                 except Exception as exc:
                     st.warning(archivo.name+': '+(str(exc) if isinstance(exc,ValueError) else 'No se pudo transcribir. Usa una copia más clara o un PDF con texto.'))
-        presentes={hashlib.sha256(a.getvalue()).hexdigest() for a in archivos or []}
+        presentes={clave_lectura(a) for a in archivos or []}
         for digest,material in st.session_state.get(prefix+'_material_readings',{}).items():
             if digest not in presentes:continue
             with st.expander('Revisar lectura · '+material['nombre'],expanded=True):
                 for aviso in material['avisos']:st.caption(aviso)
-                texto=st.text_area('Texto útil para esta planeación: corrige o selecciona lo pertinente',value=material['texto'],max_chars=20000,height=200,key=prefix+'_material_text_'+digest)
+                texto=st.text_area('Texto útil para esta planeación: corrige o selecciona lo pertinente',value=material['texto'],max_chars=MAX_TEXTO,height=200,key=prefix+'_material_text_'+digest)
                 st.caption('El material se vincula solo a esta planeación. Confirma qué información corresponde al alumno o al grupo. Para IA se preparan extractos que revisarás en el resumen educativo.')
                 revisado=st.checkbox('Revisé el texto y su pertinencia',key=prefix+'_material_review_'+digest)
                 if st.button('Incorporar texto revisado',disabled=not revisado or not texto.strip(),key=prefix+'_material_apply_'+digest):
@@ -64,7 +77,7 @@ def _materiales(prefix,doc):
                     except ValueError as exc:st.info(str(exc))
         for material in doc['metadatos'].get('materiales',[]):
             with st.expander('Material incorporado · '+material['nombre']):
-                texto=st.text_area('Editar material incorporado',value=material['texto'],max_chars=20000,height=180,key=f"{prefix}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")
+                texto=st.text_area('Editar material incorporado',value=material['texto'],max_chars=MAX_TEXTO,height=180,key=f"{prefix}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")
                 if st.button('Guardar cambios del material',key=prefix+'_material_update_'+material['id']):
                     try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],material,texto))
                     except ValueError as exc:st.info(str(exc))
@@ -206,6 +219,7 @@ def _text(prefix,section,field,label=None):
 
 
 def _ai(prefix,doc,revision=False):
+    modelo = modelo_configurado()
     st.caption('La IA se usa solo cuando solicitas propuestas. El expediente y los datos del formato se preparan automáticamente.')
     _text(prefix,'metadatos','resumen_educativo','Resumen educativo sin nombres, CURP, contactos ni identificadores')
     current=st.session_state[prefix+'_doc']
@@ -218,7 +232,7 @@ def _ai(prefix,doc,revision=False):
         st.info(str(exc))
     record=(st.session_state.get(prefix+'_revision_ia_guardada',{}) if revision
             else current['metadatos'].get('propuestas_ia_guardadas',{}))
-    coinciden=bool(firma and record.get('huella')==firma and record.get('motor')==MODEL)
+    coinciden=bool(firma and record.get('huella')==firma and record.get('motor')==modelo)
     if coinciden:
         st.session_state[prefix+'_ia']=record['resultado']
         st.caption('Estas propuestas ya están guardadas. Consultarlas y editar tu planeación no genera otra solicitud de IA.')
@@ -231,7 +245,7 @@ def _ai(prefix,doc,revision=False):
             with st.spinner('Preparando propuestas…'):
                 result=proponer(resumen,current['formato'],current['datos']['Función'],revision,curriculo=contexto)
                 st.session_state[prefix+'_ia']=result
-                guardado={'huella':firma,'motor':MODEL,'version_prompt':VERSION_PROMPT,'resultado':result}
+                guardado={'huella':firma,'motor':modelo,'version_prompt':VERSION_PROMPT,'resultado':result}
                 if revision:
                     st.session_state[prefix+'_revision_ia_guardada']=guardado
                 else:
@@ -242,8 +256,9 @@ def _ai(prefix,doc,revision=False):
         except (ValueError,RuntimeError) as exc:
             st.info(str(exc))
     diagnostico=st.session_state.get('planeacion_ia_diagnostico')
-    if diagnostico and servicio.identidad()['director']:
+    if diagnostico:
         with st.expander('Diagnóstico de la última solicitud de IA'):
+            st.caption('Puedes compartir este código con Dirección. No incluye datos del alumno ni la clave de conexión.')
             st.write('Motor: '+diagnostico['motor'])
             st.write('Código: '+str(diagnostico['codigo'] or 'No disponible'))
             st.write('Tipo de incidencia: '+diagnostico['tipo'])
@@ -273,8 +288,13 @@ def _ai(prefix,doc,revision=False):
 
 def _editor(prefix):
     doc=st.session_state[prefix+'_doc']; servicio.autorizar(doc,True)
+    if doc['metadatos'].get('version_contexto')!=servicio.VERSION_CONTEXTO:
+        doc=servicio.preparar_contexto(doc)
+        _open(prefix,doc)
+        st.session_state[prefix+'_pending']=True
     st.subheader(FORMATOS[doc['formato']]['titulo'])
     st.write(doc['datos']['Escuela regular']+' · '+doc['datos'].get('CCT',''))
+    if doc['metadatos'].get('aviso_contexto'):st.caption(doc['metadatos']['aviso_contexto'])
     if not doc['datos'].get('CCT'):_text(prefix,'datos','CCT','CCT no registrado: verifica y completa')
     alumnos_col,fuentes_col,estado_col=st.columns(3)
     alumnos_col.metric('Alumnos seleccionados',len(doc['datos']['Alumnos']))
@@ -283,68 +303,78 @@ def _editor(prefix):
     with st.expander('Datos precargados de los alumnos'):
         st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,use_container_width=True)
     st.caption('Autoguardado de cambios confirmados cada 15 segundos mientras trabajas. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
-    st.markdown('#### Referentes y materiales para trabajar')
-    _materiales(prefix,doc)
-    _curriculo(prefix,doc)
-    if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
-    with st.expander('Evidencias del expediente y referente curricular'):
-        if st.button('Actualizar información del expediente',key=prefix+'_sources'):
-            current=servicio.preparar_contexto(st.session_state[prefix+'_doc'])
-            st.session_state[prefix+'_doc']=current
-            st.session_state[prefix+'_fuentes']=(current['metadatos']['fuentes'],current['metadatos']['fuentes_pendientes'])
-            _persist(prefix)
-        if prefix+'_fuentes' not in st.session_state and doc['metadatos'].get('contexto_cargado'):
-            st.session_state[prefix+'_fuentes']=(doc['metadatos'].get('fuentes',[]),doc['metadatos'].get('fuentes_pendientes',[]))
-        if prefix+'_fuentes' in st.session_state:
-            sources,failed=st.session_state[prefix+'_fuentes']
-            if failed:st.info('Parte de la evidencia no está disponible. Puedes continuar sin modificar esos registros.')
-            for source in sources:
-                with st.expander(source['referencia']+' · '+source['tipo']+' · '+source['fecha']+' · '+source['alcance']):
-                    st.write(source['texto'])
-            if not sources:st.caption('No hay evidencia vinculada disponible. No se inferirán necesidades o resultados.')
-            elif st.button('Preparar resumen educativo para revisar',key=prefix+'_summary'):
-                current=deepcopy(st.session_state[prefix+'_doc'])
-                current['metadatos']['resumen_educativo']=servicio.resumen_previo(current,sources)
-                _open(prefix,current);_persist(prefix);st.rerun()
-            st.caption('El resumen se prepara localmente. Revisa posibles nombres o datos sensibles restantes antes de solicitar IA.')
-        _text(prefix,'metadatos','necesidades_confirmadas','Necesidades y apoyos documentados (incluye la referencia de origen)')
-        _text(prefix,'metadatos','referente_curricular','Campo formativo, fase, contenido y PDA verificado; referencia del programa')
-        st.caption('Plan de Estudio 2022, edición 2025. El plan general no sustituye el catálogo de contenidos y PDA de cada fase.')
-    if doc['formato']=='XXI':
-        _text(prefix,'metadatos','fuente_iepp','Referencia del IEPP: fecha, folio o ubicación del informe')
-        key=prefix+'_iepp_'+str(st.session_state.get(prefix+'_generation',0))
-        st.checkbox('Las NEE fueron confirmadas en el IEPP.',value=bool(doc['metadatos'].get('NEE confirmadas desde IEPP')),key=key,on_change=_field,args=(prefix,key,'metadatos','NEE confirmadas desde IEPP'))
-        for field in ('Necesidades educativas específicas asociadas a','Maestro de grupo','Vigencia en cursos escolares'):
-            _text(prefix,'datos',field)
-    for name,headers in FORMATOS[doc['formato']]['tablas'].items():
-        guias={'barreras':('Barreras y apoyos','¿Qué dificulta participar? Describe el apoyo que ayudará a reducir esa barrera.'),
-               'aprendizajes':('¿Qué queremos que logren?','Ejemplo: El alumno identifica palabras frecuentes con apoyo visual. Define cómo observarás el avance.'),
-               'necesidades':('Necesidades y objetivos','Parte del IEPP: necesidad, acción observable, apoyo y seguimiento.'),
-               'curriculo':('Apoyos en el aula regular','Vincula el aprendizaje priorizado con el programa verificado y los ajustes necesarios.'),
-               'dosificacion':('¿Cómo lo trabajaremos?','Describe una actividad concreta, dónde se realizará, cuándo y con qué recursos.'),
-               'evaluacion_final':('Resultados al finalizar','No necesitas llenar este apartado al comenzar.'),
-               'participantes':('¿Quiénes participarán?','Anota a las personas implicadas y su función.')}
-        titulo,ayuda=guias[name]
-        st.markdown('#### '+titulo);st.caption(ayuda)
-        if name=='evaluacion_final':st.caption('Completar solo con resultados documentados al finalizar; no con predicciones.')
-        key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_table_{name}'
-        basekey=key+'_base'
-        if basekey not in st.session_state:
-            st.session_state[basekey]=deepcopy(st.session_state[prefix+'_doc']['tablas'][name])
-        base=st.session_state[basekey]
-        st.data_editor(pd.DataFrame(base,columns=headers).fillna(''),num_rows='dynamic',hide_index=True,
-              use_container_width=True,key=key,on_change=_table,args=(prefix,key,name,base))
-    for field in doc['textos']:_text(prefix,'textos',field)
-    with st.expander('Asistente de redacción y propuestas'):
-        st.caption('Guía: el alumno identifica / relaciona / resuelve / explica… Evita verbos poco observables como “comprender”. Define evidencia y plazo.')
-        for row in st.session_state[prefix+'_doc']['tablas'].get('aprendizajes',st.session_state[prefix+'_doc']['tablas'].get('necesidades',[])):
-            descriptor=row.get('Descriptor de logro',row.get('Descriptor de Logro',''))
-            if descriptor:
-                for consejo in revisar_redaccion(descriptor):st.caption(consejo)
-        _ai(prefix,st.session_state[prefix+'_doc'])
+    conocer,planear,revisar=st.tabs(['1. Conocer y elegir','2. Preparar actividades','3. Revisar y compartir'])
+    with conocer:
+        st.caption('Revisa el expediente, elige qué aprendizaje trabajarás y añade materiales solo si los necesitas. Los datos del alumno ya están completos cuando existen en el padrón.')
+        st.markdown('#### Referentes y materiales para trabajar')
+        _materiales(prefix,doc)
+        _curriculo(prefix,doc)
+        if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
+        with st.expander('Evidencias del expediente y referente curricular'):
+            if st.button('Actualizar información del expediente',key=prefix+'_sources'):
+                current=servicio.preparar_contexto(st.session_state[prefix+'_doc'])
+                st.session_state[prefix+'_doc']=current
+                st.session_state[prefix+'_fuentes']=(current['metadatos']['fuentes'],current['metadatos']['fuentes_pendientes'])
+                _persist(prefix)
+            if prefix+'_fuentes' not in st.session_state and doc['metadatos'].get('contexto_cargado'):
+                st.session_state[prefix+'_fuentes']=(doc['metadatos'].get('fuentes',[]),doc['metadatos'].get('fuentes_pendientes',[]))
+            if prefix+'_fuentes' in st.session_state:
+                sources,failed=st.session_state[prefix+'_fuentes']
+                if failed:st.info('Parte de la evidencia no está disponible. Puedes continuar sin modificar esos registros.')
+                for source in sources:
+                    with st.expander(source['referencia']+' · '+source['tipo']+' · '+source['fecha']+' · '+source['alcance']):
+                        st.write(source['texto'])
+                if not sources:st.caption('No hay evidencia vinculada disponible. No se inferirán necesidades o resultados.')
+                elif st.button('Preparar resumen educativo para revisar',key=prefix+'_summary'):
+                    current=deepcopy(st.session_state[prefix+'_doc'])
+                    current['metadatos']['resumen_educativo']=servicio.resumen_previo(current,sources)
+                    _open(prefix,current);_persist(prefix);st.rerun()
+                st.caption('El resumen se prepara localmente. Revisa posibles nombres o datos sensibles restantes antes de solicitar IA.')
+            _text(prefix,'metadatos','necesidades_confirmadas','Necesidades y apoyos documentados (incluye la referencia de origen)')
+            _text(prefix,'metadatos','referente_curricular','Campo formativo, fase, contenido y PDA verificado; referencia del programa')
+            st.caption('Plan de Estudio 2022, edición 2025. El plan general no sustituye el catálogo de contenidos y PDA de cada fase.')
+        if doc['formato']=='XXI':
+            _text(prefix,'metadatos','fuente_iepp','Referencia del IEPP: fecha, folio o ubicación del informe')
+            key=prefix+'_iepp_'+str(st.session_state.get(prefix+'_generation',0))
+            st.checkbox('Las NEE fueron confirmadas en el IEPP.',value=bool(doc['metadatos'].get('NEE confirmadas desde IEPP')),key=key,on_change=_field,args=(prefix,key,'metadatos','NEE confirmadas desde IEPP'))
+            for field in ('Necesidades educativas específicas asociadas a','Maestro de grupo','Vigencia en cursos escolares'):
+                _text(prefix,'datos',field)
+    with planear:
+        st.caption('Empieza por una actividad posible en tu jornada: qué hará el alumno, qué apoyo necesita y cómo reconocerás su avance. Puedes escribirla tú o pedir hasta tres ideas al asistente.')
+        with st.expander('Asistente de redacción y propuestas'):
+            st.caption('Guía: el alumno identifica / relaciona / resuelve / explica… Evita verbos poco observables como “comprender”. Define evidencia y plazo.')
+            for row in st.session_state[prefix+'_doc']['tablas'].get('aprendizajes',st.session_state[prefix+'_doc']['tablas'].get('necesidades',[])):
+                descriptor=row.get('Descriptor de logro',row.get('Descriptor de Logro',''))
+                if descriptor:
+                    for consejo in revisar_redaccion(descriptor):st.caption(consejo)
+            _ai(prefix,st.session_state[prefix+'_doc'])
+        for name,headers in FORMATOS[doc['formato']]['tablas'].items():
+            guias={'barreras':('Barreras y apoyos','¿Qué dificulta participar? Describe el apoyo que ayudará a reducir esa barrera.'),
+                   'aprendizajes':('¿Qué queremos que logren?','Ejemplo: El alumno identifica palabras frecuentes con apoyo visual. Define cómo observarás el avance.'),
+                   'necesidades':('Necesidades y objetivos','Parte del IEPP: necesidad, acción observable, apoyo y seguimiento.'),
+                   'curriculo':('Apoyos en el aula regular','Vincula el aprendizaje priorizado con el programa verificado y los ajustes necesarios.'),
+                   'dosificacion':('¿Cómo lo trabajaremos?','Describe una actividad concreta, dónde se realizará, cuándo y con qué recursos.'),
+                   'evaluacion_final':('Resultados al finalizar','No necesitas llenar este apartado al comenzar.'),
+                   'participantes':('¿Quiénes participarán?','Anota a las personas implicadas y su función.')}
+            titulo,ayuda=guias[name]
+            st.markdown('#### '+titulo);st.caption(ayuda)
+            if name=='evaluacion_final':st.caption('Completar solo con resultados documentados al finalizar; no con predicciones.')
+            key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_table_{name}'
+            basekey=key+'_base'
+            if basekey not in st.session_state:
+                st.session_state[basekey]=deepcopy(st.session_state[prefix+'_doc']['tablas'][name])
+            base=st.session_state[basekey]
+            st.data_editor(pd.DataFrame(base,columns=headers).fillna(''),num_rows='dynamic',hide_index=True,
+                  use_container_width=True,key=key,on_change=_table,args=(prefix,key,name,base))
+    with revisar:
+        st.caption('Completa las notas del formato y prepara el PDF para revisarlo. Puedes regresar a cualquiera de los pasos sin crear otro documento.')
+        for field in doc['textos']:_text(prefix,'textos',field)
     current=st.session_state[prefix+'_doc']
     faltas=servicio.revisar(current)
-    if faltas:st.caption('Por completar para enviar: '+'; '.join(faltas))
+    if faltas:
+        with st.expander(f'Antes de enviar: {len(faltas)} aspectos por completar'):
+            for falta in faltas:st.write('• '+falta)
+    else:st.success('El formato está completo para enviarlo a Dirección. Revisa el PDF antes de compartir.')
     left,middle,right=st.columns(3)
     if left.button('Guardar borrador',key=prefix+'_save'):
         _persist(prefix);st.rerun()
@@ -376,6 +406,8 @@ def direccion_panel():
     docs=[d for d in docs if school=='Todas' or d['datos']['Escuela regular']==school]
     selected=st.selectbox('Documento',range(len(docs)),format_func=lambda i:f"{docs[i]['datos']['Nombre del especialista']} · {docs[i]['formato']} · {docs[i]['datos'].get('Periodo','')} · {docs[i]['estado']}",key=prefix+'_selected')
     doc=docs[selected]
+    if doc['metadatos'].get('version_contexto')!=servicio.VERSION_CONTEXTO:
+        doc=servicio.preparar_contexto(doc)
     st.write(doc['datos']);
     for name,rows in doc['tablas'].items():
         st.markdown('#### '+name.replace('_',' ').capitalize());st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
@@ -386,10 +418,23 @@ def direccion_panel():
         consent=st.checkbox('Revisé que el resumen no identifica personas.',key=prefix+'_ia_consent_'+doc['id'])
         if st.button('Analizar áreas de mejora',disabled=not consent,key=prefix+'_ia_revisar'):
             try:
-                result=proponer(resumen,doc['formato'],doc['datos']['Función'],True,curriculo=contexto_ia(doc))
-                st.write(result['observaciones'])
-                for item in result['faltantes']:st.caption(item)
+                contexto=contexto_ia(doc)
+                firma=huella(resumen,doc['formato'],doc['datos']['Función'],True,contexto)
+                cachekey=prefix+'_analisis_'+doc['id']
+                previo=st.session_state.get(cachekey,{})
+                if previo.get('huella')!=firma or previo.get('motor')!=modelo_configurado():
+                    result=proponer(resumen,doc['formato'],doc['datos']['Función'],True,curriculo=contexto)
+                    st.session_state[cachekey]={'huella':firma,'motor':modelo_configurado(),'resultado':result}
             except (ValueError,RuntimeError) as exc:st.info(str(exc))
+        previo=st.session_state.get(prefix+'_analisis_'+doc['id'],{})
+        try:firma_actual=huella(resumen,doc['formato'],doc['datos']['Función'],True,contexto_ia(doc))
+        except ValueError:firma_actual=''
+        if previo.get('huella')==firma_actual and previo.get('motor')==modelo_configurado():
+            st.caption('Análisis conservado en esta sesión; volver a consultarlo no repite la solicitud.')
+            st.write(previo['resultado']['observaciones'])
+            for item in previo['resultado']['faltantes']:st.caption(item)
+        diagnostico=st.session_state.get('planeacion_ia_diagnostico')
+        if diagnostico:st.caption('Diagnóstico: '+str(diagnostico['codigo'] or diagnostico['tipo'])+' · '+diagnostico['motor'])
     observations=st.text_area('Áreas de mejora y observaciones de Dirección',value=doc.get('observaciones_director',''),key=prefix+'_notes_'+doc['revision'])
     for label,state in [('Devolver con observaciones','CON_OBSERVACIONES'),('Validar revisión','VALIDADO')]:
         if st.button(label,key=prefix+'_'+state):

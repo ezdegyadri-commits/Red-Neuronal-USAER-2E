@@ -31,6 +31,8 @@ from services.horarios import (
     guardar_horario_apoyo,
     guardar_restricciones,
     guardar_restricciones_lote,
+    editar_referencia,
+    _referencia_general,
     marcar_avisos_leidos,
     normalizar_tabla_horario,
     actualizar_bloques_borrador,
@@ -981,7 +983,7 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
         espacio = st.selectbox("Espacio", ["Aula regular", "Aula de apoyo", "Otro"],
                                index=["Aula regular", "Aula de apoyo", "Otro"].index(actual.get("Espacio", "Aula regular")) if actual.get("Espacio", "Aula regular") in ["Aula regular", "Aula de apoyo", "Otro"] else 0,
                                key=f"{clave_editor}_espacio", **cambio)
-    grupo_candidato = grupo or str(actual.get("Grupo", ""))
+    grupo_candidato = grupo
     if ids:
         grupos_alumnos = sorted({_grupo_alumno(row) for row in visibles.to_dict("records")
                                  if str(row.get("ID_Alumno", "")) in set(ids) and _grupo_alumno(row)})
@@ -989,7 +991,7 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     candidato = {
         "Dia": dia_elegido, "Inicio": desde_editado, "Fin": hasta_editado,
         "Grupo": grupo_candidato,
-        "ID_Alumnos": ",".join(ids) or str(actual.get("ID_Alumnos", "")),
+        "ID_Alumnos": ",".join(ids),
         "Actividad": actividad.strip() or str(actual.get("Actividad", "")), "Maestra": nombre,
     }
     if candidato["Actividad"] or grupo or ids:
@@ -1247,6 +1249,28 @@ def horarios_apoyo_page():
     if not restricciones.empty:
         st.markdown("#### Horarios de referencia activos")
         st.dataframe(_tabla_vista(restricciones), hide_index=True, width="stretch")
+        ambiguos=[r for r in restricciones.to_dict('records') if not str(r.get('Grupo','')).strip() and not _referencia_general(r)]
+        if ambiguos:
+            st.warning('Hay actividades sin grupos confirmados. Se muestran como referencia y no bloquean automáticamente a todos los alumnos. Confirma los grupos con el docente y corrige la referencia antes de considerar definitivo tu horario.')
+            st.dataframe(_tabla_vista(pd.DataFrame(ambiguos)),hide_index=True,width='stretch')
+        with st.expander('Corregir horarios de referencia guardados'):
+            st.caption('Puedes corregir día, horas, actividad y grupos o quitar filas incorrectas, sin subir otra imagen. La corrección es compartida por esta escuela; se conserva la versión anterior. Grupo vacío: por confirmar. Escribe Todos solo si se confirmó que participa toda la escuela.')
+            archivos=sorted(restricciones['Archivo'].fillna('').astype(str).unique())
+            archivo=st.selectbox('Referencia que corregirás',archivos,key='editar_referencia_'+clave_identidad)
+            seleccion=restricciones.loc[restricciones['Archivo'].fillna('').astype(str).eq(archivo)]
+            version=str(seleccion.iloc[-1].get('ID_Version',''))
+            editkey='referencia_guardada_'+hashlib.sha256((clave_identidad+archivo+version).encode()).hexdigest()[:24]
+            columnas=['Dia','Inicio','Fin','Actividad','Grupo','Responsable']
+            base=seleccion.reindex(columns=columnas).fillna('').reset_index(drop=True)
+            editado=st.data_editor(base,num_rows='dynamic',hide_index=True,width='stretch',key=editkey,
+                column_config={'Dia':st.column_config.SelectboxColumn('Día',options=list(DIAS),required=True),'Grupo':st.column_config.TextColumn('Grupos confirmados',help='Ejemplo: 3A, 4B. Vacío significa pendiente, no todos.')})
+            confirma=st.checkbox('Revisé la corrección y confirmo actualizar la referencia de esta escuela',key=editkey+'_confirmar')
+            if st.button('Guardar corrección de referencia',disabled=not confirma,key=editkey+'_guardar'):
+                try:
+                    editar_referencia(escuela,archivo,editado,version)
+                    st.success('Referencia corregida. Se conserva su historial y se recalculan los choques.');st.rerun()
+                except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+                except Exception:st.warning('No se confirmó la corrección. Tu edición permanece aquí; actualiza las referencias antes de reintentar.')
     if not horarios_equipo.empty:
         st.markdown("#### Horarios guardados de otras maestras de esta escuela")
         colegas = horarios_equipo.loc[horarios_equipo["Maestra"].astype(str).ne(nombre)].copy() if "Maestra" in horarios_equipo else horarios_equipo.iloc[0:0]
