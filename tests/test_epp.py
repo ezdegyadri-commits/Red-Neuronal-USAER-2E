@@ -116,6 +116,13 @@ class EPPTests(unittest.TestCase):
         for t in ['Información inicial','Funcionamiento intelectual','Conducta adaptativa','Funcionamiento académico','Contextos','Conclusión','Necesidades','Firmas','MARCADOR FINAL']:
             self.assertIn(t.lower(),text.lower())
         self.assertGreater(len(pdf),2)
+    def test_pdf_precarga_fecha_y_registro_directo(self):
+        d=self.doc();v=vacia('Aprendizaje')
+        v['evaluaciones']=[{'id':'ficticio','nombre':'Observación directa ficticia','texto':'Hallazgo','fecha':'2026-10-07','entrada':'DIRECTO'}]
+        d['partes']['Aprendizaje']={'contenido':v,'fecha':'2026-10-07','autor':'Docente ficticia'}
+        pdf=fitz.open(stream=generar_pdf(d,{**ALUMNO,'Fecha_Nacimiento':'2017-01-01'}),filetype='pdf')
+        text=''.join(p.get_text() for p in pdf)
+        self.assertIn('2017-01-01',text);self.assertIn('Observación directa ficticia',text)
     def test_ia_rechaza_determinar_nee_en_area(self):
         def call(*args,**kwargs):
             response={'campos':{f:'' for f in campos('Comunicación')},'faltantes':[],'nee':[{}],'bap':[]}
@@ -129,6 +136,18 @@ class EPPTests(unittest.TestCase):
         self.assertIn('No interpretes ni califiques pruebas psicométricas',prompt)
         self.assertIn('Anexos XVII y XVIII',prompt)
         self.assertNotIn(ALUMNO['Nombre_Completo'],prompt)
+    def test_ia_rechaza_apartado_sin_instrumento_citado(self):
+        def call(*args,**kwargs):
+            r={'campos':{f:'Resultado sin fuente.' for f in campos('Psicología')},'faltantes':[],'nee':[],'bap':[]}
+            return kwargs['_validador'](r)
+        with patch.object(ai,'proponer',side_effect=call):
+            with self.assertRaises(ValueError):ai.generar('EV1: Hallazgo.','Psicología')
+    def test_ia_rechaza_codigo_de_instrumento_ajeno(self):
+        def call(*args,**kwargs):
+            r={'campos':{f:'EV99: Resultado.' for f in campos('Psicología')},'faltantes':[],'nee':[],'bap':[]}
+            return kwargs['_validador'](r)
+        with patch.object(ai,'proponer',side_effect=call):
+            with self.assertRaises(ValueError):ai.generar('EV1: Hallazgo.','Psicología')
 
 class ModalidadTests(unittest.TestCase):
     def setUp(self):self.frame=pd.DataFrame([ALUMNO,{**ALUMNO,'ID_Alumno':'FICTICIO-A2','Tipo_Atencion':'GRUPAL'},{**ALUMNO,'ID_Alumno':'FICTICIO-A3','Tipo_Atencion':''}])
