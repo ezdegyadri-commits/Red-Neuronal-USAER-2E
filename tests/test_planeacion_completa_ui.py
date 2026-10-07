@@ -7,7 +7,7 @@ class GeneracionCompletaUITests(unittest.TestCase):
     def test_cuatro_perfiles_generan_editan_recuperan_y_no_repiten_ia(self):
         for area in ['Aprendizaje','Psicología','Comunicación','Trabajo Social']:
             app=self.abrir();app.radio[0].set_value(area).run()
-            next(m for m in app.multiselect if m.label=='Alumno o subgrupo de la misma escuela').set_value(['A1']).run()
+            next(m for m in app.multiselect if m.label=='Alumnos de atención grupal de la misma escuela').set_value(['A1']).run()
             next(b for b in app.button if b.label=='Crear y guardar borrador').click().run()
             self.assertFalse(app.exception,area)
             self.assertTrue(any(b.label=='Generar mi planeación trimestral con IA' for b in app.button))
@@ -29,7 +29,7 @@ class GeneracionCompletaUITests(unittest.TestCase):
                 self.assertEqual(app.session_state.llamadas_ficticias,1)
     def test_configuracion_se_recupera_sin_otra_llamada(self):
         app=self.abrir()
-        next(m for m in app.multiselect if m.label=='Alumno o subgrupo de la misma escuela').set_value(['A1']).run()
+        next(m for m in app.multiselect if m.label=='Alumnos de atención grupal de la misma escuela').set_value(['A1']).run()
         next(b for b in app.button if b.label=='Crear y guardar borrador').click().run()
         next(n for n in app.number_input if n.label=='Duración de cada sesión (minutos)').set_value(60).run()
         next(b for b in app.button if b.label=='Guardar borrador').click().run()

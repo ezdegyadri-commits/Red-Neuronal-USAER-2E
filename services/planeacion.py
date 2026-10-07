@@ -66,8 +66,11 @@ def padron_autorizado():
     return frame
 
 
-def nueva(formato, ids, ciclo=2026, trimestre=1):
+def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None):
     actor = identidad()
+    if modalidad is not None:
+        from services.planeacion_modalidad import comprobar
+        comprobar(padron_autorizado(), ids, modalidad)
     if formato != 'XXI' and formato != ('XXV' if actor['area']=='Trabajo Social' else 'XXIII'):
         raise PermissionError('Utiliza el formato correspondiente a tu función.')
     doc = crear_plantilla(formato, ids, padron_autorizado().to_dict('records'),
@@ -77,6 +80,8 @@ def nueva(formato, ids, ciclo=2026, trimestre=1):
     doc.update({'id':uuid4().hex,'revision':'','cuenta':actor['cuenta'],'observaciones_director':''})
     doc['metadatos'].update({'resumen_educativo':'','fuente_iepp':'','necesidades_confirmadas':'',
                              'referente_curricular':'','revisado_por':''})
+    if modalidad is not None:
+        doc['metadatos']['modalidad_planeacion'] = modalidad
     from services.planeacion_equipo import preparar
     return preparar(doc)
 
@@ -344,6 +349,24 @@ def evidencias(doc):
                 if any(f['tipo']=='V' and f['fecha']==texto(r.get('Fecha')) and f['texto']==texto(r.get('Descripcion')) for f in fuentes):continue
                 fuentes.append({'tipo':'SEGUIMIENTO','alumno':alumno,'fecha':texto(r.get('Fecha')),'registro':texto(r.get('ID_Evento',r.get('ID_Expediente'))),'texto':texto(r.get('Descripcion')),'alcance':'seguimiento del expediente'})
     except Exception:fallas.append('SEGUIMIENTO')
+    try:
+        from services.epp_modelo import reconstruir as reconstruir_epp, AREAS as AREAS_EPP, conclusion_vigente
+        frame_epp=df_sheet('EPP_Versiones')
+        for informe in reconstruir_epp(frame_epp.fillna('').to_dict('records')):
+            if informe['alumno'] not in elegidos or informe['partes']['META']['estado']=='ELIMINADO':continue
+            for area in (*AREAS_EPP,'Conclusión'):
+                parte=informe['partes'].get(area,{})
+                contenido=parte.get('contenido',{})
+                if not contenido.get('validada') or (area=='Conclusión' and not conclusion_vigente(informe)):continue
+                hallazgos={k:v for k,v in contenido.get('campos',{}).items() if v}
+                if area=='Conclusión':hallazgos.update(NEE=contenido.get('nee',[]),BAP=contenido.get('bap',[]))
+                if not hallazgos:continue
+                fuentes.append({'tipo':'EPP','alumno':informe['alumno'],'fecha':parte.get('fecha','')[:10],
+                    'registro':informe['id']+'-'+area,'revision':parte.get('revision',''),
+                    'texto':json.dumps(hallazgos,ensure_ascii=False),
+                    'alcance':'hallazgos de EPP revisados por el área; no equivale a diagnóstico médico'})
+    except Exception as exc:
+        if type(exc).__name__!='WorksheetNotFound':fallas.append('EPP')
     fuentes=unificar_fuentes(fuentes)
     for i,r in enumerate(fuentes):
         r['referencia']='E'+str(i+1)

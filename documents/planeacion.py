@@ -42,6 +42,16 @@ def generar_pdf(doc):
     metadata=Table([datos[i:i+2] for i in range(0,len(datos),2)],colWidths=[available/2]*2)
     metadata.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0)]))
     story.insert(2,metadata)
+    from services.planeacion_modalidad import guia_grupal, GUIA_XIX, GUIA_XX
+    guia=guia_grupal(doc)
+    if guia:
+        story.extend([p('Anexo XIX. Guía de Planeación Grupal',styles['Heading2']),p('Maestro de grupo: '+guia['maestro_grupo'])])
+        for headers,rows in [(GUIA_XIX,guia['filas']),(GUIA_XX,guia['as'])]:
+            if not rows:continue
+            if headers==GUIA_XX:story.append(p('Anexo XX. Guía de Planeación Grupal AS',styles['Heading2']))
+            t=Table([[p(h) for h in headers]]+[[p(r.get(h,'')) for h in headers] for r in rows],colWidths=[available/len(headers)]*len(headers),repeatRows=1,splitInRow=1)
+            t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.3,colors.grey),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#dceeee')),('VALIGN',(0,0),(-1,-1),'TOP')]))
+            story.append(t)
     meta=doc['metadatos']
     for key in ('fuente_iepp','necesidades_confirmadas','referente_curricular'):
         if meta.get(key):
