@@ -16,7 +16,7 @@ area=st.selectbox('Perfil ficticio',['Aprendizaje','Psicología','Comunicación'
 who={'cuenta':'docente-ficticia' if area=='Aprendizaje' else 'cuenta-'+area,'nombre':'Profesional ficticio',
     'area':area,'rol':'MAESTRO DE APOYO' if area=='Aprendizaje' else area,'director':area=='Dirección','perfil':None}
 alumno={'ID_Alumno':'FICTICIO-A1','Nombre_Completo':'Alumno de prueba','ID_Escuela':'E1','Nombre_Escuela':'Escuela ficticia',
-    'CCT_Escuela':'TEST','Grado':'3','Grupo':'A','Tipo_Atencion':'Individual'}
+    'CCT_Escuela':'TEST','Grado':'3','Grupo':'A','Tipo_Atencion':'Individual','Edad_1_Septiembre':9}
 st.session_state.setdefault('qa_epp_rows',[])
 st.session_state.setdefault('qa_ai_calls',0)
 class Sheet:
