@@ -63,6 +63,30 @@ class EPPUITests(unittest.TestCase):
     def test_director_consulta_sin_edicion_de_areas(self):
         app=self.open();app.selectbox[0].set_value('Dirección').run()
         self.assertFalse(app.exception);self.assertEqual(len(app.text_area),0)
+    def test_especialistas_filtran_escuela_y_solo_epp_iniciadas(self):
+        for area in ('Psicología','Comunicación','Trabajo Social'):
+            app=AppTest.from_file(str(Path(__file__).with_name('fixture_epp_panel.py')),default_timeout=30)
+            app.session_state['qa_multiescuela']=True;app.run()
+            app.selectbox[0].set_value(area).run()
+            school=next(s for s in app.selectbox if s.label=='Escuela asignada')
+            self.assertEqual(len(school.options),3)
+            school.set_value('E2').run()
+            pupils=next(s for s in app.selectbox if s.label=='Alumno con EPP iniciada')
+            self.assertEqual(len(pupils.options),1);self.assertIn('Alumno escuela dos',pupils.options[0])
+            self.assertFalse(any('Sin EPP' in label for label in pupils.options))
+            field={'Psicología':'3.1. Atención','Comunicación':'4.1. Comprensión receptiva','Trabajo Social':'6.3. Contexto social'}[area]
+            next(t for t in app.text_area if t.label==field).set_value('Aportación de escuela dos.').run()
+            self.assertEqual(app.session_state['qa_epp_rows'][-1][0],'FICTICIO-A2')
+            next(s for s in app.selectbox if s.label=='Escuela asignada').set_value('E3').run()
+            self.assertFalse(app.exception)
+            self.assertFalse(any(s.label=='Alumno con EPP iniciada' for s in app.selectbox))
+            self.assertTrue(any('Todavía no hay EPP' in i.value for i in app.info))
+            next(s for s in app.selectbox if s.label=='Escuela asignada').set_value('E1').run()
+            self.assertIn('Alumno de prueba',next(s for s in app.selectbox if s.label=='Alumno con EPP iniciada').options[0])
+            self.assertEqual(next(t for t in app.text_area if t.label==field).value,'')
+            next(s for s in app.selectbox if s.label=='Escuela asignada').set_value('E2').run()
+            self.assertEqual(next(t for t in app.text_area if t.label==field).value,'Aportación de escuela dos.')
+            self.assertEqual(sum(row[2]=='META' for row in app.session_state['qa_epp_rows']),2)
     def test_ia_solo_despues_de_revisar_y_permanece_borrador(self):
         app=self.instrument(self.open())
         next(b for b in app.button if b.label=='Reunir expediente y evaluaciones').click().run()

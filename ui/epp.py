@@ -97,11 +97,27 @@ def epp_page():
         for k in list(st.session_state):
             if k.startswith(prefix+'_edit_'):del st.session_state[k]
         st.rerun()
-    if not docs:st.caption('Aún no hay EPP en tus escuelas asignadas. La maestra de apoyo puede iniciar una.');return
     frame=s.planes.padron_autorizado()
     names={str(r['ID_Alumno']):str(r['Nombre_Completo'])+' · '+str(r.get('Nombre_Escuela','')) for r in frame.to_dict('records')}
+    selected_key=prefix+'_selected'
+    if a['area'] in ('Psicología','Comunicación','Trabajo Social') and not a['director']:
+        # El padrón ya está autorizado en servidor. El filtro no amplía escuelas ni
+        # crea informes: abre las mismas identidades iniciadas por las maestras.
+        schools={str(r['ID_Escuela']):str(r.get('Nombre_Escuela','')) for r in frame.to_dict('records')
+            if str(r.get('ID_Escuela','')).strip()}
+        if not schools:
+            st.info('No hay escuelas asignadas disponibles para consultar EPP.');return
+        school=st.selectbox('Escuela asignada',sorted(schools,key=lambda i:schools[i]),
+            format_func=schools.get,key=prefix+'_escuela')
+        ids=set(frame.loc[frame['ID_Escuela'].astype(str).eq(school),'ID_Alumno'].astype(str))
+        docs=[d for d in docs if d['alumno'] in ids and d['partes']['META']['estado']!='ELIMINADO']
+        st.caption('Solo aparecen alumnos de esta escuela con EPP iniciada por su maestra de apoyo. Las aportaciones se integran en el mismo informe compartido.')
+        if not docs:
+            st.info('Todavía no hay EPP iniciadas en esta escuela. Cuando su maestra de apoyo cree una, aparecerá aquí; puedes usar Actualizar aportaciones del equipo.');return
+        selected_key=prefix+'_selected_escuela_'+school
+    if not docs:st.caption('Aún no hay EPP en tus escuelas asignadas. La maestra de apoyo puede iniciar una.');return
     by_id={d['id']:d for d in docs}
-    selected=st.selectbox('Informe compartido',list(by_id),format_func=lambda i:names.get(by_id[i]['alumno'],'')+' · '+by_id[i]['ciclo']+(' · Retirado' if by_id[i]['partes']['META']['estado']=='ELIMINADO' else ''),key=prefix+'_selected')
+    selected=st.selectbox('Alumno con EPP iniciada' if selected_key!=prefix+'_selected' else 'Informe compartido',list(by_id),format_func=lambda i:names.get(by_id[i]['alumno'],'')+' · '+by_id[i]['ciclo']+(' · Retirado' if by_id[i]['partes']['META']['estado']=='ELIMINADO' else ''),key=selected_key)
     doc=by_id[selected];s.autorizar(doc)
     if doc['partes']['META']['estado']=='ELIMINADO':
         st.warning('EPP retirada. Su historial se conserva.')
