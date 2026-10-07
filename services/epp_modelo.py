@@ -100,6 +100,15 @@ def validar_parte(area, value):
     for ev in result['evaluaciones']:
         if not isinstance(ev,dict) or not all(isinstance(ev.get(k),str) for k in ('id','texto','nombre')):
             raise ValueError('Evaluación no válida.')
+        if len(ev['texto'])>12000:raise ValueError('Resume los hallazgos del instrumento a 12000 caracteres.')
+    if 'generales' in result:
+        if not isinstance(result['generales'],dict) or not set(result['generales'])<=set(GENERALES):
+            raise ValueError('Datos generales no válidos.')
+        if any(not isinstance(t,str) or len(t)>12000 for t in result['generales'].values()):
+            raise ValueError('Dato general demasiado extenso o no válido.')
+    if 'generales_editados' in result:
+        if not isinstance(result['generales_editados'],list) or any(f not in GENERALES for f in result['generales_editados']):
+            raise ValueError('Identificación de datos corregidos no válida.')
     for name,headers in [('nee',NEE),('bap',BAP),('familia',FAMILIA),('historia',HISTORIA)]:
         if name not in result:continue
         if not isinstance(result[name],list) or len(result[name])>100:raise ValueError('Tabla no válida.')
