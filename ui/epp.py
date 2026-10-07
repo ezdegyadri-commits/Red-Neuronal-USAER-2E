@@ -9,6 +9,7 @@ from services.epp_modelo import AREAS, SECCIONES, campos, vacia, NEE, BAP, FAMIL
 from services.materiales_planeacion import TIPOS, leer_material
 from documents.epp import generar_pdf
 from ai.epp import generar
+from services.epp_entrada import precargar, huella_instrumentos, entrada_directa
 
 def _save(prefix):
     try:
@@ -26,6 +27,8 @@ def _field(prefix,key,section,field):
     value=st.session_state[prefix+'_value']
     if section:value[section][field]=st.session_state[key]
     else:value[field]=st.session_state[key]
+    if section=='generales':
+        value['generales_editados']=sorted(set(value.get('generales_editados',[]))|{field})
     if field!='validada':value['validada']=False
     _save(prefix)
 
@@ -63,6 +66,11 @@ def _abrir(prefix,doc,area):
     st.session_state[prefix+'_doc']=deepcopy(doc)
     st.session_state[prefix+'_area']=area
     st.session_state[prefix+'_value']=deepcopy(doc['partes'].get(area,{}).get('contenido',vacia(area)))
+    if area=='Aprendizaje':
+        original=st.session_state[prefix+'_value']
+        filled=precargar(original,s.alumno_autorizado(doc['alumno']))
+        st.session_state[prefix+'_value']=filled
+        if filled!=original:_save(prefix)
 
 def epp_page():
     a=s.actor()
@@ -101,6 +109,9 @@ def epp_page():
             s.retirar(doc,True);st.rerun()
         return
     st.subheader(names[doc['alumno']])
+    student=s.alumno_autorizado(doc['alumno'])
+    st.caption('Datos del registro: grado '+str(student.get('Grado',''))+' · grupo '+str(student.get('Grupo',''))+
+        ' · CCT '+str(student.get('CCT_Escuela',''))+' · condición registrada: '+str(student.get('Condicion_Discapacidad','Por confirmar')))
     status=[{'Área':area,'Profesional':doc['partes'].get(area,{}).get('autor','Por aportar'),
         'Estado':'Revisada' if doc['partes'].get(area,{}).get('contenido',{}).get('validada') else 'Borrador / pendiente'} for area in AREAS]
     st.dataframe(pd.DataFrame(status),hide_index=True,use_container_width=True)
@@ -117,6 +128,22 @@ def epp_page():
             st.caption('Los cambios de texto se guardan al salir del campo. Si falla la conexión, se muestra un aviso; conserva un respaldo antes de cerrar.')
             if area!='Conclusión':
                 _text(edit,'instrumentos');_text(edit,'fecha_aplicacion')
+                with st.expander('Aplicar o registrar un instrumento aquí'):
+                    st.caption('Entrada directa de observaciones y resultados. El catálogo de instrumentos se incorporará después; aquí no se calculan puntuaciones ni diagnósticos.')
+                    direct_fields=['Instrumento o técnica aplicada','Fecha de aplicación (AAAA-MM-DD)',
+                        'Cómo se aplicó y apoyos utilizados','Resultados y observaciones documentadas',
+                        'Limitaciones y aspectos por confirmar']
+                    value.setdefault('aplicacion_en_curso',dict.fromkeys(direct_fields,''))
+                    st.caption('Este registro en curso se guarda al salir de cada campo, separado del informe.')
+                    for f in direct_fields:_text(edit,f,'aplicacion_en_curso',height=100)
+                    checked=st.checkbox('Revisé los resultados de esta aplicación y corresponden a este alumno',key=edit+'_direct_review')
+                    if st.button('Incorporar instrumento aplicado',disabled=not checked,key=edit+'_direct_apply'):
+                        try:
+                            ev=entrada_directa(value['aplicacion_en_curso'])
+                            if not any(e['id']==ev['id'] for e in value['evaluaciones']):value['evaluaciones'].append(ev)
+                            value['validada']=False;_save(edit)
+                            if edit+'_error' not in st.session_state:st.rerun()
+                        except ValueError as exc:st.warning(str(exc))
                 with st.expander('Cargar mis evaluaciones y revisar la lectura'):
                     st.caption('Hasta 32 MB; transcripción local. No se envían archivos originales a IA. Copia únicamente los hallazgos de este alumno, no cuadernillos completos ni pruebas con datos de terceros.')
                     upload=st.file_uploader('Evaluación de mi área',type=TIPOS,key=edit+'_upload')
@@ -143,17 +170,24 @@ def epp_page():
                             value['evaluaciones']=[e for e in value['evaluaciones'] if e['id']!=ev['id']]
                             value['validada']=False;_save(edit);st.rerun()
             with st.expander('Preparar mis apartados con IA'):
-                if st.button('Reunir expediente y evaluaciones',key=edit+'_context'):
+                ready=bool(value.get('evaluaciones')) if area!='Conclusión' else any(
+                    any(t.strip() for t in doc['partes'].get(other,{}).get('contenido',{}).get('campos',{}).values()) for other in AREAS)
+                if not ready:st.info('Primero incorpora los resultados de un instrumento, por carga o entrada directa.' if area!='Conclusión' else 'Primero reúne los hallazgos del equipo.')
+                if st.button('Reunir expediente y evaluaciones',disabled=not ready,key=edit+'_context'):
                     try:
                         plan=s.contexto(doc)
                         st.session_state[edit+'_resumen']=s.resumen(doc,area,value,plan)
+                        st.session_state[edit+'_fuente_resumen']=huella_instrumentos(doc,area,value)
                         st.session_state.pop(edit+'_resumen_ia',None)
+                        st.session_state.pop(edit+'_consent',None)
                     except Exception:st.error('No se pudo reunir el contexto completo. No se enviaron datos a IA; intenta actualizar.')
                 if edit+'_resumen' in st.session_state:
+                    stale=st.session_state.get(edit+'_fuente_resumen')!=huella_instrumentos(doc,area,value)
+                    if stale:st.warning('Cambiaron los instrumentos o las aportaciones del equipo. Vuelve a reunir el expediente y revisa el resumen actualizado.')
                     text=st.text_area('Resumen educativo a enviar: retira datos que identifiquen a alumnos o familiares',value=st.session_state[edit+'_resumen'],height=200,max_chars=12000,key=edit+'_resumen_ia')
                     consent=st.checkbox('Revisé el resumen: sin nombres, CURP, domicilios ni contactos. Autorizo analizar estos hallazgos en Gemini.',key=edit+'_consent')
                     replace=st.checkbox('Sustituir los textos de mi área por un nuevo borrador; conservar evaluaciones e historial',key=edit+'_replace')
-                    if st.button('Proponer conclusión interdisciplinaria' if area=='Conclusión' else 'Generar mis apartados',disabled=not consent or not replace,key=edit+'_generate'):
+                    if st.button('Proponer conclusión interdisciplinaria' if area=='Conclusión' else 'Generar mis apartados',disabled=not ready or stale or not consent or not replace,key=edit+'_generate'):
                         try:
                             from ai.planeacion import modelo_configurado
                             fingerprint=hashlib.sha256((doc['id']+area+modelo_configurado()+text).encode()).hexdigest()
@@ -163,11 +197,15 @@ def epp_page():
                                 with st.spinner('Redactando con base en los hallazgos revisados…'):result=generar(text,area)
                                 value['campos']=result['campos'];value['validada']=False
                                 if area=='Conclusión':value['nee']=result['nee'];value['bap']=result['bap']
-                                value['pendientes_ia']=result['faltantes'];value['huella_ia']=fingerprint;_save(edit)
+                                value['pendientes_ia']=result['faltantes'];value['huella_ia']=fingerprint
+                                value['fuentes_analisis']=[{'id':e['id'],'nombre':e['nombre']} for e in value.get('evaluaciones',[])]
+                                value['huella_instrumentos_analizados']=huella_instrumentos(doc,area,value)
+                                _save(edit)
                                 if edit+'_error' not in st.session_state:_abrir(edit,st.session_state[edit+'_doc'],area);st.rerun()
                         except (ValueError,RuntimeError) as exc:st.warning(str(exc))
             if area=='Aprendizaje':
                 with st.expander('Datos generales editables'):
+                    st.caption('Se precargan los datos disponibles del registro de este alumno. Los campos vacíos están por confirmar; tus correcciones se conservan, incluso si dejas un campo vacío.')
                     for f in GENERALES:_text(edit,f,'generales')
                 with st.expander('Historia escolar'):_grid(edit,'historia',HISTORIA)
             if area=='Trabajo Social':
@@ -185,6 +223,10 @@ def epp_page():
                 _grid(edit,'nee',NEE);_grid(edit,'bap',BAP)
             else:_text(edit,'sintesis',height=150)
             for p in value.get('pendientes_ia',[]):st.caption('Por confirmar: '+p)
+            if value.get('huella_instrumentos_analizados'):
+                st.caption('Apartados propuestos a partir de instrumentos; siempre sujetos a revisión profesional.')
+                if value['huella_instrumentos_analizados']!=huella_instrumentos(doc,area,value):
+                    st.warning('Los resultados cambiaron después del análisis. Revisa o regenera los apartados antes de confirmarlos.')
             if st.button('Guardar mi borrador',key=edit+'_save'):_save(edit)
             if st.button('Confirmar revisión de mi área' if area!='Conclusión' else 'Validar conclusión acordada por el equipo',key=edit+'_validate'):
                 if area=='Conclusión':
