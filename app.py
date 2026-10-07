@@ -21,6 +21,7 @@ from ui.calendario_eventos import eventos_direccion, calendario_page
 from ui.tramites import tramites_page
 from services.tramites import gestor as gestor_tramites, puede_solicitar
 from ui.planeacion import planeacion_page, direccion_panel
+from ui.epp import epp_page
 from ui.novedades_supervision import novedades_page
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
@@ -52,7 +53,7 @@ with st.sidebar:
         menu += ["Trámites"]
     perfil_cronograma = perfil_especialista(st.session_state.get("nombre", ""), rol)
     if perfil_cronograma or "APOYO" in rol.upper():
-        menu += ["Planeación e intervención"]
+        menu += ["Planeación e intervención", "EPP"]
     if perfil_cronograma and perfil_cronograma["area"] != "Dirección":
         menu += ["Cronograma mensual"]
     if "DIRECTOR" in rol.upper():
@@ -108,6 +109,7 @@ elif page=="Cronograma mensual": cronogramas_page()
 elif page=="Horarios de apoyo": horarios_apoyo_page()
 elif page=="Trámites": tramites_page()
 elif page=="Planeación e intervención": planeacion_page()
+elif page=="EPP": epp_page()
 elif page=="Novedades de supervisión": novedades_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
