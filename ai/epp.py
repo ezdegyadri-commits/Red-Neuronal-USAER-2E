@@ -1,5 +1,6 @@
 """Redacción educativa bajo demanda; no interpreta pruebas ni decide diagnósticos."""
 import json
+import re
 from services.epp_modelo import campos, NEE, BAP
 from ai.planeacion import proponer
 
@@ -9,6 +10,9 @@ def generar(resumen, area):
     if len(resumen)>12000: raise ValueError('Resume los hallazgos pertinentes antes de solicitar IA.')
     fields=campos(area)
     if not fields: raise ValueError('Área no válida.')
+    sources=set(re.findall(r'\bEV\d+\b',resumen))
+    if area!='Conclusión' and not sources:
+        raise ValueError('El resumen debe incluir las referencias EV de los instrumentos aplicados.')
     schema={'type':'object','required':['campos','faltantes','nee','bap'], 'properties':{
         'campos':{'type':'object','required':fields,'properties':{f:{'type':'string'} for f in fields}},
         'faltantes':{'type':'array','items':{'type':'string'}},
@@ -33,11 +37,20 @@ si no están acordados. Distingue competencia curricular de habilidades académi
 no rellenes ambas automáticamente con la misma evaluación. No clasifiques VAK como diagnóstico.
 No inventes literatura, normas, PDA o citas; no apliques requisitos CAM al servicio USAER.
 La salida es BORRADOR PARA REVISIÓN INTERDISCIPLINARIA, nunca conclusión validada.
-Solo genera tablas NEE/BAP cuando el área sea Conclusión; en las demás devuelve listas vacías.'''
+Solo genera tablas NEE/BAP cuando el área sea Conclusión; en las demás devuelve listas vacías.
+Para las áreas, cada campo no vacío debe tener sustento en un instrumento EV1, EV2, etc.
+incluido en el resumen; cita ese código. El expediente complementa, no sustituye los resultados
+del instrumento. No completes un apartado porque normalmente se espere ese resultado.
+Si el instrumento no evaluó ese aspecto, deja el campo vacío y registra lo pendiente.'''
     prompt=instructions+'\nÁREA: '+area+'\nCAMPOS: '+json.dumps(fields,ensure_ascii=False)+'\nDATOS REVISADOS:\n'+resumen
     def validar(r):
         if not isinstance(r,dict) or set(r.get('campos',{}))!=set(fields): raise ValueError('Estructura incorrecta.')
         if any(not isinstance(t,str) or len(t)>12000 for t in r['campos'].values()):raise ValueError('Campo no válido.')
+        if area!='Conclusión':
+            for t in r['campos'].values():
+                cited=set(re.findall(r'\bEV\d+\b',t))
+                if t.strip() and (not cited or not cited<=sources):
+                    raise ValueError('La propuesta no identifica un instrumento registrado como fuente. Se conserva el borrador anterior.')
         if not isinstance(r.get('faltantes'),list) or any(not isinstance(t,str) for t in r['faltantes']):raise ValueError('Pendientes no válidos.')
         for key,cols in [('nee',NEE),('bap',BAP)]:
             rows=r.get(key)

@@ -7,6 +7,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from services.epp_modelo import SECCIONES, AREAS, NEE, BAP, FAMILIA, HISTORIA, GENERALES, conclusion_vigente
+from services.epp_entrada import precargar
 
 def generar_pdf(doc, alumno):
     out=BytesIO(); styles=getSampleStyleSheet()
@@ -20,6 +21,7 @@ def generar_pdf(doc, alumno):
             ('GRID',(0,0),(-1,-1),.3,colors.grey),('VALIGN',(0,0),(-1,-1),'TOP')]))
         return t
     values={a:doc['partes'].get(a,{}).get('contenido',{}) for a in (*AREAS,'Conclusión')}
+    values['Aprendizaje']=precargar(values['Aprendizaje'],alumno)
     fecha=max((v['fecha'] for v in doc['partes'].values()),default='')[:10]
     story=[p('Informe de Evaluación Psicopedagógica',styles['Title']),p('Servicio de Apoyo de Educación Especial · Anexo XVII'),
         p('Nombre de la escuela: '+str(alumno.get('Nombre_Escuela',''))),
@@ -30,7 +32,9 @@ def generar_pdf(doc, alumno):
         p('CURP: '+str(alumno.get('CURP',''))+' · Grado: '+str(alumno.get('Grado',''))+' · Grupo: '+str(alumno.get('Grupo','')))]
     for f in GENERALES:story.append(p(f+': '+values['Aprendizaje'].get('generales',{}).get(f,'')))
     story.append(table(['Área','Instrumentos aplicados','Especialista que aplicó'],[
-        {'Área':a,'Instrumentos aplicados':values[a].get('instrumentos','')+('\nFecha: '+values[a].get('fecha_aplicacion','') if values[a].get('fecha_aplicacion') else ''),'Especialista que aplicó':doc['partes'].get(a,{}).get('autor','')} for a in AREAS]))
+        {'Área':a,'Instrumentos aplicados':values[a].get('instrumentos','')+('\nFecha: '+values[a].get('fecha_aplicacion','') if values[a].get('fecha_aplicacion') else '')+
+            '\n'+'\n'.join(e.get('nombre','')+(' · '+e['fecha'] if e.get('fecha') else '') for e in values[a].get('evaluaciones',[])),
+            'Especialista que aplicó':doc['partes'].get(a,{}).get('autor','')} for a in AREAS]))
     for section,areas in SECCIONES.items():
         story.extend([Spacer(1,8),p(section,styles['Heading2'])])
         for area,fields in areas.items():

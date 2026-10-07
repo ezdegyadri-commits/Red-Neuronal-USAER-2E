@@ -8,10 +8,11 @@ from documents.epp import generar_pdf
 
 def main():
     out=Path('tmp/epp-qa');out.mkdir(parents=True,exist_ok=True)
-    alumno={'ID_Alumno':'FICTICIO','Nombre_Completo':'Alumno ficticio para revisión','Nombre_Escuela':'Escuela ficticia','Nivel_Educativo':'Primaria','Grado':'3','Grupo':'A','CURP':''}
+    alumno={'ID_Alumno':'FICTICIO','Nombre_Completo':'Alumno ficticio para revisión','Nombre_Escuela':'Escuela ficticia','Nivel_Educativo':'Primaria','Grado':'3','Grupo':'A','CURP':'','Fecha_Nacimiento':'2017-01-01'}
     d={'id':clave('FICTICIO','2026-2027'),'alumno':'FICTICIO','ciclo':'2026-2027','partes':{'META':{'fecha':'2026-10-07'}}}
     for area in AREAS:
         v=vacia(area);v['instrumentos']='Registro de observación ficticio';v['fecha_aplicacion']='07/10/2026'
+        v['evaluaciones']=[{'id':'ficticio','nombre':'Observación registrada directamente','fecha':'2026-10-07','texto':'Resultados ficticios.','entrada':'DIRECTO'}]
         for f in v['campos']:v['campos'][f]='Ejemplo ficticio: participa con un apoyo visual y una indicación breve. El equipo debe corroborar los hallazgos registrados.'
         d['partes'][area]={'contenido':v,'fecha':'2026-10-07','autor':'Profesional ficticio'}
     v=vacia('Conclusión');v['campos']['7.1. Conclusión']='Ejemplo de redacción: al contrastar las observaciones de las áreas, el equipo identifica fortalezas de participación con apoyos visuales. Faltan evaluaciones para establecer una conclusión real.'

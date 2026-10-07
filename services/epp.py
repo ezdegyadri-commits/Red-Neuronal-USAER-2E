@@ -145,8 +145,12 @@ def resumen(doc, parte, value, plan):
             for f,t in p.get('campos',{}).items():
                 if t: parts.append({'referencia':area+' / '+f,'alcance':'hallazgos del área; revisión humana pendiente' if not p.get('validada') else 'área revisada', 'texto':t})
     else:
+        if not value.get('evaluaciones'):
+            raise ValueError('Incorpora primero los resultados revisados de un instrumento de esta área.')
         for i,e in enumerate(value.get('evaluaciones',[]),1):
-            parts.append({'referencia':'EV'+str(i),'alcance':'evaluación revisada por el profesional','texto':e.get('texto','')})
+            parts.append({'referencia':'EV'+str(i),'alcance':'evaluación revisada por el profesional',
+                'texto':'Instrumento: '+e.get('nombre','')+'\nFecha: '+e.get('fecha','por confirmar')+
+                    '\nEntrada: '+e.get('entrada','CARGA')+'\n'+e.get('texto','')})
     for f in plan['metadatos'].get('fuentes',[]):
         if f.get('vinculo_verificado') and f.get('alumno') == doc['alumno']:
             parts.append(f)
