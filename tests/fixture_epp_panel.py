@@ -24,7 +24,12 @@ class Sheet:
         assert value_input_option=='RAW'
         st.session_state['qa_epp_rows'].extend(deepcopy(rows))
 s.actor=lambda:who
-s.planes.padron_autorizado=lambda:pd.DataFrame([alumno])
+students=[alumno]
+if st.session_state.get('qa_multiescuela'):
+    students.extend([{**alumno,'ID_Alumno':'FICTICIO-A2','Nombre_Completo':'Alumno escuela dos','ID_Escuela':'E2','Nombre_Escuela':'Escuela dos'},
+        {**alumno,'ID_Alumno':'FICTICIO-A3','Nombre_Completo':'Sin EPP','ID_Escuela':'E2','Nombre_Escuela':'Escuela dos'},
+        {**alumno,'ID_Alumno':'FICTICIO-A4','Nombre_Completo':'Escuela sin EPP','ID_Escuela':'E3','Nombre_Escuela':'Escuela tres'}])
+s.planes.padron_autorizado=lambda:pd.DataFrame(students)
 s.df_sheet=lambda name:pd.DataFrame(st.session_state['qa_epp_rows'],columns=s.HEADERS)
 s.clear_cache=lambda *args:None
 s.hoja=lambda:Sheet()
@@ -34,6 +39,7 @@ if not st.session_state['qa_epp_rows']:
     previous=who
     s.actor=lambda:{**previous,'area':'Aprendizaje','cuenta':'docente-ficticia','rol':'MAESTRO DE APOYO','director':False}
     s.crear('FICTICIO-A1','2026-2027')
+    if st.session_state.get('qa_multiescuela'):s.crear('FICTICIO-A2','2026-2027')
     s.actor=lambda:who
 def fake_generate(summary,target):
     st.session_state['qa_ai_calls']+=1
