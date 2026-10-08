@@ -7,7 +7,7 @@ class EquipoUITests(unittest.TestCase):
         for area in ['Psicología','Comunicación','Trabajo Social']:
             app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_equipo.py')),default_timeout=30).run()
             next(s for s in app.selectbox if s.label=='Perfil de demostración').set_value(area).run()
-            next(m for m in app.multiselect if m.label=='Alumno o subgrupo de la misma escuela').set_value(['A1']).run()
+            next(m for m in app.multiselect if m.label=='Alumnos de atención grupal de la misma escuela').set_value(['A1']).run()
             next(b for b in app.button if b.label=='Crear y guardar borrador').click().run()
             self.assertFalse(app.exception,area)
             next(t for t in app.text_input if t.label=='Nombre del subgrupo').set_value('Subgrupo 1').run()
