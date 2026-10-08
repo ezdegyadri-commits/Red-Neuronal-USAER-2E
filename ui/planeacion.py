@@ -243,6 +243,8 @@ def _ai(prefix,doc,revision=False):
     current=st.session_state[prefix+'_doc']
     resumen=current['metadatos'].get('resumen_educativo','')
     contexto=contexto_ia(current)
+    if contexto.get('contextualizacion_docente'):
+        contexto['contextualizacion_docente']=servicio.resumen_previo(current,[{'referencia':'CONTEXTO-ESCOLAR','alcance':'contextualización declarada','texto':contexto['contextualizacion_docente']}]).split('\n\n',1)[-1]
     try:
         firma=huella(resumen,current['formato'],current['datos']['Función'],revision,contexto) if resumen.strip() else ''
     except ValueError as exc:
@@ -323,22 +325,26 @@ def _editor_contenido(prefix):
     st.caption('Autoguardado de cambios confirmados cada 15 segundos mientras trabajas. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
     from ui.planeacion_generacion import panel_generacion
     panel_generacion(prefix,_persist,_open)
+    from ui.planeacion_continuidad import panel as panel_continuidad
+    panel_continuidad(prefix,_open,_persist)
     if doc['metadatos'].get('modalidad_planeacion')=='grupal':
         from services.planeacion_modalidad import guia_grupal, GUIA_XIX, GUIA_XX
         with st.expander('Guía de planeación grupal · Anexos XIX y XX'):
             st.caption('Esta guía acompaña la planeación trimestral y el formato ajustado de zona. Registra qué y cómo se trabajará por área. No anticipes situación final ni inventes actividades de otros profesionales.')
             guia=guia_grupal(st.session_state[prefix+'_doc'])
-            maestro=st.text_input('Maestro de grupo regular',value=guia['maestro_grupo'],key=prefix+'_guia_maestro')
+            enlazada=doc['metadatos'].get('guia_compartida')
+            if enlazada:st.caption('Guía anual compartida vinculada: edita las aportaciones en Trabajo colaborativo. Actualizar conexiones recupera su versión reciente sin crear otra guía independiente.')
+            maestro=st.text_input('Maestro de grupo regular',value=guia['maestro_grupo'],key=prefix+'_guia_maestro',disabled=bool(enlazada))
             rows=st.data_editor(pd.DataFrame(guia['filas']).drop(columns=['ID_Alumno']),
                 column_order=GUIA_XIX,hide_index=True,use_container_width=True,
-                disabled=['Nombre alumno','Discapacidad o condición'],key=prefix+'_guia_xix')
+                disabled=True if enlazada else ['Nombre alumno','Discapacidad o condición'],key=prefix+'_guia_xix')
             st.caption('Los grados y grupos se conservan en los datos precargados de cada alumno. Si trabajas varios grupos, revisa que la guía corresponda al grupo regular elegido.')
             as_rows=guia['as']
             if st.checkbox('Incluir guía AS (Anexo XX): solo aptitudes documentadas',key=prefix+'_guia_as'):
                 st.caption('Marca aptitud y tipo de enriquecimiento únicamente cuando estén sustentados. No se asignan por IA ni por rendimiento supuesto.')
                 defaults=as_rows or [{'Nombre alumno':a['Nombre del alumno'],**{h:'' for h in GUIA_XX[1:]}} for a in doc['datos']['Alumnos']]
-                as_rows=st.data_editor(pd.DataFrame(defaults,columns=GUIA_XX),hide_index=True,use_container_width=True,disabled=['Nombre alumno'],key=prefix+'_guia_xx').fillna('').to_dict('records')
-            if st.button('Guardar guía grupal',key=prefix+'_guia_save'):
+                as_rows=st.data_editor(pd.DataFrame(defaults,columns=GUIA_XX),hide_index=True,use_container_width=True,disabled=True if enlazada else ['Nombre alumno'],key=prefix+'_guia_xx').fillna('').to_dict('records')
+            if st.button('Guardar guía grupal',key=prefix+'_guia_save',disabled=bool(enlazada)):
                 current=deepcopy(st.session_state[prefix+'_doc'])
                 filas=rows.fillna('').to_dict('records')
                 for i,row in enumerate(filas):row['ID_Alumno']=guia['filas'][i]['ID_Alumno']
@@ -504,6 +510,7 @@ def direccion_panel():
         if st.button('Analizar áreas de mejora',disabled=not consent,key=prefix+'_ia_revisar'):
             try:
                 contexto=contexto_ia(doc)
+                contexto['contextualizacion_docente']=servicio.resumen_previo(doc,contexto.get('contextualizacion_docente',''))
                 firma=huella(resumen,doc['formato'],doc['datos']['Función'],True,contexto)
                 cachekey=prefix+'_analisis_'+doc['id']
                 previo=st.session_state.get(cachekey,{})
@@ -512,7 +519,10 @@ def direccion_panel():
                     st.session_state[cachekey]={'huella':firma,'motor':modelo_configurado(),'resultado':result}
             except (ValueError,RuntimeError) as exc:st.info(str(exc))
         previo=st.session_state.get(prefix+'_analisis_'+doc['id'],{})
-        try:firma_actual=huella(resumen,doc['formato'],doc['datos']['Función'],True,contexto_ia(doc))
+        try:
+            contexto=contexto_ia(doc)
+            contexto['contextualizacion_docente']=servicio.resumen_previo(doc,contexto.get('contextualizacion_docente',''))
+            firma_actual=huella(resumen,doc['formato'],doc['datos']['Función'],True,contexto)
         except ValueError:firma_actual=''
         if previo.get('huella')==firma_actual and previo.get('motor')==modelo_configurado():
             st.caption('Análisis conservado en esta sesión; volver a consultarlo no repite la solicitud.')
@@ -530,16 +540,21 @@ def direccion_panel():
 
 def planeacion_page():
     actor=servicio.identidad();prefix=_prefix()
-    from services.planeacion_modalidad import filtrar
+    from services.planeacion_modalidad import filtrar, modalidad as modalidad_alumno
     inicial=servicio.padron_autorizado()
     modalidad=st.radio('Tipo de planeación',['individual','grupal'],
         format_func=lambda m:'Planeación individual' if m=='individual' else 'Planeación grupal',
         index=1 if filtrar(inicial,'individual').empty else 0,horizontal=True,key=prefix+'_modalidad')
     prefix+='_'+modalidad
-    st.caption('Individual: alumnos registrados con atención individual. Grupal: el resto de tu matrícula asignada. No se modifica el padrón.')
+    pendientes=inicial.apply(lambda r: modalidad_alumno(r.to_dict())=='por confirmar',axis=1) if not inicial.empty else []
+    if sum(pendientes):st.warning(f'{sum(pendientes)} alumnos tienen modalidad por confirmar en el padrón. No se asignarán automáticamente a una planeación grupal.')
+    st.caption('La modalidad del expediente y la organización de una sesión son distintas. Puedes incluir alumnos de atención individual en una sesión grupal sin cambiar su padrón ni su PI.')
     st.title('Planeación del equipo · '+actor['area'] if actor['area'] in ('Psicología','Comunicación','Trabajo Social') else 'Planeación e intervención')
     st.caption('1. Elige a quién acompañar  →  2. Revisa lo que ya sabemos  →  3. Planea, guarda y comparte con Dirección')
-    editar,recuperar,revisar=st.tabs(['Mi trabajo','Recuperar documentos','Revisión directiva'] if actor['director'] else ['Mi trabajo','Recuperar documentos','Guía'])
+    editar,recuperar,revisar,colaborar=st.tabs(['Mi trabajo','Recuperar documentos','Revisión directiva','Trabajo colaborativo'] if actor['director'] else ['Mi trabajo','Recuperar documentos','Guía','Trabajo colaborativo'])
+    with colaborar:
+        from ui.planeacion_colaboracion import panel as panel_colaboracion
+        panel_colaboracion(prefix+'_colaboracion')
     with recuperar:
         backup=st.file_uploader('Recuperar un respaldo editable (.json)',type=['json'],key=prefix+'_import')
         if backup and st.button('Recuperar este respaldo',key=prefix+'_restore'):
@@ -574,14 +589,16 @@ def planeacion_page():
         with st.expander('Crear documento',expanded=prefix+'_doc' not in st.session_state):
             frame=servicio.padron_autorizado()
             from services.planeacion_modalidad import filtrar
-            frame=filtrar(frame,modalidad)
+            incluir=False
+            if modalidad=='grupal':incluir=st.checkbox('Incluir alumnos de atención individual en esta sesión grupal',key=prefix+'_incluir_individuales')
+            frame=filtrar(frame,modalidad,incluir)
             if frame.empty:st.info('No hay alumnos asignados disponibles.');return
             schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
             si=st.selectbox('Escuela asignada',range(len(schools)),format_func=lambda i:schools[i]['Nombre_Escuela'],key=prefix+'_newschool')
             options=frame.loc[frame['ID_Escuela'].astype(str)==str(schools[si]['ID_Escuela'])].to_dict('records')
             labels={str(a['ID_Alumno']):str(a['Nombre_Completo'])+' · '+str(a.get('Grado',''))+' '+str(a.get('Grupo','')) for a in options}
             formatos=['XXV' if actor['area']=='Trabajo Social' else 'XXIII']
-            if modalidad=='individual':formatos.append('XXI')
+            if modalidad=='individual' and actor['area']=='Aprendizaje' and not actor['director']:formatos.append('XXI')
             formato=st.selectbox('Documento',formatos,format_func=lambda f:FORMATOS[f]['titulo'],key=prefix+'_newformat')
             if modalidad=='individual':
                 elegido=st.selectbox('Alumno en atención individual',list(labels),format_func=labels.get,index=None,key=prefix+'_newid')
@@ -593,7 +610,7 @@ def planeacion_page():
             if st.button('Crear y guardar borrador',key=prefix+'_create',disabled=not ids):
                 try:
                     with st.spinner('Reuniendo la información que ya registró el equipo…'):
-                        doc=servicio.preparar_contexto(servicio.nueva(formato,ids,int(ciclo),trimestre,modalidad=modalidad))
+                        doc=servicio.preparar_contexto(servicio.nueva(formato,ids,int(ciclo),trimestre,modalidad=modalidad,incluir_individuales=incluir))
                     _open(prefix,doc);_persist(prefix);st.rerun()
                 except (ValueError,PermissionError) as exc:st.warning(str(exc))
         if prefix+'_doc' in st.session_state:_editor(prefix)
