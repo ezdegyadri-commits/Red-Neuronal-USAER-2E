@@ -58,6 +58,7 @@ def vincular(doc,campo,ejes,ids,contexto_local='',adaptaciones=None):
 def contexto_ia(doc):
     from services.planeacion_equipo import contexto_zona
     contexto=_contexto_ia_base(doc)
+    contexto['contextualizacion_docente']=str(doc.get('metadatos',{}).get('curriculo',{}).get('contexto_local',''))[:4000]
     zona=contexto_zona(doc)
     if zona:
         contexto['fuentes']=contexto['fuentes']+zona['fuentes']
