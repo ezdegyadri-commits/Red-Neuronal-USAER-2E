@@ -66,13 +66,20 @@ def padron_autorizado():
     return frame
 
 
-def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None):
+def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individuales=False):
     actor = identidad()
     if modalidad is not None:
         from services.planeacion_modalidad import comprobar
-        comprobar(padron_autorizado(), ids, modalidad)
+        comprobar(padron_autorizado(), ids, modalidad, incluir_individuales)
     if formato != 'XXI' and formato != ('XXV' if actor['area']=='Trabajo Social' else 'XXIII'):
         raise PermissionError('Utiliza el formato correspondiente a tu función.')
+    if formato=='XXI':
+        if actor['area']!='Aprendizaje' or actor['director']:raise PermissionError('La maestra de apoyo coordina la creación del PI; los especialistas aportan desde Trabajo colaborativo.')
+        existentes=[d for d in compartidos() if d['formato']=='XXI' and d['datos']['Curso escolar']==f'{ciclo}-{int(ciclo)+1}' and {a['ID_Alumno'] for a in d['datos']['Alumnos']}==set(ids)]
+        if len(existentes)>1:raise ValueError('Hay varios PI para este alumno y ciclo. Revisa los documentos existentes con Dirección antes de crear otro.')
+        if existentes:
+            if existentes[0]['cuenta']!=actor['cuenta']:raise PermissionError('Ya existe un PI coordinado por otra maestra; ábrelo en Trabajo colaborativo.')
+            return existentes[0]
     doc = crear_plantilla(formato, ids, padron_autorizado().to_dict('records'),
                           autor=actor['nombre'],funcion=actor['area'],ciclo_inicio=ciclo,
                           trimestre=trimestre,escuelas=repo.escuelas().to_dict('records'),
@@ -82,6 +89,7 @@ def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None):
                              'referente_curricular':'','revisado_por':''})
     if modalidad is not None:
         doc['metadatos']['modalidad_planeacion'] = modalidad
+        doc['metadatos']['individuales_en_sesion_grupal']=bool(incluir_individuales and modalidad=='grupal')
     from services.planeacion_equipo import preparar
     return preparar(doc)
 
@@ -194,6 +202,11 @@ def refrescar():
 
 def guardar(doc, estado='BORRADOR', observaciones=None):
     actor=autorizar(doc,True)
+    return _guardar_version(doc,actor,estado,observaciones)
+
+
+def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=False):
+    """Persistencia común; las entradas públicas verifican edición completa o aporte acotado."""
     from services.planeacion_equipo import validar, sincronizar, aplica
     validar(doc)
     if aplica(doc) and 'equipo' in doc['metadatos']:
@@ -202,7 +215,7 @@ def guardar(doc, estado='BORRADOR', observaciones=None):
         raise ValueError('Estado no válido.')
     if estado in {'CON_OBSERVACIONES','VALIDADO'} and not actor['director']:
         raise PermissionError('La revisión corresponde a Dirección.')
-    if actor['cuenta']!=doc['cuenta'] and estado not in {'CON_OBSERVACIONES','VALIDADO'}:
+    if not aportacion and actor['cuenta']!=doc['cuenta'] and estado not in {'CON_OBSERVACIONES','VALIDADO'}:
         raise PermissionError('Dirección revisa sin reescribir el trabajo del autor.')
     lock,heads=_control()
     with lock:
@@ -216,6 +229,8 @@ def guardar(doc, estado='BORRADOR', observaciones=None):
             claves=('ID_Escuela','Curso escolar','Trimestre','Nombre del especialista','Función','Alumnos')
             if latest['cuenta']!=doc['cuenta'] or latest['formato']!=doc['formato'] or any(latest['datos'].get(k)!=doc['datos'].get(k) for k in claves):
                 raise PermissionError('No se puede cambiar la identidad de un documento guardado.')
+            if not aportacion and latest['metadatos'].get('aportaciones_equipo',{})!=doc['metadatos'].get('aportaciones_equipo',{}):
+                raise PermissionError('Las aportaciones se editan desde Trabajo colaborativo, por el profesional de cada área.')
         elif doc['cuenta']!=actor['cuenta']:
             raise PermissionError('Solo el autor puede crear el documento.')
         if estado in {'ENVIADO','VALIDADO'}:
@@ -260,6 +275,9 @@ def revisar(doc):
     if doc['formato']=='XXI' and not (meta.get('fuente_iepp') and meta.get('NEE confirmadas desde IEPP')):
         faltas.append('confirmar el IEPP del plan individual')
     if doc['formato']=='XXI':
+        try:
+            if int(doc['datos'].get('Vigencia en cursos escolares') or 0) not in (1,2,3):raise ValueError()
+        except (ValueError,TypeError):faltas.append('indicar vigencia del PI de uno a tres cursos escolares')
         required=('barreras','necesidades','curriculo','participantes')
     else:
         required=('barreras',) if doc['formato']=='XXV' else ('aprendizajes',)
@@ -333,9 +351,14 @@ def evidencias(doc):
             ids_plan={a['ID_Alumno'] for a in plan['datos']['Alumnos']}
             if plan['id']==doc['id'] or plan['datos']['ID_Escuela']!=doc['datos']['ID_Escuela'] or not ids_plan or not ids_plan.issubset(elegidos):continue
             if plan['estado'] not in {'ENVIADO','VALIDADO'}:continue
+            from services.planeacion_continuidad import vigente_pi
+            if plan['formato']=='XXI' and not vigente_pi(plan,doc['datos']['Curso escolar']):continue
             autorizar(plan)
             contenido={'tablas':plan['tablas'],'textos':plan['textos'],'necesidades_documentadas':plan['metadatos'].get('necesidades_confirmadas','')}
-            fuentes.append({'tipo':'PLAN','alumno':','.join(sorted(ids_plan&elegidos)),'fecha':plan.get('guardado_en','')[:10],'registro':plan['id'],'revision':plan['revision'],'texto':json.dumps(contenido,ensure_ascii=False),'alcance':('plan o planeación anterior enviada' if ids_plan.issubset(elegidos) else 'planeación previa del grupo; contexto grupal')+'; no equivale a resultado alcanzado'})
+            fuentes.append({'tipo':'PLAN','alumno':','.join(sorted(ids_plan&elegidos)),'fecha':plan.get('guardado_en','')[:10],'registro':plan['id'],'documento_origen':plan['id'],'formato':plan['formato'],'revision':plan['revision'],'texto':json.dumps(contenido,ensure_ascii=False),'alcance':'plan o planeación anterior enviada; no equivale a resultado alcanzado'})
+            for seguimiento in plan['metadatos'].get('seguimiento_formativo',[]):
+                fuentes.append({'tipo':'SEGUIMIENTO','alumno':','.join(sorted(ids_plan)),'fecha':seguimiento['fecha'],'registro':plan['id']+'-'+seguimiento['fecha'],
+                    'texto':seguimiento['hallazgos']+'\nDecisión docente: '+seguimiento['decision'],'alcance':'resultados registrados por el profesional; verificar sus evidencias'})
     except Exception:fallas.append('PLAN')
     try:
         timeline=df_sheet('Linea_Tiempo')
@@ -352,8 +375,10 @@ def evidencias(doc):
     try:
         from services.epp_modelo import reconstruir as reconstruir_epp, AREAS as AREAS_EPP, conclusion_vigente
         frame_epp=df_sheet('EPP_Versiones')
-        for informe in reconstruir_epp(frame_epp.fillna('').to_dict('records')):
-            if informe['alumno'] not in elegidos or informe['partes']['META']['estado']=='ELIMINADO':continue
+        informes=[i for i in reconstruir_epp(frame_epp.fillna('').to_dict('records')) if i['alumno'] in elegidos and i['partes']['META']['estado']!='ELIMINADO' and i['ciclo']<=doc['datos']['Curso escolar']]
+        ciclos={aid:max(i['ciclo'] for i in informes if i['alumno']==aid) for aid in {i['alumno'] for i in informes}}
+        for informe in informes:
+            if informe['ciclo']!=ciclos[informe['alumno']]:continue
             for area in (*AREAS_EPP,'Conclusión'):
                 parte=informe['partes'].get(area,{})
                 contenido=parte.get('contenido',{})
@@ -362,7 +387,7 @@ def evidencias(doc):
                 if area=='Conclusión':hallazgos.update(NEE=contenido.get('nee',[]),BAP=contenido.get('bap',[]))
                 if not hallazgos:continue
                 fuentes.append({'tipo':'EPP','alumno':informe['alumno'],'fecha':parte.get('fecha','')[:10],
-                    'registro':informe['id']+'-'+area,'revision':parte.get('revision',''),
+                    'registro':informe['id']+'-'+area,'documento_origen':informe['id'],'parte':area,'revision':parte.get('revision',''),
                     'texto':json.dumps(hallazgos,ensure_ascii=False),
                     'alcance':'hallazgos de EPP revisados por el área; no equivale a diagnóstico médico'})
     except Exception as exc:
@@ -395,15 +420,63 @@ def preparar_contexto(doc):
     previas=[f for f in doc['metadatos'].get('fuentes',[]) if f.get('tipo') in fallas and f.get('vinculo_verificado') and set(texto(f.get('alumno')).split(','))<=elegidos]
     fuentes=unificar_fuentes(fuentes+previas+fuentes_materiales(doc))
     for i,f in enumerate(fuentes):f['referencia']='E'+str(i+1)
+    def firma(rows):return hashlib.sha256(json.dumps(rows,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+    cambio=bool(doc['metadatos'].get('fuentes')) and firma(doc['metadatos']['fuentes'])!=firma(fuentes)
     migrar=doc['metadatos'].get('version_contexto')!=VERSION_CONTEXTO
     resultado['metadatos'].update(fuentes=fuentes,contexto_cargado=True,fuentes_pendientes=fallas,version_contexto=VERSION_CONTEXTO)
-    if migrar or not resultado['metadatos'].get('resumen_educativo'):
+    if cambio:
+        resultado['metadatos']['resumen_anterior_para_revisar']=doc['metadatos'].get('resumen_educativo','')
+        resultado['metadatos'].pop('resumen_ia_completo',None)
+    if cambio or migrar or not resultado['metadatos'].get('resumen_educativo'):
         resultado['metadatos']['resumen_educativo']=resumen_previo(resultado,fuentes)
     if migrar:
         resultado['metadatos'].pop('propuestas_ia_guardadas',None)
         resultado['metadatos']['aviso_contexto']='El expediente se revisó por alumno. Las actividades ya redactadas se conservan; confirma su pertinencia antes de enviar.'
     from services.planeacion_generacion import prellenar
-    return prellenar(resultado)
+    from services.planeacion_continuidad import actualizar_vinculos
+    resultado=actualizar_vinculos(prellenar(resultado))
+    from services.planeacion_colaboracion import clave_guia
+    clave=clave_guia(resultado)
+    if clave:
+        origen=next((d for d in compartidos() if clave_guia(d)==clave),None)
+        if origen and origen['id']!=doc['id']:
+            from services.planeacion_modalidad import guia_grupal
+            guia=guia_grupal(origen)
+            ids={a['ID_Alumno'] for a in doc['datos']['Alumnos']}
+            guia['filas']=[r for r in guia['filas'] if r['ID_Alumno'] in ids]
+            nombres={a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
+            guia['as']=[r for r in guia.get('as',[]) if r.get('Nombre alumno') in nombres]
+            resultado['metadatos']['guia_compartida']={'documento':origen['id'],'revision':origen['revision']}
+            if resultado['metadatos'].get('guia_grupal_manual')!=guia:
+                resultado['metadatos']['guia_local_anterior']=resultado['metadatos'].get('guia_grupal_manual',{})
+                resultado['metadatos']['guia_grupal_manual']=guia
+    return resultado
+
+
+def compartidos():
+    """Solo PI o guías de apoyo, con todos sus alumnos dentro de la asignación actual."""
+    from services.planeacion_colaboracion import compartible,clave_guia
+    resultado=[];guias=set()
+    for doc in {d['id']:d for d in versiones_actuales()}.values():
+        if not compartible(doc):continue
+        try:autorizar(doc)
+        except PermissionError:continue
+        clave=clave_guia(doc)
+        if clave and clave in guias:continue
+        if clave:guias.add(clave)
+        resultado.append(deepcopy(doc))
+    return resultado
+
+
+def guardar_aportacion(doc,filas,observaciones):
+    from services.planeacion_colaboracion import aportar
+    actor=autorizar(doc)
+    # Recuperar servidor: jamás persistir tablas o identidad recibidas del editor compartido.
+    actual=next((d for d in compartidos() if d['id']==doc['id']),None)
+    if not actual:raise PermissionError('No hay un documento compartido autorizado.')
+    if doc.get('revision')!=actual.get('revision'):raise RuntimeError('El equipo actualizó el documento. Tu aportación sigue aquí; actualiza y revisa antes de guardar.')
+    updated=aportar(actual,actor,filas,observaciones)
+    return _guardar_version(updated,actor,'BORRADOR',aportacion=True)
 
 
 def resumen_previo(doc,fuentes):
