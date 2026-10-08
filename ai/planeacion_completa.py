@@ -24,6 +24,7 @@ def solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
        'adaptaciones_docentes':contexto.get('adaptaciones_docentes',{}),
        'campo':contexto.get('campo',contexto.get('campos',{})),'ejes':contexto.get('ejes',{}),
        'guia_local':contexto.get('guia_local',''),'fuentes':fuentes,'evidencias':evidencias,
+       'contextualizacion_docente':contexto.get('contextualizacion_docente',''),
        'configuracion':{k:ajustes[k] for k in ('duracion','sesiones','dias','enfoque','apoyos') if k in ajustes},
        'contextos_admitidos':FORMATOS[formato]['contextos']}
     reglas='''Prepara el borrador completo de planeación trimestral, no solo ideas sueltas.
@@ -37,6 +38,9 @@ Las evidencias indican qué se registró, no que el alumno logró un objetivo fu
 No conviertas BAP en diagnósticos. No rellenes resultados, situación final, firmas,
 aprobaciones, entregas a familias o acuerdos que no ocurrieron.
 Respeta la duración y apoyos configurados. No asignes fechas: se calculan localmente.
+Contextualiza en el programa analítico, lengua, intereses, fortalezas, comunidad y
+recursos documentados. El contexto escolar no demuestra una necesidad individual.
+Respeta el codiseño y las decisiones docentes: tus propuestas son editables, no mandatos.
 Para Psicología, propone las cinco competencias emocionales y al menos una unidad
 en aula regular cuando la evidencia permita sostenerlas. No fabriques necesidades
 para cubrirlas: indica en faltantes lo que requiere confirmación. Las competencias
