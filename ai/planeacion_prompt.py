@@ -92,7 +92,7 @@ def solicitud(resumen, formato, area, revisar=False, curriculo=None):
     referencias = [{k: r[k] for k in ('id', 'fuente', 'grado', 'fase', 'campo',
                     'contenido', 'pda', 'pagina_pdf', 'continuacion') if k in r}
                    for r in original.get('referentes_por_grado', [])]
-    contexto = {k: original[k] for k in ('campo', 'campos', 'ejes', 'guia_local', 'aviso', 'grados_del_padron') if k in original}
+    contexto = {k: original[k] for k in ('campo', 'campos', 'ejes', 'guia_local', 'aviso', 'grados_del_padron', 'contextualizacion_docente') if k in original}
     contexto.update(fuentes=fuentes, referentes_por_grado=referencias)
     modo = ('Revisa el trabajo descrito: señala hasta tres ajustes concretos y cómo realizarlos. '
             'Si el resumen no contiene la planeación a revisar, pide ese contenido.' if revisar
