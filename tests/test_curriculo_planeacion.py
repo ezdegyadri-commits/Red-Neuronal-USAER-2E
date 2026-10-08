@@ -44,7 +44,7 @@ class CurriculoTests(unittest.TestCase):
         from pathlib import Path
         from streamlit.testing.v1 import AppTest
         at=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_panel.py'))).run(timeout=30)
-        at.multiselect[0].set_value(['A1']).run()
+        next(s for s in at.selectbox if s.label=='Alumno en atención individual').set_value('A1').run()
         next(b for b in at.button if b.label=='Crear y guardar borrador').click().run()
         next(s for s in at.selectbox if s.label=='Campo formativo').set_value('Lenguajes').run()
         selector=next(m for m in at.multiselect if m.label.startswith('Contenido y PDA'))

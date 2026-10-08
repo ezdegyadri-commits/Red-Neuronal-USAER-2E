@@ -151,11 +151,11 @@ class EPPTests(unittest.TestCase):
 
 class ModalidadTests(unittest.TestCase):
     def setUp(self):self.frame=pd.DataFrame([ALUMNO,{**ALUMNO,'ID_Alumno':'FICTICIO-A2','Tipo_Atencion':'GRUPAL'},{**ALUMNO,'ID_Alumno':'FICTICIO-A3','Tipo_Atencion':''}])
-    def test_particion_exclusiva_y_completa(self):
+    def test_particion_exclusiva_y_modalidad_vacia_pendiente(self):
         i=filtrar(self.frame,'individual');g=filtrar(self.frame,'grupal')
         self.assertEqual(list(i['ID_Alumno']),['FICTICIO-A1'])
-        self.assertEqual(len(g),2)
-        self.assertEqual(len(i)+len(g),len(self.frame))
+        self.assertEqual(len(g),1)
+        self.assertEqual(len(i)+len(g),len(self.frame)-1)
     def test_no_permite_individual_en_grupal(self):
         with self.assertRaises(PermissionError):comprobar(self.frame,['FICTICIO-A1'],'grupal')
     def test_no_altera_padron(self):

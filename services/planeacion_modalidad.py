@@ -3,18 +3,22 @@ from utils.text import normalizar_texto
 
 def modalidad(alumno):
     value = normalizar_texto(alumno.get('Tipo_Atencion', alumno.get('18.- TIPO DE ATENCIÓN', '')))
-    return 'individual' if 'INDIVIDUAL' in value or value in {'I', 'IND'} else 'grupal'
+    if 'INDIVIDUAL' in value or value in {'I', 'IND'}:return 'individual'
+    if 'GRUP' in value or value in {'G','SG','GR','SUB'}:return 'grupal'
+    return 'por confirmar'
 
-def filtrar(frame, seleccion):
+def filtrar(frame, seleccion, incluir_individuales=False):
     if seleccion not in {'individual', 'grupal'}:
         raise ValueError('Modalidad no válida.')
     if frame.empty:
         return frame.copy()
-    mask = frame.apply(lambda row: modalidad(row.to_dict()) == seleccion, axis=1)
+    admitidas={seleccion}
+    if seleccion=='grupal' and incluir_individuales:admitidas.add('individual')
+    mask = frame.apply(lambda row: modalidad(row.to_dict()) in admitidas, axis=1)
     return frame.loc[mask].copy()
 
-def comprobar(frame, ids, seleccion):
-    elegibles = filtrar(frame, seleccion)
+def comprobar(frame, ids, seleccion, incluir_individuales=False):
+    elegibles = filtrar(frame, seleccion, incluir_individuales)
     if 'ID_Alumno' not in elegibles or not set(map(str, ids)) <= set(elegibles['ID_Alumno'].astype(str)):
         raise PermissionError('El alumno no pertenece a esta modalidad de tu matrícula.')
     if seleccion == 'individual' and len(set(map(str, ids))) != 1:

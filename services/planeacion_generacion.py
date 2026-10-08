@@ -124,6 +124,11 @@ def preparar_solicitud(doc,ajustes):
         evidencias['DOCENTE']=list(aliases)
     if not evidencias:raise ValueError('Falta evidencia educativa del alumno. Actualiza el expediente, incorpora el informe o describe una necesidad documentada antes de generar.')
     contexto=contexto_ia(sugerir_curriculo(doc,ajustes))
+    contexto['huella_evidencias']=hashlib.sha256(json.dumps(fuentes,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    # El contexto institucional no debe perderse al recuperar el expediente.
+    for campo in ('contextualizacion_docente',):
+        if contexto.get(campo):
+            contexto[campo]=resumen_previo(doc,[{'referencia':'CONTEXTO-ESCOLAR','alcance':'contexto declarado; no diagnóstico individual','texto':contexto[campo]}]).split('\n\n',1)[-1][:4000]
     for adaptacion in contexto.get('adaptaciones_docentes',{}).values():
         for campo,value in list(adaptacion.items()):
             adaptacion[campo]=resumen_previo(doc,[{'referencia':'ADAPTACION','alcance':'redacción docente','texto':value}]).split('\n\n',1)[-1][:4000]
@@ -139,6 +144,9 @@ def preparar_solicitud(doc,ajustes):
     safe=deepcopy(ajustes)
     for campo in ('enfoque','apoyos'):
         safe[campo]=resumen_previo(doc,[{'referencia':'AJUSTE','alcance':'configuración docente; no evidencia de logro','texto':str(ajustes.get(campo,''))}]).split('\n\n',1)[-1][:1500] if ajustes.get(campo) else ''
+    if contexto.get('contextualizacion_docente'):
+        # Visible en el resumen que la persona revisa, y parte de la huella/caché.
+        resumen=resumen[:7800]+'\n\n'+contexto['contextualizacion_docente']
     firma=huella_completa(resumen,doc['formato'],doc['datos']['Función'],contexto,safe,aliases,evidencias)
     alcance=hashlib.sha256(json.dumps({'documento':doc.get('id',''),'cuenta':doc.get('cuenta',''),'alumnos':sorted(aliases.values()),'escuela':doc['datos']['ID_Escuela'],'formato':doc['formato']},sort_keys=True).encode()).hexdigest()
     return {'resumen':resumen,'contexto':contexto,'ajustes':safe,'configuracion_original':deepcopy(ajustes),'aliases':aliases,'evidencias':evidencias,'huella':firma,'alcance':alcance}
@@ -147,7 +155,7 @@ def preparar_solicitud(doc,ajustes):
 def _quitar_generado_sin_borrar_ediciones(rows,previas):
     restantes=deepcopy(rows)
     for previa in previas:
-        candidato=next((i for i,r in enumerate(restantes) if all(r.get(k,'')==v for k,v in previa.items())),None)
+        candidato=next((i for i,r in enumerate(restantes) if all(r.get(k,'')==v for k,v in previa.items() if not k.startswith('_'))),None)
         if candidato is not None:restantes.pop(candidato)
     return restantes
 
@@ -165,7 +173,14 @@ def ensamblar(doc,respuesta,solicitud):
     formato=doc['formato'];area=doc['datos']['Función'];es_equipo=equipo.aplica(result)
     if es_equipo:
         result=equipo.preparar(result);e=result['metadatos']['equipo']
-        e['sesiones']=[s for s in e['sesiones'] if not s.get('generada_ia')]
+        bases=anterior.get('sesiones_generadas',[])
+        por_id={s['id']:s for s in e['sesiones']}
+        protegidas={i for i,s in enumerate(bases) if por_id.get(s['id'])!=s}
+        # Sin línea base (documentos heredados), conservar por seguridad.
+        reemplazables={s['id'] for s in bases if por_id.get(s['id'])==s}
+        e['sesiones']=[s for s in e['sesiones'] if s['id'] not in reemplazables]
+        ids_conservados={s['id'] for s in e['sesiones']}
+        nuevas_sesiones=[]
     grupos={};evaluaciones=[]
     for n,u in enumerate(unidades):
         destinatarios=[aliases[a] for a in u['destinatarios']]
@@ -174,6 +189,7 @@ def ensamblar(doc,respuesta,solicitud):
         key='barreras' if formato=='XXV' else 'aprendizajes'
         row=({'Barreras para el Aprendizaje y la Participación':necesidad,'Apoyos y/o ajustes razonables':u['apoyos']} if formato=='XXV' else
              {'Necesidades educativas específicas':necesidad,'Aprendizaje y/u objetivo':u['objetivo'],'Descriptor de logro':u['descriptor']})
+        row['_origenes']=[{k:f.get(k,'') for k in ('tipo','registro','revision','alumno')} for f in fuentes_pertinentes(doc) if f['referencia'] in u['evidencias']]
         generadas.setdefault(key,[]).append(row);result['tablas'][key].append(row)
         evaluaciones.append(u['objetivo']+'\n'+u['evaluacion'])
         if es_equipo:
@@ -190,9 +206,13 @@ def ensamblar(doc,respuesta,solicitud):
         actividad=u['actividad']+'\nFundamento: '+u['fundamento']+' ['+', '.join(u['fuentes']+u['referentes'])+']'
         if not es_equipo:actividad+='\nApoyos: '+u['apoyos']+'\nSeguimiento: '+u['evaluacion']
         if es_equipo:
-            e['sesiones'].append({'id':'ia-'+solicitud['huella'][:16]+'-'+str(i),'fecha':fecha,'subgrupo':grupos[n],'contexto':u['contexto'],
+            nueva={'id':'ia-'+solicitud['huella'][:16]+'-'+str(i),'fecha':fecha,'subgrupo':grupos[n],'contexto':u['contexto'],
                 'competencias':u['competencias'],'objetivo':u['objetivo'],'actividad':actividad,'apoyos':u['apoyos'],
-                'recursos':u['recursos'],'seguimiento':u['evaluacion'],'duracion':int(solicitud['ajustes']['duracion']),'generada_ia':True})
+                'recursos':u['recursos'],'seguimiento':u['evaluacion'],'duracion':int(solicitud['ajustes']['duracion']),'generada_ia':True}
+            if i in protegidas:
+                nuevas_sesiones.append(deepcopy(bases[i]))
+            elif nueva['id'] not in ids_conservados:
+                e['sesiones'].append(nueva);nuevas_sesiones.append(deepcopy(nueva))
         else:
             row={'Contextos':u['contexto'],'Actividades':actividad,'Temporalidad':fecha+' · '+str(solicitud['ajustes']['duracion'])+' minutos','Recursos':u['recursos']}
             result['tablas']['dosificacion'].append(row);generadas.setdefault('dosificacion',[]).append(row)
@@ -220,5 +240,8 @@ def ensamblar(doc,respuesta,solicitud):
     meta['generacion_completa']={'huella':solicitud['huella'],'alcance':solicitud['alcance'],'ajustes':deepcopy(solicitud['ajustes']),
        'resultado':deepcopy(respuesta),'configuracion_original':deepcopy(solicitud['configuracion_original']),'filas_generadas':deepcopy(generadas),'evaluacion_generada':valor,'pendientes':respuesta['faltantes'],
        'requiere_revision_docente':True}
+    if es_equipo:
+        meta['generacion_completa']['sesiones_generadas']=nuevas_sesiones
+        meta['generacion_completa']['sesiones_protegidas']=len(protegidas)
     if es_equipo:result=equipo.sincronizar(result)
     return result

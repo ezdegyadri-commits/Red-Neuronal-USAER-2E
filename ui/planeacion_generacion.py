@@ -88,8 +88,29 @@ def panel_generacion(prefix,persist,abrir):
             else:
                 generado=g.ensamblar(actual,respuesta,solicitud)
                 generado['metadatos']['generacion_completa']['motor']=modelo_configurado()
-                abrir(prefix,generado);persist(prefix);st.rerun()
+                if previo:
+                    st.session_state[prefix+'_propuesta_pendiente']={'respuesta':respuesta,'solicitud':solicitud,'revision':actual.get('revision','')}
+                    st.rerun()
+                else:abrir(prefix,generado);persist(prefix);st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.info(str(exc))
+    pendiente=st.session_state.get(prefix+'_propuesta_pendiente')
+    if pendiente:
+        st.markdown('##### Revisar antes de actualizar el borrador')
+        st.caption('Se conservan las ediciones y eliminaciones de sesiones registradas desde la última generación. Solo se sustituyen las partes que siguen iguales a su versión automática.')
+        for unidad in pendiente['respuesta']['unidades']:
+            with st.expander('Nueva propuesta · '+unidad['objetivo']):st.write(unidad['actividad'])
+        st.caption('Tu borrador actual sigue intacto; puedes compararlo con la vista previa de abajo.')
+        if st.button('Aplicar actualización conservando mis ediciones',key=base+'_apply'):
+            try:
+                actual=st.session_state[prefix+'_doc']
+                if actual.get('revision','')!=pendiente['revision']:raise ValueError('Cambió el borrador. Revisa o genera una nueva propuesta antes de aplicar.')
+                generado=g.ensamblar(actual,pendiente['respuesta'],pendiente['solicitud'])
+                generado['metadatos']['generacion_completa']['motor']=modelo_configurado()
+                abrir(prefix,generado);persist(prefix)
+                st.session_state.pop(prefix+'_propuesta_pendiente',None);st.rerun()
+            except (ValueError,PermissionError,RuntimeError) as exc:st.info(str(exc))
+        if st.button('Conservar mi borrador sin aplicar la propuesta',key=base+'_cancel'):
+            st.session_state.pop(prefix+'_propuesta_pendiente',None);st.rerun()
     diagnostico=st.session_state.get('planeacion_ia_diagnostico')
     if diagnostico:st.caption('Diagnóstico de IA: '+str(diagnostico.get('codigo') or diagnostico.get('tipo'))+' · Modelo: '+str(diagnostico.get('motor',''))+' · Tu borrador se conserva.')
     if previo:

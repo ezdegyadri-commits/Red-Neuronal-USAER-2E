@@ -53,6 +53,20 @@ def generar_pdf(doc):
             t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.3,colors.grey),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#dceeee')),('VALIGN',(0,0),(-1,-1),'TOP')]))
             story.append(t)
     meta=doc['metadatos']
+    if meta.get('vinculos_documentales'):
+        story.append(p('Documentos de origen vinculados',styles['Heading2']))
+        for v in meta['vinculos_documentales']:story.append(p(v['tipo']+' · '+v['documento']+' · revisión '+v['revision']))
+    if meta.get('seguimiento_formativo'):
+        story.append(p('Seguimiento formativo registrado',styles['Heading2']))
+        for r in meta['seguimiento_formativo']:
+            story.extend([p(r['fecha']+' · '+r['decision']),p(r['hallazgos']),p('Evidencias: '+', '.join(r['referencias']))])
+    if meta.get('aportaciones_equipo'):
+        story.append(p('Aportaciones del equipo · sujetas a integración y revisión',styles['Heading2']))
+        for area,aporte in meta['aportaciones_equipo'].items():
+            story.append(p(area+' · '+aporte['autor']+' · '+aporte['fecha'][:10]))
+            for r in aporte['filas']:
+                story.append(p(' · '.join(str(v) for k,v in r.items() if k!='ID_Alumno' and v)))
+            if aporte['observaciones']:story.append(p(aporte['observaciones']))
     for key in ('fuente_iepp','necesidades_confirmadas','referente_curricular'):
         if meta.get(key):
             story.append(p(key.replace('_',' ').capitalize()+': '+str(meta[key])))
