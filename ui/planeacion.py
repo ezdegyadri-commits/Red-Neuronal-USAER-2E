@@ -459,6 +459,11 @@ def _editor_contenido(prefix):
 
 
 def _editor(prefix):
+    vista_elegida=st.radio('Cómo quieres trabajar',['Mi formato','Edición guiada'],horizontal=True,key=prefix+'_vista_editor')
+    if vista_elegida=='Mi formato':
+        from ui.planeacion_formato import panel as panel_formato
+        panel_formato(prefix,_persist,_open,_text,_materiales,_curriculo,_ai,_autosave,_preview,_field)
+        return
     editar,vista=st.columns([1.15,1],gap='large')
     with editar:_editor_contenido(prefix)
     with vista:
@@ -584,7 +589,10 @@ def planeacion_page():
         except Exception:st.info('No se pudieron recuperar los documentos. Tu edición actual se conserva.')
     with revisar:
         if actor['director']:direccion_panel()
-        else:st.write('XXI: intervención individual basada en IEPP. XXIII: planeación trimestral de apoyo, psicología y comunicación. XXV: planeación de Trabajo Social. Las propuestas son orientaciones revisables, nunca diagnósticos o resultados automáticos.')
+        else:
+            from ui.planeacion_ayuda import panel as panel_ayuda
+            panel_ayuda(actor['area'])
+            st.caption('XXI: intervención individual basada en IEPP. XXIII: planeación trimestral de apoyo, psicología y comunicación. XXV: planeación de Trabajo Social. Las propuestas son orientaciones revisables, nunca diagnósticos o resultados automáticos.')
     with editar:
         with st.expander('Crear documento',expanded=prefix+'_doc' not in st.session_state):
             frame=servicio.padron_autorizado()
