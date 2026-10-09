@@ -46,6 +46,7 @@ class CurriculoTests(unittest.TestCase):
         at=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_panel.py'))).run(timeout=30)
         next(s for s in at.selectbox if s.label=='Alumno en atención individual').set_value('A1').run()
         next(b for b in at.button if b.label=='Crear y guardar borrador').click().run()
+        next(r for r in at.radio if r.label=='Cómo quieres trabajar').set_value('Edición guiada').run()
         next(s for s in at.selectbox if s.label=='Campo formativo').set_value('Lenguajes').run()
         selector=next(m for m in at.multiselect if m.label.startswith('Contenido y PDA'))
         self.assertTrue(selector.options)
