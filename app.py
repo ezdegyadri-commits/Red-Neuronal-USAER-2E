@@ -24,7 +24,7 @@ from ui.planeacion import planeacion_page, direccion_panel
 from ui.epp import epp_page
 from ui.novedades_supervision import novedades_page
 
-st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="auto")
 inject()
 # Instaladores móviles 1.0.0 disponibles en ingreso y barra lateral.
 install_metadata()
@@ -54,7 +54,18 @@ escuelas=st.session_state.get("escuelas_permitidas","")
 
 with st.sidebar:
     st.markdown("<div class='brand'><span class='brand-overline'>Educación especial · Zona 001</span><h1><span style='color:#C49339;font-size:1.2rem;'>◈</span> USAER 02-E</h1><p>Yucatán · Gestión e intervención educativa</p></div>",unsafe_allow_html=True)
-    st.caption(f"Sesión activa: {st.session_state.get('nombre','')}")
+    nombre_sesion = st.session_state.get('nombre', '')
+    rol_sesion = st.session_state.get('rol', '')
+    st.markdown(
+        f"<div class='sidebar-user-pill'>"
+        f"<span class='status-dot'></span>"
+        f"<div class='sidebar-user-info'>"
+        f"<span class='sidebar-user-label'>Sesión activa · {rol_sesion}</span>"
+        f"<span class='sidebar-user-name'>{nombre_sesion}</span>"
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
     installation_help()
     configure_passkey()
     st.link_button("◈ Suite de Evaluación TEA", "https://deeply-howler-8m5y7.ship.place/", use_container_width=True)

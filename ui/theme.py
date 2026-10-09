@@ -90,25 +90,110 @@ html, body {
 /* Sidebar Dashboard Styling */
 [data-testid="stSidebar"] {
   background: linear-gradient(180deg, #13333F 0%, #0B222A 100%) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+/* Sidebar Headings: High-Contrast White and Institutional Gold */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h6 {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  font-weight: 700 !important;
+}
+
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {
+  color: #E7C37A !important;
+  -webkit-text-fill-color: #E7C37A !important;
+  font-size: 0.95rem !important;
+  font-weight: 750 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  margin-top: 1.15rem !important;
+  margin-bottom: 0.5rem !important;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Sidebar General Text, Labels, and Captions */
 [data-testid="stSidebar"] p,
 [data-testid="stSidebar"] label,
-[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+[data-testid="stSidebar"] span:not(.badge):not(.status-dot),
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:not([data-testid="stExpander"] *) {
+  color: #E2EFF2 !important;
+  -webkit-text-fill-color: #E2EFF2 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p,
+[data-testid="stSidebar"] .stCaption,
+[data-testid="stSidebar"] small {
   color: #CFE0E5 !important;
+  -webkit-text-fill-color: #CFE0E5 !important;
+  font-size: 0.84rem !important;
+  line-height: 1.45 !important;
 }
 
 [data-testid="stSidebar"] a {
-  color: #E2EFF2 !important;
+  color: #E7C37A !important;
   text-decoration: none;
 }
 
-[data-testid="stSidebar"] hr {
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  margin: 1rem 0;
+[data-testid="stSidebar"] a:hover {
+  color: #FFFFFF !important;
+  text-decoration: underline;
 }
+
+[data-testid="stSidebar"] hr,
+[data-testid="stSidebar"] [data-testid="stDivider"] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  margin: 1.1rem 0 !important;
+}
+
+/* Sidebar User Session Pill */
+.sidebar-user-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  margin-bottom: 1.15rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-user-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-user-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #A3C0C9 !important;
+  -webkit-text-fill-color: #A3C0C9 !important;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sidebar-user-name {
+  font-size: 0.88rem;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 
 /* Sidebar Brand Block */
 .brand {
@@ -648,6 +733,130 @@ div.stDownloadButton > button[kind="primary"]:hover,
   border-color: #CBD7DC;
 }
 
+/* Sidebar Expanders: High Contrast White Container with Dark Legible Text */
+[data-testid="stSidebar"] [data-testid="stExpander"] {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.14) !important;
+  margin: 0.5rem 0 !important;
+  overflow: hidden !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+  padding: 0.75rem 1rem !important;
+  border-radius: 12px !important;
+  background: #FFFFFF !important;
+  cursor: pointer !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+  background: #F4F8FA !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary *,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary span,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"],
+[data-testid="stSidebar"] [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p {
+  color: #12333E !important;
+  -webkit-text-fill-color: #12333E !important;
+  font-weight: 700 !important;
+  font-size: 0.92rem !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg {
+  fill: #1B4958 !important;
+  stroke: #1B4958 !important;
+  color: #1B4958 !important;
+  width: 1.15rem !important;
+  height: 1.15rem !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"],
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] * {
+  color: #1E333C !important;
+  -webkit-text-fill-color: #1E333C !important;
+  font-size: 0.89rem !important;
+  line-height: 1.5 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] strong {
+  color: #12333E !important;
+  -webkit-text-fill-color: #12333E !important;
+  font-weight: 750 !important;
+}
+
+/* Sidebar Buttons & Triggers: Crisp White Cards with High-Contrast Dark Teal Text */
+[data-testid="stSidebar"] div.stButton > button,
+[data-testid="stSidebar"] div.stDownloadButton > button,
+[data-testid="stSidebar"] div.stLinkButton > a,
+[data-testid="stSidebar"] [data-testid="stPopover"] > button {
+  background: #FFFFFF !important;
+  color: #12333E !important;
+  -webkit-text-fill-color: #12333E !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  font-weight: 700 !important;
+  font-size: 0.92rem !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.14) !important;
+  border-radius: 10px !important;
+  min-height: 44px !important;
+  transition: all 0.2s ease !important;
+  width: 100% !important;
+}
+
+[data-testid="stSidebar"] div.stButton > button:hover,
+[data-testid="stSidebar"] div.stDownloadButton > button:hover,
+[data-testid="stSidebar"] div.stLinkButton > a:hover,
+[data-testid="stSidebar"] [data-testid="stPopover"] > button:hover {
+  background: #F4F8FA !important;
+  color: #1B4958 !important;
+  -webkit-text-fill-color: #1B4958 !important;
+  border-color: #FFFFFF !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22) !important;
+}
+
+[data-testid="stSidebar"] div.stButton > button p,
+[data-testid="stSidebar"] div.stDownloadButton > button p,
+[data-testid="stSidebar"] div.stLinkButton > a p,
+[data-testid="stSidebar"] [data-testid="stPopover"] > button p {
+  color: #12333E !important;
+  -webkit-text-fill-color: #12333E !important;
+  font-weight: 700 !important;
+}
+
+/* Popover Content */
+[data-baseweb="popover"] {
+  background: #FFFFFF !important;
+  border: 1px solid var(--bs-border-color) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border-radius: 14px !important;
+  padding: 0.85rem !important;
+}
+
+[data-baseweb="popover"] *,
+[data-baseweb="popover"] p,
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] [data-testid="stMarkdownContainer"] * {
+  color: #1E333C !important;
+  -webkit-text-fill-color: #1E333C !important;
+  font-size: 0.9rem !important;
+}
+
+[data-baseweb="popover"] strong {
+  color: #12333E !important;
+  -webkit-text-fill-color: #12333E !important;
+  font-weight: 750 !important;
+}
+
+[data-baseweb="popover"] [data-testid="stCaptionContainer"] p {
+  color: #5D727B !important;
+  -webkit-text-fill-color: #5D727B !important;
+}
+
+
 .stApp [data-baseweb="tab-list"] {
   gap: 0.5rem;
   border-bottom: 2px solid var(--bs-border-color);
@@ -855,38 +1064,164 @@ div[data-testid="stAlert"]:has([data-testid="stAlertInfoIcon"]) {
   will-change: transform, box-shadow;
 }
 
-/* Responsive Rules */
+/* Responsive Mobile & Tablet Rules */
 @media(max-width: 768px) {
+  /* Prevent horizontal overflow & set comfortable mobile gutters */
   .block-container {
-    padding: 1rem 0.85rem 3rem !important;
+    padding-top: 0.85rem !important;
+    padding-bottom: 3.5rem !important;
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+    max-width: 100vw !important;
   }
+
+  /* Mobile Hamburger Menu button */
+  [data-testid="collapsedControl"] {
+    background: #FFFFFF !important;
+    border: 1px solid #D1DCE0 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 2px 8px rgba(15, 34, 42, 0.12) !important;
+    color: #1B4958 !important;
+    top: 0.5rem !important;
+    left: 0.5rem !important;
+    z-index: 99999 !important;
+    padding: 6px !important;
+  }
+  [data-testid="collapsedControl"] svg {
+    fill: #1B4958 !important;
+    stroke: #1B4958 !important;
+  }
+
+  /* Sidebar responsive width on mobile */
+  [data-testid="stSidebar"] {
+    width: 86vw !important;
+    max-width: 360px !important;
+  }
+
+  /* Header and User Bar on Mobile */
+  .topbar-user {
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    padding: 0.25rem 0 !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  .user-badge {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.7rem !important;
+  }
+
+  /* Hero Banner on Phones */
   .hero {
-    padding: 1.25rem 1.4rem;
-    margin-bottom: 1rem;
+    padding: 1.15rem 1.25rem !important;
+    margin-bottom: 1.15rem !important;
+    border-radius: 12px !important;
   }
   .hero h1 {
-    font-size: 1.65rem;
+    font-size: 1.45rem !important;
+    line-height: 1.25 !important;
   }
-  .card {
-    padding: 1.15rem;
+  .hero p {
+    font-size: 0.88rem !important;
+    line-height: 1.45 !important;
   }
-  .st-key-institutional_login {
-    margin: 1.5rem auto;
-    padding: 1.5rem;
-    border-radius: 14px;
-  }
+
+  /* Typography scale on mobile */
+  .stApp h1 { font-size: 1.6rem !important; }
+  .stApp h2 { font-size: 1.35rem !important; }
+  .stApp h3 { font-size: 1.15rem !important; }
+  .stApp h4 { font-size: 1.0rem !important; }
+
+  /* Columns stack gracefully on mobile */
   [data-testid="stHorizontalBlock"] {
     flex-wrap: wrap !important;
     gap: 0.75rem !important;
   }
+  [data-testid="stHorizontalBlock"] > [data-testid="column"],
   [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
     flex: 1 1 100% !important;
     min-width: 100% !important;
   }
+
+  /* KPI Cards compact on mobile */
+  .card {
+    padding: 1.1rem 1.15rem !important;
+    border-radius: 12px !important;
+  }
+  .kpi, .stApp [data-testid="stMarkdownContainer"] .kpi {
+    font-size: 1.75rem !important;
+  }
+  [data-testid="stMetric"] {
+    padding: 1rem 1.15rem !important;
+  }
+
+  /* Tabs with horizontal touch scroll without wrapping */
+  [data-baseweb="tab-list"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    padding-bottom: 4px !important;
+    gap: 0.35rem !important;
+  }
+  [data-baseweb="tab-list"]::-webkit-scrollbar {
+    display: none !important;
+  }
+  [data-baseweb="tab"] {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 0.55rem 0.9rem !important;
+    font-size: 0.88rem !important;
+  }
+
+  /* Form inputs: min 16px font to prevent unwanted iOS Safari auto-zoom */
+  .stApp input,
+  .stApp textarea,
+  .stApp select,
+  .stApp [data-baseweb="input"] input,
+  .stApp [data-baseweb="textarea"] textarea {
+    font-size: 16px !important;
+    min-height: 44px !important;
+  }
+
+  /* Touch-friendly buttons (Apple HIG minimum 44px) */
   div.stButton > button,
-  div.stDownloadButton > button {
-    width: 100%;
-    min-height: 48px;
+  div.stDownloadButton > button,
+  [data-testid="stFormSubmitButton"] button,
+  div.stLinkButton > a {
+    width: 100% !important;
+    min-height: 48px !important;
+    font-size: 0.95rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  /* Dataframes & Tables responsive touch scroll */
+  [data-testid="stDataFrame"], .stTable {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Action Directive Callouts */
+  .action-directive-box {
+    padding: 0.9rem 1rem !important;
+    font-size: 0.88rem !important;
+    gap: 0.75rem !important;
+    border-radius: 10px !important;
+  }
+
+  /* Institutional login card on mobile */
+  .st-key-institutional_login {
+    margin: 1.25rem auto 1.5rem !important;
+    padding: 1.4rem 1.25rem !important;
+    border-radius: 14px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
 }
 
