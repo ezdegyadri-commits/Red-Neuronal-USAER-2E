@@ -300,6 +300,7 @@ html, body {
 .badge {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   color: #87621B !important;
   background: var(--bs-accent-light);
   border: 1px solid rgba(196, 147, 57, 0.28);
@@ -309,6 +310,166 @@ html, body {
   font-weight: 700;
   border-radius: 6px;
   text-transform: uppercase;
+}
+
+.badge-primary {
+  background-color: var(--bs-primary-subtle);
+  color: var(--bs-primary) !important;
+  border: 1px solid rgba(27, 73, 88, 0.16);
+}
+
+.badge-neutral {
+  background-color: var(--bs-surface-alt);
+  color: var(--bs-secondary-color) !important;
+  border: 1px solid var(--bs-border-color);
+}
+
+.badge-success {
+  background-color: #ECFDF5;
+  color: #047857 !important;
+  border: 1px solid #A7F3D0;
+}
+
+.badge-warning {
+  background-color: #FFFBEB;
+  color: #B45309 !important;
+  border: 1px solid #FDE68A;
+}
+
+.badge-danger {
+  background-color: #FEF2F2;
+  color: #B91C1C !important;
+  border: 1px solid #FECACA;
+}
+
+.badge-accent {
+  background-color: var(--bs-accent-light);
+  color: #87621B !important;
+  border: 1px solid rgba(196, 147, 57, 0.35);
+}
+
+/* Animated Live Status Dot */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #10B981;
+  display: inline-block;
+  animation: pulse-dot 2s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+.status-dot.amber {
+  background-color: #F59E0B;
+}
+
+.status-dot.red {
+  background-color: #EF4444;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.95); opacity: 0.85; }
+  50% { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.85; }
+}
+
+/* Card Header Icon Box (Inspirado en la Suite) */
+.card-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background-color: var(--bs-primary-subtle);
+  color: var(--bs-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  flex-shrink: 0;
+  border: 1px solid rgba(27, 73, 88, 0.12);
+  margin-bottom: 0.75rem;
+}
+
+.card-header-icon.gold {
+  background-color: var(--bs-accent-light);
+  color: #87621B;
+  border-color: rgba(196, 147, 57, 0.28);
+}
+
+.card-header-icon.emerald {
+  background-color: #ECFDF5;
+  color: #047857;
+  border-color: #A7F3D0;
+}
+
+/* Action Directive Callouts */
+.action-directive-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background-color: var(--bs-accent-light);
+  border-left: 4px solid var(--bs-accent);
+  border-radius: 12px;
+  padding: 1.1rem 1.3rem;
+  font-size: 0.92rem;
+  color: var(--bs-body-color);
+  box-shadow: var(--shadow-xs);
+  margin: 0.85rem 0;
+}
+
+.action-directive-box strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #87621B;
+  font-size: 0.98rem;
+}
+
+.action-directive-box.teal {
+  background-color: var(--bs-primary-subtle);
+  border-left-color: var(--bs-primary);
+}
+
+.action-directive-box.teal strong {
+  color: var(--bs-primary-dark);
+}
+
+.action-directive-box.emerald {
+  background-color: #ECFDF5;
+  border-left-color: #10B981;
+}
+
+.action-directive-box.emerald strong {
+  color: #047857;
+}
+
+.action-directive-box.amber {
+  background-color: #FFFBEB;
+  border-left-color: #F59E0B;
+}
+
+.action-directive-box.amber strong {
+  color: #B45309;
+}
+
+.action-directive-box .action-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+/* Continuous Progress Bar */
+.progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background-color: var(--bs-surface-alt);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin: 0.4rem 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--bs-primary) 0%, var(--bs-accent) 100%);
+  border-radius: 9999px;
+  transition: width 0.4s ease;
 }
 
 .section-title {

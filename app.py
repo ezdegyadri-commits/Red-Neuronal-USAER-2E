@@ -40,7 +40,10 @@ with cabecera_izquierda:
     nombre_usuario = st.session_state.get("nombre", "")
     rol_usuario = st.session_state.get("rol", "")
     st.markdown(
-        f"<div style='padding:0.25rem 0;'><span class='user-badge'><span class='user-dot'></span> {nombre_usuario} <span style='color:var(--bs-secondary-color);font-weight:400;'>· {rol_usuario}</span></span></div>",
+        f"<div style='padding:0.25rem 0;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;'>"
+        f"<span class='user-badge'><span class='status-dot'></span> {nombre_usuario} <span style='color:var(--bs-secondary-color);font-weight:400;'>· {rol_usuario}</span></span>"
+        f"<span class='badge badge-success'><span class='status-dot'></span> Plataforma Sincronizada</span>"
+        f"</div>",
         unsafe_allow_html=True,
     )
 with cabecera_derecha:
@@ -54,6 +57,7 @@ with st.sidebar:
     st.caption(f"Sesión activa: {st.session_state.get('nombre','')}")
     installation_help()
     configure_passkey()
+    st.link_button("◈ Suite de Evaluación TEA", "https://deeply-howler-8m5y7.ship.place/", use_container_width=True)
     st.divider()
     menu=["Inicio","Expedientes","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Estadística","Documentos","Calendario de actividades"]
     if gestor_tramites() or puede_solicitar():

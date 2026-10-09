@@ -139,16 +139,30 @@ def _panel_analisis_atencion(anexos, key, alcance):
 def inicio(df):
     hero("Tu espacio de trabajo", "Consulta los expedientes y continúa la planeación y el seguimiento educativo de tu equipo.")
     c1,c2,c3,c4=st.columns(4)
-    with c1: card("Alumnos visibles",len(df))
-    with c2: card("Anexos 3",len(repo.anexo3()))
-    with c3: card("Sugerencias",len(repo.anexo4()))
-    with c4: card("Eventos",len(repo.anexo5()))
+    with c1: card("Alumnos visibles",len(df), icon="👥", badge="Padrón")
+    with c2: card("Anexos 3",len(repo.anexo3()), icon="📋", badge="BAP")
+    with c3: card("Sugerencias",len(repo.anexo4()), icon="💡", badge="Anexo IV")
+    with c4: card("Eventos",len(repo.anexo5()), icon="📌", badge="Anexo V")
     st.markdown("### Información conectada")
     st.caption("Lo que documentas en el expediente acompaña la planeación, la intervención y el seguimiento. No necesitas volver a capturar la misma información.")
     st.markdown("### Ruta de trabajo")
     cols=st.columns(5)
-    for c,t in zip(cols,["1. Expediente","2. BAP","3. IA + revisión","4. Seguimiento","5. Evidencia"]):
-        with c: st.markdown(f"<div class='card'><span class='badge'>PROCESO</span><h4>{t}</h4><div class='muted'>La información permanece conectada.</div></div>",unsafe_allow_html=True)
+    for c,t,icon in zip(cols,["1. Expediente","2. BAP","3. IA + revisión","4. Seguimiento","5. Evidencia"], ["📁","📊","🧠","🩺","📝"]):
+        with c: st.markdown(f"<div class='card'><div class='card-header-icon gold' style='width:36px;height:36px;font-size:1.1rem;margin-bottom:0.5rem;'>{icon}</div><span class='badge'>PROCESO</span><h4>{t}</h4><div class='muted'>La información permanece conectada.</div></div>",unsafe_allow_html=True)
+    st.markdown("### Instrumentos Clínicos y Psicométricos")
+    c_tea1, c_tea2 = st.columns([3.8, 1.2])
+    with c_tea1:
+        st.markdown(
+            "<div class='card' style='padding:1.1rem 1.3rem;'>"
+            "<span class='badge' style='margin-bottom:0.35rem;'>Área de Psicología y Educación Especial</span>"
+            "<h4 style='margin:0 0 0.25rem 0;'>Suite Psicométrica TEA (M-CHAT-R/F™ & Protocolo USAER)</h4>"
+            "<p class='muted' style='margin:0;font-size:0.88rem;'>Herramienta digital de cribado temprano y observación en edad escolar con baremación automática e informe oficial.</p>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    with c_tea2:
+        st.write("")
+        st.link_button("Abrir Suite TEA ◈", "https://deeply-howler-8m5y7.ship.place/", type="primary", use_container_width=True)
 
 
 def expedientes_page(df):
@@ -162,10 +176,10 @@ def expedientes_page(df):
     exp=expediente(id_alumno)
     a=exp["alumno"]
     c=st.columns(4)
-    with c[0]: card("Expediente",exp["id_expediente"])
-    with c[1]: card("Grado / grupo",f"{a.get('Grado','')} {a.get('Grupo','')}")
-    with c[2]: card("Condición",a.get("Condicion_Discapacidad",""))
-    with c[3]: card("Estatus",a.get("Estatus",""))
+    with c[0]: card("Expediente",exp["id_expediente"], icon="🗂️", badge="ID")
+    with c[1]: card("Grado / grupo",f"{a.get('Grado','')} {a.get('Grupo','')}", icon="🏫")
+    with c[2]: card("Condición",a.get("Condicion_Discapacidad",""), icon="👤")
+    with c[3]: card("Estatus",a.get("Estatus",""), icon="📌")
     tabs=st.tabs(["Resumen","Anexo III BAP","Anexo IV Hoja de sugerencias","Anexo V Eventos significativos","Línea de tiempo"])
     with tabs[0]:
         st.write({k:a.get(k,"") for k in ["Nombre_Completo","CURP","Grado","Grupo","ID_Escuela","Maestra de Apoyo","ID_Maestro_Regular","Condicion_Discapacidad","Tipo_Atencion","Estatus"]})
