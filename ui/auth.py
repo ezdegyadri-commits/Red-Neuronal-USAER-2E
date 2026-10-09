@@ -26,13 +26,20 @@ def login():
 
 
 def _login_content():
-    st.markdown("<div class='hero'><div class='eyebrow'>Educación especial · Yucatán</div><h1>USAER 02-E</h1><p>Plataforma de gestión e intervención educativa</p></div>", unsafe_allow_html=True)
-    st.subheader("Acceso al equipo")
+    st.markdown(
+        "<div style='text-align:center;margin-bottom:1.6rem;'>"
+        "<div class='badge' style='margin-bottom:0.6rem;'>Zona Escolar 001 · Yucatán</div>"
+        "<h2 style='font-size:1.9rem;margin:0 0 0.35rem;letter-spacing:-0.025em;color:var(--bs-primary-dark);'>USAER 02-E</h2>"
+        "<p style='color:var(--bs-secondary-color);font-size:0.92rem;margin:0;'>Plataforma institucional de gestión e intervención</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("<div style='font-weight:600;font-size:1rem;color:var(--bs-primary-dark);margin-bottom:0.6rem;'>Acceso del equipo</div>", unsafe_allow_html=True)
     login_passkey(start_session)
     with st.form("login"):
-        user = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        ok = st.form_submit_button("Ingresar", type="primary", use_container_width=True)
+        user = st.text_input("Usuario", placeholder="Tu usuario institucional")
+        password = st.text_input("Contraseña", type="password", placeholder="••••••••")
+        ok = st.form_submit_button("Ingresar a la plataforma", type="primary", use_container_width=True)
     if ok:
         df = usuarios()
         match = None
@@ -47,7 +54,7 @@ def _login_content():
             start_session(match)
             st.rerun()
     installation_help()
-    st.markdown("<p class='institution-footnote'>USAER 02-E · Zona 001<br>Información educativa de uso exclusivo del personal autorizado.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='institution-footnote' style='text-align:center;'>USAER 02-E · Zona 001 · Yucatán<br>Información educativa de uso exclusivo del personal autorizado.</p>", unsafe_allow_html=True)
 
 
 def logout(key="cerrar_sesion"):

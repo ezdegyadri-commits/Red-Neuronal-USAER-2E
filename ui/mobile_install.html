@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="es"><meta charset="utf-8">
 <style>
-body{margin:0;font:16px system-ui,sans-serif;color:#18313a}
-button{font:inherit;background:#087e8b;color:white;border:0;border-radius:12px;padding:13px 18px;min-height:48px;cursor:pointer;width:100%}
-button:focus-visible{outline:3px solid #e7a83e;outline-offset:2px}
+body{margin:0;font:15px/1.4 'Plus Jakarta Sans', system-ui, sans-serif;color:#1E333C}
+button{font:inherit;font-weight:600;background:linear-gradient(135deg, #1B4958 0%, #12333E 100%);color:white;border:1px solid #1B4958;border-radius:10px;padding:12px 18px;min-height:46px;cursor:pointer;width:100%;box-shadow:0 2px 5px rgba(27,73,88,0.2);transition:all 0.2s ease}
+button:hover{background:linear-gradient(135deg, #245A6D 0%, #173E4B 100%);box-shadow:0 4px 8px rgba(27,73,88,0.28);transform:translateY(-1px)}
+button:focus-visible{outline:3px solid #C49339;outline-offset:2px}
 </style>
 <button id="install" type="button">Cómo instalar en mi teléfono</button>
 <script>
@@ -80,8 +81,8 @@ button:focus-visible{outline:3px solid #e7a83e;outline-offset:2px}
     if (!dialog) {
       dialog = doc.createElement('dialog'); dialog.id = 'usaer-install-help';
       dialog.setAttribute('aria-labelledby', 'usaer-install-title');
-      dialog.style.cssText = 'max-width:440px;width:calc(100% - 48px);box-sizing:border-box;border:1px solid #d5e2e4;border-radius:18px;padding:24px;background:#fff;color:#18313a;font:16px/1.5 system-ui;';
-      dialog.innerHTML = '<h2 id="usaer-install-title" style="font-size:22px;margin-top:0">Instalar USAER 02E</h2><p><strong>iPhone:</strong> en Safari, toca Compartir y Añadir a pantalla de inicio. Activa Abrir como app si aparece.</p><p><strong>Android:</strong> usa el botón Descargar APK para Android de la plataforma. También puedes instalar la versión web desde el menú de Chrome.</p><p>Si abriste el enlace desde WhatsApp, ábrelo primero en Safari o Chrome.</p><button type="button" style="font:inherit;min-height:48px;background:#087e8b;color:#fff;border:0;border-radius:12px;padding:12px 24px">Entendido</button>';
+      dialog.style.cssText = 'max-width:440px;width:calc(100% - 48px);box-sizing:border-box;border:1px solid #E2E8EB;border-radius:16px;padding:24px;background:#fff;color:#1E333C;font:15px/1.5 Plus Jakarta Sans, system-ui, sans-serif;box-shadow:0 12px 24px -4px rgba(15,34,42,0.14);';
+      dialog.innerHTML = '<h2 id="usaer-install-title" style="font-size:20px;font-weight:700;margin-top:0;color:#12333E">Instalar USAER 02E</h2><p><strong>iPhone:</strong> en Safari, toca Compartir y Añadir a pantalla de inicio. Activa Abrir como app si aparece.</p><p><strong>Android:</strong> usa el botón Descargar APK para Android de la plataforma. También puedes instalar la versión web desde el menú de Chrome.</p><p style="color:#5D727B;font-size:14px;">Si abriste el enlace desde WhatsApp, ábrelo primero en Safari o Chrome.</p><button type="button" style="font:inherit;font-weight:600;min-height:44px;background:linear-gradient(135deg, #1B4958 0%, #12333E 100%);color:#fff;border:0;border-radius:10px;padding:12px 24px;cursor:pointer;width:100%;box-shadow:0 2px 4px rgba(27,73,88,0.2);">Entendido</button>';
       dialog.querySelector('button').addEventListener('click', () => dialog.close());
       doc.body.append(dialog);
     }

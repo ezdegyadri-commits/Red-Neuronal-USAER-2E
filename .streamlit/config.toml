@@ -8,8 +8,8 @@ maxMessageSize = 400
 
 [theme]
 base = "light"
-primaryColor = "#254F60"
-backgroundColor = "#F6F5F1"
-secondaryBackgroundColor = "#ECEFED"
-textColor = "#243A43"
+primaryColor = "#1B4958"
+backgroundColor = "#F8FAFB"
+secondaryBackgroundColor = "#F0F4F6"
+textColor = "#1E333C"
 font = "sans serif"

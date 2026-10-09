@@ -881,15 +881,18 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
     celdas_conflicto = {(str(row["Día"]), str(row["Horario propuesto"]).replace("–", "|")) for row in pendientes.to_dict('records')}
     celdas_acuerdo = {(str(row['Día']),str(row['Horario propuesto']).replace('–','|')) for row in acuerdos.to_dict('records')}
     dias = list(DIAS)
-    tabla = ["<style>.horario-apoyo-grid{width:100%;min-width:850px;border-collapse:collapse;table-layout:fixed;font-family:Arial,sans-serif}"
-             ".horario-apoyo-grid th{background:#d9eaf6;color:#173b57;padding:12px;border:1px solid #a9bfce;font-size:16px}"
-             ".horario-apoyo-grid td{height:86px;vertical-align:top;border:1px solid #a9bfce;padding:9px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}"
-             ".horario-apoyo-grid .hora{background:#f0f5f9;text-align:center;font-weight:bold;width:12%}"
-             ".horario-apoyo-grid .ocupado{background:#eef8f1}.horario-apoyo-grid .choque{background:#ffe5e5}.horario-apoyo-grid .acuerdo{background:#fff1bf;color:#6f5200}"
-             ".horario-apoyo-grid .descanso{background:#fff1bf;color:#6f5200;text-align:center;font-weight:bold}"
-             ".horario-apoyo-grid .inactivo{background:#f7f9fb;color:#c2cbd2;text-align:center}"
-             ".horario-apoyo-grid .vacio{color:#8195a6}</style>",
-             "<div style='overflow-x:auto'><table class='horario-apoyo-grid'><thead><tr><th>Hora</th>"]
+    tabla = ["<style>.horario-apoyo-grid{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;border-radius:12px;overflow:hidden;}"
+             ".horario-apoyo-grid th{background:#1B4958;color:#ffffff;padding:12px 10px;font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border-bottom:2px solid #133844;text-align:center;}"
+             ".horario-apoyo-grid td{height:84px;vertical-align:top;border-right:1px solid #E5EDF0;border-bottom:1px solid #E5EDF0;padding:10px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.45;transition:background 0.15s ease;}"
+             ".horario-apoyo-grid tr:hover td{filter:brightness(0.98);}"
+             ".horario-apoyo-grid .hora{background:#F3F7F9;color:#173B49;text-align:center;font-weight:700;width:12%;border-left:1px solid #E5EDF0;font-size:12px;}"
+             ".horario-apoyo-grid .ocupado{background:#F0FDF4;color:#166534;font-weight:500;}"
+             ".horario-apoyo-grid .choque{background:#FEF2F2;color:#991B1B;font-weight:600;}"
+             ".horario-apoyo-grid .acuerdo{background:#FFFBEB;color:#92400E;font-weight:500;}"
+             ".horario-apoyo-grid .descanso{background:#FEF3C7;color:#78350F;text-align:center;font-weight:700;letter-spacing:0.05em;}"
+             ".horario-apoyo-grid .inactivo{background:#F8FAFC;color:#94A3B8;text-align:center;}"
+             ".horario-apoyo-grid .vacio{color:#64748B;background:#FFFFFF;}</style>",
+             "<div style='overflow-x:auto;border-radius:12px;box-shadow:0 1px 3px rgba(15,34,42,0.06);border:1px solid #E2E8EB;margin-bottom:1rem;'><table class='horario-apoyo-grid'><thead><tr><th>Hora</th>"]
     tabla.extend(f"<th>{html.escape(dia)}</th>" for dia in dias)
     tabla.append("</tr></thead><tbody>")
     for desde, hasta in franjas:

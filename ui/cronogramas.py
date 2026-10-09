@@ -236,9 +236,10 @@ def _calendario_mes(mes, guardadas, escuelas=None, prefijo="", lectura=False, ed
             fuera = fecha.month != numero
             with col:
                 with st.container(border=True):
-                    color = "#f4f6f8" if fuera else ("#fff0d4" if "Consejo Técnico" in motivo else "#f9dddd" if motivo else "#eaf5f4")
+                    color = "#F1F5F9" if fuera else ("#FEF3C7" if "Consejo Técnico" in motivo else "#FEE2E2" if motivo else "#E8F2F5")
+                    text_color = "#94A3B8" if fuera else ("#92400E" if "Consejo Técnico" in motivo else "#991B1B" if motivo else "#1B4958")
                     etiqueta = "" if fuera else str(fecha.day)
-                    st.markdown(f"<div style='background:{color};color:#183f46;border-radius:8px;padding:8px;text-align:right;font-weight:bold'>{etiqueta}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='background:{color};color:{text_color};border-radius:6px;padding:6px 8px;text-align:right;font-weight:700;font-size:13px;'>{etiqueta}</div>", unsafe_allow_html=True)
                     if fuera:
                         continue
                     ventana_eventos(iso, eventos)

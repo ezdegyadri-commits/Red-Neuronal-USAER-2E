@@ -35,7 +35,14 @@ if not st.session_state.get("autenticado"):
 
 activar_revision()
 
-cabecera_izquierda, cabecera_derecha = st.columns([5, 1])
+cabecera_izquierda, cabecera_derecha = st.columns([4.8, 1.2])
+with cabecera_izquierda:
+    nombre_usuario = st.session_state.get("nombre", "")
+    rol_usuario = st.session_state.get("rol", "")
+    st.markdown(
+        f"<div style='padding:0.25rem 0;'><span class='user-badge'><span class='user-dot'></span> {nombre_usuario} <span style='color:var(--bs-secondary-color);font-weight:400;'>· {rol_usuario}</span></span></div>",
+        unsafe_allow_html=True,
+    )
 with cabecera_derecha:
     logout("cerrar_sesion_principal")
 
@@ -43,8 +50,8 @@ rol=st.session_state.get("rol","")
 escuelas=st.session_state.get("escuelas_permitidas","")
 
 with st.sidebar:
-    st.markdown("<div class='brand'><p class='brand-overline'>Educación especial</p><h1>USAER 02-E</h1><p>Yucatán · Zona 001<br>Gestión e intervención educativa</p></div>",unsafe_allow_html=True)
-    st.caption(f"Sesión: {st.session_state.get('nombre','')}")
+    st.markdown("<div class='brand'><span class='brand-overline'>Educación especial · Zona 001</span><h1><span style='color:#C49339;font-size:1.2rem;'>◈</span> USAER 02-E</h1><p>Yucatán · Gestión e intervención educativa</p></div>",unsafe_allow_html=True)
+    st.caption(f"Sesión activa: {st.session_state.get('nombre','')}")
     installation_help()
     configure_passkey()
     st.divider()
