@@ -7,16 +7,22 @@ import streamlit as st
 from services import planeacion as s
 from services.planeacion_colaboracion import COLUMNAS
 from services.planeacion_modelo import FORMATOS
+from services.planeacion_estabilidad import GuardadoPendiente
 
 
 def _guardar(base,automatic=False):
-    if automatic and time.monotonic()-st.session_state.get(base+'_intento',0)<15:return
+    st.session_state[base+'_pending']=True
+    if automatic and (time.monotonic()<st.session_state.get(base+'_retry_at',0) or time.monotonic()-st.session_state.get(base+'_intento',0)<60):return
     st.session_state[base+'_intento']=time.monotonic()
     try:
         saved=s.guardar_aportacion(st.session_state[base+'_doc'],st.session_state[base+'_filas'],st.session_state.get(base+'_obs',''))
         st.session_state[base+'_doc']=saved
         st.session_state[base+'_pending']=False
         st.session_state.pop(base+'_error',None)
+        st.session_state.pop(base+'_retry_at',None)
+    except GuardadoPendiente as exc:
+        st.session_state[base+'_retry_at']=time.monotonic()+exc.espera
+        st.session_state[base+'_error']=str(exc)
     except Exception as exc:
         st.session_state[base+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó el guardado. Conserva el respaldo y vuelve a intentar.'
 
@@ -68,7 +74,7 @@ def panel(prefix):
             if not any(r['ID_Alumno']==a['ID_Alumno'] for r in rows):rows=rows+[{k:a['ID_Alumno'] if k=='ID_Alumno' else '' for k in COLUMNAS}]
         st.session_state[base+'_doc']=deepcopy(doc);st.session_state[base+'_filas']=deepcopy(rows)
         st.session_state[base+'_original']=deepcopy(rows);st.session_state[base+'_obs']=aporte.get('observaciones','')
-    st.caption('Solo editas tu aportación. Confirma cada celda; se autoguarda cada 15 segundos. Guarda y verifica antes de cerrar.')
+    st.caption('Solo editas tu aportación. Confirma cada celda; los cambios se agrupan para guardar aproximadamente cada minuto. Guarda y verifica antes de cerrar.')
     st.data_editor(pd.DataFrame(st.session_state[base+'_original'],columns=COLUMNAS),disabled=['ID_Alumno'],hide_index=True,
         column_config={'Contexto':st.column_config.SelectboxColumn(options=FORMATOS[doc['formato']]['contextos'])},
         key=base+'_editor',on_change=_cambio,args=(base,base+'_editor',st.session_state[base+'_original']))

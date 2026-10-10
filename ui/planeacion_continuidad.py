@@ -31,7 +31,7 @@ def panel(prefix,abrir,persist):
                 st.write(doc['metadatos']['resumen_anterior_para_revisar'])
         if st.button('Actualizar conexiones del expediente',key=prefix+'_conexiones'):
             try:
-                s.refrescar();actual=s.preparar_contexto(doc);abrir(prefix,actual);persist(prefix);st.rerun()
+                s.refrescar_evidencias();actual=s.preparar_contexto(doc);abrir(prefix,actual);persist(prefix);st.rerun()
             except Exception:st.warning('No se pudieron confirmar las conexiones. Tu redacción se conserva.')
         if doc['formato']=='XXI' and st.button('Precargar NEE y BAP desde la EPP revisada',key=prefix+'_precargar_epp'):
             try:abrir(prefix,c.trasladar_epp(doc));persist(prefix);st.rerun()

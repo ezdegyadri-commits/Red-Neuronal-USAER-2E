@@ -1,4 +1,6 @@
 import hmac
+import hashlib
+import logging
 import streamlit as st
 from data.repository import usuarios
 from services.asignaciones import escuelas_asignadas
@@ -41,7 +43,11 @@ def _login_content():
         password = st.text_input("Contraseña", type="password", placeholder="••••••••")
         ok = st.form_submit_button("Ingresar a la plataforma", type="primary", use_container_width=True)
     if ok:
-        df = usuarios()
+        try:df = usuarios()
+        except Exception as exc:
+            logging.getLogger(__name__).warning('autenticacion_lectura_error tipo=%s',type(exc).__name__)
+            st.warning('La conexión de acceso está temporalmente ocupada. Vuelve a intentar; no se modificó tu cuenta.')
+            return
         match = None
         if not df.empty:
             for _, r in df.iterrows():
@@ -59,7 +65,13 @@ def _login_content():
 
 def logout(key="cerrar_sesion"):
     """Muestra un cierre de sesión en el contenedor actual."""
-    if st.button("Cerrar sesión", key=key, use_container_width=True):
+    prefix='planeacion_'+hashlib.sha256(str(st.session_state.get('usuario','')).encode()).hexdigest()[:12]
+    pendientes=any(k.startswith(prefix) and k.endswith('_pending') and v for k,v in st.session_state.items())
+    salir=False
+    if pendientes:
+        st.warning('Hay cambios de Planeación pendientes. Guarda y confirma, o descarga el respaldo antes de salir.')
+        salir=st.checkbox('Quiero cerrar sin guardar los cambios pendientes',key=key+'_confirmar_pendientes')
+    if st.button("Cerrar sesión", key=key, use_container_width=True,disabled=pendientes and not salir):
         for k in [
             "autenticado",
             "nombre",

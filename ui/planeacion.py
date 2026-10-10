@@ -5,6 +5,7 @@ import inspect
 import json
 import re
 import time
+import logging
 import pandas as pd
 import streamlit as st
 from services import planeacion as servicio
@@ -14,6 +15,28 @@ from ai.planeacion_prompt import huella, VERSION_PROMPT
 from documents.planeacion import generar_pdf
 from services.curriculo import CAMPOS, EJES, FUENTES_BASE, opciones, vincular, contexto_ia, catalogo
 from services.materiales_planeacion import TIPOS, MAX_TEXTO, leer_material, incorporar, fuentes_materiales
+from services.planeacion_estabilidad import GuardadoPendiente
+
+logger=logging.getLogger(__name__)
+
+
+def _pdf_sesion(prefix,doc):
+    digest=hashlib.sha256(json.dumps(doc,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    if st.session_state.get(prefix+'_pdf_digest')!=digest:
+        pdf=generar_pdf(doc)
+        st.session_state[prefix+'_pdf_cache']=pdf
+        st.session_state[prefix+'_pdf_digest']=digest
+    return st.session_state[prefix+'_pdf_cache']
+
+
+def _contexto_revision(doc):
+    contexto=contexto_ia(doc)
+    value=contexto.get('contextualizacion_docente','')
+    if value:
+        contexto['contextualizacion_docente']=servicio.resumen_previo(doc,[
+            {'referencia':'CONTEXTO-ESCOLAR','alcance':'contextualización declarada','texto':value}
+        ]).split('\n\n',1)[-1]
+    return contexto
 
 
 def _resumen_complementos(current):
@@ -152,7 +175,8 @@ def _prefix():
 def _persist(prefix,estado='BORRADOR',automatic=False):
     doc=st.session_state[prefix+'_doc']
     st.session_state[prefix+'_pending']=True
-    if automatic and time.monotonic()-st.session_state.get(prefix+'_last_attempt',0)<15:
+    intervalo=60+int(hashlib.sha256(prefix.encode()).hexdigest()[:2],16)%15
+    if automatic and (time.monotonic()<st.session_state.get(prefix+'_retry_at',0) or time.monotonic()-st.session_state.get(prefix+'_last_attempt',0)<intervalo):
         return False
     st.session_state[prefix+'_last_attempt']=time.monotonic()
     try:
@@ -161,7 +185,12 @@ def _persist(prefix,estado='BORRADOR',automatic=False):
         st.session_state.pop(prefix+'_error',None)
         st.session_state.pop(prefix+'_pdf',None)
         st.session_state[prefix+'_pending']=False
+        st.session_state.pop(prefix+'_retry_at',None)
         return True
+    except GuardadoPendiente as exc:
+        st.session_state[prefix+'_retry_at']=time.monotonic()+exc.espera
+        st.session_state[prefix+'_error']=str(exc)
+        return False
     except Exception as exc:
         st.session_state[prefix+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó el guardado. Conserva el respaldo y vuelve a intentar.'
         return False
@@ -210,11 +239,22 @@ def _grupal_zona(prefix,key,base):
 
 
 def _open(prefix,doc):
+    previo=st.session_state.get(prefix+'_doc')
+    if previo and st.session_state.get(prefix+'_pending') and (previo.get('id')!=doc.get('id') or previo.get('revision')!=doc.get('revision')):
+        raise RuntimeError('Hay cambios pendientes en el documento abierto. Guarda o descarga su respaldo antes de abrir otro; tu edición no fue reemplazada.')
     from services.planeacion_generacion import prellenar
     st.session_state[prefix+'_doc']=prellenar(doc)
     st.session_state[prefix+'_generation']=st.session_state.get(prefix+'_generation',0)+1
     for suffix in ('_error','_pdf','_fuentes','_ia'):
         st.session_state.pop(prefix+suffix,None)
+    st.session_state[prefix+'_pending']=bool(previo and previo.get('id')==doc.get('id') and st.session_state.get(prefix+'_pending'))
+
+
+def _resguardar_pendiente(prefix):
+    """Conciliación explícita: conserva ambas ediciones, nunca las fusiona a ciegas."""
+    doc=deepcopy(st.session_state[prefix+'_doc'])
+    firma=hashlib.sha256(json.dumps(doc,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+    st.session_state.setdefault(prefix+'_resguardos',{})[firma]=doc
     st.session_state[prefix+'_pending']=False
 
 
@@ -224,7 +264,7 @@ def _autosave(prefix):
         _persist(prefix,automatic=True)
     current=st.session_state[prefix+'_doc']
     if prefix+'_error' in st.session_state:st.warning(st.session_state[prefix+'_error'])
-    elif st.session_state.get(prefix+'_pending'):st.caption('Cambios pendientes de autoguardado. Usa Guardar borrador antes de cerrar.')
+    elif st.session_state.get(prefix+'_pending'):st.caption('Cambios pendientes: se agrupan y guardan automáticamente. Usa Guardar borrador antes de cerrar.')
     elif current.get('guardado_en'):st.caption('Guardado confirmado: '+current['guardado_en'][:19]+' · '+current['estado'])
     else:st.warning('Este borrador aún no tiene un guardado confirmado.')
 
@@ -322,7 +362,7 @@ def _editor_contenido(prefix):
     estado_col.metric('Tu trabajo',{'BORRADOR':'Borrador','ENVIADO':'Enviado','VALIDADO':'Revisado','CON_OBSERVACIONES':'Por ajustar'}.get(doc['estado'],doc['estado']))
     with st.expander('Datos precargados de los alumnos'):
         st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,use_container_width=True)
-    st.caption('Autoguardado de cambios confirmados cada 15 segundos mientras trabajas. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
+    st.caption('Tus cambios se conservan en esta sesión y se agrupan para guardar aproximadamente cada minuto. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
     from ui.planeacion_generacion import panel_generacion
     panel_generacion(prefix,_persist,_open)
     from ui.planeacion_continuidad import panel as panel_continuidad
@@ -359,6 +399,7 @@ def _editor_contenido(prefix):
         if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
         with st.expander('Evidencias del expediente y referente curricular'):
             if st.button('Actualizar información del expediente',key=prefix+'_sources'):
+                servicio.refrescar_evidencias()
                 current=servicio.preparar_contexto(st.session_state[prefix+'_doc'])
                 st.session_state[prefix+'_doc']=current
                 st.session_state[prefix+'_fuentes']=(current['metadatos']['fuentes'],current['metadatos']['fuentes_pendientes'])
@@ -448,7 +489,10 @@ def _editor_contenido(prefix):
         _persist(prefix,'ENVIADO');st.rerun()
     if right.button('Preparar PDF',key=prefix+'_makepdf'):
         _persist(prefix)
-        st.session_state[prefix+'_pdf']=generar_pdf(st.session_state[prefix+'_doc'])
+        try:st.session_state[prefix+'_pdf']=_pdf_sesion(prefix,st.session_state[prefix+'_doc'])
+        except Exception as exc:
+            logger.warning('planeacion_pdf_error tipo=%s',type(exc).__name__)
+            st.warning('No se pudo preparar el PDF. Tu edición se conserva; descarga el respaldo y vuelve a intentar.')
     _autosave(prefix)
     st.download_button('Descargar respaldo editable',json.dumps(current,ensure_ascii=False,indent=2),file_name='planeacion-'+current['id']+'.json',mime='application/json',key=prefix+'_backup')
     if prefix+'_pdf' in st.session_state:
@@ -474,7 +518,7 @@ def _editor(prefix):
             doc=st.session_state[prefix+'_doc']
             digest=hashlib.sha256(json.dumps(doc,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
             if st.session_state.get(prefix+'_live_digest')!=digest:
-                st.session_state[prefix+'_live_pdf']=generar_pdf(doc)
+                st.session_state[prefix+'_live_pdf']=_pdf_sesion(prefix,doc)
                 st.session_state[prefix+'_live_digest']=digest
             pdf=st.session_state[prefix+'_live_pdf']
             _preview(prefix+'_live',pdf)
@@ -483,7 +527,7 @@ def _editor(prefix):
             st.info('La vista previa no pudo actualizarse. Tu borrador y los campos editables se conservan; vuelve a intentar Preparar PDF.')
 
 
-def direccion_panel():
+def _direccion_panel():
     if not servicio.identidad()['director']:raise PermissionError('Solo Dirección.')
     prefix=_prefix()+'_review'
     st.subheader('Planeaciones y planes de intervención del equipo')
@@ -514,8 +558,7 @@ def direccion_panel():
         consent=st.checkbox('Revisé que el resumen no identifica personas.',key=prefix+'_ia_consent_'+doc['id'])
         if st.button('Analizar áreas de mejora',disabled=not consent,key=prefix+'_ia_revisar'):
             try:
-                contexto=contexto_ia(doc)
-                contexto['contextualizacion_docente']=servicio.resumen_previo(doc,contexto.get('contextualizacion_docente',''))
+                contexto=_contexto_revision(doc)
                 firma=huella(resumen,doc['formato'],doc['datos']['Función'],True,contexto)
                 cachekey=prefix+'_analisis_'+doc['id']
                 previo=st.session_state.get(cachekey,{})
@@ -525,8 +568,7 @@ def direccion_panel():
             except (ValueError,RuntimeError) as exc:st.info(str(exc))
         previo=st.session_state.get(prefix+'_analisis_'+doc['id'],{})
         try:
-            contexto=contexto_ia(doc)
-            contexto['contextualizacion_docente']=servicio.resumen_previo(doc,contexto.get('contextualizacion_docente',''))
+            contexto=_contexto_revision(doc)
             firma_actual=huella(resumen,doc['formato'],doc['datos']['Función'],True,contexto)
         except ValueError:firma_actual=''
         if previo.get('huella')==firma_actual and previo.get('motor')==modelo_configurado():
@@ -540,10 +582,10 @@ def direccion_panel():
         if st.button(label,key=prefix+'_'+state):
             try:servicio.guardar(doc,state,observations);st.success('Revisión guardada.');st.rerun()
             except Exception as exc:st.warning(str(exc) if isinstance(exc,(ValueError,RuntimeError,PermissionError)) else 'No se confirmó la revisión. Vuelve a intentar.')
-    st.download_button('PDF del documento',generar_pdf(doc),file_name='revision-'+doc['id']+'.pdf',mime='application/pdf',key=prefix+'_pdf_'+doc['revision'])
+    st.download_button('PDF del documento',_pdf_sesion(prefix,doc),file_name='revision-'+doc['id']+'.pdf',mime='application/pdf',key=prefix+'_pdf_'+doc['revision'])
 
 
-def planeacion_page():
+def _planeacion_page():
     actor=servicio.identidad();prefix=_prefix()
     from services.planeacion_modalidad import filtrar, modalidad as modalidad_alumno
     inicial=servicio.padron_autorizado()
@@ -561,6 +603,12 @@ def planeacion_page():
         from ui.planeacion_colaboracion import panel as panel_colaboracion
         panel_colaboracion(prefix+'_colaboracion')
     with recuperar:
+        conservar=False
+        if st.session_state.get(prefix+'_pending'):
+            st.warning('Hay una edición pendiente. Descarga su respaldo antes de recuperar otra versión. Puedes conservar una copia adicional en esta sesión para conciliar; esa copia no sustituye el respaldo descargado.')
+            conservar=st.checkbox('Conservar mi edición pendiente en esta sesión y abrir la versión que elija',key=prefix+'_resguardar_confirm')
+        for firma,resguardo in st.session_state.get(prefix+'_resguardos',{}).items():
+            st.download_button('Descargar edición conservada para conciliar',json.dumps(resguardo,ensure_ascii=False,indent=2),file_name='planeacion-conciliar-'+resguardo['id']+'.json',mime='application/json',key=prefix+'_resguardo_'+firma)
         backup=st.file_uploader('Recuperar un respaldo editable (.json)',type=['json'],key=prefix+'_import')
         if backup and st.button('Recuperar este respaldo',key=prefix+'_restore'):
             try:
@@ -570,6 +618,9 @@ def planeacion_page():
                 if recovered['cuenta']!=actor['cuenta']:raise PermissionError('El respaldo corresponde a otra cuenta.')
                 latest=next((d for d in servicio.listar() if d['id']==recovered['id']),None)
                 recovered['revision']=latest['revision'] if latest else ''
+                if st.session_state.get(prefix+'_pending'):
+                    if not conservar:raise RuntimeError('Primero guarda o confirma conservar la edición pendiente; no se reemplazó tu trabajo.')
+                    _resguardar_pendiente(prefix)
                 _open(prefix,recovered);_persist(prefix);st.rerun()
             except Exception as exc:
                 st.warning(str(exc) if isinstance(exc,(ValueError,PermissionError)) else 'No se pudo recuperar el respaldo. No se modificó el documento guardado.')
@@ -580,7 +631,11 @@ def planeacion_page():
             docs=[d for d in servicio.listar() if d['cuenta']==actor['cuenta'] and modalidad_documento(d,padron)==modalidad]
             if docs:
                 i=st.selectbox('Mis documentos guardados',range(len(docs)),format_func=lambda i:f"{docs[i]['datos']['Escuela regular']} · Anexo {docs[i]['formato']} · {docs[i]['datos'].get('Periodo','')} · {docs[i]['estado']}",key=prefix+'_recover')
-                if st.button('Abrir documento',key=prefix+'_open'):_open(prefix,docs[i]);st.rerun()
+                if st.button('Abrir documento',key=prefix+'_open'):
+                    if st.session_state.get(prefix+'_pending'):
+                        if not conservar:raise RuntimeError('Confirma conservar la edición pendiente antes de abrir otra versión.')
+                        _resguardar_pendiente(prefix)
+                    _open(prefix,docs[i]);st.rerun()
                 with st.expander('Versiones anteriores (consulta y respaldo)'):
                     histories=[d for d in servicio.listar(True) if d['id']==docs[i]['id']]
                     for history in histories:
@@ -620,5 +675,26 @@ def planeacion_page():
                     with st.spinner('Reuniendo la información que ya registró el equipo…'):
                         doc=servicio.preparar_contexto(servicio.nueva(formato,ids,int(ciclo),trimestre,modalidad=modalidad,incluir_individuales=incluir))
                     _open(prefix,doc);_persist(prefix);st.rerun()
-                except (ValueError,PermissionError) as exc:st.warning(str(exc))
+                except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
         if prefix+'_doc' in st.session_state:_editor(prefix)
+
+
+def _pantalla_segura(funcion):
+    try:return funcion()
+    except Exception as exc:
+        logger.warning('planeacion_pantalla_error funcion=%s tipo=%s',funcion.__name__,type(exc).__name__)
+        st.warning('No se pudo completar esta consulta. No se borró información. Tu edición de sesión se conserva; vuelve a intentar.')
+        # Mantener acceso al respaldo incluso si falla el padrón o una vista.
+        if st.session_state.get('autenticado'):
+            base='planeacion_'+hashlib.sha256(str(st.session_state.get('usuario','')).encode()).hexdigest()[:12]
+            for key,value in list(st.session_state.items()):
+                if key.startswith(base) and key.endswith('_doc') and isinstance(value,dict):
+                    st.download_button('Respaldar mi edición pendiente',json.dumps(value,ensure_ascii=False),file_name='planeacion-respaldo.json',mime='application/json',key=key+'_emergencia')
+
+
+def planeacion_page():
+    return _pantalla_segura(_planeacion_page)
+
+
+def direccion_panel():
+    return _pantalla_segura(_direccion_panel)

@@ -163,7 +163,10 @@ def clear_cache(name=None):
     El parámetro name se conserva por compatibilidad
     con el repositorio.
     """
-    read_sheet.clear()
+    if name is None:
+        read_sheet.clear()
+    else:
+        read_sheet.clear(name)
 
 def worksheet(name): return retry_google(lambda: connections()[0].worksheet(name))
 

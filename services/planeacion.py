@@ -18,6 +18,7 @@ from services.planeacion_modelo import crear_plantilla, texto, FORMATOS
 from utils.text import normalizar_texto
 from utils.ids import expediente_id
 from data.google import df_sheet
+from services.planeacion_estabilidad import candado, intentos, reservar_escritura
 
 HOJA = 'Planeaciones_Versiones'
 HEADERS = ['Documento','Revision','Anterior','Fecha','Cuenta','Autor','Escuela_ID','Alumnos_JSON',
@@ -130,7 +131,8 @@ def versiones_actuales():
     # No invalida la lectura de Sheets por cada campo editado. Las escrituras
     # confirmadas se incorporan al caché del proceso y el libro se refresca por TTL.
     por_revision={d['revision']:d for d in _versiones()}
-    por_revision.update(_recientes())
+    with _control()[0]:
+        por_revision.update(dict(_recientes()))
     return sorted(por_revision.values(),key=lambda d:d.get('guardado_en',''))
 
 
@@ -200,6 +202,65 @@ def refrescar():
     identidad(); _versiones.clear()
 
 
+def refrescar_evidencias():
+    """Solo invalida fuentes documentales; no vacía ninguna hoja."""
+    from data.google import clear_cache
+    refrescar()
+    for nombre in ('Alumnos','Anexo3_Deteccion','Anexo4_Sugerencias','Anexo5_Eventos',
+                   'Registro_Visitas','Relaciones_Expediente','Linea_Tiempo','EPP_Versiones'):
+        clear_cache(nombre)
+
+
+def _firma_guardado(doc, estado, observaciones):
+    copia=deepcopy(doc)
+    for k in ('revision','anterior','guardado_en','_orden'):copia.pop(k,None)
+    return hashlib.sha256(json.dumps([copia,estado,observaciones],ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+
+
+def _confirmar(saved):
+    with _control()[0]:
+        _control()[1][saved['id']]=saved['revision']
+        _recientes()[saved['revision']]=deepcopy(saved)
+        if len(_recientes())>1000:
+            _versiones.clear()
+            _recientes().clear()
+
+
+def _resolver_intento(clave, firma):
+    pendiente=intentos().get(clave)
+    if not pendiente:return None
+    # Una respuesta perdida nunca autoriza otro append ciego. Primero leer
+    # servidor; una lectura fallida conserva el intento para la próxima vez.
+    versiones=reconstruir(retry_google(_hoja().get_all_values))
+    confirmado=next((v for v in versiones if v['revision']==pendiente['saved']['revision']),None)
+    if confirmado is None:
+        ultimo=next((v for v in reversed(versiones) if v['id']==clave[0]),None)
+        if (ultimo['revision'] if ultimo else '')!=pendiente['saved']['anterior']:
+            raise RuntimeError('El documento cambió mientras se verificaba el guardado. Conserva el respaldo y recupera la versión reciente.')
+        reservar_escritura()
+        _hoja().append_rows(pendiente['rows'],value_input_option='RAW')
+        confirmado=pendiente['saved']
+    _confirmar(confirmado)
+    del intentos()[clave]
+    if pendiente['firma']!=firma:
+        raise RuntimeError('Se confirmó el guardado anterior. Tus cambios nuevos siguen aquí; respáldalos y concílialos con la versión recuperada antes de guardar.')
+    return deepcopy(confirmado)
+
+
+def _conciliar_otros_intentos(documento,clave):
+    otros=[k for k in list(intentos()) if k[0]==documento and k!=clave]
+    if not otros:return
+    versiones=reconstruir(retry_google(_hoja().get_all_values))
+    for key in otros:
+        revision=intentos()[key]['saved']['revision']
+        confirmado=next((v for v in versiones if v['revision']==revision),None)
+        if confirmado is None:
+            from services.planeacion_estabilidad import GuardadoPendiente
+            raise GuardadoPendiente(60)
+        _confirmar(confirmado)
+        del intentos()[key]
+
+
 def guardar(doc, estado='BORRADOR', observaciones=None):
     actor=autorizar(doc,True)
     return _guardar_version(doc,actor,estado,observaciones)
@@ -217,12 +278,15 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         raise PermissionError('La revisión corresponde a Dirección.')
     if not aportacion and actor['cuenta']!=doc['cuenta'] and estado not in {'CON_OBSERVACIONES','VALIDADO'}:
         raise PermissionError('Dirección revisa sin reescribir el trabajo del autor.')
-    lock,heads=_control()
-    with lock:
+    clave=(doc['id'],actor['cuenta'],bool(aportacion))
+    firma=_firma_guardado(doc,estado,observaciones)
+    with candado(doc['id']):
+        _conciliar_otros_intentos(doc['id'],clave)
+        confirmado=_resolver_intento(clave,firma)
+        if confirmado is not None:return confirmado
         versiones=[v for v in versiones_actuales() if v['id']==doc['id']]
         latest=versiones[-1] if versiones else None
-        known=heads.get(doc['id'])
-        expected=known or (latest['revision'] if latest else '')
+        expected=latest['revision'] if latest else ''
         if expected!=doc.get('revision',''):
             raise RuntimeError('Otra sesión guardó cambios. Tu edición sigue aquí; guarda un respaldo y recupera la versión reciente.')
         if latest:
@@ -248,6 +312,8 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         saved['metadatos']['firma_aprobada_por']=actor['nombre'] if estado=='VALIDADO' else ''
         if actor['director']:
             saved['metadatos']['revisado_por']=actor['nombre']
+        if latest and _firma_guardado(saved,estado,None)==_firma_guardado(latest,estado,None):
+            return deepcopy(latest)
         revision=uuid4().hex
         fecha=datetime.now(ZoneInfo('America/Mexico_City')).isoformat(timespec='microseconds')
         saved.update({'revision':revision,'anterior':expected,'guardado_en':fecha})
@@ -259,12 +325,13 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         rows=[[saved['id'],revision,expected,fecha,saved['cuenta'],saved['datos']['Nombre del especialista'],
                saved['datos']['ID_Escuela'],json.dumps([a['ID_Alumno'] for a in saved['datos']['Alumnos']]),
                saved['formato'],estado,str(i),str(len(partes)),digest,p] for i,p in enumerate(partes)]
-        retry_google(lambda:_hoja().append_rows(rows,value_input_option='RAW'))
-        heads[doc['id']]=revision
-        _recientes()[revision]=deepcopy(saved)
-        if len(_recientes())>1000:
-            _versiones.clear()
-            _recientes().clear()
+        reservar_escritura()
+        intentos()[clave]={'firma':firma,'saved':deepcopy(saved),'rows':rows}
+        # No retry_google para append: los fallos ambiguos se reconcilian por
+        # revisión estable en _resolver_intento, sin crear otro UUID.
+        _hoja().append_rows(rows,value_input_option='RAW')
+        _confirmar(saved)
+        del intentos()[clave]
         return saved
 
 
