@@ -196,6 +196,15 @@ def _persist(prefix,estado='BORRADOR',automatic=False):
         return False
 
 
+def _guardar_edicion_pendiente(prefix):
+    """Una aportación conserva su guardado acotado, nunca el del autor del PI."""
+    if prefix+'_filas' in st.session_state:
+        from ui.planeacion_colaboracion import _guardar
+        _guardar(prefix)
+        return not st.session_state.get(prefix+'_pending',True)
+    return _persist(prefix)
+
+
 def _field(prefix,key,section,field):
     doc=deepcopy(st.session_state[prefix+'_doc'])
     doc[section][field]=st.session_state[key]
@@ -585,7 +594,7 @@ def _direccion_panel():
     st.download_button('PDF del documento',_pdf_sesion(prefix,doc),file_name='revision-'+doc['id']+'.pdf',mime='application/pdf',key=prefix+'_pdf_'+doc['revision'])
 
 
-def _planeacion_page():
+def _planeacion_page_clasica():
     actor=servicio.identidad();prefix=_prefix()
     from services.planeacion_modalidad import filtrar, modalidad as modalidad_alumno
     inicial=servicio.padron_autorizado()
@@ -693,7 +702,8 @@ def _pantalla_segura(funcion):
 
 
 def planeacion_page():
-    return _pantalla_segura(_planeacion_page)
+    from ui.planeacion_simple import pagina
+    return _pantalla_segura(pagina)
 
 
 def direccion_panel():

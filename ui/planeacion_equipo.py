@@ -55,7 +55,7 @@ def calendario(prefix,doc):
     st.caption('El calendario muestra lo que tú planeaste; no publica avisos ni modifica el cronograma mensual.')
 
 
-def panel(prefix,doc,persist,abrir):
+def panel(prefix,doc,persist,abrir,compact=False):
     if not equipo.aplica(doc):return
     if 'equipo' not in doc['metadatos']:
         st.info('Puedes incorporar la organización del equipo sin reemplazar lo que ya escribiste.')
@@ -82,7 +82,7 @@ def panel(prefix,doc,persist,abrir):
             try:abrir(prefix,equipo.guardar_subgrupo(st.session_state[prefix+'_doc'],nombre,ids));persist(prefix);st.rerun()
             except (ValueError,PermissionError) as exc:st.warning(str(exc))
         for g in e['subgrupos']:st.write(g['nombre']+': '+', '.join(labels[i] for i in g['alumnos'] if i in labels))
-    if area=='Psicología':
+    if area=='Psicología' and (not compact or st.toggle('Editar metas de las cinco competencias',key=base+'_editar_competencias')):
         with st.expander('2. Preparar las cinco competencias emocionales',expanded=True):
             st.caption('Describe necesidades documentadas y metas observables; estos campos no se rellenan a partir del diagnóstico ni del ejemplo de zona.')
             key=base+'_competencias';bk=key+'_base'
@@ -131,8 +131,10 @@ def panel(prefix,doc,persist,abrir):
             if edit.get('id') and st.checkbox('Quitar esta sesión del borrador actual',key=base+'_delete_confirm'):
                 if st.button('Quitar sesión',key=base+'_delete_session'):
                     abrir(prefix,equipo.quitar_sesion(st.session_state[prefix+'_doc'],edit['id']));persist(prefix);st.rerun()
-            calendario(prefix,st.session_state[prefix+'_doc'])
-    with st.expander('4. Planeación grupal horizontal de zona'):
+            if not compact or st.toggle('Ver calendario',key=base+'_ver_calendario'):
+                calendario(prefix,st.session_state[prefix+'_doc'])
+    if not compact or st.toggle('Editar complemento horizontal de zona',key=base+'_ver_horizontal'):
+      with st.expander('4. Planeación grupal horizontal de zona'):
         st.caption('Nombres y condiciones vienen del padrón. Registra la situación inicial con su fuente; deja la final pendiente hasta contar con resultados. Las fechas de derivación no se adivinan.')
         labels={a['ID_Alumno']:a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
         key=base+'_grupal';bk=key+'_base'

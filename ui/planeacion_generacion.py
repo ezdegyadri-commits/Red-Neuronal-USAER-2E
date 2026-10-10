@@ -24,18 +24,61 @@ def _resumen(prefix,key,persist):
     persist(prefix,automatic=True)
 
 
-def panel_generacion(prefix,persist,abrir):
+def _prioridades(prefix,key,campo,persist):
+    doc=deepcopy(st.session_state[prefix+'_doc'])
+    config=doc['metadatos'].setdefault('configuracion_generacion',g.configuracion(doc))
+    config[campo]=st.session_state[key]
+    # La orientación se guarda por separado; no sustituye redacción previa.
+    st.session_state[prefix+'_doc']=doc
+    persist(prefix,automatic=True)
+
+
+def _revision(prefix,compact):
+    if compact:
+        from ui.planeacion_simple import PASOS
+        st.session_state[prefix.rsplit('_',1)[0]+'_paso_pendiente']=PASOS[2]
+
+
+def panel_generacion(prefix,persist,abrir,compact=False):
     doc=st.session_state[prefix+'_doc']
     if doc['formato'] not in ('XXIII','XXV'):return
-    st.markdown('#### Generar mi planeación trimestral')
+    if not compact:st.markdown('#### Generar mi planeación trimestral')
     conexion=configuracion_modelo()
-    st.caption('Motor de IA: '+conexion['efectivo']+'. Solo se solicita al pulsar Generar; editar o ver el PDF no consume IA.')
+    if not compact:st.caption('Motor de IA: '+conexion['efectivo']+'. Solo se solicita al pulsar Generar; editar o ver el PDF no consume IA.')
     if conexion['migrado']:
         st.info('Se actualizó la configuración heredada '+conexion['solicitado']+' a '+conexion['efectivo']+'. Se conserva el proveedor y la clave; no se activó facturación.')
     st.caption('Configura las sesiones y ajustes. El sistema reúne la información documentada, propone actividades y completa el formato; después puedes editarlo. No redacta resultados futuros ni coloca firmas automáticamente.')
-    ajustes=doc['metadatos'].get('configuracion_generacion',g.configuracion(doc))
+    ajustes={**g.configuracion(doc),**doc['metadatos'].get('configuracion_generacion',{})}
     generation=st.session_state.get(prefix+'_generation',0);base=f'{prefix}_{generation}_generar'
-    with st.expander('Configurar sesiones y apoyos',expanded=not bool(doc['metadatos'].get('generacion_completa'))):
+    from datetime import date
+    inicio=date.fromisoformat(ajustes['inicio']);duracion=ajustes['duracion'];sesiones=ajustes['sesiones']
+    dias=ajustes['dias'];enfoque=ajustes.get('enfoque','');apoyos=ajustes.get('apoyos','')
+    grado=ajustes.get('grado_referencia');campo=ajustes.get('campo_referencia','Lenguajes')
+    if compact:
+        st.caption(f"{sesiones} sesiones · {duracion} min · {', '.join(dias)} · desde {inicio.isoformat()}")
+        st.caption(f"Referencia sugerida: {grado or 'por confirmar'}° · {campo}. No cambia el grado del padrón.")
+        key=base+'_enfoque'
+        enfoque=st.text_area('Barrera prioritaria (opcional)' if doc['datos']['Función']=='Trabajo Social' else '¿Qué quieres priorizar? (opcional)',value=enfoque,max_chars=1500,key=key,on_change=_ajuste,args=(prefix,key,'enfoque',persist))
+        if doc['datos']['Función']=='Psicología':
+            from services.planeacion_equipo import COMPETENCIAS
+            st.caption('Competencias a priorizar, según la evidencia (opcional):')
+            prioridades=[]
+            for i,competencia in enumerate(COMPETENCIAS):
+                key=base+'_competencia_'+str(i)
+                if st.checkbox(competencia,value=competencia in ajustes.get('competencias_priorizadas',[]),key=key):prioridades.append(competencia)
+            if prioridades!=ajustes.get('competencias_priorizadas',[]):
+                doc=deepcopy(st.session_state[prefix+'_doc'])
+                doc['metadatos'].setdefault('configuracion_generacion',g.configuracion(doc))['competencias_priorizadas']=prioridades
+                st.session_state[prefix+'_doc']=doc;persist(prefix,automatic=True)
+            ajustes={**ajustes,'competencias_priorizadas':prioridades}
+        if doc['datos']['Función']=='Trabajo Social':
+            key=base+'_contextos'
+            contextos=st.multiselect('¿Con quién trabajarás? (opcional)',['Familia','Escuela','Comunidad'],default=ajustes.get('contextos_priorizados',[]),key=key,on_change=_prioridades,args=(prefix,key,'contextos_priorizados',persist))
+            ajustes={**ajustes,'contextos_priorizados':contextos}
+        configurar=st.toggle('Cambiar sesiones, apoyos o referencia',key=base+'_cambiar')
+    else:configurar=True
+    if configurar:
+      with st.expander('Configurar sesiones y apoyos',expanded=True):
         izquierda,derecha=st.columns(2)
         desde,hasta=doc['datos']['Periodo'].split(' / ')
         from datetime import date
@@ -47,8 +90,9 @@ def panel_generacion(prefix,persist,abrir):
         sesiones=izquierda.number_input('Sesiones a organizar en el trimestre',min_value=1,max_value=36,value=int(ajustes['sesiones']),key=key,on_change=_ajuste,args=(prefix,key,'sesiones',persist))
         key=base+'_dias'
         dias=derecha.multiselect('Días para proponer las sesiones',list(g.DIAS),default=ajustes['dias'],key=key,on_change=_ajuste,args=(prefix,key,'dias',persist))
-        key=base+'_enfoque'
-        enfoque=st.text_area('Qué deseas priorizar (opcional)',value=ajustes.get('enfoque',''),placeholder='Ejemplo: comunicar necesidades en el aula, con apoyos visuales.',max_chars=1500,key=key,on_change=_ajuste,args=(prefix,key,'enfoque',persist))
+        if not compact:
+            key=base+'_enfoque'
+            enfoque=st.text_area('Qué deseas priorizar (opcional)',value=ajustes.get('enfoque',''),placeholder='Ejemplo: comunicar necesidades en el aula, con apoyos visuales.',max_chars=1500,key=key,on_change=_ajuste,args=(prefix,key,'enfoque',persist))
         key=base+'_apoyos'
         apoyos=st.text_area('Ajustes, recursos disponibles o apoyos que deseas conservar',value=ajustes.get('apoyos',''),max_chars=1500,key=key,on_change=_ajuste,args=(prefix,key,'apoyos',persist))
         grado_key=base+'_grado'
@@ -58,11 +102,17 @@ def panel_generacion(prefix,persist,abrir):
         st.caption('El sistema propone referentes exactos del catálogo por tema y grado elegido. Puedes cambiar a un grado anterior sin modificar el padrón. Los referentes sugeridos requieren revisión y siguen siendo editables.')
         st.caption('Las fechas evitan fines de semana, CTE y suspensiones del calendario cargado. Son propuestas: no reservan espacios ni sustituyen la revisión de tu horario o cronograma.')
     ajustes={**ajustes,'inicio':inicio.isoformat(),'duracion':duracion,'sesiones':sesiones,'dias':dias,'enfoque':enfoque,'apoyos':apoyos,'grado_referencia':grado,'campo_referencia':campo}
+    # Los servicios existentes ya admiten un enfoque educativo. Sin cambiar su
+    # contrato, presentar las prioridades opcionales como orientación, no hallazgos.
+    orientaciones=[]
+    if ajustes.get('competencias_priorizadas'):orientaciones.append('Competencias a priorizar si la evidencia lo permite: '+', '.join(ajustes['competencias_priorizadas']))
+    if ajustes.get('contextos_priorizados'):orientaciones.append('Contextos propuestos, por confirmar: '+', '.join(ajustes['contextos_priorizados']))
+    ajustes_solicitud={**ajustes,'enfoque':(enfoque+'\n'+'\n'.join(orientaciones)).strip()}
     solicitud=None
-    try:solicitud=g.preparar_solicitud(st.session_state[prefix+'_doc'],ajustes)
+    try:solicitud=g.preparar_solicitud(st.session_state[prefix+'_doc'],ajustes_solicitud)
     except (ValueError,PermissionError) as exc:st.info(str(exc))
     if solicitud:
-        with st.expander('Revisar la información que analizará la IA'):
+        with st.expander('Ver qué se envía' if compact else 'Revisar la información que analizará la IA'):
             st.caption('Este es el resumen educativo, no los archivos originales. Corrige nombres o datos que puedan identificar a alguien. Los referentes oficiales y ajustes revisados se envían por separado; nunca el padrón.')
             key=base+'_resumen'
             st.text_area('Resumen educativo que analizará la IA',value=solicitud['resumen'],height=180,max_chars=12000,key=key,on_change=_resumen,args=(prefix,key,persist))
@@ -71,13 +121,13 @@ def panel_generacion(prefix,persist,abrir):
     else:consentimiento=False
     previo=doc['metadatos'].get('generacion_completa',{})
     coincide=bool(solicitud and previo.get('huella')==solicitud['huella'] and previo.get('motor')==modelo_configurado())
-    etiqueta='Generar mi planeación trimestral con IA'
+    etiqueta='Preparar mi planeación' if compact else 'Generar mi planeación trimestral con IA'
     if coincide:st.caption('La generación para esta información ya está guardada. Puedes recuperar el resultado sin hacer otra solicitud de IA.')
     if st.button('Recuperar la generación guardada' if coincide else etiqueta,type='primary',disabled=not consentimiento or not solicitud,key=base+'_button',use_container_width=True):
         try:
             actual=deepcopy(st.session_state[prefix+'_doc'])
             actual['metadatos']['configuracion_generacion']=deepcopy(ajustes)
-            solicitud=g.preparar_solicitud(actual,ajustes)
+            solicitud=g.preparar_solicitud(actual,ajustes_solicitud)
             if coincide:respuesta=previo['resultado']
             else:
                 with st.spinner('Analizando la información documentada y preparando el formato…'):
@@ -91,7 +141,9 @@ def panel_generacion(prefix,persist,abrir):
                 if previo:
                     st.session_state[prefix+'_propuesta_pendiente']={'respuesta':respuesta,'solicitud':solicitud,'revision':actual.get('revision','')}
                     st.rerun()
-                else:abrir(prefix,generado);persist(prefix);st.rerun()
+                else:
+                    generado['metadatos']['configuracion_generacion']=deepcopy(ajustes)
+                    abrir(prefix,generado);persist(prefix);_revision(prefix,compact);st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.info(str(exc))
     pendiente=st.session_state.get(prefix+'_propuesta_pendiente')
     if pendiente:
@@ -106,7 +158,8 @@ def panel_generacion(prefix,persist,abrir):
                 if actual.get('revision','')!=pendiente['revision']:raise ValueError('Cambió el borrador. Revisa o genera una nueva propuesta antes de aplicar.')
                 generado=g.ensamblar(actual,pendiente['respuesta'],pendiente['solicitud'])
                 generado['metadatos']['generacion_completa']['motor']=modelo_configurado()
-                abrir(prefix,generado);persist(prefix)
+                generado['metadatos']['configuracion_generacion']=deepcopy(st.session_state[prefix+'_doc'].get('metadatos',{}).get('configuracion_generacion',{}))
+                abrir(prefix,generado);persist(prefix);_revision(prefix,compact)
                 st.session_state.pop(prefix+'_propuesta_pendiente',None);st.rerun()
             except (ValueError,PermissionError,RuntimeError) as exc:st.info(str(exc))
         if st.button('Conservar mi borrador sin aplicar la propuesta',key=base+'_cancel'):

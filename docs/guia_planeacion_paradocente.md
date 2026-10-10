@@ -1,45 +1,45 @@
 # Guía de planeación para el equipo paradocente
 
-Psicología, Comunicación y Trabajo Social trabajan en **Mi formato**, conservando sus documentos, escuelas y funciones respectivas.
+Mi formato: Psicología, Comunicación y Trabajo Social conservan sus escuelas, documentos y responsabilidades.
 
-## Crear una planeación individual o grupal
+## 1. ¿A quién planeo?
 
-1. Entra con tu cuenta y abre **Planeación**. Selecciona **individual** para un alumno o **grupal** para varios alumnos de una misma escuela.
-2. En **Mi trabajo → Crear documento**, elige una escuela asignada, alumnos, ciclo y trimestre.
-3. Verifica el documento: **Psicología y Comunicación: Planeación del Servicio de Apoyo de Educación Especial (XXIII)**; **Trabajo Social: Planeación del Área de Trabajo Social (XXV)**.
-4. Pulsa **Crear y guardar borrador**. Comprueba los datos precargados del alumno y la escuela. No modifiques su grado de inscripción para elegir contenidos de otro grado.
-5. Si necesitas incluir alumnos de atención individual en una sesión grupal, activa la opción correspondiente al crear el documento. La matrícula no cambia.
+1. Abre **Planeación → Mi planeación**. Para retomar un documento, pulsa **Continuar** en **Continuar donde me quedé**. **Por ajustar** indica observaciones de Dirección.
+2. Para empezar, elige escuela si tienes varias y después **Alumno o alumnos para planear**. La modalidad se infiere del padrón; para reunir alumnos individuales en una sesión grupal debes activar la opción avanzada. No modifica su atención registrada.
+3. El formato es automático: Psicología y Comunicación, **XXIII**; Trabajo Social, **XXV**. Ciclo y trimestre se proponen según la fecha; puedes ajustarlos en **Cambiar periodo u organizar una sesión grupal especial**.
+4. Pulsa **Crear mi borrador**. Se reutilizan los datos y evidencias vinculadas y se prepara **Subgrupo 1** con los destinatarios elegidos. Puedes reorganizarlo después. Los documentos anteriores no cambian de integrantes automáticamente.
 
-## Revisar evidencia y fundamentación
+## 2. Preparar con IA
 
-6. Abre **Expediente, documentos y referentes oficiales**, pulsa **Actualizar información del expediente** y comprueba que los registros correspondan a la selección.
-7. Revisa **Necesidades y apoyos que sustentan este formato**. Complementa hallazgos documentados, con su fuente; no deduzcas necesidades solamente desde una condición.
-8. Para incorporar evaluaciones o materiales, abre **Añadir documentos o imágenes a mi planeación → Transcribir archivos**. Corrige la lectura, selecciona los alumnos a quienes corresponde y pulsa **Incorporar texto revisado** después de confirmar pertinencia. Para material general deja vacía la selección individual.
-9. Carga formatos compatibles de Word, PDF, imágenes, texto, hojas de cálculo y presentaciones, hasta 32 MB por archivo. Puedes elegir páginas de PDF largos. Se vinculan a esta planeación, no automáticamente al expediente general.
-10. Selecciona los referentes pertinentes en **Campos, ejes y referentes oficiales** e incorpóralos al borrador. Conserva separados el contenido/PDA oficial y los ajustes docentes.
+5. Revisa la línea de sesiones, duración, días y fecha. Activa **Cambiar sesiones, apoyos o referencia** solamente si necesitas ajustar. Puedes elegir referentes de otro grado sin cambiar la inscripción.
+6. Psicología: indica tu prioridad y marca, opcionalmente, competencias a priorizar según la evidencia. Las casillas son orientaciones, no hallazgos ni resultados; no sustituyen los acuerdos de las cinco competencias.
+7. Comunicación: indica opcionalmente qué quieres priorizar en expresión, comprensión o comunicación accesible.
+8. Trabajo Social: indica opcionalmente la barrera prioritaria y con quién se trabajará: familia, escuela o comunidad. No generalices barreras a todas las familias.
+9. Abre **Ver qué se envía**, comprueba pertinencia y retira identificadores. Marca la revisión y pulsa **Preparar mi planeación**. Se proponen actividades, apoyos y sesiones con fundamento documental; el equipo revisa. Editar y visualizar PDF no consumen IA.
 
-## Preparar una propuesta y editar el documento
+## 3. Revisar y enviar
 
-11. Abre **Proponer el contenido de mi formato con IA**. Configura fechas, días, duración, cantidad, prioridades y apoyos disponibles.
-12. Revisa el resumen educativo sin identificadores, marca la revisión y pulsa **Generar mi planeación trimestral con IA**. También puedes escribir manualmente sin IA.
-13. Corrige directamente las celdas de necesidades, objetivos, barreras, actividades y apoyos. Puedes añadir o retirar filas manuales. No vuelvas a generar para una simple corrección.
-14. Mantén el enfoque de tu función: Psicología aborda competencias emocionales y participación educativa; Comunicación, expresión, comprensión y comunicación accesible; Trabajo Social, barreras y apoyos viables en escuela, aula, familia y comunidad. No generalices hallazgos de un alumno a los demás.
+10. Corrige directamente las tarjetas de tu formato. Puedes añadir filas manuales y retirarlas con confirmación. No necesitas volver a generar por cada corrección.
+11. En grupal, revisa **Actividades por alumno y área** y, para textos largos, **Editar texto completo por alumno**. Conserva la situación final pendiente hasta contar con resultados observados.
+12. Las actividades vinculadas a una sesión se editan en **Más herramientas → Organizar sesiones del equipo**. Selecciona una sesión, pulsa **Abrir sesión seleccionada**, corrige y guarda. Puedes ajustar subgrupos, fechas, objetivos, actividades, apoyos, recursos y seguimiento. El calendario solo se abre al activar **Ver calendario**; no modifica el cronograma ni publica avisos.
+13. Psicología: en esa herramienta puedes activar **Editar metas de las cinco competencias**. Los acuerdos mantienen cinco competencias, al menos cinco sesiones grupales calendarizadas, una sesión en aula regular y una sugerencia para familias mediante la hoja correspondiente. Una sugerencia prevista no demuestra que ya fue entregada. No traslades estos requisitos a Comunicación, Trabajo Social ni los propios del CAM a USAER.
+14. Completa evaluación u observaciones según tu documento, resuelve pendientes, pulsa **Guardar borrador** y comprueba el guardado. **Ver PDF** permite revisar y descargar; **Volver a editar** no borra nada. Pulsa **Enviar a Dirección** cuando esté listo.
+15. Una nueva generación requiere revisar antes de **Aplicar actualización conservando mis ediciones**. Puedes conservar el borrador sin aplicar la propuesta.
 
-## Organizar y calendarizar sesiones
+## Documentos y herramientas adicionales
 
-15. Abre **Organización, competencias y sesiones del equipo especialista → 1. Organizar mis subgrupos**. Escribe un nombre, selecciona integrantes y pulsa **Guardar subgrupo**. Para atención individual organiza un destinatario de un alumno; para grupal elige quienes trabajarán juntos.
-16. En **3. Calendarizar y editar sesiones**, indica fecha, subgrupo y contexto. Completa qué lograrán, inicio/desarrollo/cierre, apoyos, recursos y cómo reconocerás el avance. Pulsa **Guardar sesión en la planeación**.
-17. Para corregir una sesión existente, selecciónala en **Sesión para trabajar**, pulsa **Abrir sesión seleccionada**, modifica y guarda. Las actividades vinculadas se editan aquí, no en una copia de dosificación. El calendario de planeación no sustituye el cronograma ni publica avisos.
-18. En Psicología, revisa las cinco competencias: conciencia emocional, regulación emocional, autonomía emocional, competencia social y habilidades de vida y bienestar. Los acuerdos contemplan organización de subgrupos, al menos cinco sesiones grupales calendarizadas en el trimestre, actividades para las cinco competencias, una sesión en aula regular y una sugerencia para familias mediante la hoja correspondiente. Una sugerencia prevista no demuestra una entrega realizada.
-19. No traslades los requisitos específicos de Psicología a Comunicación o Trabajo Social ni los dirigidos al CAM a USAER.
+Activa **Más herramientas** y elige solo lo que necesitas:
 
-## Colaborar, guardar y entregar
+- **Materiales y escaneos**: carga un formato compatible, pulsa **Transcribir archivos**, corrige el texto, selecciona sus alumnos si es información individual, confirma y pulsa **Incorporar texto revisado**. Hasta 32 MB por archivo; PDF de hasta 1 000 páginas con selección de intervalo. Hasta diez páginas escaneadas por lectura y 100 000 caracteres de transcripción. El material alimenta esta planeación, no se agrega automáticamente al expediente general. No cualquier extensión es compatible.
+- **Referentes oficiales**: revisa contenidos, PDA, campo, ejes y adaptaciones; conserva separados el texto oficial y la redacción docente.
+- **Evidencias del expediente**: consulta o actualiza registros vinculados a los destinatarios; no uses datos de otros alumnos.
+- **Conexiones y seguimiento**: recupera EPP, PI y aportaciones, integra lo acordado y registra resultados reales con evidencia.
+- **Guía grupal XIX / XX**: complementos del documento, sin crear otra tabla principal. Las aptitudes requieren evidencia.
+- **Respaldo y versiones**: descarga un JSON editable y consulta la historia sin borrar registros. Conserva un respaldo antes de conciliar cambios pendientes. También puedes recuperar una copia propia desde el paso 1.
+- **Ideas adicionales con IA**: ayuda opcional para una actividad específica, distinta del botón principal.
 
-20. Para la planeación grupal, revisa la tabla horizontal y el texto completo por alumno. Registra situación inicial con evidencia; deja la final pendiente hasta contar con resultados reales. Las fechas de derivación no se adivinan.
-21. En **Trabajo colaborativo**, elige escuela y documento compartido para aportar desde tu área al PI o a la guía coordinada por la maestra de apoyo. Pulsa **Guardar mi aportación** y comprueba el guardado. La coordinación revisa e integra lo acordado.
-22. Completa la evaluación, observaciones o resultados según tu formato; no registres resultados futuros como logrados. En **Conexiones y seguimiento** puedes registrar resultados observados sustentados en evidencias.
-23. Pulsa **Guardar borrador** y confirma el guardado antes de salir. Abre **Ver la hoja y descargar PDF**, revisa y descarga. Resuelve pendientes y pulsa **Enviar a Dirección**.
-24. Para continuar otro día, elige la misma modalidad y entra a **Recuperar documentos → Abrir documento**. No dupliques el trabajo creando otro borrador.
-25. Para una nueva generación, revisa antes de **Aplicar actualización conservando mis ediciones**. Puedes conservar el borrador sin aplicar la propuesta. Si falla IA o una conexión, conserva el borrador y reporta el mensaje; no uses evidencias de otro alumno.
+## Trabajo colaborativo y seguridad del trabajo
 
-**Mi formato** y **Edición guiada** muestran el mismo documento. El autoguardado de cambios confirmados funciona cada 15 segundos mientras trabajas; verifica el guardado manual antes de cerrar. La IA propone, no firma, no valida y no emite diagnósticos clínicos.
+En **Trabajo colaborativo**, elige escuela y documento compartido y aporta desde tu área al PI o a la guía coordinada por la maestra de apoyo. Comprueba el guardado; la coordinación revisa e integra. Cada profesional conserva su alcance de edición.
+
+Los cambios confirmados se agrupan para reducir solicitudes; confirma **Guardado confirmado** antes de salir. **Guardar cambios y cerrar sesión** solo cierra si se guardó: ante un fallo mantiene abierta la sesión. Si falla IA, continúa manualmente. Si hay conflicto con otra versión, respalda antes de conciliar. La IA propone, no firma, no valida y no emite diagnósticos clínicos.
