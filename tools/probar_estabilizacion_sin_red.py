@@ -33,6 +33,7 @@ logging.disable(logging.WARNING)
 modulos=[
  'tests.test_planeacion_estabilidad','tests.test_planeacion_panel',
  'tests.test_planeacion_simple',
+ 'tests.test_coordinacion_distribuida',
  'tests.test_planeacion_modelo','tests.test_planeacion_contexto',
  'tests.test_planeacion_continuidad','tests.test_planeacion_equipo',
  'tests.test_planeacion_completa','tests.test_planeacion_formato',
