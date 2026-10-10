@@ -62,7 +62,7 @@ def panel(prefix,persist,abrir,texto,materiales,curriculo,ia,autosave,preview,fi
     if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
     with st.expander('Expediente, documentos y referentes oficiales'):
         if st.button('Actualizar información del expediente',key=prefix+'_formato_fuentes'):
-            try:s.refrescar();abrir(prefix,s.preparar_contexto(st.session_state[prefix+'_doc']));persist(prefix);st.rerun()
+            try:s.refrescar_evidencias();abrir(prefix,s.preparar_contexto(st.session_state[prefix+'_doc']));persist(prefix);st.rerun()
             except Exception:st.warning('No se confirmó la actualización. Tu borrador se conserva.')
         for fuente in doc['metadatos'].get('fuentes',[]):
             with st.expander(fuente['referencia']+' · '+fuente['tipo']+' · '+fuente.get('fecha','')):st.write(fuente['texto'])
@@ -126,6 +126,7 @@ def panel(prefix,persist,abrir,texto,materiales,curriculo,ia,autosave,preview,fi
     st.caption('Mismo formato de descarga, con referencias y complementos. No consulta IA.')
     with st.expander('Ver la hoja y descargar PDF'):
         try:
-            pdf=generar_pdf(actual);preview(prefix+'_formato_preview',pdf)
+            from ui.planeacion import _pdf_sesion
+            pdf=_pdf_sesion(prefix,actual);preview(prefix+'_formato_preview',pdf)
             st.download_button('Descargar PDF',pdf,file_name='planeacion-'+actual['id']+'.pdf',mime='application/pdf',key=prefix+'_formato_pdf')
         except Exception:st.warning('No se pudo preparar la vista. Tu borrador se conserva.')

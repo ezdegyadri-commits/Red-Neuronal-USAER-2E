@@ -29,7 +29,7 @@ class PanelTests(unittest.TestCase):
     def setUp(self):
         self.sheet=Sheet();self.heads={}
         import threading
-        self.patches=[patch.object(s,'identidad',return_value=ACTOR),patch.object(s,'padron_autorizado',return_value=pd.DataFrame([ALUMNO])),patch.object(s,'_hoja',return_value=self.sheet),patch.object(s,'_control',return_value=(threading.RLock(),self.heads)),patch.object(s,'retry_google',side_effect=lambda f:f())]
+        self.patches=[patch.object(s,'identidad',return_value=ACTOR),patch.object(s,'padron_autorizado',return_value=pd.DataFrame([ALUMNO])),patch.object(s,'_hoja',return_value=self.sheet),patch.object(s,'_control',return_value=(threading.RLock(),self.heads)),patch.object(s,'retry_google',side_effect=lambda f:f()),patch.object(s,'reservar_escritura')]
         for p in self.patches:p.start()
         s._versiones.clear()
         s._recientes().clear()
@@ -43,7 +43,7 @@ class PanelTests(unittest.TestCase):
         self.assertEqual(s.listar()[0]['revision'],b['revision'])
         self.assertEqual(self.sheet.options,['RAW','RAW'])
     def test_edicion_obsoleta_no_borra(self):
-        a=s.guardar(documento());s.guardar(a)
+        a=s.guardar(documento());b=deepcopy(a);b['textos']['Evaluación']='Cambio de otra sesión';s.guardar(b)
         with self.assertRaises(RuntimeError):s.guardar(a)
         self.assertEqual(len(s.listar(True)),2)
     def test_fragmentos_incompletos_no_se_muestran(self):

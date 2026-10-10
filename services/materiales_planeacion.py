@@ -44,6 +44,17 @@ def _ocr(image):
     return '\n'.join(' '.join(words) for words in lines.values()) if reliable>=2 else ''
 
 def leer_material(nombre,data,pagina_inicio=1,pagina_fin=None):
+    from services.planeacion_estabilidad import lecturas_materiales
+    cupo=lecturas_materiales()
+    if not cupo.acquire(blocking=False):
+        raise ValueError('Hay otras transcripciones en proceso. Conserva el archivo cargado y vuelve a pulsar Transcribir en un momento; tu planeación no cambia.')
+    try:
+        return _leer_material(nombre,data,pagina_inicio,pagina_fin)
+    finally:
+        cupo.release()
+
+
+def _leer_material(nombre,data,pagina_inicio=1,pagina_fin=None):
     if not data or len(data)>MAX_BYTES:raise ValueError('Usa archivos de hasta 32 MB.')
     if pagina_inicio<1 or (pagina_fin is not None and pagina_fin<pagina_inicio):raise ValueError('Revisa el intervalo de páginas.')
     extension=Path(nombre).suffix.lower().lstrip('.')
