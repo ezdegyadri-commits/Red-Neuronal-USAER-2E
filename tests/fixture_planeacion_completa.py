@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 from services import planeacion as s
 from ui import planeacion_generacion as generador
-from ui.planeacion import planeacion_page
+from ui.planeacion import _planeacion_page_clasica as planeacion_page
 from tests.test_planeacion_completa import resultado
 st.set_page_config(layout='wide')
 area=st.radio('Perfil ficticio',['Aprendizaje','Psicología','Comunicación','Trabajo Social','Dirección'])

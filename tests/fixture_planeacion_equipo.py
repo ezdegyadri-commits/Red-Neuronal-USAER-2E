@@ -3,7 +3,7 @@ from copy import deepcopy
 import streamlit as st
 import pandas as pd
 from services import planeacion as s
-from ui.planeacion import planeacion_page
+from ui.planeacion import _planeacion_page_clasica as planeacion_page
 st.set_page_config(layout='wide')
 area=st.selectbox('Perfil de demostración',['Psicología','Comunicación','Trabajo Social','Dirección'])
 actor={'cuenta':'demo-'+area,'nombre':'Autor de demostración','director':area=='Dirección','area':area,'rol':area,'perfil':{'area':area,'escuelas':['Escuela de demostración']}}

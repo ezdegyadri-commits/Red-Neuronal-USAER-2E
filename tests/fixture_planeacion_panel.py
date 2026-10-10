@@ -7,7 +7,7 @@ import pandas as pd
 from services import planeacion as s
 ALUMNO={'ID_Alumno':'A1','Nombre_Completo':'Alumno ficticio','ID_Escuela':'E1','Nombre_Escuela':'Escuela de prueba','CCT_Escuela':'TEST','Grado':'1','Grupo':'B','Tipo_Atencion':'Individual'}
 ACTOR={'cuenta':'prueba','nombre':'Autor ficticio','director':False,'area':'Aprendizaje','rol':'APOYO','perfil':None}
-from ui.planeacion import planeacion_page
+from ui.planeacion import _planeacion_page_clasica as planeacion_page
 st.set_page_config(layout='wide')
 rol_prueba=st.selectbox('Perfil ficticio',['Apoyo','Dirección','Trabajo Social'])
 if rol_prueba!='Apoyo':

@@ -1,43 +1,46 @@
 # Guía de planeación para maestras de apoyo
 
-## Empezar una planeación individual o grupal
+Mi formato: un recorrido sencillo que reutiliza lo que ya conoce el equipo.
 
-1. Entra con tu cuenta y abre **Planeación**.
-2. Elige **Planeación individual** para un alumno en atención individual o **Planeación grupal** para los alumnos que trabajarán juntos.
-3. En **Mi trabajo → Crear documento**, selecciona tu escuela y el documento **Planeación del Servicio de Apoyo de Educación Especial**. Es la planeación trimestral (anexo XXIII), no el Plan de Intervención.
-4. Selecciona al alumno o alumnos, ciclo y trimestre. Para incluir a un alumno de atención individual en una sesión grupal, activa **Incluir alumnos de atención individual en esta sesión grupal**. No cambia su padrón.
-5. Pulsa **Crear y guardar borrador**. Se abrirá **Mi formato** con datos precargados. Comprueba escuela, CCT, alumno, grado, grupo y condición. No inventes un dato faltante.
+## 1. ¿A quién planeo?
 
-## Revisar la información que alimenta el formato
+1. Entra a **Planeación → Mi planeación**.
+2. Si ya empezaste, busca **Continuar donde me quedé** y pulsa **Continuar**. El estado **Por ajustar** indica que Dirección dejó observaciones. No crees otro borrador del mismo trabajo.
+3. Para un documento nuevo, elige **Alumno o alumnos para planear**. La escuela solo se pregunta cuando tienes más de una asignada. La modalidad se toma del padrón; no cambia la atención registrada.
+4. Para un alumno de atención individual, elige **Planeación trimestral** (XXIII) o **Plan de intervención** (XXI). Los alumnos grupales trabajan en XXIII.
+5. El ciclo y trimestre se proponen según la fecha. Si necesitas otro periodo o una sesión grupal con alumnos individuales, abre **Cambiar periodo u organizar una sesión grupal especial** y ajusta explícitamente.
+6. Pulsa **Crear mi borrador**. Se reúnen los datos y registros vinculados a tus alumnos. Comprueba **Guardado confirmado**.
 
-6. Abre **Expediente, documentos y referentes oficiales** y pulsa **Actualizar información del expediente**. Revisa que las evidencias correspondan a los alumnos seleccionados.
-7. En **Necesidades y apoyos que sustentan este formato**, revisa o complementa lo observado e indica su origen. La condición del alumno por sí sola no determina las actividades.
-8. Para añadir documentos, dentro del primer apartado abre **Añadir documentos o imágenes a mi planeación**, carga el archivo y pulsa **Transcribir archivos**. Revisa y corrige el texto. Selecciona a qué alumno corresponde cuando sea información individual; deja vacío solamente para material general. Marca la revisión y pulsa **Incorporar texto revisado**.
-9. Se admiten Word, PDF, imágenes, texto, hojas de cálculo y presentaciones compatibles; no cualquier extensión. Máximo 32 MB por archivo. En PDF largos puedes elegir páginas. El material queda vinculado a esta planeación, no se incorpora automáticamente al expediente general.
-10. En **Campos, ejes y referentes oficiales**, elige campo, ejes y contenidos/PDA; revisa las adaptaciones y pulsa **Incorporar referentes al borrador**. Puedes usar contenidos de otro grado sin cambiar el grado de inscripción. El texto oficial y tu adaptación permanecen separados.
+## 2. Preparar con IA
 
-## Generar y editar sobre el formato
+7. Revisa la línea de sesiones, duración, días y fecha. Solo si necesitas ajustarla activa **Cambiar sesiones, apoyos o referencia**. Puedes usar contenidos de otro grado sin modificar el padrón.
+8. Escribe, opcionalmente, **¿Qué quieres priorizar?**. El expediente ya alimenta el resumen: no tienes que volver a capturar todo.
+9. Abre **Ver qué se envía**. Revisa su pertinencia y retira cualquier nombre, CURP, contacto u otro dato que identifique personas. Marca la casilla de revisión y pulsa **Preparar mi planeación**. La IA propone; tú decides. Editar y consultar el PDF no consumen IA.
+10. En el Plan de Intervención, las NEE y BAP se precargan solo si hay una conclusión vigente de EPP vinculada. Revisa el IEPP y confirma las NEE; el sistema no las valida por ti. Conserva su flujo de propuestas revisables.
 
-11. Abre **Proponer el contenido de mi formato con IA**. En **Configurar sesiones y apoyos**, indica fecha inicial, días, duración, cantidad de sesiones, prioridades y recursos disponibles.
-12. Abre **Revisar la información que analizará la IA**. Confirma su pertinencia y retira nombres, CURP, contactos u otros identificadores. Marca la casilla de revisión y pulsa **Generar mi planeación trimestral con IA**. Puedes trabajar manualmente sin IA.
-13. Revisa las necesidades, objetivos y descriptores que aparecen en el formato. Corrige directamente sus celdas amplias. Usa **Añadir fila** si hace falta otra y confirma el retiro antes de eliminar una fila. No necesitas generar de nuevo para corregir.
-14. En **Organización de las actividades de aprendizaje**, ajusta contexto, actividades, temporalidad y recursos. Describe acciones viables y cómo observarás el avance.
-15. En una planeación grupal, revisa la tabla horizontal **Planeación grupal · actividades por alumno y área**. Para leer o editar una celda larga, abre **Editar texto completo · [nombre del alumno]**. No atribuyas actividades a otras áreas sin acuerdo. Completa situación final solamente después, con resultados reales.
-16. Si una guía está vinculada y aparece bloqueada, las aportaciones se editan en **Trabajo colaborativo**, por área. En **Conexiones y seguimiento**, actualizar conexiones recupera la versión compartida. No crees otra guía para evitar el bloqueo.
-17. Completa **Evaluación** y **Observaciones**. Distingue cómo evaluarás de los resultados realmente observados.
+## 3. Revisar y enviar
 
-## Guardar, compartir y continuar otro día
+11. Revisa y corrige directamente las tarjetas del formato. Puedes **Añadir fila**; para retirar una fila manual debes confirmar. No necesitas repetir IA para corregir texto.
+12. En grupal, usa **Actividades por alumno y área**. Para textos largos abre **Editar texto completo por alumno**. No atribuyas hallazgos de un alumno a otro ni actividades no acordadas a otras áreas.
+13. Completa evaluación y observaciones. Los resultados finales se registran después del trabajo, no como predicciones.
+14. Pulsa **Guardar borrador** y comprueba el guardado. Los cambios confirmados se agrupan para reducir solicitudes; la revisión del autoguardado es periódica, no significa que todo se escriba inmediatamente. Guarda antes de salir.
+15. Pulsa **Ver PDF**, revisa y descarga. **Volver a editar** cierra la vista, no borra el documento. Resuelve los pendientes y pulsa **Enviar a Dirección**.
+16. Si solicitas otra generación, revisa antes de **Aplicar actualización conservando mis ediciones**. Puedes conservar el borrador sin aplicar la propuesta.
 
-18. Pulsa **Guardar borrador** y comprueba **Guardado confirmado** antes de salir. Confirma cada edición saliendo de la celda; el autoguardado funciona cada 15 segundos mientras trabajas, pero no sustituye la comprobación del guardado.
-19. Abre **Ver la hoja y descargar PDF**, revisa la vista previa y descarga el documento. Editar o visualizar el PDF no solicita IA.
-20. Revisa los pendientes y pulsa **Enviar a Dirección** cuando el formato esté listo.
-21. Para retomar, selecciona la misma modalidad y entra a **Recuperar documentos → Mis documentos guardados → Abrir documento**. No crees un documento nuevo del mismo trabajo.
-22. Si pides otra generación, revisa la propuesta antes de **Aplicar actualización conservando mis ediciones**. Puedes conservar el borrador sin aplicarla.
+## Más herramientas: solo cuando las necesitas
 
-## Opciones adicionales
+Activa **Más herramientas** y elige una opción:
 
-**Mi formato** y **Edición guiada** son dos vistas del mismo documento. Cambiar de vista no duplica la planeación. El editor anterior mantiene las herramientas adicionales, incluida la guía de aptitudes sobresalientes cuando corresponda.
+- **Materiales y escaneos**: carga un formato compatible (Word, PDF, imágenes, texto, hojas de cálculo o presentaciones); pulsa **Transcribir archivos**. Corrige la lectura, señala a qué alumnos corresponde si es información individual, confirma pertinencia y pulsa **Incorporar texto revisado**. Se vincula a esta planeación, no automáticamente al expediente general. Hasta 32 MB por archivo, PDF de hasta 1 000 páginas; puedes elegir un intervalo. Hasta diez páginas escaneadas por lectura y 100 000 caracteres de transcripción. No se admiten todas las extensiones.
+- **Referentes oficiales**: revisa campo, ejes, contenidos y PDA e incorpóralos al borrador. Las adaptaciones docentes y el texto oficial quedan separados.
+- **Evidencias del expediente**: revisa las fuentes o actualiza la información cuando cambió. Solo los registros con vínculo verificado se usan como evidencia del alumno.
+- **Conexiones y seguimiento**: conserva EPP → PI → trimestral; integra aportaciones del equipo y registra resultados reales con su fuente.
+- **Guía grupal XIX / XX**: completa el maestro regular y, cuando corresponda, aptitudes documentadas y enriquecimiento. No se asignan por IA.
+- **Respaldo y versiones**: descarga JSON editable, consulta versiones anteriores o recupera una copia propia. Para conciliar una edición pendiente, descarga primero su respaldo y confirma conservarla antes de abrir otra versión.
+- **Ideas adicionales con IA**: ayuda opcional para mejorar una actividad concreta, con su revisión de privacidad; no sustituye el generador principal.
 
-El **Plan de Intervención** (anexo XXI) es un documento distinto. La maestra de apoyo coordina su elaboración con la EPP/IEPP revisada y las aportaciones del equipo; no se sustituye con una planeación trimestral.
+Para recuperar un respaldo sin abrir un documento primero, usa **Recuperar un respaldo o consultar ayuda** en el paso 1. Las guías compartidas se editan por área en **Trabajo colaborativo**; actualiza conexiones para recuperar aportaciones, no crees una copia para evitar un bloqueo.
 
-Si aparece **Falta evidencia educativa del alumno**, actualiza las conexiones o incorpora una necesidad realmente documentada. Si ya existen registros y no aparecen, reporta el caso; no recaptures todo ni uses información de otro alumno. Ante una falla de IA, guarda tu borrador y continúa editando sin ella.
+## Si algo falla
+
+Si falta evidencia, actualiza conexiones o incorpora una necesidad realmente documentada con su origen. No inventes registros ni uses información de otro alumno. Si falla IA, sigue editando manualmente y guarda. Si no se confirma el guardado, descarga el respaldo y conserva la sesión. **Guardar cambios y cerrar sesión** solo cierra después de confirmar el guardado; una falla mantiene tu sesión abierta.
