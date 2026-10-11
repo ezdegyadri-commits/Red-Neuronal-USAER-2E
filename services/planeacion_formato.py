@@ -36,3 +36,32 @@ def editar_guia(doc,parche,base):
         if 0<=int(i)<len(rows):rows[int(i)].update({k:str(v or '') for k,v in campos.items() if k in permitidos})
     previo=result['metadatos'].get('guia_grupal_manual',{})
     result['metadatos']['guia_grupal_manual']={**previo,'filas':rows};return result
+
+
+# Tabla y columna donde una evidencia del expediente se vuelve punto de partida
+# del formato. Solo se copia la necesidad/barrera; objetivos y apoyos los redacta
+# la docente (no se infieren desde la evidencia).
+DESTINO_EVIDENCIA={'XXIII':('aprendizajes','Necesidades educativas específicas'),
+                   'XXV':('barreras','Barreras para el Aprendizaje y la Participación'),
+                   'XXI':('necesidades','NEE')}
+
+
+def usar_evidencia(doc,fuente,limite=300):
+    """Copia una evidencia ya registrada como nueva fila editable (capturar una vez)."""
+    tabla,campo=DESTINO_EVIDENCIA[doc['formato']]
+    texto=' '.join(str(fuente.get('texto','')).split())[:limite]
+    if not texto:raise ValueError('La evidencia no tiene texto para usar.')
+    valor='['+str(fuente.get('tipo','EVIDENCIA'))+' · '+str(fuente.get('referencia',''))+'] '+texto
+    if any(r.get(campo)==valor for r in doc['tablas'][tabla]):raise ValueError('Esta evidencia ya está en tu borrador.')
+    result=nueva_fila(doc,tabla);result['tablas'][tabla][-1][campo]=valor;return result
+
+
+def periodo_sugerido(hoy):
+    """Ciclo (año de inicio) y trimestre según el calendario escolar SEP.
+
+    Agosto–diciembre: trimestre 1 del ciclo que inicia ese año; enero–marzo: 2;
+    abril–julio: 3 (ambos del ciclo iniciado el año anterior).
+    """
+    if hoy.month>=8:return hoy.year,1
+    return hoy.year-1,(2 if hoy.month<=3 else 3)
+

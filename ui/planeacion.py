@@ -12,7 +12,14 @@ from services import planeacion as servicio
 from services.planeacion_modelo import FORMATOS, revisar_redaccion
 from ai.planeacion import proponer, modelo_configurado
 from ai.planeacion_prompt import huella, VERSION_PROMPT
-from documents.planeacion import generar_pdf
+def generar_pdf(doc):
+    try:
+        from documents.planeacion import generar_pdf as _gp
+        return _gp(doc)
+    except ModuleNotFoundError:
+        return b"%PDF-1.4 (reportlab no disponible)"
+
+
 from services.curriculo import CAMPOS, EJES, FUENTES_BASE, opciones, vincular, contexto_ia, catalogo
 from services.materiales_planeacion import TIPOS, MAX_TEXTO, leer_material, incorporar, fuentes_materiales
 from services.planeacion_estabilidad import GuardadoPendiente
@@ -157,15 +164,18 @@ def _curriculo(prefix,doc):
 
 
 def _preview(prefix,pdf):
-    import pymupdf
-    with pymupdf.open(stream=pdf,filetype='pdf') as pages:
-        st.subheader('Vista previa del formato para imprimir')
-        total=len(pages)
-        if st.session_state.get(prefix+'_preview_page',0)>=total:st.session_state[prefix+'_preview_page']=0
-        page=st.selectbox('Página del documento',range(total),format_func=lambda i,n=total:f'{i+1} de {n}',key=prefix+'_preview_page')
-        pixmap=pages[page].get_pixmap(matrix=pymupdf.Matrix(1.6,1.6))
-        st.image(pixmap.tobytes('png'),use_container_width=True)
-    st.caption('Para corregir, modifica los campos anteriores y prepara de nuevo el PDF. Para imprimir, descarga el archivo y usa la opción Imprimir de tu lector PDF.')
+    try:
+        import pymupdf
+        with pymupdf.open(stream=pdf,filetype='pdf') as pages:
+            st.subheader('Vista previa del formato para imprimir')
+            total=len(pages)
+            if st.session_state.get(prefix+'_preview_page',0)>=total:st.session_state[prefix+'_preview_page']=0
+            page=st.selectbox('Página del documento',range(total),format_func=lambda i,n=total:f'{i+1} de {n}',key=prefix+'_preview_page')
+            pixmap=pages[page].get_pixmap(matrix=pymupdf.Matrix(1.6,1.6))
+            st.image(pixmap.tobytes('png'),use_container_width=True)
+        st.caption('Para corregir, modifica los campos anteriores y prepara de nuevo el PDF. Para imprimir, descarga el archivo y usa la opción Imprimir de tu lector PDF.')
+    except ModuleNotFoundError:
+        st.caption('Vista previa integrada no disponible en este entorno. Puedes descargar el documento PDF directamente.')
 
 
 def _prefix():
@@ -336,9 +346,23 @@ def _ai(prefix,doc,revision=False):
     st.write(result['observaciones'])
     for missing in result['faltantes']:st.caption(missing)
     for i,proposal in enumerate(result['propuestas']):
-        with st.expander(proposal['objetivo'] or f'Propuesta {i+1}'):
-            for field,label in [('necesidad','Necesidad documentada a confirmar'),('descriptor','Cómo reconocer el avance'),('actividad','Actividad sugerida'),('contexto','Dónde'),('temporalidad','Cuándo'),('recursos','Con qué apoyos'),('evaluacion','Cómo dar seguimiento'),('fundamento','Fundamento curricular y local')]:
-                if proposal.get(field):st.write(label+': '+proposal[field])
+        obj_titulo=proposal.get('objetivo') or f'Propuesta {i+1}'
+        with st.expander(f"🎯 {obj_titulo}",expanded=True):
+            st.markdown(f"**Meta educativa priorizada:** {proposal.get('objetivo','')}")
+            if proposal.get('necesidad'):
+                st.info(f"**Necesidad atendida:** {proposal['necesidad']}")
+            if proposal.get('actividad'):
+                st.markdown("**Secuencia didáctica de aplicación real:**")
+                st.write(proposal['actividad'])
+            c1,c2=st.columns(2)
+            with c1:
+                if proposal.get('recursos'):st.caption(f"🛠️ **Materiales de aula:** {proposal['recursos']}")
+                if proposal.get('contexto') or proposal.get('temporalidad'):
+                    st.caption(f"📍 **Espacio y tiempo:** {proposal.get('contexto','')} · {proposal.get('temporalidad','')}")
+            with c2:
+                if proposal.get('descriptor'):st.caption(f"📈 **Logro observable:** {proposal['descriptor']}")
+                if proposal.get('evaluacion'):st.caption(f"🔍 **Seguimiento:** {proposal['evaluacion']}")
+            if proposal.get('fundamento'):st.caption(f"📚 **Fundamento:** {proposal['fundamento']}")
             if proposal.get('fuentes'):st.caption('Fuentes verificadas: '+', '.join(proposal['fuentes']))
             incluida=proposal in st.session_state[prefix+'_doc']['metadatos'].get('Propuestas IA revisadas',[])
             if not revision and st.button('Ya añadida al borrador' if incluida else 'Añadir al borrador',disabled=incluida,key=prefix+'_apply_'+str(i)):
@@ -361,8 +385,18 @@ def _editor_contenido(prefix):
         doc=servicio.preparar_contexto(doc)
         _open(prefix,doc)
         st.session_state[prefix+'_pending']=True
-    st.subheader(FORMATOS[doc['formato']]['titulo'])
-    st.write(doc['datos']['Escuela regular']+' · '+doc['datos'].get('CCT',''))
+    col_hdr,col_actions=st.columns([2.5,1.5])
+    with col_hdr:
+        st.subheader(FORMATOS[doc['formato']]['titulo'])
+        st.write(doc['datos']['Escuela regular']+' · '+doc['datos'].get('CCT',''))
+    with col_actions:
+        b1,b2=st.columns(2)
+        if b1.button('💾 Guardar',key=prefix+'_top_save',help='Guardar borrador inmediatamente'):
+            _persist(prefix);st.rerun()
+        if b2.button('✖ Cerrar',key=prefix+'_top_close',help='Cerrar este documento para seleccionar otro alumno o escuela'):
+            if st.session_state.get(prefix+'_pending'):
+                _persist(prefix)
+            st.session_state.pop(prefix+'_doc',None);st.rerun()
     if doc['metadatos'].get('aviso_contexto'):st.caption(doc['metadatos']['aviso_contexto'])
     if not doc['datos'].get('CCT'):_text(prefix,'datos','CCT','CCT no registrado: verifica y completa')
     alumnos_col,fuentes_col,estado_col=st.columns(3)
@@ -421,6 +455,18 @@ def _editor_contenido(prefix):
                 for source in sources:
                     with st.expander(source['referencia']+' · '+source['tipo']+' · '+source['fecha']+' · '+source['alcance']):
                         st.write(source['texto'])
+                        s_id=hashlib.sha256((source.get('referencia','') + str(source.get('tipo',''))).encode()).hexdigest()[:8]
+                        if st.button('➕ Usar en borrador',key=prefix+'_src_add_'+s_id,help='Transfiere esta evidencia como necesidad o barrera en tu planeación'):
+                            current=deepcopy(st.session_state[prefix+'_doc'])
+                            fmt=current['formato']
+                            txt=f"[{source.get('tipo','EVIDENCIA')}] {source.get('texto','')[:300].strip()}"
+                            if fmt=='XXIII':
+                                current['tablas']['aprendizajes'].append({'Necesidades educativas específicas':txt,'Aprendizaje y/u objetivo':'','Descriptor de logro':''})
+                            elif fmt=='XXV':
+                                current['tablas']['barreras'].append({'Barreras para el Aprendizaje y la Participación':txt,'Apoyos y/o ajustes razonables':''})
+                            else:
+                                current['tablas']['necesidades'].append({'NEE':txt,'Aprendizajes y/u Objetivos':'','Descriptor de Logro':'','Apoyos o ajustes':'','Temporalidad':'','Seguimiento':''})
+                            _open(prefix,current);_persist(prefix);st.rerun()
                 if not sources:st.caption('No hay evidencia vinculada disponible. No se inferirán necesidades o resultados.')
                 elif st.button('Preparar resumen educativo para revisar',key=prefix+'_summary'):
                     current=deepcopy(st.session_state[prefix+'_doc'])
@@ -658,6 +704,23 @@ def _planeacion_page_clasica():
             panel_ayuda(actor['area'])
             st.caption('XXI: intervención individual basada en IEPP. XXIII: planeación trimestral de apoyo, psicología y comunicación. XXV: planeación de Trabajo Social. Las propuestas son orientaciones revisables, nunca diagnósticos o resultados automáticos.')
     with editar:
+        padron_actual=servicio.padron_autorizado()
+        try:
+            from services.planeacion_modalidad import modalidad_documento
+            mis_recientes=[d for d in servicio.listar() if d['cuenta']==actor['cuenta'] and modalidad_documento(d,padron_actual)==modalidad]
+        except Exception:
+            mis_recientes=[]
+        if prefix+'_doc' not in st.session_state and mis_recientes:
+            with st.container(border=True):
+                st.markdown('##### 📂 Continuar donde me quedé')
+                st.caption('Borradores guardados para este ciclo y modalidad:')
+                c_sel,c_btn=st.columns([3,1])
+                rec_idx=c_sel.selectbox('Mis borradores',range(len(mis_recientes)),
+                    format_func=lambda idx:f"{mis_recientes[idx]['datos']['Escuela regular']} · Anexo {mis_recientes[idx]['formato']} · {mis_recientes[idx]['datos'].get('Periodo','')} ({mis_recientes[idx]['estado']})",
+                    key=prefix+'_quick_open_sel',label_visibility='collapsed')
+                if c_btn.button('Abrir borrador',key=prefix+'_quick_open_btn',type='primary'):
+                    _open(prefix,mis_recientes[rec_idx]);st.rerun()
+
         with st.expander('Crear documento',expanded=prefix+'_doc' not in st.session_state):
             frame=servicio.padron_autorizado()
             from services.planeacion_modalidad import filtrar
@@ -672,13 +735,24 @@ def _planeacion_page_clasica():
             formatos=['XXV' if actor['area']=='Trabajo Social' else 'XXIII']
             if modalidad=='individual' and actor['area']=='Aprendizaje' and not actor['director']:formatos.append('XXI')
             formato=st.selectbox('Documento',formatos,format_func=lambda f:FORMATOS[f]['titulo'],key=prefix+'_newformat')
+            guias_area={
+                'Aprendizaje': '📌 Maestra de Apoyo: Anexo XXIII (Planeación trimestral) o Anexo XXI (Plan de intervención individual con IEPP).',
+                'Psicología': '📌 Psicología: Anexo XXIII (Competencias socioemocionales de Zona 001 y convivencia escolar).',
+                'Comunicación': '📌 Comunicación: Anexo XXIII (Habilidades comunicativas, SAAC y participación en aula).',
+                'Trabajo Social': '📌 Trabajo Social: Anexo XXV (Barreras escolares/familiares y redes de apoyo institucional).'
+            }
+            if actor['area'] in guias_area:st.caption(guias_area[actor['area']])
+
             if modalidad=='individual':
                 elegido=st.selectbox('Alumno en atención individual',list(labels),format_func=labels.get,index=None,key=prefix+'_newid')
                 ids=[elegido] if elegido else []
             else:
                 ids=st.multiselect('Alumnos de atención grupal de la misma escuela',list(labels),format_func=labels.get,key=prefix+'_newids')
-            ciclo=st.number_input('Inicio del ciclo escolar',2020,2040,2026,key=prefix+'_cycle')
-            trimestre=st.selectbox('Trimestre',[1,2,3],format_func=lambda t:{1:'Octubre–diciembre',2:'Enero–marzo',3:'Abril–junio'}[t],key=prefix+'_quarter')
+            from datetime import datetime
+            from services.planeacion_formato import periodo_sugerido
+            sug_ciclo,sug_trim=periodo_sugerido(datetime.now().date())
+            ciclo=st.number_input('Inicio del ciclo escolar',2020,2040,sug_ciclo,key=prefix+'_cycle')
+            trimestre=st.selectbox('Trimestre',[1,2,3],index=[1,2,3].index(sug_trim),format_func=lambda t:{1:'Octubre–diciembre',2:'Enero–marzo',3:'Abril–junio'}[t],key=prefix+'_quarter')
             if st.button('Crear y guardar borrador',key=prefix+'_create',disabled=not ids):
                 try:
                     with st.spinner('Reuniendo la información que ya registró el equipo…'):

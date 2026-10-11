@@ -73,6 +73,29 @@ def panel(prefix,doc,persist,abrir,compact=False):
         st.caption({'Psicología':'Objetivos educativos de convivencia, participación y bienestar; no diagnósticos ni tratamientos clínicos.',
                     'Comunicación':'Expresión y comprensión, medios de comunicación accesibles y participación en aula, según la evidencia.',
                     'Trabajo Social':'Barreras compartidas y apoyos viables en aula, escuela, familia y comunidad; no atribuirlas a todas las familias.'}[area])
+    if area=='Psicología':
+        with st.expander('💡 Orientaciones de aplicación real · 5 Competencias (Zona 001)'):
+            st.markdown("""
+- **1. Conciencia emocional**: Identificar emociones básicas (alegría, enojo, tristeza, miedo) con el *termómetro de emociones*, tarjetas visuales de rostros o sensaciones corporales.
+- **2. Regulación emocional**: Espacio de autorregulación (*rincón de la calma*), técnica del semáforo, respiración 4x4 antes de reaccionar impulsivamente.
+- **3. Autonomía emocional**: Autoestima e iniciativa en actividades escolares; pedir ayuda de manera asertiva al docente o compañeros ante una dificultad.
+- **4. Competencia social**: Escucha activa en círculos de diálogo, respeto de turnos de habla y turnos en juegos de patio/recreo, resolución pacífica de desacuerdos.
+- **5. Habilidades de vida y bienestar**: Hábitos de orden con sus materiales, colaboración proactiva en equipo, disfrute de actividades escolares compartidas.
+""")
+    elif area=='Comunicación':
+        with st.expander('💡 Orientaciones de aplicación real · Comunicación y Lenguaje'):
+            st.markdown("""
+- **Intención comunicativa**: Uso funcional de tableros de comunicación con pictogramas ARASAAC, señalización de necesidades e intereses en el aula.
+- **Comprensión y consignas**: Apoyos visuales de anticipación paso a paso (primero / después), modelado directo con objetos concretos.
+- **Expresión y estructuración**: Expansión lingüística en interacciones naturales ("agua" ➔ "quiero agua"), turnos de conversación en grupo pequeño.
+""")
+    elif area=='Trabajo Social':
+        with st.expander('💡 Orientaciones de aplicación real · Trabajo Social (Anexo XXV)'):
+            st.markdown("""
+- **Barreras en contexto escolar/áulico**: Detección y reducción de barreras físicas, actitudinales o de organización escolar.
+- **Contexto sociofamiliar**: Acuerdos tangibles y realistas con la familia (rutinas estructuradas de sueño, horario fijo de tareas, asistencia regular sin ausentismo).
+- **Redes comunitarias e interinstitucionales**: Articulación con DIF, servicios de salud u organismos comunitarios pertinentes.
+""")
     with st.expander('1. Organizar mis subgrupos',expanded=not bool(e['subgrupos'])):
         labels={a['ID_Alumno']:a['Nombre del alumno']+' · '+str(a['Grado'])+' '+str(a['Grupo']) for a in doc['datos']['Alumnos']}
         nombre=st.text_input('Nombre del subgrupo',key=base+'_group_name',placeholder='Ejemplo: Subgrupo 1',max_chars=100)
@@ -94,7 +117,12 @@ def panel(prefix,doc,persist,abrir,compact=False):
         if not e['subgrupos']:st.info('Guarda primero un subgrupo para preparar sesiones.')
         else:
             byid={s['id']:s for s in e['sesiones']}
-            seleccionado=st.selectbox('Sesión para trabajar',['Nueva sesión']+list(byid),format_func=lambda i:i if i=='Nueva sesión' else byid[i]['fecha']+' · '+byid[i]['subgrupo'],key=base+'_selected_session')
+            def _al_cambiar_sesion():
+                sel=st.session_state.get(base+'_selected_session')
+                updated=deepcopy(st.session_state[prefix+'_doc'])
+                updated['metadatos']['equipo']['edicion_sesion']=deepcopy(byid[sel]) if sel and sel!='Nueva sesión' and sel in byid else {}
+                abrir(prefix,updated);persist(prefix,automatic=True)
+            seleccionado=st.selectbox('Sesión para trabajar',['Nueva sesión']+list(byid),format_func=lambda i:i if i=='Nueva sesión' else byid[i]['fecha']+' · '+byid[i]['subgrupo'],key=base+'_selected_session',on_change=_al_cambiar_sesion)
             if st.button('Abrir sesión seleccionada',key=base+'_open_session'):
                 updated=deepcopy(st.session_state[prefix+'_doc'])
                 updated['metadatos']['equipo']['edicion_sesion']=deepcopy(byid.get(seleccionado,{}))

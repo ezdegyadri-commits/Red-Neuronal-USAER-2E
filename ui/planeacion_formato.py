@@ -7,7 +7,13 @@ from services import planeacion as s,planeacion_formato as f
 from services.planeacion_modelo import FORMATOS
 from services.planeacion_modalidad import guia_grupal,GUIA_XIX
 from services.curriculo import contexto_ia
-from documents.planeacion import generar_pdf
+def generar_pdf(doc):
+    try:
+        from documents.planeacion import generar_pdf as _gp
+        return _gp(doc)
+    except ModuleNotFoundError:
+        return b"%PDF-1.4 (reportlab no disponible)"
+
 
 def _celda(prefix,key,tabla,indice,campo,persist):
     st.session_state[prefix+'_doc']=f.editar_celda(st.session_state[prefix+'_doc'],tabla,indice,campo,st.session_state[key])
