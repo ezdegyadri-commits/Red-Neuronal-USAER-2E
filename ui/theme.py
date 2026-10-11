@@ -1181,9 +1181,19 @@ div[data-testid="stAlert"]:has([data-testid="stAlertInfoIcon"]) {
   .stApp textarea,
   .stApp select,
   .stApp [data-baseweb="input"] input,
-  .stApp [data-baseweb="textarea"] textarea {
+  .stApp [data-baseweb="textarea"] textarea,
+  .stApp [data-baseweb="select"] *,
+  .stApp div[data-baseweb="select"] div {
     font-size: 16px !important;
     min-height: 44px !important;
+  }
+
+  /* Segmented control touch scroll on mobile */
+  [data-baseweb="segmented-control"] {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
   }
 
   /* Touch-friendly buttons (Apple HIG minimum 44px) */
@@ -1192,16 +1202,45 @@ div[data-testid="stAlert"]:has([data-testid="stAlertInfoIcon"]) {
   [data-testid="stFormSubmitButton"] button,
   div.stLinkButton > a {
     width: 100% !important;
-    min-height: 48px !important;
+    min-height: 46px !important;
     font-size: 0.95rem !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     text-align: center !important;
+    -webkit-tap-highlight-color: rgba(27, 73, 88, 0.15) !important;
+    touch-action: manipulation !important;
+  }
+
+  /* Compact native-feel bottom toolbar on mobile for sticky action bars */
+  [class*="_acciones"] {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 16px)) !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    box-shadow: 0 -4px 14px rgba(15, 34, 42, 0.08) !important;
+  }
+  [class*="_acciones"] [data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    gap: 0.4rem !important;
+    width: 100% !important;
+  }
+  [class*="_acciones"] [data-testid="stHorizontalBlock"] > div,
+  [class*="_acciones"] [data-testid="stElementContainer"] {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+  [class*="_acciones"] div.stButton > button {
+    min-height: 40px !important;
+    height: 40px !important;
+    font-size: 0.78rem !important;
+    padding: 0.35rem 0.3rem !important;
+    white-space: nowrap !important;
+    border-radius: 8px !important;
   }
 
   /* Dataframes & Tables responsive touch scroll */
-  [data-testid="stDataFrame"], .stTable {
+  [data-testid="stDataFrame"], .stTable, [data-testid="stDataEditor"] {
     max-width: 100% !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
