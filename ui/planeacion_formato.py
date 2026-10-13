@@ -40,8 +40,30 @@ def _tabla(prefix,tabla,persist,abrir):
             st.caption('Fila '+str(i+1));columnas=st.columns(min(3,len(headers)))
             for j,campo in enumerate(headers):
                 key=f'{prefix}_{gen}_formato_{tabla}_{i}_{campo}'
+                ayuda = None
+                if campo in ('Descriptor de logro', 'Descriptor de Logro'):
+                    ayuda = 'Manual SEGEY: Sujeto + verbo en presente + complemento observable (Ej: El alumno lee hasta 100 palabras con el Método Troncoso)'
+                elif campo in ('Necesidades educativas específicas', 'NEE'):
+                    ayuda = 'Manual SEGEY: Verbo + qué (Ej: Necesita fortalecer la atención sostenida)'
+                elif campo in ('Barreras para el Aprendizaje y la Participación', 'BAP'):
+                    ayuda = 'Manual SEGEY: Enunciadas sobre las barreras del entorno/contexto, no etiquetas del alumno'
+                elif campo == 'Temporalidad':
+                    ayuda = 'Ej: Primera semana de noviembre / Sesión semanal de 45 min / Quincenal'
+                elif campo == 'Recursos':
+                    ayuda = 'Ej: Material concreto, pictogramas, regletas, libros sensoriales, libretas'
+
                 with columnas[j%len(columnas)]:
-                    st.text_area(campo,value=str(row.get(campo,'') or ''),height=130,key=key,on_change=_celda,args=(prefix,key,tabla,i,campo,persist))
+                    st.text_area(campo,value=str(row.get(campo,'') or ''),height=130,key=key,help=ayuda,on_change=_celda,args=(prefix,key,tabla,i,campo,persist))
+                    if campo == 'Contextos' and FORMATOS.get(doc['formato'],{}).get('contextos'):
+                        opts = FORMATOS[doc['formato']]['contextos']
+                        curr_ctx = str(row.get(campo,'') or '').strip()
+                        c_idx = opts.index(curr_ctx) + 1 if curr_ctx in opts else 0
+                        c_sel = st.selectbox('Contexto normativo', ['(Escribir libre)'] + opts, index=c_idx, key=f'{key}_ctx_sel')
+                        if c_sel != '(Escribir libre)' and c_sel != curr_ctx:
+                            st.session_state[prefix+'_doc'] = f.editar_celda(st.session_state[prefix+'_doc'], tabla, i, campo, c_sel)
+                            st.session_state.pop(prefix+'_pdf', None)
+                            persist(prefix, automatic=True)
+                            st.rerun()
             confirmar=st.checkbox('Confirmar retiro de esta fila',key=f'{prefix}_{gen}_{tabla}_{i}_retirar_confirm')
             if st.button('Retirar fila '+str(i+1),key=f'{prefix}_{gen}_{tabla}_{i}_retirar',disabled=not confirmar):
                 abrir(prefix,f.quitar_fila(st.session_state[prefix+'_doc'],tabla,i));persist(prefix);st.rerun()

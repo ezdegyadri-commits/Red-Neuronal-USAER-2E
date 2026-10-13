@@ -250,14 +250,89 @@ def _editor(prefix,actor,paso):
                 if st.toggle('Buscar y adaptar referentes curriculares (PDA)', key=prefix+'_toggle_curriculo'):
                     u._curriculo(prefix,doc)
         elif actor['area']=='Psicología':
-            with st.expander('🧠 2. Competencias socioemocionales (Zona 001)', expanded=True):
-                st.caption('Trabaja sobre las 5 competencias formativas: Autoconciencia, Autorregulación, Conciencia social, Relaciones interpersonales y Toma de decisiones responsables.')
+            with st.expander('🧠 2. Competencias socioemocionales y conducta (Manual SEGEY · Zona 001)', expanded=True):
+                st.caption('Enfoca tu intervención en las 5 competencias formativas y estrategias conductuales de la Tabla 8 del Manual.')
+                cols_psic = st.columns(2)
+                with cols_psic[0]:
+                    st.markdown('**Competencias formativas prioritarias:**')
+                    c_sel = st.multiselect('Competencias a favorecer', [
+                        'Autoconciencia (identificación de emociones y autoconcepto)',
+                        'Autorregulación (tolerancia a frustración y manejo de impulsos)',
+                        'Conciencia social (empatía y normas de convivencia)',
+                        'Relaciones interpersonales (escucha activa y trabajo en equipo)',
+                        'Toma de decisiones responsables (solución pacífica de conflictos)'
+                    ], key=prefix+'_psic_comp')
+                with cols_psic[1]:
+                    st.markdown('**Estrategias conductuales sugeridas (Tabla 8):**')
+                    e_sel = st.multiselect('Estrategias de aula', [
+                        'Economía de fichas / reforzamiento positivo',
+                        'Semáforo de control del tiempo de trabajo',
+                        'Pausas activas y espacios breves de esparcimiento',
+                        'Estructuración visual de rutinas y normas en aula',
+                        'Técnicas de relajación y respiración'
+                    ], key=prefix+'_psic_est')
+                if (c_sel or e_sel) and st.button('➕ Aplicar al enfoque de mi planeación', key=prefix+'_psic_aplicar'):
+                    texto_adic = []
+                    if c_sel: texto_adic.append('Competencias socioemocionales prioritarias:\n• ' + '\n• '.join(c_sel))
+                    if e_sel: texto_adic.append('Estrategias conductuales:\n• ' + '\n• '.join(e_sel))
+                    previo = doc['metadatos'].get('necesidades_confirmadas', '')
+                    doc['metadatos']['necesidades_confirmadas'] = (previo + '\n\n' + '\n\n'.join(texto_adic)).strip()
+                    u._open(prefix, doc); u._persist(prefix); st.success('¡Enfoque socioemocional integrado!'); st.rerun()
         elif actor['area']=='Comunicación':
-            with st.expander('🗣️ 2. Canal comunicativo y participación', expanded=True):
-                st.caption('Prioriza canales de comunicación: SAAC, oral, apoyos pictográficos o lectoescritura adaptada, vinculados al aula regular.')
+            with st.expander('🗣️ 2. Canal comunicativo y participación (Manual SEGEY p. 13-14, 23)', expanded=True):
+                st.caption('Prioriza canales de comunicación y estrategias para el aula regular según las características del alumno.')
+                cols_com = st.columns(2)
+                with cols_com[0]:
+                    st.markdown('**Canal comunicativo prioritario:**')
+                    canal_sel = st.selectbox('Canal comunicativo principal', [
+                        'Selecciona un canal...',
+                        'Lenguaje oral (estimulación fonoarticulatoria y morfosintaxis)',
+                        'Lengua de Señas Mexicana (LSM) / Enfoque bilingüe-bicultural',
+                        'SAAC (Sistemas Aumentativos y Alternativos / Tableros con pictogramas)',
+                        'Lectoescritura funcional y adaptada',
+                        'Comunicación pre-simbólica / Claves visuales y gestuales'
+                    ], key=prefix+'_com_canal')
+                with cols_com[1]:
+                    st.markdown('**Contextos y estrategias prioritarias:**')
+                    ambito_sel = st.multiselect('Contextos y estrategias', [
+                        'Aula de apoyo: estimulación fonoarticulatoria y desarrollo de habla',
+                        'Aula regular: modelado y pausas comunicativas con pares',
+                        'Familia: fomento de situaciones de elección y diálogo en casa',
+                        'Uso de apoyos visuales y material concreto en clase'
+                    ], key=prefix+'_com_ambito')
+                if canal_sel != 'Selecciona un canal...' and st.button('➕ Aplicar al enfoque de mi planeación', key=prefix+'_com_aplicar'):
+                    texto_com = [f'Canal comunicativo: {canal_sel}']
+                    if ambito_sel: texto_com.append('Estrategias en contextos:\n• ' + '\n• '.join(ambito_sel))
+                    previo = doc['metadatos'].get('necesidades_confirmadas', '')
+                    doc['metadatos']['necesidades_confirmadas'] = (previo + '\n\n' + '\n\n'.join(texto_com)).strip()
+                    u._open(prefix, doc); u._persist(prefix); st.success('¡Enfoque de comunicación integrado!'); st.rerun()
         elif actor['area']=='Trabajo Social':
-            with st.expander('🤝 2. Barreras de contexto y corresponsabilidad', expanded=True):
-                st.caption('Identifica BAP en los contextos familiar, escolar y comunitario, y consolida compromisos de apoyo.')
+            with st.expander('🤝 2. Barreras de contexto y corresponsabilidad (Manual SEGEY Formato XXV)', expanded=True):
+                st.caption('Identifica BAP en los contextos familiar, escolar y comunitario, y consolida redes de apoyo.')
+                cols_ts = st.columns(2)
+                with cols_ts[0]:
+                    st.markdown('**BAP de contexto a intervenir:**')
+                    bap_ts = st.multiselect('BAP identificadas', [
+                        'Contexto Familiar: falta de involucramiento o sobreprotección',
+                        'Contexto Familiar: condiciones socioeconómicas o de salud vulnerables',
+                        'Contexto Escolar: barreras actitudinales o de organización escolar',
+                        'Contexto Comunitario: falta de servicios o transporte accesible'
+                    ], key=prefix+'_ts_bap')
+                with cols_ts[1]:
+                    st.markdown('**Acciones y redes de apoyo:**')
+                    redes_ts = st.multiselect('Acciones de Trabajo Social', [
+                        'Visitas domiciliarias de seguimiento (Anexo XXX)',
+                        'Vinculación interinstitucional (DIF, salud, becas IBECEY - Anexo XXIX)',
+                        'Talleres de orientación familiar y habilidades de autocuidado',
+                        'Acuerdos de corresponsabilidad con padres de familia'
+                    ], key=prefix+'_ts_redes')
+                if (bap_ts or redes_ts) and st.button('➕ Aplicar al enfoque de mi planeación', key=prefix+'_ts_aplicar'):
+                    texto_ts = []
+                    if bap_ts: texto_ts.append('BAP de contexto:\n• ' + '\n• '.join(bap_ts))
+                    if redes_ts: texto_ts.append('Acciones y redes de corresponsabilidad:\n• ' + '\n• '.join(redes_ts))
+                    previo = doc['metadatos'].get('necesidades_confirmadas', '')
+                    doc['metadatos']['necesidades_confirmadas'] = (previo + '\n\n' + '\n\n'.join(texto_ts)).strip()
+                    u._open(prefix, doc); u._persist(prefix); st.success('¡Enfoque de trabajo social integrado!'); st.rerun()
         with st.expander('✨ 3. Propuesta pedagógica con IA', expanded=True):
             if doc['formato']=='XXI':
                 st.caption('Las NEE y BAP se precargan únicamente de una conclusión vigente de EPP. No se validan automáticamente.')

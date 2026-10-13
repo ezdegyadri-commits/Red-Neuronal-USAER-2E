@@ -11,6 +11,47 @@ from documents.epp import generar_pdf
 from ai.epp import generar
 from services.epp_entrada import precargar, huella_instrumentos, entrada_directa
 
+CATALOGO_INSTRUMENTOS_SEGEY = {
+    'Psicología': [
+        'Escala Wechsler de Inteligencia para Niños (WISC-IV)',
+        'Evaluación Neuropsicológica Infantil (ENI)',
+        'Test de Matrices Progresivas Raven (Escala Coloreada)',
+        'Test de Matrices Progresivas Raven (Escala General)',
+        'Prueba Visomotora Bender',
+        'Test de la Figura Compleja (Rey)',
+        'Test de Desarrollo de la Percepción Visual (Frostig)',
+        'Dibujo de la Figura Humana (DFH)',
+        'Test CREA (Inteligencia Creativa - para Aptitudes Sobresalientes)',
+        'Baterías de Socialización (BAS 1, 2 y 3)',
+        'Evaluación de la Conducta Adaptativa (ABAS-II)',
+        'Escala de Maduración Social de Vineland',
+        'Escala Vanderbilt / Conners (para indicadores de TDAH)'
+    ],
+    'Comunicación': [
+        'Evaluación cualitativa del lenguaje (Flores)',
+        'Evaluación de la articulación de sonidos del habla (Laiz)',
+        'Evaluación de la comunicación y el lenguaje (SEGEY, 2014)',
+        'Matriz de Comunicación / Mapa comunicativo (Bove & Perkins)',
+        'Inventario de dificultades auditivas en el hogar (CHILD)',
+        'Test SIFTER de detección de riesgo educativo'
+    ],
+    'Trabajo Social': [
+        'Estudio Social (Anexo XII)',
+        'Cuestionario de Identificación de BAP Sociofamiliar (Anexo XI)',
+        'Entrevista a Padres de Familia (Anexo Xa)',
+        'Constancia de Visita Domiciliaria (Anexo XXX)',
+        'Constancia de Visita Institucional (Anexo XXIX)'
+    ],
+    'Aprendizaje': [
+        'Evaluación de competencia curricular por grado escolar',
+        'Estilo de Aprendizaje y Motivación para Aprender (Anexo XIV)',
+        'Estilo de Enseñanza del docente regular (Anexo XIII)',
+        'Entrevista al Alumno (Anexo X)',
+        'Inventario de Habilidades Básicas (Macotela & Romay)',
+        'Evaluación de lectura y matemáticas funcionales'
+    ]
+}
+
 def _save(prefix):
     try:
         doc=st.session_state[prefix+'_doc'];area=st.session_state[prefix+'_area']
@@ -143,9 +184,28 @@ def epp_page():
             value=st.session_state[edit+'_value']
             st.caption('Los cambios de texto se guardan al salir del campo. Si falla la conexión, se muestra un aviso; conserva un respaldo antes de cerrar.')
             if area!='Conclusión':
-                _text(edit,'instrumentos');_text(edit,'fecha_aplicacion')
+                _text(edit,'instrumentos')
+                cat_area = CATALOGO_INSTRUMENTOS_SEGEY.get(area, [])
+                if cat_area:
+                    with st.expander('📋 Catálogo de instrumentos normativos (Manual SEGEY · Tabla 14)'):
+                        st.caption('Selecciona instrumentos oficiales de '+area+' para agregarlos a tu lista:')
+                        elegidos = st.multiselect('Instrumentos oficiales de '+area, cat_area, key=edit+'_cat_inst_sel')
+                        if elegidos and st.button('➕ Agregar a mis instrumentos aplicados', key=edit+'_cat_inst_btn'):
+                            previo = str(value.get('instrumentos', '') or '').strip()
+                            nuevos = [i for i in elegidos if i not in previo]
+                            if nuevos:
+                                nuevo_txt = (previo + '\n• ' + '\n• '.join(nuevos)).strip() if previo else '• ' + '\n• '.join(nuevos)
+                                value['instrumentos'] = nuevo_txt
+                                value['validada'] = False
+                                _save(edit)
+                                st.rerun()
+                _text(edit,'fecha_aplicacion')
                 with st.expander('Aplicar o registrar un instrumento aquí'):
-                    st.caption('Entrada directa de observaciones y resultados. El catálogo de instrumentos se incorporará después; aquí no se calculan puntuaciones ni diagnósticos.')
+                    st.caption('Entrada directa de observaciones y resultados documentados según el manual.')
+                    if cat_area:
+                        sug_dir = st.selectbox('Sugerencia de catálogo normativo', ['(Escribir o mantener personalizado)'] + cat_area, key=edit+'_sug_dir_inst')
+                        if sug_dir != '(Escribir o mantener personalizado)' and not value.get('aplicacion_en_curso',{}).get('Instrumento o técnica aplicada'):
+                            value.setdefault('aplicacion_en_curso',{})['Instrumento o técnica aplicada'] = sug_dir
                     direct_fields=['Instrumento o técnica aplicada','Fecha de aplicación (AAAA-MM-DD)',
                         'Cómo se aplicó y apoyos utilizados','Resultados y observaciones documentadas',
                         'Limitaciones y aspectos por confirmar']
@@ -233,9 +293,13 @@ def epp_page():
                     if area not in areas:continue
                     with st.expander(title,expanded=title.startswith('5.')):
                         st.caption('Describe lo observado, fortalezas y apoyos que necesita. Si no se evaluó un aspecto, no inventes un resultado; registra por qué en la síntesis de tu área.')
+                        if area == 'Comunicación' and '4. Conducta adaptativa' in title:
+                            st.info('📌 Orientación Manual SEGEY (p. 145):\n• Con lenguaje oral: describe Fonológico, Morfosintáctico, Semántico y Pragmático.\n• Sin lenguaje oral: describe Intención comunicativa, SAAC y Comprensión expresiva/receptiva.')
+                        elif area == 'Psicología' and '3. Funcionamiento intelectual' in title:
+                            st.caption('💡 Nota Manual SEGEY: Creatividad aplica específicamente para alumnos evaluados por Aptitudes Sobresalientes (AS).')
                         for f in areas[area]:_text(edit,f,'campos')
             if area=='Conclusión':
-                st.caption('NEE: Necesita + verbo + qué. BAP: barreras del contexto, no etiquetas del alumno. Completa apoyos, responsables y períodos acordados.')
+                st.caption('Manual SEGEY (p. 150-151): NEE = [Necesita + verbo observable + qué]. BAP = [Barreras del entorno en contextos Áulico, Escolar, Familiar y Social; no etiquetas del alumno].')
                 _grid(edit,'nee',NEE);_grid(edit,'bap',BAP)
             else:_text(edit,'sintesis',height=150)
             for p in value.get('pendientes_ia',[]):st.caption('Por confirmar: '+p)
