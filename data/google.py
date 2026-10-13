@@ -5,6 +5,7 @@ import pandas as pd
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+from data.coordinacion import coordinador
 from config.settings import (
     HOJA_RESPUESTAS_PERSONAL,
     URL_SPREADSHEET_MAESTRO,
@@ -18,6 +19,14 @@ def _secret_dict(name):
         except json.JSONDecodeError: return json.loads(value.replace('\\"','"').strip())
     return dict(value)
 
+
+class CuotasCompartidasHTTPClient(gspread.HTTPClient):
+    """Presupuesto atómico compartido; sin cambiar el contrato de gspread."""
+    def request(self,method,endpoint,*args,**kwargs):
+        compartido=coordinador()
+        if compartido:compartido.reservar('lectura' if str(method).lower()=='get' else 'escritura')
+        return super().request(method,endpoint,*args,**kwargs)
+
 @st.cache_resource(show_spinner=False)
 def connections():
     """Conexión esencial para Google Sheets.
@@ -25,7 +34,7 @@ def connections():
     No solicita ni refresca Drive: un token de Drive vencido no puede impedir
     el inicio de sesión ni la lectura de la base central.
     """
-    gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'))
+    gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'),http_client=CuotasCompartidasHTTPClient)
     sheet = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
     return sheet, None
 
@@ -33,13 +42,13 @@ def connections():
 @st.cache_resource(show_spinner=False)
 def service_account_client():
     """Devuelve el cliente autenticado de Sheets para abrir libros distintos al central."""
-    return gspread.service_account_from_dict(_secret_dict('credenciales_json'))
+    return gspread.service_account_from_dict(_secret_dict('credenciales_json'),http_client=CuotasCompartidasHTTPClient)
 
 
 @st.cache_resource(show_spinner=False)
 def personal_responses_connection():
     """Abre en solo lectura la hoja vinculada al formulario de personal."""
-    gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'))
+    gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'),http_client=CuotasCompartidasHTTPClient)
     return gc.open_by_url(URL_SPREADSHEET_RESPUESTAS_PERSONAL)
 
 

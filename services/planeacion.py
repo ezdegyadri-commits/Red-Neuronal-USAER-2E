@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import threading
+import sys
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -133,6 +134,11 @@ def versiones_actuales():
     por_revision={d['revision']:d for d in _versiones()}
     with _control()[0]:
         por_revision.update(dict(_recientes()))
+    from data.coordinacion import coordinador
+    if coordinador() is not None:
+        # El orden físico del ledger es canónico; los relojes de hosts distintos
+        # pueden diferir. No elegir una versión antigua por su fecha aparente.
+        return sorted(por_revision.values(),key=lambda d:d.get('_orden',-1))
     return sorted(por_revision.values(),key=lambda d:d.get('guardado_en',''))
 
 
@@ -218,15 +224,21 @@ def _firma_guardado(doc, estado, observaciones):
 
 
 def _confirmar(saved):
+    from data.coordinacion import coordinador
+    sin_orden=coordinador() is not None and '_orden' not in saved
     with _control()[0]:
         _control()[1][saved['id']]=saved['revision']
-        _recientes()[saved['revision']]=deepcopy(saved)
+        if sin_orden:
+            # El append confirmado no informa aquí del índice canónico. Recuperar
+            # por la caché normal de versiones, sin inventar un índice por reloj.
+            _versiones.clear()
+        else:_recientes()[saved['revision']]=deepcopy(saved)
         if len(_recientes())>1000:
             _versiones.clear()
             _recientes().clear()
 
 
-def _resolver_intento(clave, firma):
+def _resolver_intento(clave, firma, permiso=None):
     pendiente=intentos().get(clave)
     if not pendiente:return None
     # Una respuesta perdida nunca autoriza otro append ciego. Primero leer
@@ -238,7 +250,8 @@ def _resolver_intento(clave, firma):
         if (ultimo['revision'] if ultimo else '')!=pendiente['saved']['anterior']:
             raise RuntimeError('El documento cambió mientras se verificaba el guardado. Conserva el respaldo y recupera la versión reciente.')
         reservar_escritura()
-        _hoja().append_rows(pendiente['rows'],value_input_option='RAW')
+        from services.planeacion_distribuida import append_confirmable
+        append_confirmable(sys.modules[__name__],pendiente['rows'],permiso,firma)
         confirmado=pendiente['saved']
     _confirmar(confirmado)
     del intentos()[clave]
@@ -278,13 +291,22 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         raise PermissionError('La revisión corresponde a Dirección.')
     if not aportacion and actor['cuenta']!=doc['cuenta'] and estado not in {'CON_OBSERVACIONES','VALIDADO'}:
         raise PermissionError('Dirección revisa sin reescribir el trabajo del autor.')
+    from data.coordinacion import coordinador
+    compartido=coordinador()
+    if compartido:
+        from services.planeacion_distribuida import ejecutar
+        return ejecutar(sys.modules[__name__],compartido,doc,actor,estado,observaciones,aportacion)
+    return _guardar_version_local(doc,actor,estado,observaciones,aportacion)
+
+
+def _guardar_version_local(doc,actor,estado='BORRADOR',observaciones=None,aportacion=False,versiones_servidor=None,permiso=None):
     clave=(doc['id'],actor['cuenta'],bool(aportacion))
     firma=_firma_guardado(doc,estado,observaciones)
     with candado(doc['id']):
         _conciliar_otros_intentos(doc['id'],clave)
-        confirmado=_resolver_intento(clave,firma)
+        confirmado=_resolver_intento(clave,firma,permiso)
         if confirmado is not None:return confirmado
-        versiones=[v for v in versiones_actuales() if v['id']==doc['id']]
+        versiones=[v for v in (versiones_actuales() if versiones_servidor is None else versiones_servidor) if v['id']==doc['id']]
         latest=versiones[-1] if versiones else None
         expected=latest['revision'] if latest else ''
         if expected!=doc.get('revision',''):
@@ -329,7 +351,8 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         intentos()[clave]={'firma':firma,'saved':deepcopy(saved),'rows':rows}
         # No retry_google para append: los fallos ambiguos se reconcilian por
         # revisión estable en _resolver_intento, sin crear otro UUID.
-        _hoja().append_rows(rows,value_input_option='RAW')
+        from services.planeacion_distribuida import append_confirmable
+        append_confirmable(sys.modules[__name__],rows,permiso,firma)
         _confirmar(saved)
         del intentos()[clave]
         return saved
