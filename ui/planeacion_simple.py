@@ -22,7 +22,7 @@ def seleccion(frame,ids,incluir=False):
     rows=frame.loc[frame['ID_Alumno'].astype(str).isin(ids)].to_dict('records')
     if len(rows)!=len(set(ids)):raise ValueError('Revisa los alumnos de tu matrícula.')
     tipos={modalidad(r) for r in rows}
-    if not tipos or 'por confirmar' in tipos:raise ValueError('Confirma la modalidad de atención en el padrón antes de continuar.')
+    if not tipos or 'por confirmar' in tipos:raise ValueError('Para continuar, este alumno requiere tener asignada su modalidad de atención (individual o grupal) en el padrón.')
     if tipos=={'individual'} and len(ids)==1 and not incluir:return 'individual'
     if 'individual' in tipos and not incluir:raise ValueError('Para reunir alumnos individuales, activa la opción avanzada de sesión grupal.')
     return 'grupal'
@@ -73,9 +73,10 @@ def _entrada(base,actor):
     escuelas=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
     indice=st.selectbox('Escuela asignada',range(len(escuelas)),format_func=lambda i:escuelas[i]['Nombre_Escuela'],key=base+'_escuela') if len(escuelas)>1 else 0
     escolar=frame.loc[frame['ID_Escuela'].astype(str)==str(escuelas[indice]['ID_Escuela'])]
-    etiquetas={str(r['ID_Alumno']):str(r['Nombre_Completo'])+' · '+str(r.get('Grado',''))+' '+str(r.get('Grupo','')) for r in escolar.to_dict('records') if modalidad(r)!='por confirmar'}
+    etiquetas={str(r['ID_Alumno']):str(r['Nombre_Completo'])+' · '+str(r.get('Grado',''))+' '+str(r.get('Grupo','')) for r in escolar.to_dict('records')}
     ids=st.multiselect('Alumno o alumnos para planear',list(etiquetas),format_func=etiquetas.get,key=base+'_alumnos_'+str(escuelas[indice]['ID_Escuela']))
-    if len(etiquetas)<len(escolar):st.caption('Hay alumnos con atención por confirmar. No se asignan automáticamente a una modalidad.')
+    pendientes_mod=[r for r in escolar.to_dict('records') if modalidad(r)=='por confirmar']
+    if pendientes_mod:st.caption(f'Nota: {len(pendientes_mod)} alumno(s) tienen pendiente registrar su modalidad de atención en el padrón.')
     ciclo,trimestre=periodo_actual();incluir=False
     with st.expander('Cambiar periodo u organizar una sesión grupal especial'):
         ciclo=st.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_ciclo')
@@ -117,9 +118,15 @@ def _herramientas(prefix,actor):
         if st.button('Actualizar información del expediente',key=prefix+'_simple_fuentes'):
             try:s.refrescar_evidencias();u._open(prefix,s.preparar_contexto(doc));u._persist(prefix);st.rerun()
             except Exception:st.warning('No se confirmó la actualización. Tu edición se conserva.')
-        for fuente in doc['metadatos'].get('fuentes',[]):
+        for i, fuente in enumerate(doc['metadatos'].get('fuentes',[])):
             with st.expander(fuente['referencia']+' · '+fuente['tipo']):
                 st.write(fuente['texto']);st.caption('Ya se considera si su vínculo con estos alumnos está verificado.')
+                if st.button('➕ Usar en mi planeación', key=f'{prefix}_tool_usar_{i}'):
+                    try:
+                        from services.planeacion_formato import usar_evidencia
+                        actualizado=usar_evidencia(st.session_state[prefix+'_doc'],fuente)
+                        u._open(prefix,actualizado);u._persist(prefix);st.success('¡Agregado a tu borrador!');st.rerun()
+                    except Exception as exc:st.info(str(exc))
     elif herramienta=='Conexiones y seguimiento':
         from ui.planeacion_continuidad import panel
         panel(prefix,u._open,u._persist)
@@ -214,18 +221,58 @@ def _editor(prefix,actor,paso):
     if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
     if paso==PASOS[1]:
         st.subheader(PASOS[1]);st.caption('El expediente alimenta el borrador. La IA propone; tú decides y puedes editar todo.')
-        if doc['metadatos'].get('fuentes_pendientes'):st.warning('Parte del expediente aún no pudo leerse. Comprueba las fuentes antes de solicitar propuestas.')
-        if doc['formato']=='XXI':
-            st.caption('Las NEE y BAP se precargan únicamente de una conclusión vigente de EPP. No se validan automáticamente.')
-            u._text(prefix,'metadatos','fuente_iepp','Referencia del IEPP: fecha, folio o ubicación del informe')
-            key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_simple_iepp'
-            st.checkbox('Las NEE fueron confirmadas en el IEPP.',value=bool(doc['metadatos'].get('NEE confirmadas desde IEPP')),key=key,on_change=u._field,args=(prefix,key,'metadatos','NEE confirmadas desde IEPP'))
-            u._ai(prefix,doc)
-        else:
-            from ui.planeacion_generacion import panel_generacion
-            panel_generacion(prefix,u._persist,u._open,compact=True)
+        fuentes=doc['metadatos'].get('fuentes',[])
+        with st.expander('📋 1. Antecedentes automáticos (Anexos III, IV, V y visitas)', expanded=True):
+            st.caption('Revisa lo ya documentado por el equipo. Si un antecedente te sirve, pulsa "+ Usar en borrador" para transferirlo sin copiar y pegar.')
+            if doc['metadatos'].get('fuentes_pendientes'):st.warning('Parte del expediente aún no pudo leerse. Comprueba las fuentes antes de solicitar propuestas.')
+            if fuentes:
+                for i, fuente in enumerate(fuentes):
+                    with st.container(border=True):
+                        c_txt,c_btn=st.columns([3.5,1.5])
+                        with c_txt:
+                            st.markdown(f"**{fuente.get('referencia',fuente.get('tipo','Registro'))}** · *{fuente.get('fecha','')}*")
+                            st.write(fuente.get('texto',''))
+                        with c_btn:
+                            if st.button('➕ Usar en borrador', key=f'{prefix}_step2_usar_{i}'):
+                                try:
+                                    from services.planeacion_formato import usar_evidencia
+                                    actualizado=usar_evidencia(st.session_state[prefix+'_doc'],fuente)
+                                    u._open(prefix,actualizado);u._persist(prefix);st.success('¡Agregado a tu borrador!');st.rerun()
+                                except Exception as exc:st.info(str(exc))
+            else:
+                st.info('No hay antecedentes previos registrados en el expediente para este alumno o grupo.')
+            if st.button('🔄 Actualizar antecedentes del expediente', key=prefix+'_step2_refresh_fuentes'):
+                try:s.refrescar_evidencias();u._open(prefix,s.preparar_contexto(doc));u._persist(prefix);st.rerun()
+                except Exception:st.warning('No se confirmó la actualización. Tu edición se conserva.')
+        if actor['area']=='Aprendizaje':
+            with st.expander('📚 2. Referentes oficiales y PDA (Plan y Programas)', expanded=True):
+                st.caption('Selecciona el campo formativo y busca el PDA para contextualizar tus metas.')
+                if st.toggle('Buscar y adaptar referentes curriculares (PDA)', key=prefix+'_toggle_curriculo'):
+                    u._curriculo(prefix,doc)
+        elif actor['area']=='Psicología':
+            with st.expander('🧠 2. Competencias socioemocionales (Zona 001)', expanded=True):
+                st.caption('Trabaja sobre las 5 competencias formativas: Autoconciencia, Autorregulación, Conciencia social, Relaciones interpersonales y Toma de decisiones responsables.')
+        elif actor['area']=='Comunicación':
+            with st.expander('🗣️ 2. Canal comunicativo y participación', expanded=True):
+                st.caption('Prioriza canales de comunicación: SAAC, oral, apoyos pictográficos o lectoescritura adaptada, vinculados al aula regular.')
+        elif actor['area']=='Trabajo Social':
+            with st.expander('🤝 2. Barreras de contexto y corresponsabilidad', expanded=True):
+                st.caption('Identifica BAP en los contextos familiar, escolar y comunitario, y consolida compromisos de apoyo.')
+        with st.expander('✨ 3. Propuesta pedagógica con IA', expanded=True):
+            if doc['formato']=='XXI':
+                st.caption('Las NEE y BAP se precargan únicamente de una conclusión vigente de EPP. No se validan automáticamente.')
+                u._text(prefix,'metadatos','fuente_iepp','Referencia del IEPP: fecha, folio o ubicación del informe')
+                key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_simple_iepp'
+                st.checkbox('Las NEE fueron confirmadas en el IEPP.',value=bool(doc['metadatos'].get('NEE confirmadas desde IEPP')),key=key,on_change=u._field,args=(prefix,key,'metadatos','NEE confirmadas desde IEPP'))
+                u._ai(prefix,doc)
+            else:
+                from ui.planeacion_generacion import panel_generacion
+                panel_generacion(prefix,u._persist,u._open,compact=True)
         with st.expander('Añadir una necesidad documentada si hace falta evidencia'):
             u._text(prefix,'metadatos','necesidades_confirmadas','Necesidades y apoyos documentados (incluye la referencia de origen)')
+        st.markdown('---')
+        if st.button('Continuar a mi formato para revisar y entregar ➡️', type='primary', key=prefix+'_ir_paso3', use_container_width=True):
+            st.session_state[prefix.rsplit('_',1)[0]+'_paso']=PASOS[2];st.rerun()
     else:
         st.subheader(PASOS[2]);st.caption('Edita directamente en tu formato. Los resultados finales se registran después de trabajar con el alumno.')
         with st.expander('Datos generales del formato'):
@@ -265,6 +312,7 @@ def _editor(prefix,actor,paso):
         if st.button('Ver PDF',key=prefix+'_simple_pdf'):
             st.session_state[prefix+'_mostrar_pdf']=True;st.rerun()
         if st.button('Enviar a Dirección',key=prefix+'_simple_send',disabled=bool(faltas)):u._persist(prefix,'ENVIADO');st.rerun()
+        st.download_button('Descargar respaldo editable',json.dumps(actual,ensure_ascii=False,indent=2),file_name='planeacion-'+actual['id']+'.json',mime='application/json',key=prefix+'_bar_backup')
     if st.session_state.get(prefix+'_mostrar_pdf'):
         if st.button('Volver a editar',key=prefix+'_simple_hidepdf'):
             st.session_state[prefix+'_mostrar_pdf']=False;st.rerun()

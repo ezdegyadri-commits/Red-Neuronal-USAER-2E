@@ -56,7 +56,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     grado=ajustes.get('grado_referencia');campo=ajustes.get('campo_referencia','Lenguajes')
     if compact:
         st.caption(f"{sesiones} sesiones · {duracion} min · {', '.join(dias)} · desde {inicio.isoformat()}")
-        st.caption(f"Referencia sugerida: {grado or 'por confirmar'}° · {campo}. No cambia el grado del padrón.")
+        st.caption(f"Referencia sugerida: {grado}° · {campo}." if grado else f"Referencia sugerida del grupo · {campo}.")
         key=base+'_enfoque'
         enfoque=st.text_area('Barrera prioritaria (opcional)' if doc['datos']['Función']=='Trabajo Social' else '¿Qué quieres priorizar? (opcional)',value=enfoque,max_chars=1500,key=key,on_change=_ajuste,args=(prefix,key,'enfoque',persist))
         if doc['datos']['Función']=='Psicología':
@@ -106,7 +106,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     # contrato, presentar las prioridades opcionales como orientación, no hallazgos.
     orientaciones=[]
     if ajustes.get('competencias_priorizadas'):orientaciones.append('Competencias a priorizar si la evidencia lo permite: '+', '.join(ajustes['competencias_priorizadas']))
-    if ajustes.get('contextos_priorizados'):orientaciones.append('Contextos propuestos, por confirmar: '+', '.join(ajustes['contextos_priorizados']))
+    if ajustes.get('contextos_priorizados'):orientaciones.append('Contextos priorizados: '+', '.join(ajustes['contextos_priorizados']))
     ajustes_solicitud={**ajustes,'enfoque':(enfoque+'\n'+'\n'.join(orientaciones)).strip()}
     solicitud=None
     try:solicitud=g.preparar_solicitud(st.session_state[prefix+'_doc'],ajustes_solicitud)
@@ -168,4 +168,4 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     if diagnostico:st.caption('Diagnóstico de IA: '+str(diagnostico.get('codigo') or diagnostico.get('tipo'))+' · Modelo: '+str(diagnostico.get('motor',''))+' · Tu borrador se conserva.')
     if previo:
         st.success('Formato preparado como borrador editable. Revisa actividades, destinatarios, apoyos y fechas antes de compartir con Dirección.')
-        for pregunta in previo.get('pendientes',[]):st.caption('Por confirmar: '+pregunta)
+        for pregunta in previo.get('pendientes',[]):st.caption('Aspecto a considerar: '+pregunta)

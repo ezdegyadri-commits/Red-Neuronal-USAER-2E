@@ -147,7 +147,7 @@ def panel(prefix,doc,persist,abrir,compact=False):
             for campo,label,ayuda in [('objetivo','Qué queremos lograr','El alumno identifica… / Los alumnos expresan…'),
                  ('actividad','Cómo lo trabajaremos','Inicio, desarrollo y cierre, con acciones concretas.'),
                  ('apoyos','Apoyos y ajustes','Cómo facilitarás el acceso y la participación.'),
-                 ('recursos','Materiales y recursos','Solo materiales disponibles o por confirmar.'),
+                 ('recursos','Materiales y recursos','Materiales y recursos del aula o escuela.'),
                  ('seguimiento','Cómo reconoceremos el avance','Qué observarás, qué registrarás y cuándo lo revisarás.')]:
                 key=base+'_session_'+campo
                 campos[campo]=st.text_area(label,value=edit.get(campo,''),placeholder=ayuda,key=key,max_chars=4000,on_change=_campo,args=(prefix,key,campo,persist))

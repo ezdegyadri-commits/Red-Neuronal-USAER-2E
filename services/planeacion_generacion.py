@@ -79,7 +79,7 @@ def prellenar(doc):
     if meta.get('firma_fuentes_generacion')!=firma_fuentes:
         meta.pop('resumen_ia_completo',None)
         meta['firma_fuentes_generacion']=firma_fuentes
-    necesidades='\n\n'.join(f"{f.get('referencia','')} · {f.get('fecha','')} · Registro documentado por confirmar:\n{f['texto'][:1800]}" for f in fuentes if f['tipo']!='MATERIAL' or f.get('alumno'))[:10000]
+    necesidades='\n\n'.join(f"{f.get('referencia','')} · {f.get('fecha','')} · Antecedente de apoyo registrado:\n{f['texto'][:1800]}" for f in fuentes if f['tipo']!='MATERIAL' or f.get('alumno'))[:10000]
     valores={'necesidades_confirmadas':necesidades,'referente_curricular':texto_curricular(doc)}
     for campo,value in valores.items():
         if value and (not meta.get(campo) or meta.get(campo)==anteriores.get(campo)):

@@ -6,6 +6,7 @@ import hashlib
 import pandas as pd
 from services import planeacion as s
 from services.planeacion_modelo import crear_plantilla
+from documents.planeacion import generar_pdf
 
 
 ALUMNO={'ID_Alumno':'A1','Nombre_Completo':'Alumno ficticio','ID_Escuela':'E1','Nombre_Escuela':'Escuela de prueba','CCT_Escuela':'TEST','Grado':'1','Grupo':'B'}

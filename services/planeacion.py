@@ -554,7 +554,7 @@ def resumen_previo(doc,fuentes):
     for alumno in doc['datos']['Alumnos']:
         grado=re.match(r'^\s*([1-6])(?:\D|$)',str(alumno.get('Grado','')))
         if grado:grados.add(int(grado[1]))
-    contexto='Alumnos seleccionados: '+str(len(doc['datos']['Alumnos']))+'. Grados registrados: '+(', '.join(str(g)+'°' for g in sorted(grados)) or 'por confirmar')+'.'
+    contexto='Alumnos seleccionados: '+str(len(doc['datos']['Alumnos']))+'. Grados registrados: '+(', '.join(str(g)+'°' for g in sorted(grados)) or 'de la escuela')+'.'
     value=(contexto+'\n\n'+'\n\n'.join(partes))[:12000]
     tokens=[doc['datos'].get('Nombre del especialista',''),doc['datos'].get('Escuela regular',''),doc['datos'].get('CCT',''),doc['datos'].get('ID_Escuela','')]
     for alumno in doc['datos']['Alumnos']:
