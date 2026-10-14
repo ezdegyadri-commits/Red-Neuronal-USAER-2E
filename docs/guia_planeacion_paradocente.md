@@ -1,5 +1,11 @@
 # Guía de planeación para el equipo paradocente
 
+## Edición sobre el formato de referencia
+
+Elige **Individual**, **Grupal** o **Por grado** y abre la hoja. Psicología y Comunicación mantienen XXIII; Trabajo Social mantiene XXV. Escribe en sus celdas; puedes borrar contenidos, agregar filas o retirar las manuales con confirmación. **Conectar antecedentes, PDA y DUA** reúne las fuentes y apoyos pertinentes y **Proponer actividades con IA** conserva la revisión previa del resumen sin identificadores. Las sesiones y aportaciones vinculadas se editan en su origen.
+
+La pausa de escritura transmite cambios al autoguardado existente. Confirma **Guardar cambios de la hoja** antes de salir. **Alumnos y otras opciones → Detalle y sesiones** conserva los acuerdos específicos de tu función; retirar destinatarios mediante copia adaptada no elimina alumnos del padrón.
+
 ## Formato vivo · nuevo recorrido
 
 1. En **Mi formato**, elige escuela, modalidad y destinatarios. Pulsa **Abrir formato con mis alumnos**. Los datos y antecedentes se reúnen sin solicitar IA; puedes abrir cualquier planeación propia guardada.

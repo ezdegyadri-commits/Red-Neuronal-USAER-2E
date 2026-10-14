@@ -37,12 +37,15 @@ def _entrada(base,actor):
     schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
     indice=st.selectbox('Escuela',range(len(schools)),format_func=lambda i:schools[i]['Nombre_Escuela'],key=base+'_viva_escuela') if len(schools)>1 else 0
     school=schools[indice];st.caption(school['Nombre_Escuela'])
-    modo=st.segmented_control('Modalidad de planeación',['Grupal','Individual'],default='Grupal',key=base+'_viva_modalidad') or 'Grupal'
-    tipo=modo.lower();ciclo,trimestre=periodo_actual();incluir=False
+    modo=st.segmented_control('Modalidad de planeación',['Individual','Grupal','Por grado'],default='Grupal',key=base+'_viva_modalidad') or 'Grupal'
+    tipo='individual' if modo=='Individual' else 'grupal';ciclo,trimestre=periodo_actual();incluir=False
     with st.expander('Cambiar periodo o incluir atención individual en una sesión grupal'):
         ciclo=st.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
         trimestre=st.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
-        if tipo=='grupal':incluir=st.checkbox('Incluir alumnos de atención individual en esta sesión grupal',key=base+'_viva_incluir')
+        if tipo=='grupal' and modo!='Por grado':incluir=st.checkbox('Incluir alumnos de atención individual en esta sesión grupal',key=base+'_viva_incluir')
+    if modo=='Por grado':
+        incluir=True
+        st.caption('Por grado reúne a sus alumnos individuales y grupales autorizados, sin cambiar su modalidad en el padrón.')
     rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,incluir=incluir)
     if rows.empty:st.info('No hay alumnos con esta modalidad registrada en esta escuela.');return
     grado=grupo=''
@@ -52,22 +55,28 @@ def _entrada(base,actor):
         grados=rows if grado=='Todos' else rows.loc[rows['Grado'].astype(str)==grado]
         grupo=right.selectbox('Grupo',['Todos']+sorted(set(grados['Grupo'].astype(str))),key=base+'_viva_grupo_'+grado)
         rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
+        if modo=='Por grado' and grado=='Todos':
+            st.info('Elige el grado para reunir a sus alumnos. La modalidad registrada no cambia.');return
     nombres={str(a['ID_Alumno']):a['Nombre_Completo'] for a in rows.to_dict('records')}
     selection_key=f'{base}_viva_alumnos_{school["ID_Escuela"]}_{tipo}_{grado}_{grupo}_{incluir}'
     if tipo=='grupal':
-        if st.button('Seleccionar todo este grupo',key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
+        if st.button('Seleccionar alumnos del grado' if modo=='Por grado' else 'Seleccionar todo este grupo',key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
         ids=st.multiselect('Alumnos de mi formato',list(nombres),format_func=nombres.get,key=selection_key)
     else:
         elegido=st.selectbox('Alumno de mi formato',['']+list(nombres),format_func=lambda i:nombres.get(i,'Selecciona un alumno'),key=selection_key)
         ids=[elegido] if elegido else []
     fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
+    presentacion=None
+    if tipo=='grupal' and actor['area']=='Aprendizaje':
+        elegido=st.selectbox('Formato para trabajar',['Guía grupal por alumno y área','Planeación trimestral del ejemplo'],key=base+'_papel_formato')
+        presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
     if tipo=='individual' and actor['area']=='Aprendizaje' and not actor['director']:
         opcion=st.selectbox('Formato',['Planeación trimestral','Plan de intervención anual'],key=base+'_viva_tipo')
         if opcion=='Plan de intervención anual':fmt='XXI'
     st.caption(f'Curso {ciclo}–{ciclo+1} · Trimestre {trimestre}. Se reúnen los antecedentes propios de los alumnos seleccionados.')
     if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear'):
         try:
-            crear_borrador(base,fmt,ids,int(ciclo),trimestre,tipo,incluir);st.rerun()
+            crear_borrador(base,fmt,ids,int(ciclo),trimestre,tipo,incluir,presentacion);st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
     with st.expander('Actualizar matrícula, recuperar un respaldo o consultar las guías'):
         if st.button('Actualizar matrícula disponible',key=base+'_viva_refresh'):s.refrescar_matricula();st.rerun()
@@ -164,7 +173,7 @@ def _ayuda(prefix):
                 panel_generacion(prefix,u._persist,u._open,compact=True)
 
 
-def _acciones(prefix):
+def _acciones(prefix,pdf_provider=None,acciones_hoja=False):
     from ui import planeacion as u
     from ui.planeacion_simple import _pendientes
     doc=st.session_state[prefix+'_doc'];faltas,avisos=_pendientes(doc)
@@ -174,13 +183,15 @@ def _acciones(prefix):
     # Solo un contenedor propio; el CSS no depende de clases internas de Streamlit.
     st.html('<style>.st-key-'+prefix+'_viva_acciones{position:sticky;bottom:0;z-index:10;background:var(--background-color,#fff);padding:.7rem;border-top:1px solid #c8d3d5}</style>')
     with st.container(horizontal=True,key=prefix+'_viva_acciones'):
-        if st.button('Guardar borrador',key=prefix+'_viva_guardar'):u._persist(prefix);st.rerun()
-        if st.button('Ver PDF',key=prefix+'_viva_pdf'):st.session_state[prefix+'_mostrar_pdf']=True;st.rerun()
-        if st.button('Enviar a Dirección',disabled=bool(faltas),key=prefix+'_viva_enviar'):u._persist(prefix,'ENVIADO');st.rerun()
+        if not acciones_hoja:
+            if st.button('Guardar borrador',key=prefix+'_viva_guardar'):u._persist(prefix);st.rerun()
+            if st.button('Ver PDF',key=prefix+'_viva_pdf'):st.session_state[prefix+'_mostrar_pdf']=True;st.rerun()
+            if st.button('Enviar a Dirección',disabled=bool(faltas),key=prefix+'_viva_enviar'):u._persist(prefix,'ENVIADO');st.rerun()
     if st.session_state.get(prefix+'_mostrar_pdf'):
         with st.expander('Documento para imprimir',expanded=True):
             try:
-                pdf=u._pdf_sesion(prefix,doc);u._preview(prefix+'_viva_preview',pdf)
+                pdf=u._pdf_sesion(prefix,doc,provider=pdf_provider) if pdf_provider else u._pdf_sesion(prefix,doc)
+                u._preview(prefix+'_viva_preview',pdf)
                 st.download_button('Descargar PDF',pdf,file_name='planeacion-'+doc['id']+'.pdf',mime='application/pdf',key=prefix+'_viva_descarga_pdf')
             except Exception:st.warning('No se pudo preparar la vista. El borrador se conserva.')
     with st.expander('Más opciones · alumnos, versiones, respaldo y herramientas'):
@@ -254,15 +265,18 @@ def hoja(prefix):
     _acciones(prefix)
 
 
-def pagina():
+def pagina(render_hoja=None):
     from ui import planeacion as u
     actor=s.identidad();base=u._prefix()
     if st.session_state.get(base+'_viva_anterior'):
         if st.button('Volver al formato vivo',key=base+'_viva_volver'):st.session_state[base+'_viva_anterior']=False;st.rerun()
         from ui.planeacion_simple import pagina as anterior
         anterior();return
-    st.title('Mi formato · '+actor['area'])
-    st.caption('Planea en tu hoja de siempre. Los alumnos y sus antecedentes ya están conectados; tú decides qué trabajar y cómo.')
+    if render_hoja:
+        st.subheader('Planeación · '+actor['area'])
+    else:
+        st.title('Mi formato · '+actor['area'])
+        st.caption('Planea en tu hoja de siempre. Los alumnos y sus antecedentes ya están conectados; tú decides qué trabajar y cómo.')
     labels=['Mi formato','Trabajo colaborativo']+(['Revisión directiva'] if actor['director'] else [])
     tabs=st.tabs(labels)
     with tabs[0]:
@@ -272,7 +286,7 @@ def pagina():
             activo=next((p for p in prefixes if st.session_state.get(p+'_pending')),next(iter(prefixes),None))
             if activo:st.session_state[base+'_activa']=activo
         if activo and activo+'_doc' in st.session_state and not st.session_state.get(base+'_viva_entrada'):
-            hoja(activo)
+            (render_hoja or hoja)(activo)
         else:
             anterior=st.session_state.get(base+'_activa')
             _entrada(base,actor)

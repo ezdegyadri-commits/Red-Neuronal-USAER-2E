@@ -27,10 +27,11 @@ from services.planeacion_estabilidad import GuardadoPendiente
 logger=logging.getLogger(__name__)
 
 
-def _pdf_sesion(prefix,doc):
+def _pdf_sesion(prefix,doc,provider=None):
     digest=hashlib.sha256(json.dumps(doc,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    if provider:digest=getattr(provider,'__module__',type(provider).__module__)+':'+getattr(provider,'__qualname__',type(provider).__name__)+':'+digest
     if st.session_state.get(prefix+'_pdf_digest')!=digest:
-        pdf=generar_pdf(doc)
+        pdf=(provider or generar_pdf)(doc)
         st.session_state[prefix+'_pdf_cache']=pdf
         st.session_state[prefix+'_pdf_digest']=digest
     return st.session_state[prefix+'_pdf_cache']
@@ -778,7 +779,7 @@ def _pantalla_segura(funcion):
 
 
 def planeacion_page():
-    from ui.planeacion_viva import pagina
+    from ui.planeacion_papel import pagina
     return _pantalla_segura(pagina)
 
 
