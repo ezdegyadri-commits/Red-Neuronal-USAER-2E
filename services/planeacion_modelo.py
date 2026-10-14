@@ -97,6 +97,9 @@ def crear_plantilla(formato, ids, alumnos_autorizados, *, autor, funcion,
         'ID_Maestro_Regular': texto(r.get('ID_Maestro_Regular')),
         'Fase de inscripción': fase_primaria(r.get('Grado')) if 'PRIMARIA' in texto(r.get('Nivel_Educativo')).upper() else None,
     } for r in filas]
+    from services.planeacion_nee import nee_padron
+    for persona,registro in zip(personas,filas):
+        if nee_padron(registro):persona['NEE registrada']=nee_padron(registro)
     inicio, fin = periodo_trimestral(ciclo_inicio,trimestre)
     spec = deepcopy(FORMATOS[formato])
     doc = {

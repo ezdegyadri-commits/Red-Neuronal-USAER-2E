@@ -21,7 +21,7 @@ def generar_pdf(doc):
     for section in spec['tables']:
         if section['title']:story.extend([p(section['title'],title),Spacer(1,5)])
         rows=[[p(v) for v in section['headers']]]
-        rows.extend([[p((c['referente']+'\n\nAdaptación docente / objetivo de trabajo:\n' if c['referente'] else '')+c['value']) for c in row] for row in section['rows']])
+        rows.extend([[p((c['referente']+'\n\nAdaptación docente / objetivo de trabajo:\n' if c['referente'] else '')+c['value']+('\n\n'+c['nota'] if c.get('nota') else '')) for c in row] for row in section['rows']])
         widths=[ancho*n/sum(section['widths']) for n in section['widths']] if section['widths'] else [ancho/len(section['headers'])]*len(section['headers'])
         story.extend([tabla(rows,widths),Spacer(1,12)])
     for c in spec['textos']:story.extend([tabla([[p(c['label'])],[p(c['value'])]],[ancho]),Spacer(1,12)])

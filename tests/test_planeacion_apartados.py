@@ -9,6 +9,8 @@ from tests import test_planeacion_papel as papeltests
 class ApartadosTests(unittest.TestCase):
     def setUp(self):
         self.auth=patch.object(p.s,'autorizar',return_value={});self.auth.start();self.addCleanup(self.auth.stop)
+        import pandas as pd
+        self.padron=patch.object(p.s,'padron_autorizado',return_value=pd.DataFrame());self.padron.start();self.addCleanup(self.padron.stop)
 
     def doc(self,area='Aprendizaje',dos=False):
         d=documento(area,dos=dos)
@@ -21,8 +23,8 @@ class ApartadosTests(unittest.TestCase):
             new=p.proponer(d)
         row=new['tablas']['aprendizajes'][0]
         self.assertTrue(all(row[k] for k in ['Necesidades educativas específicas','Aprendizaje y/u objetivo','Descriptor de logro']))
-        self.assertIn('no confirma NEE',row['Necesidades educativas específicas'])
-        self.assertIn('Propuesta de logro',row['Descriptor de logro'])
+        self.assertTrue(row['Necesidades educativas específicas'].startswith('Necesita '))
+        self.assertTrue(row['_nee_origen']['propuesta'])
         ia.assert_not_called();self.assertEqual(d,antes)
         self.assertEqual(new['datos'],d['datos']);self.assertEqual(new['textos'],d['textos'])
 
@@ -34,7 +36,7 @@ class ApartadosTests(unittest.TestCase):
         d['metadatos']['fuentes'].append({**d['metadatos']['fuentes'][0],'alumno':'A1,A2','texto':'ANTECEDENTE COMPARTIDO, NO INDIVIDUAL'})
         rows=p.proponer(d)['tablas']['aprendizajes']
         self.assertEqual(len(rows),2)
-        self.assertIn('LECTURA PROPIA UNO',rows[0]['Necesidades educativas específicas'])
+        self.assertIn('comprensión de textos',rows[0]['Necesidades educativas específicas'])
         self.assertNotIn('CONTEO PROPIO DOS',str(rows[0]))
         self.assertNotIn('LECTURA PROPIA UNO',str(rows[1]))
         self.assertNotIn('DATO AJENO',str(rows))
@@ -54,12 +56,15 @@ class ApartadosTests(unittest.TestCase):
         self.assertEqual(new['tablas']['aprendizajes'][0]['Necesidades educativas específicas'],'DECISIÓN DOCENTE')
         self.assertTrue(new['tablas']['aprendizajes'][0]['Descriptor de logro'])
 
-    def test_sin_evidencia_no_inventa_necesidades(self):
+    def test_sin_evidencia_propone_hipotesis_sin_confirmarla(self):
         d=self.doc();d['metadatos']['fuentes']=[];d['metadatos'].pop('curriculo',None)
-        with patch.object(p,'contexto_ia',return_value={'referentes_por_grado':[]}):self.assertEqual(p.proponer(d),d)
+        with patch.object(p,'contexto_ia',return_value={'referentes_por_grado':[]}):
+            inicial=p.proponer(d)
+        self.assertIn('sin hallazgos suficientes',inicial['tablas']['aprendizajes'][0]['_nee_origen']['origen'])
+        self.assertTrue(inicial['tablas']['aprendizajes'][0]['_nee_origen']['propuesta'])
         r={'id':'OFICIAL','grado':5,'contenido':'Lectura compartida','pda':'PDA verificado','fuente':'SEP','pagina_pdf':3}
         with patch.object(p,'contexto_ia',return_value={'referentes_por_grado':[r]}):new=p.proponer(d)
-        self.assertEqual(new['tablas']['aprendizajes'][0]['Necesidades educativas específicas'],'')
+        self.assertTrue(new['tablas']['aprendizajes'][0]['_nee_origen']['propuesta'])
         self.assertIn('Lectura compartida',new['tablas']['aprendizajes'][0]['Aprendizaje y/u objetivo'])
         self.assertEqual(new['tablas']['aprendizajes'][0]['_referentes_apartados'],['OFICIAL'])
 
