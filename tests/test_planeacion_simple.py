@@ -182,7 +182,7 @@ class RecorridoTests(unittest.TestCase):
             self.assertFalse(app.exception,area)
             self.assertEqual(app.session_state.llamadas_ficticias,1)
     def test_intervencion_individual_no_confirma_nee_automaticamente(self):
-        source=Path(__file__).with_name('fixture_planeacion_panel.py').read_text(encoding='utf-8').replace('from ui.planeacion import _planeacion_page_clasica as planeacion_page','from ui.planeacion import planeacion_page')
+        source=Path(__file__).with_name('fixture_planeacion_panel.py').read_text(encoding='utf-8').replace('from ui.planeacion import _planeacion_page_clasica as planeacion_page','from ui.planeacion_simple import pagina as planeacion_page')
         app=AppTest.from_string(source,default_timeout=30).run()
         next(m for m in app.multiselect if m.label=='Alumno o alumnos para planear').set_value(['A1']).run()
         next(w for w in app.button_group if w.label=='¿Qué documento necesitas?').set_value('Plan de intervención').run()

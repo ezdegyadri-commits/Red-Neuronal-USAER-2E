@@ -1,5 +1,20 @@
 # Guía de planeación para maestras de apoyo
 
+## Formato vivo · nuevo recorrido
+
+1. En **Mi formato**, elige **Grupal** o **Individual**, escuela y alumnos. En grupal puedes filtrar grado/grupo y seleccionar el grupo completo; no cambia la modalidad del padrón.
+2. Pulsa **Abrir formato con mis alumnos**. La hoja se abre sin pedir IA. Para recuperar trabajo usa **Continuar una planeación guardada → Abrir mi formato**.
+3. En grupal, escribe en la matriz horizontal del Anexo XIX. Identidad y condición vienen del padrón. Las aportaciones de otras áreas se consultan sin editarlas aquí. Para textos largos selecciona al alumno y abre **Escribir con más espacio en la fila de este alumno**: es la misma celda, no otra copia.
+4. Abre **Antecedentes de este alumno y documentos para enriquecer el formato** para consultar registros propios. Activa **Añadir documento o imagen**; transcribe, revisa y asigna el texto a sus destinatarios con los controles existentes. Un material general no es una evaluación individual.
+5. En **Referentes oficiales**, revisa los seleccionados o activa **Elegir o ajustar contenidos y PDA**. Puedes elegir varios campos. El texto oficial y tu adaptación siguen separados.
+6. Si necesitas propuestas abre **Preparar actividades para este formato**. Puedes usar tus datos **sin IA** o activar **Solicitar propuesta con IA**, revisar lo que se enviará y confirmar. La hoja permanece editable si la IA falla.
+7. El detalle trimestral conserva objetivos, descriptores, secuencias y evaluación. **Datos del grupo y complemento de aptitudes sobresalientes** conserva maestro regular y Anexo XX. No se inventan aptitudes ni resultados.
+8. **Guardar borrador** confirma la escritura. **Ver PDF** muestra el documento conectado. Resuelve los pendientes antes de **Enviar a Dirección**. Las versiones, copias adaptadas, cambios de alumnos y respaldo están en **Más opciones**.
+
+La planeación individual trimestral conserva XXIII. El **Plan de intervención anual** conserva XXI y la revisión del IEPP; no se convierte en una guía grupal. **Trabajo colaborativo** mantiene los aportes por profesional. **Vista anterior y ayuda → Usar el recorrido anterior** abre el mismo documento en la interfaz previa.
+
+## Recorrido anterior · conservado como alternativa
+
 Mi formato: un recorrido sencillo que reutiliza lo que ya conoce el equipo.
 
 ## 1. ¿A quién planeo?

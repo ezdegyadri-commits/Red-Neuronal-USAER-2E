@@ -39,7 +39,25 @@ def _abrir(base,prefix,doc):
     u._open(prefix,doc)
     st.session_state[prefix+'_mostrar_pdf']=False
     st.session_state[base+'_activa']=prefix
+    st.session_state[base+'_viva_entrada']=False
     st.session_state[base+'_paso_pendiente']=PASOS[2] if doc.get('metadatos',{}).get('generacion_completa') or doc.get('metadatos',{}).get('preparacion_local') else PASOS[1]
+
+
+def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False):
+    """Las dos vistas comparten creación, protección de pendientes y contexto."""
+    from ui import planeacion as u
+    for key in list(st.session_state):
+        if key.startswith(base+'_') and key.endswith('_doc') and st.session_state.get(key[:-4]+'_pending'):
+            if not u._guardar_edicion_pendiente(key[:-4]):raise RuntimeError('Primero confirma el guardado de tu edición pendiente.')
+    with st.spinner('Reuniendo la información que ya registró el equipo…'):
+        doc=s.preparar_contexto(s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=tipo,incluir_individuales=incluir))
+        if equipo.aplica(doc) and not doc['metadatos'].get('equipo',{}).get('subgrupos'):
+            doc=equipo.guardar_subgrupo(equipo.preparar(doc),'Subgrupo 1',ids)
+        if fmt=='XXI' and any(v['tipo']=='EPP' for v in doc['metadatos'].get('vinculos_documentales',[])):
+            from services.planeacion_continuidad import trasladar_epp
+            doc=trasladar_epp(doc)
+    prefix=base+'_'+tipo;_abrir(base,prefix,doc);u._persist(prefix)
+    return prefix
 
 
 def _entrada(base,actor):
@@ -103,18 +121,7 @@ def _entrada(base,actor):
         fmt='XXI' if opcion=='Plan de intervención' else 'XXIII'
     if st.button('Crear mi borrador',type='primary',disabled=not tipo,key=base+'_crear'):
         try:
-            # Guardar primero la edición actual; nunca crear ni desplazarla a ciegas.
-            for key in list(st.session_state):
-                if key.startswith(base+'_') and key.endswith('_doc') and st.session_state.get(key[:-4]+'_pending'):
-                    if not u._guardar_edicion_pendiente(key[:-4]):raise RuntimeError('Primero confirma el guardado de tu edición pendiente.')
-            with st.spinner('Reuniendo la información que ya registró el equipo…'):
-                doc=s.preparar_contexto(s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=tipo,incluir_individuales=incluir))
-                if equipo.aplica(doc) and not doc['metadatos'].get('equipo',{}).get('subgrupos'):
-                    doc=equipo.guardar_subgrupo(equipo.preparar(doc),'Subgrupo 1',ids)
-                if fmt=='XXI' and any(v['tipo']=='EPP' for v in doc['metadatos'].get('vinculos_documentales',[])):
-                    from services.planeacion_continuidad import trasladar_epp
-                    doc=trasladar_epp(doc)
-            prefix=base+'_'+tipo;_abrir(base,prefix,doc);u._persist(prefix);st.rerun()
+            crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir);st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
 
 

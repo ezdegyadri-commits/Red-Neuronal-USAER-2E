@@ -778,7 +778,7 @@ def _pantalla_segura(funcion):
 
 
 def planeacion_page():
-    from ui.planeacion_simple import pagina
+    from ui.planeacion_viva import pagina
     return _pantalla_segura(pagina)
 
 

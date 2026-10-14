@@ -50,5 +50,11 @@ def guia_grupal(doc):
             if not row[key]:row[key]=z.get(key,'')
         area=doc['datos']['Función']
         if area in GUIA_XIX and not row[area]:row[area]=z.get('Actividades','')
+        # Una propuesta local ya revisada conserva su destinatario por ID. La guía
+        # y el PDF la leen del mismo origen; nunca se asocia texto por nombre.
+        if area in GUIA_XIX and not row[area]:
+            actividades=[r.get('Actividades','') for r in doc['tablas'].get('dosificacion',[])
+                         if a['ID_Alumno'] in r.get('_alumnos_locales',[]) and r.get('_actividad_local')]
+            row[area]='\n\n'.join(v for v in actividades if v)
         filas.append(row)
     return {'maestro_grupo':prev.get('maestro_grupo',''),'filas':filas,'as':prev.get('as',[])}

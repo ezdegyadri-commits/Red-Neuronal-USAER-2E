@@ -1,5 +1,20 @@
 # Guía de planeación para el equipo paradocente
 
+## Formato vivo · nuevo recorrido
+
+1. En **Mi formato**, elige escuela, modalidad y destinatarios. Pulsa **Abrir formato con mis alumnos**. Los datos y antecedentes se reúnen sin solicitar IA; puedes abrir cualquier planeación propia guardada.
+2. Psicología y Comunicación conservan el formato XXIII. Trabajo Social conserva XXV: BAP, apoyos, acciones por contexto, fechas, recursos y resultados observados después de intervenir. No se impone una misma tabla a las tres áreas.
+3. Selecciona **Alumno para consultar o completar** y abre sus antecedentes. **Añadir documento o imagen** conserva la carga, transcripción revisada y asignación a alumnos. No copies evaluaciones de otros destinatarios.
+4. **Referentes oficiales** permite consultar y elegir varios campos, contenidos y PDA. Las adaptaciones docentes no sustituyen las citas oficiales.
+5. **Preparar actividades para este formato** ofrece propuestas con tus datos **sin IA**; opcionalmente activa **Solicitar propuesta con IA**, revisa el resumen sin identificadores y confirma. Puedes editar y guardar aunque el motor falle.
+6. **Sesiones y acuerdos específicos de tu área** mantiene subgrupos, sesiones y calendario. Psicología conserva cinco competencias, al menos cinco sesiones grupales, una en aula regular y sugerencia para familias. Estos mínimos no se trasladan a Comunicación ni a Trabajo Social. Las sesiones vinculadas se editan en su origen, no en una copia de dosificación.
+7. La conexión con la guía grupal se consulta por alumno. Las aportaciones al PI o guía coordinada por la maestra siguen en **Trabajo colaborativo**, con permisos de cada profesional.
+8. Usa **Guardar borrador**, comprueba el guardado, revisa **Ver PDF** y resuelve pendientes antes de **Enviar a Dirección**. **Más opciones** conserva edición, copias adaptadas, historia y respaldo. Los resultados no se predicen.
+
+**Vista anterior y ayuda → Usar el recorrido anterior** permite trabajar sobre el mismo documento con el recorrido previo. No se migran datos ni se crean expedientes paralelos.
+
+## Recorrido anterior · conservado como alternativa
+
 Mi formato: Psicología, Comunicación y Trabajo Social conservan sus escuelas, documentos y responsabilidades.
 
 ## 1. ¿A quién planeo?
