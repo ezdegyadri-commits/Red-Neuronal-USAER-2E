@@ -2,6 +2,8 @@
 
 ## Edición sobre el formato de referencia
 
+Los formatos nuevos reciben propuestas revisables a partir de antecedentes propios y referentes seleccionados, sin solicitar IA. Psicología y Comunicación conservan objetivos y descriptores; Trabajo Social conserva antecedentes para revisar BAP y propuestas de apoyos, no NEE ni resultados inventados. **Completar apartados vacíos con mis datos** permite preparar una hoja guardada sin sustituir redacciones existentes. Las propuestas pueden editarse, vaciarse o retirarse y no se regeneran al abrirla.
+
 En **Individual** selecciona uno o varios alumnos de atención individual, o usa **Seleccionar todos los alumnos individuales**. En **Grupal** también puedes elegir varios destinatarios. La selección conserva los formatos de cada área y la modalidad del padrón; los antecedentes permanecen vinculados por alumno.
 
 Elige **Individual**, **Grupal** o **Por grado** y abre la hoja. Psicología y Comunicación mantienen XXIII; Trabajo Social mantiene XXV. Escribe en sus celdas; puedes borrar contenidos, agregar filas o retirar las manuales con confirmación. **Conectar antecedentes, PDA y DUA** reúne las fuentes y apoyos pertinentes y **Proponer actividades con IA** conserva la revisión previa del resumen sin identificadores. Las sesiones y aportaciones vinculadas se editan en su origen.

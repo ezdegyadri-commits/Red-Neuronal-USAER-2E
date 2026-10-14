@@ -43,7 +43,7 @@ def _abrir(base,prefix,doc):
     st.session_state[base+'_paso_pendiente']=PASOS[2] if doc.get('metadatos',{}).get('generacion_completa') or doc.get('metadatos',{}).get('preparacion_local') else PASOS[1]
 
 
-def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None):
+def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None,proponer_apartados=False):
     """Las dos vistas comparten creación, protección de pendientes y contexto."""
     from ui import planeacion as u
     for key in list(st.session_state):
@@ -56,6 +56,9 @@ def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=
         if fmt=='XXI' and any(v['tipo']=='EPP' for v in doc['metadatos'].get('vinculos_documentales',[])):
             from services.planeacion_continuidad import trasladar_epp
             doc=trasladar_epp(doc)
+    if proponer_apartados:
+        from services.planeacion_apartados import proponer
+        doc=proponer(doc)
     if presentacion in ('guia','trimestral'):doc['metadatos']['vista_formato']=presentacion
     prefix=base+'_'+tipo;_abrir(base,prefix,doc);u._persist(prefix)
     return prefix

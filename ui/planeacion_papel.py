@@ -22,16 +22,18 @@ def hoja(prefix):
             if nuevo!=doc:
                 u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar')
             st.session_state[prefix+'_papel_aceptado']=True
-            if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar'):st.session_state[prefix+'_papel_panel']=action
+            if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados'):st.session_state[prefix+'_papel_panel']=action
             if action=='guardar' and nuevo==doc:u._persist(prefix)
             if action=='enviar':
                 if estado=='ENVIADO' and nuevo==doc:u._persist(prefix,'ENVIADO')
                 elif estado!='ENVIADO':st.session_state[prefix+'_papel_aviso']='Completa los aspectos pendientes antes de enviar. Se conserva tu borrador.'
             if action=='pdf':st.session_state[prefix+'_mostrar_pdf']=True
+            if action=='apartados' and nuevo==doc:st.session_state[prefix+'_papel_aviso']='No hay nuevos vacíos vinculados con datos suficientes para proponer. Tu redacción se conserva; puedes conectar antecedentes o elegir referentes sin redactar de nuevo.'
             st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:
             st.session_state[prefix+'_papel_nonce']=event.get('nonce');st.warning(str(exc))
     if st.session_state.get(prefix+'_papel_aviso'):st.info(st.session_state.pop(prefix+'_papel_aviso'))
+    if doc['metadatos'].get('propuestas_apartados'):st.caption(doc['metadatos']['propuestas_apartados']['aviso'])
     action=st.session_state.get(prefix+'_papel_panel')
     if action:
         with st.expander('Conexión con este formato',expanded=True):
