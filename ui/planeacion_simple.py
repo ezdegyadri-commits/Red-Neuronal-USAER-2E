@@ -68,11 +68,16 @@ def _entrada(base,actor):
         from ui.planeacion_ayuda import panel
         panel(actor['area'])
     st.markdown('#### Nueva planeación')
+    if st.button('Actualizar matrícula disponible',key=base+'_refrescar_matricula'):
+        s.refrescar_matricula();st.rerun()
     frame=s.padron_autorizado()
     if frame.empty:st.info('No hay alumnos asignados disponibles.');return
     escuelas=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
     indice=st.selectbox('Escuela asignada',range(len(escuelas)),format_func=lambda i:escuelas[i]['Nombre_Escuela'],key=base+'_escuela') if len(escuelas)>1 else 0
     escolar=frame.loc[frame['ID_Escuela'].astype(str)==str(escuelas[indice]['ID_Escuela'])]
+    individuales=sum(modalidad(r)=='individual' for r in escolar.to_dict('records'))
+    grupales=sum(modalidad(r)=='grupal' for r in escolar.to_dict('records'))
+    st.caption(f'{len(escolar)} alumnos disponibles · {individuales} individuales · {grupales} grupales. Abre el selector para elegir.')
     etiquetas={str(r['ID_Alumno']):str(r['Nombre_Completo'])+' · '+str(r.get('Grado',''))+' '+str(r.get('Grupo','')) for r in escolar.to_dict('records')}
     ids=st.multiselect('Alumno o alumnos para planear',list(etiquetas),format_func=etiquetas.get,key=base+'_alumnos_'+str(escuelas[indice]['ID_Escuela']))
     pendientes_mod=[r for r in escolar.to_dict('records') if modalidad(r)=='por confirmar']
@@ -246,12 +251,11 @@ def _editor(prefix,actor,paso):
             if st.button('🔄 Actualizar antecedentes del expediente', key=prefix+'_step2_refresh_fuentes'):
                 try:s.refrescar_evidencias();u._open(prefix,s.preparar_contexto(doc));u._persist(prefix);st.rerun()
                 except Exception:st.warning('No se confirmó la actualización. Tu edición se conserva.')
-        if actor['area']=='Aprendizaje':
-            with st.expander('📚 2. Referentes oficiales y PDA (Plan y Programas)', expanded=True):
-                st.caption('Selecciona el campo formativo y busca el PDA para contextualizar tus metas.')
-                if st.toggle('Buscar y adaptar referentes curriculares (PDA)', key=prefix+'_toggle_curriculo'):
-                    u._curriculo(prefix,doc)
-        elif actor['area']=='Psicología':
+        with st.expander('📚 2. Referentes oficiales y PDA (Plan y Programas)', expanded=actor['area']=='Aprendizaje'):
+            st.caption('Selecciona uno o varios campos formativos y busca sus PDA. Complementan la función de tu área; no sustituyen su formato ni sus acuerdos.')
+            if st.toggle('Buscar y adaptar referentes curriculares (PDA)', key=prefix+'_toggle_curriculo'):
+                u._curriculo(prefix,doc)
+        if actor['area']=='Psicología':
             with st.expander('🧠 2. Competencias socioemocionales y conducta (Manual SEGEY · Zona 001)', expanded=True):
                 st.caption('Enfoca tu intervención en las 5 competencias formativas y estrategias conductuales de la Tabla 8 del Manual.')
                 cols_psic = st.columns(2)

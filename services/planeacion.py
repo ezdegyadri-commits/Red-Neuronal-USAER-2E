@@ -13,6 +13,7 @@ import streamlit as st
 from data import repository as repo
 from data.google import ensure_headers, retry_google
 from services.expedientes import alumnos_visibles, baps_de_alumno, sugerencias_de_alumno
+from services.planeacion_matricula import clave_escuela, preparar as preparar_matricula
 from services.cronogramas import perfil_especialista
 from services.planeacion_modelo import crear_plantilla, texto, FORMATOS
 from utils.text import normalizar_texto
@@ -32,7 +33,7 @@ def _vinculo_individual(r, alumno, padron):
         return False
     rid=texto(r.get('ID_Alumno'))
     escuela_id=texto(r.get('ID_Escuela'))
-    if escuela_id and escuela_id!=texto(alumno.get('ID_Escuela')):return False
+    if escuela_id and clave_escuela(escuela_id)!=clave_escuela(alumno.get('ID_Escuela')):return False
     if rid:return rid==texto(alumno.get('ID_Alumno'))
     nombre=normalizar_texto(r.get('Nombre_Alumno',''))
     escuela=normalizar_texto(r.get('Escuela',''))
@@ -60,7 +61,7 @@ def padron_autorizado():
     actor = identidad()
     # Diego usa su identidad canónica aunque Usuarios haya abreviado la función.
     rol = 'TRABAJO SOCIAL' if actor['area']=='Trabajo Social' else actor['rol']
-    frame = alumnos_visibles(rol, st.session_state.get('escuelas_permitidas',''), actor['nombre'])
+    frame = preparar_matricula(alumnos_visibles(rol, st.session_state.get('escuelas_permitidas',''), actor['nombre']))
     if actor['perfil'] and not actor['director'] and not frame.empty:
         permitidas = {normalizar_texto(e) for e in actor['perfil']['escuelas']}
         frame = frame.loc[frame['Nombre_Escuela'].map(normalizar_texto).isin(permitidas)].copy()
@@ -106,7 +107,7 @@ def autorizar(doc, escribir=False):
     if not set(ids).issubset(set(frame['ID_Alumno'].astype(str)) if 'ID_Alumno' in frame else set()):
         raise PermissionError('Este documento contiene alumnos fuera de tu asignación actual.')
     actuales = frame.loc[frame['ID_Alumno'].astype(str).isin(ids)]
-    if set(actuales['ID_Escuela'].astype(str)) != {doc['datos']['ID_Escuela']}:
+    if set(actuales['ID_Escuela'].map(clave_escuela)) != {clave_escuela(doc['datos']['ID_Escuela'])}:
         raise PermissionError('La escuela del documento no corresponde al padrón.')
     if doc['formato']=='XXI' and len(ids)!=1:
         raise ValueError('El plan de intervención es individual.')
@@ -200,6 +201,13 @@ def listar(todas_versiones=False):
 
 def refrescar():
     identidad(); _versiones.clear()
+
+
+def refrescar_matricula():
+    """Invalida solo la lectura: no cambia permisos, documentos ni registros."""
+    from data.google import clear_cache
+    identidad()
+    clear_cache('Alumnos')
 
 
 def refrescar_evidencias():
@@ -304,8 +312,8 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         saved=deepcopy(doc); saved['estado']=estado
         curricular=saved['metadatos'].get('curriculo')
         if curricular:
-            from services.curriculo import vincular
-            saved=vincular(saved,curricular.get('campo',''),curricular.get('ejes',[]),[r['id'] for r in curricular.get('registros',[])],curricular.get('contexto_local',''),curricular.get('adaptaciones',{}))
+            from services.curriculo import vincular, campos_seleccionados
+            saved=vincular(saved,campos_seleccionados(curricular),curricular.get('ejes',[]),[r['id'] for r in curricular.get('registros',[])],curricular.get('contexto_local',''),curricular.get('adaptaciones',{}))
         saved.pop('_orden',None)
         if observaciones is not None:
             saved['observaciones_director']=str(observaciones)
@@ -416,7 +424,7 @@ def evidencias(doc):
         ultimas={d['id']:d for d in versiones_actuales()}
         for plan in ultimas.values():
             ids_plan={a['ID_Alumno'] for a in plan['datos']['Alumnos']}
-            if plan['id']==doc['id'] or plan['datos']['ID_Escuela']!=doc['datos']['ID_Escuela'] or not ids_plan or not ids_plan.issubset(elegidos):continue
+            if plan['id']==doc['id'] or clave_escuela(plan['datos']['ID_Escuela'])!=clave_escuela(doc['datos']['ID_Escuela']) or not ids_plan or not ids_plan.issubset(elegidos):continue
             if plan['estado'] not in {'ENVIADO','VALIDADO'}:continue
             from services.planeacion_continuidad import vigente_pi
             if plan['formato']=='XXI' and not vigente_pi(plan,doc['datos']['Curso escolar']):continue

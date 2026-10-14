@@ -72,7 +72,8 @@ def generar_pdf(doc):
             story.append(p(key.replace('_',' ').capitalize()+': '+str(meta[key])))
     curricular=meta.get('curriculo',{})
     if curricular:
-        story.extend([p('Vinculación curricular',styles['Heading2']),p('Campo formativo: '+curricular.get('campo','')),p('Ejes articuladores: '+', '.join(curricular.get('ejes',[])))])
+        from services.curriculo import campos_seleccionados
+        story.extend([p('Vinculación curricular',styles['Heading2']),p('Campos formativos: '+', '.join(campos_seleccionados(curricular))),p('Ejes articuladores: '+', '.join(curricular.get('ejes',[])))])
         for r in curricular.get('registros',[]):
             story.append(p(f"Fase {r['fase']} · Grado {r['grado']} · {r['fuente']} · Página PDF {r['pagina_pdf']}"))
             story.extend([p('Contenido: '+r['contenido']),p('PDA (extracto oficial por grado): '+r['pda'])])

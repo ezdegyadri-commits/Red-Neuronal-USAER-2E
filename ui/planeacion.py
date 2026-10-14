@@ -20,7 +20,7 @@ def generar_pdf(doc):
         return b"%PDF-1.4 (reportlab no disponible)"
 
 
-from services.curriculo import CAMPOS, EJES, FUENTES_BASE, opciones, vincular, contexto_ia, catalogo
+from services.curriculo import CAMPOS, EJES, FUENTES_BASE, opciones, vincular, contexto_ia, catalogo, campos_seleccionados
 from services.materiales_planeacion import TIPOS, MAX_TEXTO, leer_material, incorporar, fuentes_materiales
 from services.planeacion_estabilidad import GuardadoPendiente
 
@@ -121,11 +121,11 @@ def _curriculo(prefix,doc):
     seleccion=doc['metadatos'].get('curriculo',{})
     with st.expander('Campos, ejes y referentes oficiales',expanded=not bool(seleccion)):
         st.caption('Puedes trabajar contenidos de otro grado según las necesidades del alumno. Su grado escolar no cambia; el texto oficial y tu adaptación se conservan por separado.')
-        campos=list(CAMPOS)
-        campo=st.selectbox('Campo formativo',campos,index=campos.index(seleccion['campo']) if seleccion.get('campo') in campos else None,placeholder='Elige el campo que trabajarás',key=key+'_campo')
+        campos=st.multiselect('Campos formativos',list(CAMPOS),default=campos_seleccionados(seleccion),placeholder='Elige uno o varios campos',key=key+'_campos')
         ejes=st.multiselect('Ejes articuladores pertinentes',list(EJES),default=seleccion.get('ejes',['Inclusión']),key=key+'_ejes')
-        if campo:
-            st.caption(CAMPOS[campo]);rows=opciones(doc,campo);by_id={r['id']:r for r in rows}
+        if campos:
+            for campo in campos:st.caption(campo+': '+CAMPOS[campo])
+            rows=opciones(doc,campos);by_id={r['id']:r for r in rows}
             grado=st.selectbox('Explorar referentes de', ['Todos los grados',1,2,3,4,5,6],format_func=lambda g:g if isinstance(g,str) else f'{g}° de primaria',key=key+'_grado')
             query=st.text_input('Encontrar contenidos por palabra: lectura, números, convivencia…',key=key+'_query')
             visibles=[r for r in rows if grado=='Todos los grados' or r['grado']==grado]
@@ -135,10 +135,12 @@ def _curriculo(prefix,doc):
                 filtradas=[r for r in visibles if all(t in normalizar_texto(r['contenido']+' '+r['pda']) for t in tokens)]
             else:filtradas=visibles
             anteriores=[r['id'] for r in seleccion.get('registros',[]) if r['id'] in by_id]
-            selector_key=key+'_ids_'+campo
+            selector_key=key+'_ids_multicampos'
+            if selector_key in st.session_state:
+                st.session_state[selector_key]=[i for i in st.session_state[selector_key] if i in by_id]
             elegidos=[i for i in st.session_state.get(selector_key,anteriores) if i in by_id]
             opciones_ids=list(dict.fromkeys([r['id'] for r in filtradas]+elegidos+anteriores))
-            ids=st.multiselect('Contenido y PDA por grado (hasta seis referentes)',opciones_ids,default=elegidos,format_func=lambda i:f"{by_id[i]['grado']}° · {by_id[i]['contenido']} · p. {by_id[i]['pagina_pdf']}",max_selections=6,key=selector_key)
+            ids=st.multiselect('Contenido y PDA por grado (hasta seis referentes)',opciones_ids,default=elegidos,format_func=lambda i:f"{by_id[i]['campo']} · {by_id[i]['grado']}° · {by_id[i]['contenido']} · p. {by_id[i]['pagina_pdf']}",max_selections=6,key=selector_key)
             adaptaciones={}
             for i in ids:
                 r=by_id[i];source=next(s for s in catalogo()['fuentes'] if s['id']==r['fuente'])
@@ -153,7 +155,7 @@ def _curriculo(prefix,doc):
             local=st.text_area('Contextualización: programa analítico de la escuela, lengua y entorno de la comunidad',value=seleccion.get('contexto_local',''),key=key+'_local')
             st.caption('No se presume que el programa analítico de cada escuela ya esté cargado. Aquí puedes añadir su referencia y los acuerdos pertinentes.')
             if st.button('Incorporar referentes al borrador',key=key+'_save'):
-                updated=vincular(st.session_state[prefix+'_doc'],campo,ejes,ids,local,adaptaciones)
+                updated=vincular(st.session_state[prefix+'_doc'],campos,ejes,ids,local,adaptaciones)
                 if local:
                     local_resumen=servicio.resumen_previo(updated,[{'referencia':'CONTEXTO-ESCOLAR','alcance':'contextualización declarada; confirmar con el programa analítico','texto':local}])
                     previous=updated['metadatos'].get('resumen_educativo','')
