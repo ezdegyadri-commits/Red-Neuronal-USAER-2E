@@ -59,20 +59,23 @@ def _entrada(base,actor):
             st.info('Elige el grado para reunir a sus alumnos. La modalidad registrada no cambia.');return
     nombres={str(a['ID_Alumno']):a['Nombre_Completo'] for a in rows.to_dict('records')}
     selection_key=f'{base}_viva_alumnos_{school["ID_Escuela"]}_{tipo}_{grado}_{grupo}_{incluir}'
-    if tipo=='grupal':
-        if st.button('Seleccionar alumnos del grado' if modo=='Por grado' else 'Seleccionar todo este grupo',key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
-        ids=st.multiselect('Alumnos de mi formato',list(nombres),format_func=nombres.get,key=selection_key)
-    else:
-        elegido=st.selectbox('Alumno de mi formato',['']+list(nombres),format_func=lambda i:nombres.get(i,'Selecciona un alumno'),key=selection_key)
-        ids=[elegido] if elegido else []
+    # Clave nueva: una sesión abierta podía conservar el valor escalar del
+    # selector individual anterior; no reutilizarlo como lista del multiselect.
+    if tipo=='individual':selection_key+='_multiple'
+    label='Seleccionar todos los alumnos individuales' if tipo=='individual' else 'Seleccionar alumnos del grado' if modo=='Por grado' else 'Seleccionar todo este grupo'
+    if st.button(label,key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
+    ids=st.multiselect('Alumnos de mi formato',list(nombres),format_func=nombres.get,key=selection_key)
+    if tipo=='individual':st.caption('Puedes reunir varios alumnos de atención individual en un formato trimestral; sus antecedentes se conservan vinculados a cada alumno.')
     fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
     presentacion=None
     if tipo=='grupal' and actor['area']=='Aprendizaje':
         elegido=st.selectbox('Formato para trabajar',['Guía grupal por alumno y área','Planeación trimestral del ejemplo'],key=base+'_papel_formato')
         presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
-    if tipo=='individual' and actor['area']=='Aprendizaje' and not actor['director']:
+    if tipo=='individual' and len(ids)<=1 and actor['area']=='Aprendizaje' and not actor['director']:
         opcion=st.selectbox('Formato',['Planeación trimestral','Plan de intervención anual'],key=base+'_viva_tipo')
         if opcion=='Plan de intervención anual':fmt='XXI'
+    elif tipo=='individual' and len(ids)>1 and actor['area']=='Aprendizaje':
+        st.caption('El Plan de intervención anual se elabora por alumno y conserva su IEPP; esta selección abre la planeación trimestral.')
     st.caption(f'Curso {ciclo}–{ciclo+1} · Trimestre {trimestre}. Se reúnen los antecedentes propios de los alumnos seleccionados.')
     if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear'):
         try:

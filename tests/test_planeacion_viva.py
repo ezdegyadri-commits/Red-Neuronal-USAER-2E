@@ -68,7 +68,7 @@ class HojaTests(unittest.TestCase):
         app.radio[0].set_value(area).run()
         if tipo=='Individual':
             next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value('Individual').run()
-            next(w for w in app.selectbox if w.label=='Alumno de mi formato').set_value('I1').run()
+            next(w for w in app.multiselect if w.label=='Alumnos de mi formato').set_value(['I1']).run()
             if pi:next(w for w in app.selectbox if w.label=='Formato').set_value('Plan de intervención anual').run()
         else:next(w for w in app.multiselect if w.label=='Alumnos de mi formato').set_value(['A1']).run()
         next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()

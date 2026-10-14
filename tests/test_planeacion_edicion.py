@@ -55,14 +55,23 @@ class EdicionTests(unittest.TestCase):
             self.assertEqual(nuevo['metadatos']['copia_de']['documento'],d['id'])
             self.assertEqual(d,prev)
 
-    def test_copia_rechaza_otra_escuela_y_multiples_en_individual(self):
+    def test_copia_rechaza_otra_escuela_y_multiples_en_pi(self):
         d=self.doc();frame=pd.DataFrame([{'ID_Alumno':'A2','ID_Escuela':'E2'},{'ID_Alumno':'A1','ID_Escuela':'E1'}])
         with patch.object(s,'padron_autorizado',return_value=frame):
             with self.assertRaises(PermissionError):e.copiar(d,['A2'],2026,1)
             with self.assertRaises(PermissionError):e.copiar(d,['FUERA'],2026,1)
         frame.loc[0,'ID_Escuela']='E1'
         with patch.object(s,'padron_autorizado',return_value=frame):
-            with self.assertRaises(ValueError):e.copiar(d,['A1','A2'],2026,1)
+            with self.assertRaises(ValueError):e.copiar(self.doc(formato='XXI'),['A1','A2'],2026,1)
+
+    def test_copia_individual_trimestral_multiple_preserva_original(self):
+        d=self.doc();prev=deepcopy(d)
+        frame=pd.DataFrame([{'ID_Alumno':i,'Nombre_Completo':'Alumno ficticio '+i,'ID_Escuela':'E1','Nombre_Escuela':'Escuela ficticia','Grado':'3','Tipo_Atencion':'Individual'} for i in ['A1','A2']])
+        with patch.object(s,'identidad',return_value=self.actor),patch.object(s,'padron_autorizado',return_value=frame),patch.object(s.repo,'escuelas',return_value=pd.DataFrame()),patch.object(s,'preparar_contexto',side_effect=lambda x:x):
+            nuevo=e.copiar(d,['A1','A2'],2026,2)
+        self.assertEqual(nuevo['metadatos']['modalidad_planeacion'],'individual')
+        self.assertEqual(len(nuevo['datos']['Alumnos']),2)
+        self.assertNotEqual(nuevo['id'],d['id']);self.assertEqual(d,prev)
 
     def test_recuperacion_mantiene_revision_actual_y_aportes(self):
         actual=self.doc();actual['revision']='r2';actual['metadatos']['aportaciones_equipo']={'psic':'Actual'}

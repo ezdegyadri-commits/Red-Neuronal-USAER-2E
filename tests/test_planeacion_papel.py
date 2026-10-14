@@ -90,6 +90,60 @@ class PapelUITests(unittest.TestCase):
     setUp=simple.RecorridoTests.setUp
     tearDown=simple.RecorridoTests.tearDown
 
+    def test_individual_multiple_cuatro_perfiles_conserva_modalidad_y_pdf(self):
+        from streamlit.testing.v1 import AppTest
+        from pathlib import Path
+        from documents.planeacion_papel import generar_pdf
+        from pypdf import PdfReader
+        from io import BytesIO
+        for area in ['Aprendizaje','Psicología','Comunicación','Trabajo Social']:
+            with self.subTest(area=area):
+                app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
+                app.radio[0].set_value(area).run()
+                next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value('Individual').run()
+                selector=next(w for w in app.multiselect if w.label=='Alumnos de mi formato')
+                self.assertEqual(len(selector.options),2)
+                next(b for b in app.button if b.label=='Seleccionar todos los alumnos individuales').click().run()
+                self.assertEqual(next(w for w in app.multiselect if w.label=='Alumnos de mi formato').value,['I1','I2'])
+                self.assertFalse(any(w.label=='Formato' for w in app.selectbox))
+                next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()
+                self.assertFalse(app.exception)
+                d=app.session_state.versiones_ficticias[-1]
+                self.assertEqual([a['ID_Alumno'] for a in d['datos']['Alumnos']],['I1','I2'])
+                self.assertEqual(d['metadatos']['modalidad_planeacion'],'individual')
+                self.assertFalse(d['metadatos']['individuales_en_sesion_grupal'])
+                self.assertEqual(d['formato'],'XXV' if area=='Trabajo Social' else 'XXIII')
+                self.assertFalse(papel.hoja(d)['grupal'])
+                self.assertEqual(app.session_state.llamadas_ficticias,0)
+                texto='\n'.join(p.extract_text() for p in PdfReader(BytesIO(generar_pdf(d))).pages)
+                for a in d['datos']['Alumnos']:self.assertIn(a['Nombre del alumno'],texto)
+                app.run();self.assertFalse(app.exception)
+                self.assertEqual(app.session_state.versiones_ficticias[-1]['id'],d['id'])
+
+    def test_grupal_multiple_conserva_guia_y_destinatarios(self):
+        from streamlit.testing.v1 import AppTest
+        from pathlib import Path
+        app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
+        next(w for w in app.multiselect if w.label=='Alumnos de mi formato').set_value(['A1','A2']).run()
+        next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()
+        self.assertFalse(app.exception)
+        d=app.session_state.versiones_ficticias[-1]
+        self.assertEqual(d['metadatos']['modalidad_planeacion'],'grupal')
+        self.assertEqual([r['ID_Alumno'] for r in guia_grupal(d)['filas']],['A1','A2'])
+
+    def test_modalidad_multiple_rechaza_ajenos_grupales_y_duplicados(self):
+        import pandas as pd
+        from services.planeacion_modalidad import comprobar
+        frame=pd.DataFrame([{'ID_Alumno':'I1','Tipo_Atencion':'Individual'},{'ID_Alumno':'I2','Tipo_Atencion':'Individual'},{'ID_Alumno':'G','Tipo_Atencion':'Grupal'}])
+        antes=frame.copy(deep=True)
+        comprobar(frame,['I1','I2'],'individual')
+        self.assertEqual(simple.seleccion(frame,['I1','I2']),'individual')
+        for ids in [['I1','G'],['I1','AJENO']]:
+            with self.assertRaises(PermissionError):comprobar(frame,ids,'individual')
+        for ids in [[],['I1','I1']]:
+            with self.assertRaises(ValueError):comprobar(frame,ids,'individual')
+        pd.testing.assert_frame_equal(frame,antes)
+
     def abrir(self,area='Aprendizaje'):
         from streamlit.testing.v1 import AppTest
         from pathlib import Path
