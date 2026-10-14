@@ -23,7 +23,7 @@ def seleccion(frame,ids,incluir=False):
     if len(rows)!=len(set(ids)):raise ValueError('Revisa los alumnos de tu matrícula.')
     tipos={modalidad(r) for r in rows}
     if not tipos or 'por confirmar' in tipos:raise ValueError('Para continuar, este alumno requiere tener asignada su modalidad de atención (individual o grupal) en el padrón.')
-    if tipos=={'individual'} and len(ids)==1 and not incluir:return 'individual'
+    if tipos=={'individual'} and not incluir:return 'individual'
     if 'individual' in tipos and not incluir:raise ValueError('Para reunir alumnos individuales, activa la opción avanzada de sesión grupal.')
     return 'grupal'
 
@@ -117,7 +117,7 @@ def _entrada(base,actor):
         try:tipo=seleccion(escolar,ids,incluir)
         except ValueError as exc:st.info(str(exc))
     fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
-    if tipo=='individual' and actor['area']=='Aprendizaje' and not actor['director']:
+    if tipo=='individual' and len(ids)==1 and actor['area']=='Aprendizaje' and not actor['director']:
         opcion=st.segmented_control('¿Qué documento necesitas?', ['Planeación trimestral','Plan de intervención'],default='Planeación trimestral',key=base+'_formato')
         fmt='XXI' if opcion=='Plan de intervención' else 'XXIII'
     if st.button('Crear mi borrador',type='primary',disabled=not tipo,key=base+'_crear'):

@@ -21,8 +21,8 @@ def comprobar(frame, ids, seleccion, incluir_individuales=False):
     elegibles = filtrar(frame, seleccion, incluir_individuales)
     if 'ID_Alumno' not in elegibles or not set(map(str, ids)) <= set(elegibles['ID_Alumno'].astype(str)):
         raise PermissionError('El alumno no pertenece a esta modalidad de tu matrícula.')
-    if seleccion == 'individual' and len(set(map(str, ids))) != 1:
-        raise ValueError('La planeación individual se crea para un solo alumno.')
+    if not ids or len(set(map(str, ids))) != len(ids):
+        raise ValueError('Selecciona uno o varios alumnos sin duplicados.')
 
 def modalidad_documento(doc, frame):
     declared=doc.get('metadatos',{}).get('modalidad_planeacion')

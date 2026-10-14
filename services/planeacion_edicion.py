@@ -64,7 +64,7 @@ def copiar(doc,ids,ciclo,trimestre,grupal=False,incluir_individuales=False):
     if {clave_escuela(v) for v in rows['ID_Escuela']}!={clave_escuela(doc['datos']['ID_Escuela'])}:
         raise PermissionError('La copia debe corresponder a la misma escuela.')
     tipo='grupal' if grupal else 'individual'
-    if not grupal and len(ids)!=1:raise ValueError('Un documento individual conserva un solo alumno.')
+    if doc['formato']=='XXI' and not grupal and len(ids)!=1:raise ValueError('El Plan de intervención anual conserva un solo alumno y su IEPP.')
     formato=('XXIII' if doc['formato']=='XXI' and grupal else doc['formato'])
     nuevo=s.nueva(formato,ids,int(ciclo),int(trimestre),modalidad=tipo,incluir_individuales=incluir_individuales)
     if nuevo.get('revision'):
