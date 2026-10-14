@@ -221,6 +221,8 @@ def _editor(prefix,actor,paso):
     if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
     if paso==PASOS[1]:
         st.subheader(PASOS[1]);st.caption('El expediente alimenta el borrador. La IA propone; tú decides y puedes editar todo.')
+        from ui.planeacion_respaldo import acceso
+        acceso(prefix, prefix.rsplit('_',1)[0], PASOS[2])
         fuentes=doc['metadatos'].get('fuentes',[])
         with st.expander('📋 1. Antecedentes automáticos (Anexos III, IV, V y visitas)', expanded=True):
             st.caption('Revisa lo ya documentado por el equipo. Si un antecedente te sirve, pulsa "+ Usar en borrador" para transferirlo sin copiar y pegar.')
@@ -350,6 +352,8 @@ def _editor(prefix,actor,paso):
             st.session_state[prefix.rsplit('_',1)[0]+'_paso']=PASOS[2];st.rerun()
     else:
         st.subheader(PASOS[2]);st.caption('Edita directamente en tu formato. Los resultados finales se registran después de trabajar con el alumno.')
+        from ui.planeacion_respaldo import informacion
+        informacion(prefix, prefix.rsplit('_',1)[0], PASOS[1])
         with st.expander('Datos generales del formato'):
             st.write(doc['datos'])
             if not doc['datos'].get('CCT'):u._text(prefix,'datos','CCT','CCT no registrado: verifica y completa')
