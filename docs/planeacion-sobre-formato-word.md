@@ -26,6 +26,6 @@ El editor transmite una pausa de edición de cuatro segundos, agrupada por el gu
 
 ## Comprobaciones del 14 de octubre
 
-Batería offline de 403 pruebas correcta (117.669 s). Después se verificó específicamente Por grado y la separación de caché de PDF entre formato anterior y papel. El protocolo JavaScript se probó con un DOM simulado: origen de mensajes, texto literal, autoguardado, guardado explícito en cola, conservación de texto ante versión obsoleta y aviso de salida. No hubo conexiones externas en esas pruebas.
+Batería final offline de 405 pruebas correcta (125.337 s), incluidos Por grado y la separación de caché de PDF entre formato anterior y papel. El protocolo JavaScript se probó con un DOM simulado: origen de mensajes, texto literal, autoguardado, guardado explícito en cola, conservación de texto ante versión obsoleta y aviso de salida. No hubo conexiones externas en esas pruebas.
 
 En Chrome se abrió un formato individual ficticio, se escribió dentro de la celda de actividades y se comprobó Guardado confirmado. La captura de demostración solo contiene texto ficticio. Se reutiliza la caché por sesión y formato para no regenerar PDF en cada interacción. Guardar, mostrar PDF y enviar desde la hoja transmiten primero las celdas pendientes; enviar sigue sujeto a la revisión canónica. No se publicó ningún cambio ni se escribió en la base real.
