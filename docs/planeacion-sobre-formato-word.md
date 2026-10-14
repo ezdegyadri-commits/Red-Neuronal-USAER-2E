@@ -22,7 +22,7 @@ El editor transmite una pausa de edición de cuatro segundos, agrupada por el gu
 
 `services/planeacion_papel` vuelve a autorizar cada operación, reconstruye las celdas desde el documento de servidor y rechaza documento/huella obsoletos, celdas ajenas, campos inventados, acciones fuera de lista y eliminación de aportes/sesiones protegidos. La fila vacía del ejemplo permite empezar a escribir sin configurar la IA. Todos los cambios siguen usando el documento canónico, no una segunda base.
 
-`documents/planeacion_papel` imprime las mismas celdas y orden del editor y conserva fundamentos, apoyos y complementos de especialistas. La interfaz anterior y la primera vista viva siguen siendo alternativas de desarrollo, no publicaciones separadas. La publicación de este rediseño continúa pendiente de aprobación.
+`documents/planeacion_papel` imprime las mismas celdas y orden del editor y conserva fundamentos, apoyos y complementos de especialistas. La interfaz anterior y la primera vista viva siguen siendo alternativas de desarrollo, no publicaciones separadas. Dirección autorizó la publicación de este rediseño el 14 de octubre de 2026, condicionada a completar la regresión final y verificar el despliegue.
 
 ## Comprobaciones del 14 de octubre
 

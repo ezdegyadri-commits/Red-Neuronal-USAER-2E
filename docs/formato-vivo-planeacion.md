@@ -20,7 +20,7 @@ Se revisaron los cinco ejemplos grupales 2025–2026 compartidos por Dirección 
 
 `ui/planeacion_viva.py` presenta la hoja. `services/planeacion_viva.py` acota la edición de guía y selecciona antecedentes por ID y vínculo verificado. No tiene acceso directo a Sheets ni llama IA. Los callbacks reutilizan `ui.planeacion._open/_persist/_autosave`, los servicios canónicos de permisos, creación, contexto, propuestas y salida documental.
 
-La creación compartida está en `ui.planeacion_simple.crear_borrador`; ambas vistas llaman la misma ruta y conservan el bloqueo de ediciones pendientes. No hay migración, tabla nueva, permiso nuevo ni escritura masiva. La publicación queda pendiente de revisión de Dirección.
+La creación compartida está en `ui.planeacion_simple.crear_borrador`; ambas vistas llaman la misma ruta y conservan el bloqueo de ediciones pendientes. No hay migración, tabla nueva, permiso nuevo ni escritura masiva. Esta matriz quedó como alternativa; Dirección autorizó publicar la vista de papel descrita en `planeacion-sobre-formato-word.md` el 14 de octubre de 2026.
 
 La guía se proyecta desde el documento canónico. Las propuestas locales ya incorporadas y con destinatario por ID pueden aparecer en una celda vacía del área propia; nunca sustituyen una edición manual ni se asocian por parecido de nombres. El PDF lee esa misma proyección. Las identidades, condición y aportaciones de otras áreas quedan protegidas en la hoja nueva; las guías enlazadas conservan el flujo de aportaciones.
 
