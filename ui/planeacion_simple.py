@@ -60,6 +60,11 @@ def _entrada(base,actor):
                         from services.planeacion_modalidad import modalidad_documento
                         _abrir(base,base+'_'+modalidad_documento(doc,s.padron_autorizado()),doc);st.rerun()
                     except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+                if st.button('Editar planeación',key=base+'_editar_'+doc['id']):
+                    try:
+                        from ui.planeacion_edicion import abrir_guardada
+                        abrir_guardada(base,doc);st.rerun()
+                    except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
     else:st.caption('Tus borradores aparecerán aquí después del primer guardado confirmado.')
     with st.expander('Recuperar un respaldo o consultar ayuda'):
         if st.button('Actualizar mis documentos',key=base+'_simple_refrescar'):
@@ -224,6 +229,8 @@ def _editor(prefix,actor,paso):
     st.caption(', '.join(a['Nombre del alumno'] for a in doc['datos']['Alumnos'])+' · '+doc['datos']['Periodo'])
     u._autosave(prefix)
     if doc.get('observaciones_director'):st.info('Dirección: '+doc['observaciones_director'])
+    from ui.planeacion_edicion import panel as opciones_edicion
+    opciones_edicion(prefix)
     if paso==PASOS[1]:
         st.subheader(PASOS[1]);st.caption('El expediente alimenta el borrador. La IA propone; tú decides y puedes editar todo.')
         from ui.planeacion_respaldo import acceso
