@@ -39,7 +39,7 @@ def _abrir(base,prefix,doc):
     u._open(prefix,doc)
     st.session_state[prefix+'_mostrar_pdf']=False
     st.session_state[base+'_activa']=prefix
-    st.session_state[base+'_paso_pendiente']=PASOS[2] if doc.get('metadatos',{}).get('generacion_completa') else PASOS[1]
+    st.session_state[base+'_paso_pendiente']=PASOS[2] if doc.get('metadatos',{}).get('generacion_completa') or doc.get('metadatos',{}).get('preparacion_local') else PASOS[1]
 
 
 def _entrada(base,actor):
@@ -235,6 +235,8 @@ def _editor(prefix,actor,paso):
         st.subheader(PASOS[1]);st.caption('El expediente alimenta el borrador. La IA propone; tú decides y puedes editar todo.')
         from ui.planeacion_respaldo import acceso
         acceso(prefix, prefix.rsplit('_',1)[0], PASOS[2])
+        from ui.planeacion_local import panel as actividades_locales
+        actividades_locales(prefix)
         fuentes=doc['metadatos'].get('fuentes',[])
         with st.expander('📋 1. Antecedentes automáticos (Anexos III, IV, V y visitas)', expanded=True):
             st.caption('Revisa lo ya documentado por el equipo. Si un antecedente te sirve, pulsa "+ Usar en borrador" para transferirlo sin copiar y pegar.')

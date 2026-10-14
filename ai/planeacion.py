@@ -107,11 +107,32 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
     try:
         raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', (response.text or '').strip())
         result = _validador(json.loads(raw)) if _validador else validar_respuesta(json.loads(raw), curriculo)
-    except (ValueError, TypeError, AttributeError):
+    except (ValueError, TypeError, AttributeError) as exc:
+        motivos={
+            'JSONInvalido':'la respuesta no llegó en el formato estructurado solicitado',
+            'SalidaCortada':'la respuesta se cortó al alcanzar el límite de salida',
+            'CamposIncompletos':'faltaron campos obligatorios en una actividad',
+            'EstructuraInvalida':'la estructura de actividades no es válida',
+            'ReferenciasInvalidas':'las referencias no llegaron en el formato requerido',
+            'Vinculo_evidencias':'una actividad no citó evidencias válidas de las proporcionadas',
+            'Vinculo_fuentes':'una actividad no citó las fuentes normativas proporcionadas',
+            'Vinculo_referentes':'una actividad citó un PDA no seleccionado o no vinculó el elegido',
+            'Vinculo_destinatarios':'una actividad no identificó correctamente a sus destinatarios',
+            'Vinculo_competencias':'se incluyó una competencia no reconocida',
+            'EvidenciaAjena':'una evidencia no correspondía a los destinatarios de la actividad',
+            'ContextoInvalido':'una actividad usó un contexto distinto al admitido por el formato',
+            'FuncionInvalida':'se mezclaron indicaciones de otra función profesional',
+            'ContenidoNoVerificable':'la respuesta no superó la revisión de contenido y referencias'}
+        motivo=getattr(exc,'motivo','JSONInvalido' if isinstance(exc,json.JSONDecodeError) else 'ContenidoNoVerificable')
+        candidatos=getattr(response,'candidates',None) or []
+        final=getattr(candidatos[0],'finish_reason',None) if candidatos else None
+        final=str(getattr(final,'name',final) or '').split('.')[-1]
+        if final=='MAX_TOKENS':motivo='SalidaCortada'
+        if motivo not in motivos:motivo='ContenidoNoVerificable'
         st.session_state['planeacion_ia_diagnostico'] = {
-            'codigo': None, 'tipo': 'RespuestaNoVerificable', 'motor': modelo}
-        logger.warning('planeacion_ia_error codigo=None tipo=RespuestaNoVerificable')
-        raise RuntimeError('La propuesta llegó incompleta o sin un fundamento verificable. Tu borrador se conserva.') from None
+            'codigo': None, 'tipo': 'RespuestaNoVerificable', 'motor': modelo,'motivo':motivo}
+        logger.warning('planeacion_ia_error codigo=None tipo=RespuestaNoVerificable motivo=%s',motivo)
+        raise RuntimeError('La IA no completó una propuesta válida: '+motivos[motivo]+'. Puedes preparar actividades con tus datos sin IA. Tu borrador se conserva.') from None
     st.session_state.pop('planeacion_ia_diagnostico', None)
     st.session_state.pop('planeacion_ia_reintentar_desde', None)
     return result

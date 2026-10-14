@@ -1,13 +1,19 @@
 """Contrato de generación del borrador completo; sin datos identificadores."""
 import hashlib
 import json
+from copy import deepcopy
 from ai.planeacion_prompt import INSTRUCCIONES
 from services.planeacion_modelo import FORMATOS
 from services.planeacion_equipo import COMPETENCIAS
 
-VERSION='planeacion-completa-2026-10-06-v1'
+VERSION='planeacion-completa-2026-10-14-v2'
 CAMPOS=('necesidad','objetivo','descriptor','actividad','contexto','apoyos','recursos','evaluacion','fundamento')
 LISTAS=('evidencias','fuentes','referentes','destinatarios','competencias')
+
+
+class RespuestaInvalida(ValueError):
+    def __init__(self,mensaje,motivo):
+        super().__init__(mensaje);self.motivo=motivo
 SCHEMA={'type':'object','required':['observaciones','faltantes','unidades','sugerencia_familia'],
  'properties':{'observaciones':{'type':'string'},'faltantes':{'type':'array','items':{'type':'string'}},
  'sugerencia_familia':{'type':'string'},'unidades':{'type':'array','items':{'type':'object',
@@ -57,7 +63,9 @@ incluye los campos de texto necesidad, objetivo, descriptor, actividad, contexto
 apoyos, recursos, evaluacion, fundamento; y listas evidencias, fuentes, referentes,
 destinatarios y competencias. competencias queda vacía fuera de Psicología.
 '''
-    reglas+='\nPara esta configuración devuelve como máximo '+str(min(8,int(ajustes['sesiones'])))+' unidades.\n'
+    limite=min(8,int(ajustes['sesiones']),max(6 if area=='Psicología' else 3,len(aliases)))
+    reglas+='\nPara esta configuración devuelve como máximo '+str(limite)+' unidades. '
+    reglas+='Sé conciso: actividad hasta 900 caracteres y los demás textos hasta 240 cada uno. No repitas antecedentes completos ni tablas normativas; usa sus identificadores.\n'
     return INSTRUCCIONES.split('Devuelve solo JSON')[0]+'\n'+reglas+'\nDATOS DE CONSULTA:\n'+json.dumps(datos,ensure_ascii=False,sort_keys=True)
 
 
@@ -67,21 +75,21 @@ def huella_completa(*args):
 
 def validar_completa(data,formato,area,contexto,aliases,evidencias):
     if not isinstance(data,dict) or not isinstance(data.get('unidades'),list) or len(data['unidades'])>8:
-        raise ValueError('La planeación llegó sin una estructura válida.')
+        raise RespuestaInvalida('La planeación llegó sin una estructura válida.','EstructuraInvalida')
     fuentes={f['id'] for f in contexto.get('fuentes',[])}
     referentes={r['id'] for r in contexto.get('referentes_por_grado',[])}
     resultado=[]
     for u in data['unidades']:
         if not isinstance(u,dict) or any(not isinstance(u.get(k),str) or not u[k].strip() or len(u[k])>4000 for k in CAMPOS):
-            raise ValueError('Una actividad llegó incompleta.')
-        if any(not isinstance(u.get(k),list) or any(not isinstance(v,str) for v in u[k]) for k in LISTAS):raise ValueError('Referencias de actividad inválidas.')
+            raise RespuestaInvalida('Una actividad llegó incompleta.','CamposIncompletos')
+        if any(not isinstance(u.get(k),list) or any(not isinstance(v,str) for v in u[k]) for k in LISTAS):raise RespuestaInvalida('Referencias de actividad inválidas.','ReferenciasInvalidas')
         for campo,permitidos,obligatorio in [('evidencias',set(evidencias),True),('fuentes',fuentes,True),('referentes',referentes,bool(referentes)),('destinatarios',set(aliases),True),('competencias',set(COMPETENCIAS),False)]:
-            if not set(u[campo]).issubset(permitidos) or (obligatorio and not u[campo]):raise ValueError('La actividad no tiene un vínculo verificable: '+campo)
-        if u['contexto'] not in FORMATOS[formato]['contextos']:raise ValueError('Contexto no permitido para este formato.')
+            if not set(u[campo]).issubset(permitidos) or (obligatorio and not u[campo]):raise RespuestaInvalida('La actividad no tiene un vínculo verificable: '+campo,'Vinculo_'+campo)
+        if u['contexto'] not in FORMATOS[formato]['contextos']:raise RespuestaInvalida('Contexto no permitido para este formato.','ContextoInvalido')
         if isinstance(evidencias,dict):
             documentados={a for ref in u['evidencias'] for a in evidencias.get(ref,[])}
-            if not set(u['destinatarios'])<=documentados:raise ValueError('La evidencia de otro alumno no sustenta esta actividad.')
-        if area!='Psicología' and u['competencias']:raise ValueError('Se trasladaron competencias exclusivas de Psicología a otra función.')
+            if not set(u['destinatarios'])<=documentados:raise RespuestaInvalida('La evidencia de otro alumno no sustenta esta actividad.','EvidenciaAjena')
+        if area!='Psicología' and u['competencias']:raise RespuestaInvalida('Se trasladaron competencias exclusivas de Psicología a otra función.','FuncionInvalida')
         resultado.append({**{k:u[k].strip() for k in CAMPOS},**{k:list(dict.fromkeys(u[k])) for k in LISTAS}})
     faltantes=data.get('faltantes',[])
     if not isinstance(faltantes,list):raise ValueError('Preguntas de confirmación no válidas.')
@@ -93,5 +101,14 @@ def validar_completa(data,formato,area,contexto,aliases,evidencias):
 def generar_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias):
     from ai.planeacion import proponer
     prompt=solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
-    return proponer(resumen,formato,area,curriculo=contexto,_prompt=prompt,_schema=SCHEMA,
+    schema=deepcopy(SCHEMA)
+    unidad=schema['properties']['unidades']['items']['properties']
+    unidad['contexto']['enum']=list(FORMATOS[formato]['contextos'])
+    permitidos={'evidencias':list(evidencias),'fuentes':[f['id'] for f in contexto.get('fuentes',[])],
+        'referentes':[r['id'] for r in contexto.get('referentes_por_grado',[])],
+        'destinatarios':list(aliases),'competencias':list(COMPETENCIAS) if area=='Psicología' else []}
+    for campo,values in permitidos.items():
+        if values:unidad[campo]['items']['enum']=values
+        else:unidad[campo]['maxItems']=0
+    return proponer(resumen,formato,area,curriculo=contexto,_prompt=prompt,_schema=schema,
         _max_tokens=6000,_validador=lambda data:validar_completa(data,formato,area,contexto,aliases,evidencias))
