@@ -38,21 +38,29 @@ def grados(doc):
         if m:values.add(int(m[1]))
     return values
 
+def campos_seleccionados(seleccion):
+    """Compatible con los borradores históricos de un solo campo."""
+    values=seleccion.get('campos',seleccion.get('campo',[]))
+    return list(dict.fromkeys([values] if isinstance(values,str) else values or []))
+
+
 def opciones(doc,campo,grados_referencia=None):
-    if campo not in CAMPOS:return []
+    campos=[campo] if isinstance(campo,str) else list(campo or [])
+    if not campos or not set(campos).issubset(CAMPOS):return []
     permitidos=set(range(1,7)) if grados_referencia is None else set(grados_referencia)
-    return [r for r in catalogo()['registros'] if r['grado'] in permitidos and r['campo']==campo]
+    return [r for r in catalogo()['registros'] if r['grado'] in permitidos and r['campo'] in campos]
 
 def vincular(doc,campo,ejes,ids,contexto_local='',adaptaciones=None):
-    if campo not in CAMPOS or not set(ejes).issubset(EJES):raise ValueError('Elige campos y ejes del catálogo oficial.')
+    campos=campos_seleccionados({'campo':campo})
+    if not campos or not set(campos).issubset(CAMPOS) or not set(ejes).issubset(EJES):raise ValueError('Elige campos y ejes del catálogo oficial.')
     if len(ids)>6:raise ValueError('Elige hasta seis referentes prioritarios.')
-    disponibles={r['id']:r for r in opciones(doc,campo)}
+    disponibles={r['id']:r for r in opciones(doc,campos)}
     if not set(ids).issubset(disponibles):raise ValueError('El referente no corresponde al campo seleccionado.')
     selected=[deepcopy(disponibles[i]) for i in dict.fromkeys(ids)]
     result=deepcopy(doc)
     adaptaciones=adaptaciones if adaptaciones is not None else doc['metadatos'].get('curriculo',{}).get('adaptaciones',{})
     ajustadas={i:{k:str(v.get(k,'')).strip()[:4000] for k in ('contenido','pda')} for i,v in adaptaciones.items() if i in ids and isinstance(v,dict)}
-    result['metadatos']['curriculo']={'campo':campo,'ejes':list(ejes),'registros':selected,'contexto_local':str(contexto_local)[:4000], 'adaptaciones':ajustadas}
+    result['metadatos']['curriculo']={'campo':campos[0],'campos':campos,'ejes':list(ejes),'registros':selected,'contexto_local':str(contexto_local)[:4000], 'adaptaciones':ajustadas}
     return result
 
 def contexto_ia(doc):
@@ -68,12 +76,12 @@ def contexto_ia(doc):
 
 def _contexto_ia_base(doc):
     seleccion=doc['metadatos'].get('curriculo',{})
-    campo=seleccion.get('campo','')
-    if campo not in CAMPOS:return {'fuentes':FUENTES_BASE,'campos':CAMPOS,'ejes':EJES,'aviso':'Sin contenido o PDA seleccionado: no atribuir un PDA específico a una actividad.'}
-    verified=vincular(doc,campo,seleccion.get('ejes',[]),[r['id'] for r in seleccion.get('registros',[])])
+    campos=campos_seleccionados(seleccion)
+    if not campos:return {'fuentes':FUENTES_BASE,'campos':CAMPOS,'ejes':EJES,'aviso':'Sin contenido o PDA seleccionado: no atribuir un PDA específico a una actividad.'}
+    verified=vincular(doc,campos,seleccion.get('ejes',[]),[r['id'] for r in seleccion.get('registros',[])])
     registros=verified['metadatos']['curriculo']['registros']
     sources=FUENTES_BASE+[s for s in catalogo()['fuentes'] if s['id'] in {r['fuente'] for r in registros}]
-    return {'fuentes':sources,'campo':{campo:CAMPOS[campo]},'ejes':{e:EJES[e] for e in seleccion.get('ejes',[])},'referentes_por_grado':registros,
+    return {'fuentes':sources,'campo':{c:CAMPOS[c] for c in campos},'ejes':{e:EJES[e] for e in seleccion.get('ejes',[])},'referentes_por_grado':registros,
             'adaptaciones_docentes':verified['metadatos']['curriculo'].get('adaptaciones',{}),
             'grados_del_padron':sorted(grados(doc)),
             'guia_local':'Priorizar NEE documentadas y BAP; objetivo y descriptor: sujeto + verbo observable en presente + habilidad. Dosificar por contextos y registrar tiempos, recursos y evaluación. Trabajo Social aborda barreras y apoyos en aula, escuela, familia y comunidad. No convertir una condición en una NEE ni una propuesta en un logro.',

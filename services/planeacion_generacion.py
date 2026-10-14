@@ -7,7 +7,7 @@ import json
 import re
 from services.planeacion_modelo import FORMATOS
 from services import planeacion_equipo as equipo
-from services.curriculo import contexto_ia, CAMPOS, opciones, vincular
+from services.curriculo import contexto_ia, CAMPOS, opciones, vincular, campos_seleccionados
 from utils.text import normalizar_texto
 from ai.planeacion_completa import huella_completa, validar_completa
 
@@ -31,7 +31,8 @@ def sugerir_curriculo(doc,ajustes):
     cur=doc['metadatos'].get('curriculo',{})
     grado=ajustes.get('grado_referencia');campo=ajustes.get('campo_referencia',cur.get('campo'))
     if grado not in range(1,7) or campo not in CAMPOS:return deepcopy(doc)
-    if cur.get('registros') and not cur.get('sugerido_automaticamente') and cur.get('campo')==campo and all(r['grado']==grado for r in cur['registros']):return deepcopy(doc)
+    # La elección docente prevalece sobre la sugerencia automática de un campo.
+    if cur.get('registros') and not cur.get('sugerido_automaticamente'):return deepcopy(doc)
     contenido=str(ajustes.get('enfoque',''))+' '+doc['metadatos'].get('necesidades_confirmadas','')+' '+' '.join(f['texto'][:1500] for f in fuentes_pertinentes(doc))
     texto=normalizar_texto(contenido)
     familias={'LECTURA':('LECTURA','LECTO','LEER'),'ESCRITURA':('ESCRITURA','LECTO','ESCRIB'),
@@ -62,7 +63,7 @@ def fuentes_pertinentes(doc):
 
 def texto_curricular(doc):
     cur=doc['metadatos'].get('curriculo',{});lineas=[]
-    if cur.get('campo'):lineas.append('Campo formativo: '+cur['campo'])
+    if campos_seleccionados(cur):lineas.append('Campos formativos: '+', '.join(campos_seleccionados(cur)))
     if cur.get('ejes'):lineas.append('Ejes: '+', '.join(cur['ejes']))
     for r in cur.get('registros',[]):
         lineas.append(f"{r['fuente']} · Fase {r['fase']} · {r['grado']}° · página PDF {r['pagina_pdf']}\nContenido: {r['contenido']}\nPDA oficial: {r['pda']}")
