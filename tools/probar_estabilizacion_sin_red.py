@@ -41,6 +41,7 @@ modulos=[
  'tests.test_planeacion_viva',
  'tests.test_planeacion_papel',
  'tests.test_planeacion_apartados',
+ 'tests.test_planeacion_nee',
  'tests.test_planeacion_modelo','tests.test_planeacion_contexto',
  'tests.test_planeacion_continuidad','tests.test_planeacion_equipo',
  'tests.test_planeacion_completa','tests.test_planeacion_formato',

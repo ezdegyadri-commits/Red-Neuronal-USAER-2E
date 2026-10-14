@@ -69,7 +69,7 @@ def _entrada(base,actor):
     fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
     presentacion=None
     if tipo=='grupal' and actor['area']=='Aprendizaje':
-        elegido=st.selectbox('Formato para trabajar',['Guía grupal por alumno y área','Planeación trimestral del ejemplo'],key=base+'_papel_formato')
+        elegido=st.selectbox('Formato para trabajar',['Guía grupal horizontal por alumno y área · Anexo XIX','Planeación trimestral para el subgrupo · Anexo XXIII'],key=base+'_papel_formato_v2')
         presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
     if tipo=='individual' and len(ids)<=1 and actor['area']=='Aprendizaje' and not actor['director']:
         opcion=st.selectbox('Formato',['Planeación trimestral','Plan de intervención anual'],key=base+'_viva_tipo')

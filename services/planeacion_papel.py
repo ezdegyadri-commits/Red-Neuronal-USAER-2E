@@ -28,8 +28,11 @@ def hoja(doc):
         rows=[]
         for i,row in enumerate(doc['tablas'][table] or [{}]):
             locked=bool(row.get('_sesion_equipo') or row.get('_aporte'))
-            rows.append([celda(row.get(c,''),None if locked else ('tabla',table,i,c),c,
-                curricular if table=='aprendizajes' and c=='Aprendizaje y/u objetivo' else '') for c in headers])
+            cells_row=[celda(row.get(c,''),None if locked else ('tabla',table,i,c),c,
+                curricular if table=='aprendizajes' and c=='Aprendizaje y/u objetivo' else '') for c in headers]
+            if table=='aprendizajes' and row.get('_nee_origen'):
+                cells_row[0]['nota']='NEE propuesta para valoración: puedes mantenerla, cambiarla o eliminarla.' if row['_nee_origen'].get('propuesta') else 'NEE tomada de '+row['_nee_origen']['origen']+'.'
+            rows.append(cells_row)
         tables.append({'id':table,'title':{'aprendizajes':'','dosificacion':'Organización de las actividades de aprendizaje'}.get(table,f.TITULOS.get(table,table)),
             'headers':labelheaders,'rows':rows,'add':True,'delete':True,
             'protected':[i for i,r in enumerate(doc['tablas'][table]) if r.get('_sesion_equipo') or r.get('_aporte')],

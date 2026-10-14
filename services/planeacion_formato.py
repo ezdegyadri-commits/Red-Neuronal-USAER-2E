@@ -49,6 +49,8 @@ DESTINO_EVIDENCIA={'XXIII':('aprendizajes','Necesidades educativas específicas'
 def usar_evidencia(doc,fuente,limite=300):
     """Copia una evidencia ya registrada como nueva fila editable (capturar una vez)."""
     tabla,campo=DESTINO_EVIDENCIA[doc['formato']]
+    from services.planeacion_nee import es_bapse
+    if es_bapse(fuente) and doc['formato'] in ('XXIII','XXI'):raise ValueError('BAPSE describe barreras del contexto, no NEE. Usa la propuesta educativa o las NEE registradas por la maestra.')
     texto=' '.join(str(fuente.get('texto','')).split())[:limite]
     if not texto:raise ValueError('La evidencia no tiene texto para usar.')
     valor='['+str(fuente.get('tipo','EVIDENCIA'))+' · '+str(fuente.get('referencia',''))+'] '+texto

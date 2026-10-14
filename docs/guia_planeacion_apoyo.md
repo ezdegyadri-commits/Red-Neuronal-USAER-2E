@@ -2,6 +2,8 @@
 
 ## Edición sobre el formato Word de referencia
 
+Las NEE se redactan de forma breve: **Necesita + verbo + habilidad o conocimiento** (Manual USAER, p. 64). Se priorizan las registradas por la maestra en el padrón y las de la conclusión de una EPP revisada. Si faltan, se ofrece una hipótesis educativa señalada como propuesta, que puedes mantener, editar o eliminar; no confirma una NEE. BAPSE se conserva como evidencia del contexto, pero no se copia ni se usa como necesidad del alumno. El botón de completar apartados repara únicamente la antigua copia automática exacta, sin sustituir redacciones modificadas.
+
 Al abrir un formato nuevo se proponen objetivos y descriptores con sus antecedentes propios y referentes seleccionados. Las necesidades se presentan como antecedentes para revisión, nunca como NEE confirmadas automáticamente. Para documentos ya guardados usa **Completar apartados vacíos con mis datos**. Solo completa vacíos disponibles; puedes editar, borrar textos o retirar filas. Lo eliminado no reaparece al abrir el documento. Sin antecedentes no se inventan necesidades, y sin PDA seleccionado su vinculación queda pendiente.
 
 En **Individual** puedes seleccionar uno o varios alumnos de atención individual, o pulsar **Seleccionar todos los alumnos individuales**, para reunirlos en una planeación trimestral. En **Grupal** también puedes seleccionar varios. Esto no cambia la modalidad de atención del padrón. El **Plan de intervención anual** sigue siendo uno por alumno y se ofrece al seleccionar un solo destinatario.
