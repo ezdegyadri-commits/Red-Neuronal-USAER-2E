@@ -80,5 +80,8 @@ def aplicar(doc,event):
             if not isinstance(i,int) or event.get('confirmado') is not True:raise ValueError('Confirma el retiro de la fila.')
             if not 0<=i<len(result['tablas'][table]) or result['tablas'][table][i].get('_aporte'):raise PermissionError('Conserva la aportación de su autor.')
             result=f.quitar_fila(result,table,i)
+    elif action=='apartados':
+        from services.planeacion_apartados import proponer
+        result=proponer(result)
     elif action not in ('guardar','autoguardar','pdf','enviar','antecedentes','referentes','dua','ia','alumnos','detalle'):raise ValueError('Acción no reconocida.')
     return result

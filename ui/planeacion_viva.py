@@ -79,7 +79,7 @@ def _entrada(base,actor):
     st.caption(f'Curso {ciclo}–{ciclo+1} · Trimestre {trimestre}. Se reúnen los antecedentes propios de los alumnos seleccionados.')
     if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear'):
         try:
-            crear_borrador(base,fmt,ids,int(ciclo),trimestre,tipo,incluir,presentacion);st.rerun()
+            crear_borrador(base,fmt,ids,int(ciclo),trimestre,tipo,incluir,presentacion,proponer_apartados=True);st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
     with st.expander('Actualizar matrícula, recuperar un respaldo o consultar las guías'):
         if st.button('Actualizar matrícula disponible',key=base+'_viva_refresh'):s.refrescar_matricula();st.rerun()

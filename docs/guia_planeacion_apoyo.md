@@ -2,6 +2,8 @@
 
 ## Edición sobre el formato Word de referencia
 
+Al abrir un formato nuevo se proponen objetivos y descriptores con sus antecedentes propios y referentes seleccionados. Las necesidades se presentan como antecedentes para revisión, nunca como NEE confirmadas automáticamente. Para documentos ya guardados usa **Completar apartados vacíos con mis datos**. Solo completa vacíos disponibles; puedes editar, borrar textos o retirar filas. Lo eliminado no reaparece al abrir el documento. Sin antecedentes no se inventan necesidades, y sin PDA seleccionado su vinculación queda pendiente.
+
 En **Individual** puedes seleccionar uno o varios alumnos de atención individual, o pulsar **Seleccionar todos los alumnos individuales**, para reunirlos en una planeación trimestral. En **Grupal** también puedes seleccionar varios. Esto no cambia la modalidad de atención del padrón. El **Plan de intervención anual** sigue siendo uno por alumno y se ofrece al seleccionar un solo destinatario.
 
 Elige **Individual**, **Grupal** o **Por grado**. En grupal puedes elegir **Guía grupal por alumno y área** o **Planeación trimestral del ejemplo**. Se abre la hoja con sus tablas, no tarjetas. Escribe directamente en las celdas; puedes borrar textos, añadir filas o retirar filas manuales con confirmación. **Conectar antecedentes, PDA y DUA** abre solo la ayuda que necesites; **Proponer actividades con IA** conecta la información revisada y propone actividades, sin reemplazar el juicio docente. Los PDA oficiales y las adaptaciones siguen separados.

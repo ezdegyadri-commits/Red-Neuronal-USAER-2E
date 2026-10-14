@@ -18,7 +18,7 @@ function render(next){const focused=document.activeElement?.dataset.cell;clearTi
 const toolbar=document.getElementById('tools');toolbar.append(button('Guardar cambios de la hoja',()=>emit('guardar')),button('Ver PDF de esta hoja',()=>emit('pdf')));
 const conexiones=document.createElement('details');conexiones.append(text('summary','Conectar antecedentes, PDA y DUA'));
 for(const [label,action] of [['Antecedentes y documentos','antecedentes'],['Contenidos y PDA','referentes'],['Apoyos DUA','dua']])conexiones.append(button(label,()=>emit(action)));
-toolbar.append(conexiones,button('Proponer actividades con IA',()=>emit('ia')));
+toolbar.append(conexiones,button('Completar apartados vacíos con mis datos',()=>emit('apartados')),button('Proponer actividades con IA',()=>emit('ia')));
 const mas=document.createElement('details');mas.append(text('summary','Alumnos y otras opciones'));
 for(const [label,action] of [['Cambiar alumnos / grado','alumnos'],['Detalle y sesiones','detalle'],['Enviar a Dirección','enviar']])mas.append(button(label,()=>emit(action)));
 mas.append(button('Respaldar texto sin conexión',()=>{const blob=new Blob([JSON.stringify({documento:args.documento,huella:args.huella,cambios:dirty},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='texto-pendiente-planeacion.json';a.click();URL.revokeObjectURL(a.href)}));toolbar.append(mas);
