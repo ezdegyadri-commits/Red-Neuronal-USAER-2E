@@ -1,5 +1,11 @@
 # Guía de planeación para el equipo paradocente
 
+## Corregir, descargar y recuperar borradores
+
+En **Continuar una planeación guardada**, selecciona tu documento y pulsa **Editar borrador**. También están **Descargar borrador PDF**, **Descargar borrador editable** y **Eliminar borrador**. La eliminación pide confirmación y conserva el historial. Para recuperarlo, activa **Mostrar borradores eliminados**, selecciona el documento y pulsa **Restaurar borrador**.
+
+Cada pendiente de **Revisar antes de entregar** incluye **Corregir**: pulsa el enlace para llegar a la celda o sección correspondiente. El cuerpo de las celdas es editable completo; los referentes se consultan en las conexiones. Las filas automáticas sin trabajo planeado no ocupan espacio; usa **Añadir fila** cuando la necesites. Los borradores antiguos que copiaron un instrumento en NEE reciben una propuesta breve al abrirse; revísala, ajústala y guarda la hoja.
+
 ## Edición sobre el formato de referencia
 
 Los formatos nuevos reciben propuestas revisables a partir de antecedentes propios y referentes seleccionados, sin solicitar IA. Psicología muestra las cinco competencias emocionales con sus necesidades y descriptores editables, y la sugerencia prevista para la familia. Los objetivos anteriores siguen disponibles en **Otros aprendizajes y objetivos registrados**. Comunicación conserva objetivos y descriptores. Trabajo Social presenta el Anexo XXV con alumnos, grado, grupo, BAP, apoyos, actividades por contexto, fecha, recursos y resultados. **Completar apartados vacíos con mis datos** incorpora barreras explícitas de EPP o apartados BAP de los registros vinculados; no convierte respuestas de BAPSE en una conclusión ni sustituye redacciones existentes. Las propuestas pueden editarse, vaciarse o retirarse y no se regeneran al abrirla.

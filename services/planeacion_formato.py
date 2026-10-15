@@ -66,6 +66,11 @@ def usar_evidencia(doc,fuente,limite=300):
         from services.planeacion_generacion import fuentes_pertinentes
         if fuente not in fuentes_pertinentes(doc):raise PermissionError('La fuente no está vinculada a estos alumnos.')
         return proponer(doc)
+    if doc['formato']=='XXIII':
+        from services.planeacion_generacion import fuentes_pertinentes
+        from services.planeacion_apartados import proponer
+        if fuente not in fuentes_pertinentes(doc):raise PermissionError('El antecedente no está vinculado a estos alumnos.')
+        return proponer(doc)
     texto=' '.join(str(fuente.get('texto','')).split())[:limite]
     if not texto:raise ValueError('La evidencia no tiene texto para usar.')
     valor='['+str(fuente.get('tipo','EVIDENCIA'))+' · '+str(fuente.get('referencia',''))+'] '+texto

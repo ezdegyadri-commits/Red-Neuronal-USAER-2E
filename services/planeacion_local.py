@@ -58,8 +58,8 @@ def preparar(doc,enfoque='',contexto_actividad=None):
             if base_formato:alcance+=' Se reutiliza la orientación escrita en el formato como propuesta de trabajo; no confirma una evaluación ni un resultado.'
             firma=ed.huella({'doc':doc['id'],'alumno':a['ID_Alumno'],'campo':campo,'enfoque':enfoque,'fuentes':individuales+materiales,'referentes':seleccionados,'base_formato':bases,'contexto':contexto_actividad,'version':2})
             propuestas.append({'id':firma,'alumno':a['ID_Alumno'],'nombre':a['Nombre del alumno'],'campo':campo,
-                'actividad':'PROPUESTA LOCAL PARA REVISIÓN · '+a['Nombre del alumno']+'\n'+alcance+'\n'+sustento+
-                '\nInicio: '+inicio+'\nDesarrollo: '+desarrollo+'\nCierre: '+cierre,
+                'actividad':(a['Nombre del alumno']+'\n' if len(doc['datos']['Alumnos'])>1 else '')+'Inicio: '+inicio+'\nDesarrollo: '+desarrollo+'\nCierre: '+cierre,
+                'orientacion':alcance+'\n'+sustento,
                 'recursos':recursos,'evidencias':antecedentes,'referentes':referentes,'contexto':contexto_actividad})
     return {'huella':ed.huella(doc),'propuestas':propuestas,'enfoque':str(enfoque)}
 

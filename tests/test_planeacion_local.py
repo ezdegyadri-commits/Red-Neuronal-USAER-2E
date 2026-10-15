@@ -44,12 +44,12 @@ class LocalTests(unittest.TestCase):
         d=documento(dos=True);d['metadatos']['fuentes']=d['metadatos']['fuentes'][:1]
         req=local.preparar(d);row=next(r for r in req['propuestas'] if r['alumno']=='A2')
         self.assertFalse(row['evidencias'])
-        self.assertIn('sin antecedente individual',row['actividad'])
+        self.assertIn('sin antecedente individual',row['orientacion'])
 
     def test_material_general_no_se_convierte_en_evidencia_individual(self):
         d=documento();d['metadatos']['fuentes']=[{'tipo':'MATERIAL','alumno':'','referencia':'M1','texto':'Actividades de lectura con imágenes'}]
         row=local.preparar(d)['propuestas'][0]
-        self.assertFalse(row['evidencias']);self.assertIn('Materiales generales',row['actividad'])
+        self.assertFalse(row['evidencias']);self.assertIn('Materiales generales',row['orientacion'])
         self.assertIn('Leer o escuchar',row['actividad'])
 
     def test_respetar_campos_y_no_cambiar_grados(self):

@@ -44,22 +44,22 @@ def proponer(doc):
         texto=normalizar_texto(datos)
         if area=='Psicología':
             objetivo='Reconocer y comunicar una emoción en una situación escolar, explorando una alternativa de regulación o convivencia.'
-            descriptor='En una situación escolar propuesta, identifica una emoción y elige una alternativa de respuesta; registrar el apoyo necesario y revisar su pertinencia.'
+            descriptor='El alumno identifica una emoción y elige una alternativa de respuesta en una situación escolar.'
         elif area=='Comunicación':
             objetivo='Expresar una elección, una necesidad o una idea en un intercambio funcional mediante el canal de comunicación pertinente.'
-            descriptor='En un intercambio funcional, comunica una elección, petición o idea mediante el canal accesible; registrar la respuesta y los apoyos utilizados.'
+            descriptor='El alumno comunica una elección, petición o idea mediante un canal accesible.'
         elif any(t in texto for t in ('LECTURA','LECTO','LEER')):
             objetivo='Comprender información de un texto pertinente y comunicar una idea mediante una respuesta accesible.'
-            descriptor='Después de leer o escuchar un texto, identifica información y comunica una idea con palabras, imágenes o el canal pertinente; conservar una muestra y registrar los apoyos.'
+            descriptor='El alumno identifica información de un texto leído o escuchado y comunica una idea por un medio accesible.'
         elif 'ESCRIT' in texto:
             objetivo='Construir y compartir un mensaje significativo mediante escritura o una forma de expresión accesible.'
-            descriptor='Produce y comparte un mensaje relacionado con la actividad; conservar la muestra y registrar qué apoyos facilitaron su elaboración.'
+            descriptor='El alumno produce y comparte un mensaje relacionado con la actividad.'
         elif any(t in texto for t in ('NUMER','CONTEO','CANTIDAD','MATEMAT')):
             objetivo='Representar y resolver una situación de cantidad vinculada al contenido pertinente con recursos accesibles.'
-            descriptor='Representa una cantidad o explica una solución en una situación propuesta; registrar el procedimiento y los apoyos, sin anticipar el nivel de logro.'
+            descriptor='El alumno representa una cantidad y explica su solución con los apoyos previstos.'
         else:
             objetivo='Participar en una actividad vinculada al antecedente documentado o al contenido seleccionado, mediante apoyos pertinentes.'
-            descriptor='Realiza una acción relacionada con el objetivo y comunica su respuesta por un medio accesible; recoger una evidencia y registrar los apoyos para ajustar la siguiente sesión.'
+            descriptor='El alumno realiza la acción propuesta y comunica su respuesta por un medio accesible.'
         nombre=a['Nombre del alumno']
         antecedente='\n\n'.join('['+str(f.get('referencia',''))+'] '+str(f['texto'])[:900] for f in propias[:3])
         necesidad_texto=nee
@@ -67,7 +67,6 @@ def proponer(doc):
         verbo=objetivo.split(' ',1)[0]
         objetivo=verbos.get(verbo,verbo.lower())+' '+objetivo.split(' ',1)[1]
         if relevantes:objetivo+='\nContenido de referencia: '+ '; '.join(r['contenido'] for r in relevantes[:3])+'.'
-        else:objetivo+='\nVinculación con PDA pendiente de selección; no sustituye un referente oficial.'
         valores=({'Barreras para el Aprendizaje y la Participación':nombre+' · Propuesta para revisar las barreras documentadas del entorno; no equivale a una NEE.',
                    'Apoyos y/o ajustes razonables':'Propuesta para revisión: ofrecer información accesible, revisar los recursos reales con las personas implicadas y dar seguimiento a los acuerdos que efectivamente se alcancen.'} if tabla=='barreras' else
                   {'Necesidades educativas específicas':necesidad_texto,'Aprendizaje y/u objetivo':nombre+': '+objetivo,'Descriptor de logro':nombre+': '+descriptor})

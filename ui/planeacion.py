@@ -265,11 +265,13 @@ def _open(prefix,doc):
     if previo and st.session_state.get(prefix+'_pending') and (previo.get('id')!=doc.get('id') or previo.get('revision')!=doc.get('revision')):
         raise RuntimeError('Hay cambios pendientes en el documento abierto. Guarda o descarga su respaldo antes de abrir otro; tu edición no fue reemplazada.')
     from services.planeacion_generacion import prellenar
-    st.session_state[prefix+'_doc']=prellenar(doc)
+    from services.planeacion_limpieza import normalizar
+    limpio=normalizar(doc)
+    st.session_state[prefix+'_doc']=prellenar(limpio)
     st.session_state[prefix+'_generation']=st.session_state.get(prefix+'_generation',0)+1
     for suffix in ('_error','_pdf','_fuentes','_ia'):
         st.session_state.pop(prefix+suffix,None)
-    st.session_state[prefix+'_pending']=bool(previo and previo.get('id')==doc.get('id') and st.session_state.get(prefix+'_pending'))
+    st.session_state[prefix+'_pending']=limpio!=doc or bool(previo and previo.get('id')==doc.get('id') and st.session_state.get(prefix+'_pending'))
 
 
 def _resguardar_pendiente(prefix):

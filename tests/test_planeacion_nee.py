@@ -79,4 +79,4 @@ class FormatoUITests(unittest.TestCase):
             d=app.session_state.versiones_ficticias[-1];spec=hoja(d)
             self.assertEqual(d['metadatos']['modalidad_planeacion'],modo.lower())
             self.assertEqual(spec['grupal'],area=='Aprendizaje' and modo=='Grupal')
-            self.assertEqual(spec['tables'][0]['id'],'guia' if spec['grupal'] else 'barreras' if area=='Trabajo Social' else 'aprendizajes')
+            self.assertEqual(spec['tables'][0]['id'],'guia' if spec['grupal'] else 'alumnos_ts' if area=='Trabajo Social' else 'competencias' if area=='Psicología' else 'aprendizajes')

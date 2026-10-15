@@ -6,10 +6,12 @@ from services.planeacion_modelo import FORMATOS
 from services.planeacion_edicion import huella
 from services.curriculo import contexto_ia
 from services import planeacion_equipo as equipo
+from services.planeacion_limpieza import normalizar,tiene_contenido
 
 
-def hoja(doc):
+def hoja(doc,para_impresion=False):
     s.autorizar(doc,True)
+    firma=huella(doc);doc=normalizar(doc)
     cells={};tables=[]
     def celda(value,target=None,label='',readonly=''):
         key='c'+str(len(cells));cell={'id':key,'value':str(value or ''),'label':label,'editable':target is not None,'referente':readonly}
@@ -38,7 +40,10 @@ def hoja(doc):
         labelheaders=list(headers)
         if table=='aprendizajes' and datos['Función']=='Aprendizaje':labelheaders[1]='PDA: nacionales, nacionales contextualizados y/o locales (complementarios)'
         rows=[]
-        for i,row in enumerate(doc['tablas'][table] or [{}]):
+        indices=[]
+        for i,row in enumerate(doc['tablas'][table]):
+            if not tiene_contenido(doc,table,row) and (para_impresion or not row.get('_fila_manual')):continue
+            indices.append(i)
             sid=row.get('_sesion_equipo')
             linked=equipo.sesion_vinculada(doc,sid) if sid else None
             locked=bool(row.get('_aporte') or sid and linked is None)
@@ -48,12 +53,12 @@ def hoja(doc):
                 cells_row[0]['nota']='NEE propuesta para valoración: puedes mantenerla, cambiarla o eliminarla.' if row['_nee_origen'].get('propuesta') else 'NEE tomada de '+row['_nee_origen']['origen']+'.'
             rows.append(cells_row)
         tables.append({'id':table,'title':{'aprendizajes':'','dosificacion':'Organización de las actividades de aprendizaje'}.get(table,f.TITULOS.get(table,table)),
-            'headers':labelheaders,'rows':rows,'add':True,'delete':True,
+            'headers':labelheaders,'rows':rows,'indices':indices,'add':True,'delete':True,
             'collapsed':'Otros aprendizajes y objetivos registrados · editables' if table=='aprendizajes' and organizacion.get('competencias') else '',
             'protected':[i for i,r in enumerate(doc['tablas'][table]) if r.get('_aporte') or r.get('_sesion_equipo') and equipo.sesion_vinculada(doc,r['_sesion_equipo']) is None],
             'widths':[18,52,15,15] if table=='dosificacion' else [26,47,27] if table=='aprendizajes' else []})
-    textos=[celda(v,('texto',k),k) for k,v in doc['textos'].items()] if not grupal else []
-    if datos['Función']=='Psicología' and organizacion:
+    textos=[celda(v,('texto',k),k) for k,v in doc['textos'].items() if not para_impresion or str(v or '').strip()] if not grupal else []
+    if datos['Función']=='Psicología' and organizacion and (not para_impresion or str(organizacion.get('sugerencia_familia','')).strip()):
         textos.append(celda(organizacion.get('sugerencia_familia',''),('equipo','sugerencia_familia'),'Sugerencia prevista para la familia y referencia de su hoja'))
     header=[['Zona: '+str(datos['Zona']),'Servicio de Apoyo: '+datos['Servicio de apoyo']],
             ['Escuela Regular: '+datos['Escuela regular'],'Fase: '+', '.join(sorted({str(a.get('Fase de inscripción') or '') for a in alumnos}))],
@@ -69,8 +74,14 @@ def hoja(doc):
     else:
         header=[header[0],[header[1][0]+'\n'+header[2][0]+'\n'+header[3][0],
             header[1][1]+'\n'+header[2][1],header[3][1]+'\n'+header[4][0]+'\n'+header[4][1]]]
-    return {'documento':doc['id'],'huella':huella(doc),'titulo':'Guía de Planeación Grupal' if grupal else FORMATOS[doc['formato']]['titulo'],
+    from services.planeacion_revision import pendientes
+    _,avisos=pendientes(doc)
+    for aviso in avisos:
+        aviso['celda']=next((k for k,c in cells.items() if c['target']==aviso['target']),None)
+        if not aviso['celda'] and aviso['target'] and aviso['target'][0]=='tabla':aviso['panel']='tabla:'+aviso['target'][1]
+    return {'documento':doc['id'],'huella':firma,'titulo':'Guía de Planeación Grupal' if grupal else FORMATOS[doc['formato']]['titulo'],
         'header':header,'tables':tables,'textos':textos,'cells':cells,'grupal':grupal,
+        'pendientes':avisos,
         'firma':datos['Nombre del especialista']+'\nTrabajo Social' if doc['formato']=='XXV' else 'Nombre y firma del Especialista','vobo':'Vo. Bo. Director del Servicio de Apoyo'}
 
 
@@ -81,7 +92,7 @@ def aplicar(doc,event):
         raise ValueError('La hoja cambió. Tu texto debe conservarse en el respaldo antes de volver a aplicar.')
     cambios=event.get('cambios',{})
     if not isinstance(cambios,dict) or len(cambios)>1500:raise ValueError('Cambios fuera del formato.')
-    result=deepcopy(doc);patch={};base=guia_grupal(doc).get('filas',[])
+    result=normalizar(doc);patch={};base=guia_grupal(doc).get('filas',[])
     for key,value in cambios.items():
         cell=spec['cells'].get(key)
         if not cell or not cell['editable']:raise PermissionError('Esta celda procede del padrón o de otra aportación.')
@@ -100,7 +111,8 @@ def aplicar(doc,event):
     if action in ('agregar','retirar'):
         table=event.get('tabla')
         if table not in doc['tablas'] or spec['grupal']:raise ValueError('Selecciona una tabla del formato.')
-        if action=='agregar':result=f.nueva_fila(result,table)
+        if action=='agregar':
+            result=f.nueva_fila(result,table);result['tablas'][table][-1]['_fila_manual']=True
         else:
             i=event.get('fila')
             if not isinstance(i,int) or event.get('confirmado') is not True:raise ValueError('Confirma el retiro de la fila.')
@@ -109,5 +121,7 @@ def aplicar(doc,event):
     elif action=='apartados':
         from services.planeacion_apartados import proponer
         result=proponer(result)
+    elif action=='corregir':
+        if event.get('panel') not in {a['panel'] for a in spec['pendientes']}:raise ValueError('Destino de corrección no válido.')
     elif action not in ('guardar','autoguardar','pdf','enviar','antecedentes','referentes','dua','ia','alumnos','detalle'):raise ValueError('Acción no reconocida.')
     return result
