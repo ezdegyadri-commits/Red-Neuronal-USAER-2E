@@ -10,8 +10,17 @@ editor=components.declare_component('usaer_planeacion_papel',path=str(Path(__fil
 def hoja(prefix):
     from ui import planeacion as u
     doc=st.session_state[prefix+'_doc'];u.servicio.autorizar(doc,True)
+    from services.planeacion_compartida import ampliar_matricula
+    ampliado=ampliar_matricula(doc,u.servicio.padron_autorizado())
+    if ampliado!=doc:
+        altas=len(ampliado['datos']['Alumnos'])-len(doc['datos']['Alumnos'])
+        if altas:ampliado=u.servicio.preparar_contexto(ampliado)
+        u._open(prefix,ampliado);st.session_state[prefix+'_pending']=True
+        doc=st.session_state[prefix+'_doc']
+        if altas:st.info('Se añadieron las altas grupales nuevas del mismo grado y grupo. Las filas y aportes anteriores se conservan.')
     u._autosave(prefix)
-    event=editor(hoja=papel.hoja(doc),aceptado=st.session_state.get(prefix+'_papel_aceptado',False),key=prefix+'_papel_'+doc['id'],default=None)
+    event=editor(hoja=papel.hoja(doc),guardado=doc.get('guardado_en','') if not st.session_state.get(prefix+'_pending') else '',
+        aceptado=st.session_state.get(prefix+'_papel_aceptado',False),key=prefix+'_papel_'+doc['id'],default=None)
     st.session_state[prefix+'_papel_aceptado']=False
     if event and event.get('nonce')!=st.session_state.get(prefix+'_papel_nonce'):
         try:
@@ -22,13 +31,23 @@ def hoja(prefix):
             if nuevo!=doc:
                 u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar')
             st.session_state[prefix+'_papel_aceptado']=True
-            if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados'):st.session_state[prefix+'_papel_panel']=action
+            if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados','inicio','equipo'):st.session_state[prefix+'_papel_panel']=action
             if action=='corregir':st.session_state[prefix+'_papel_panel']=event['panel']
             if action=='guardar' and nuevo==doc:u._persist(prefix)
             if action=='enviar':
                 if estado=='ENVIADO' and nuevo==doc:u._persist(prefix,'ENVIADO')
                 elif estado!='ENVIADO':st.session_state[prefix+'_papel_aviso']='Completa los aspectos pendientes antes de enviar. Se conserva tu borrador.'
             if action=='pdf':st.session_state[prefix+'_mostrar_pdf']=True
+            if action=='equipo':
+                if not st.session_state.get(prefix+'_pending') or u._persist(prefix):
+                    u.servicio.refrescar()
+                    reciente=next((d for d in u.servicio.compartidos() if d['id']==doc['id']),None)
+                    if reciente:u._open(prefix,reciente)
+                else:st.session_state[prefix+'_papel_aviso']='Tu texto se conserva. Se actualizarán los aportes cuando se confirme el guardado.'
+            if action=='inicio':
+                if st.session_state.get(prefix+'_pending') and not u._persist(prefix):
+                    st.session_state[prefix+'_papel_aviso']='Tu edición sigue abierta: no se confirmó aún el guardado. Se reintentará automáticamente.'
+                else:st.session_state[prefix.rsplit('_',1)[0]+'_viva_entrada']=True
             if action=='apartados' and nuevo==doc:st.session_state[prefix+'_papel_aviso']='No hay nuevos vacíos vinculados con datos suficientes para proponer. Tu redacción se conserva; puedes conectar antecedentes o elegir referentes sin redactar de nuevo.'
             st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:
@@ -86,7 +105,7 @@ def hoja(prefix):
                     for campo in current['textos']:u._text(prefix,'textos',campo)
                 from ui.planeacion_equipo import panel
                 panel(prefix,current,u._persist,u._open,compact=True)
-    st.caption('La hoja transmite los cambios después de una pausa al escribir; el autoguardado conserva sus intervalos y reintentos. Antes de cerrar, pulsa Guardar cambios de la hoja y confirma el guardado. El respaldo de texto pendiente conserva las celdas aún no transmitidas.')
+    st.caption('Autoguardado activo: al pausar la escritura se transmite el texto y se confirma el guardado recuperable. Si falla la conexión, conserva esta ventana abierta: se reintenta sin borrar tu trabajo. Guardar es también una opción manual.')
     from ui.planeacion_viva import _acciones
     from documents.planeacion_papel import generar_pdf
     _acciones(prefix,pdf_provider=generar_pdf,acciones_hoja=True)

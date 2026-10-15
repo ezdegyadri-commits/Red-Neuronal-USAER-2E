@@ -70,7 +70,10 @@ class HojaTests(unittest.TestCase):
             next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value('Individual').run()
             next(w for w in app.multiselect if w.label=='Alumnos de mi formato').set_value(['I1']).run()
             if pi:next(w for w in app.selectbox if w.label=='Formato').set_value('Plan de intervención anual').run()
-        else:next(w for w in app.multiselect if w.label=='Alumnos de mi formato').set_value(['A1']).run()
+        else:
+            next(w for w in app.selectbox if w.label=='Grado').set_value('5').run()
+            next(w for w in app.selectbox if w.label=='Grupo').set_value('A').run()
+            next(w for w in app.multiselect if w.label=='Alumnos de mi formato').set_value(['A1']).run()
         next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()
         self.assertFalse(app.exception)
         return app
@@ -126,7 +129,8 @@ class HojaTests(unittest.TestCase):
         self.assertEqual(app.session_state.llamadas_ficticias,0)
 
     def test_director_conserva_revision_y_colaboracion(self):
-        app=self.abrir('Dirección')
+        app=self.abrir('Aprendizaje')
+        app.radio[0].set_value('Dirección').run()
         self.assertEqual({t.label for t in app.tabs},{'Mi formato','Trabajo colaborativo','Revisión directiva'})
         self.assertTrue(any(b.label=='Validar revisión' for b in app.button))
 

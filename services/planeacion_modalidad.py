@@ -18,7 +18,7 @@ def filtrar(frame, seleccion, incluir_individuales=False):
     return frame.loc[mask].copy()
 
 def comprobar(frame, ids, seleccion, incluir_individuales=False):
-    elegibles = filtrar(frame, seleccion, incluir_individuales)
+    elegibles = frame if seleccion=='especialista' else filtrar(frame, seleccion, incluir_individuales)
     if 'ID_Alumno' not in elegibles or not set(map(str, ids)) <= set(elegibles['ID_Alumno'].astype(str)):
         raise PermissionError('El alumno no pertenece a esta modalidad de tu matrícula.')
     if not ids or len(set(map(str, ids))) != len(ids):
@@ -26,7 +26,7 @@ def comprobar(frame, ids, seleccion, incluir_individuales=False):
 
 def modalidad_documento(doc, frame):
     declared=doc.get('metadatos',{}).get('modalidad_planeacion')
-    if declared in {'individual','grupal'}:return declared
+    if declared in {'individual','grupal','especialista'}:return declared
     ids={str(a['ID_Alumno']) for a in doc['datos']['Alumnos']}
     rows=frame.loc[frame['ID_Alumno'].astype(str).isin(ids)].to_dict('records') if 'ID_Alumno' in frame else []
     return 'individual' if rows and len(ids)==1 and all(modalidad(r)=='individual' for r in rows) else 'grupal'
@@ -48,6 +48,25 @@ def guia_grupal(doc):
         z=zona.get(a['ID_Alumno'],{})
         for key in ['Fecha derivación','Situación inicial','Situación final']:
             if not row[key]:row[key]=z.get(key,'')
+        if not row['Situación inicial']:
+            from services.planeacion_compartida import situacion_inicial
+            fuentes=[f for f in doc['metadatos'].get('fuentes',[]) if a['ID_Alumno'] in str(f.get('alumno','')).split(',')]
+            contexto=doc['metadatos'].get('contexto_padron_grupo',{}).get(a['ID_Alumno'],{})
+            row['Situación inicial']=situacion_inicial({**a,**{k:v for k,v in contexto.items() if v}},fuentes)
+        # Un aporte forma parte del mismo Anexo, sin requerir que la maestra lo copie.
+        for especialidad,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items():
+            if especialidad not in ('Psicología','Comunicación','Trabajo Social'):continue
+            # Los aportes estructurados anteriores conservan su conciliación
+            # humana. Solo las celdas nuevas explícitas son la columna viva.
+            if not any('Texto en formato' in r for r in aporte.get('filas',[])):continue
+            textos=[]
+            for r in aporte.get('filas',[]):
+                if r.get('ID_Alumno')==a['ID_Alumno']:
+                    texto=r.get('Texto en formato')
+                    if texto is None:texto=' · '.join(str(r.get(k,'') or '').strip() for k in ('Objetivo / qué trabajar','Actividad / cómo trabajar') if str(r.get(k,'') or '').strip())
+                    if texto:textos.append(texto)
+            if textos or any(r.get('ID_Alumno')==a['ID_Alumno'] and 'Texto en formato' in r for r in aporte.get('filas',[])):
+                row[especialidad]='\n\n'.join(textos)
         area=doc['datos']['Función']
         if area in GUIA_XIX and not row[area]:row[area]=z.get('Actividades','')
         # Una propuesta local ya revisada conserva su destinatario por ID. La guía
@@ -57,4 +76,5 @@ def guia_grupal(doc):
                          if a['ID_Alumno'] in r.get('_alumnos_locales',[]) and r.get('_actividad_local')]
             row[area]='\n\n'.join(v for v in actividades if v)
         filas.append(row)
-    return {'maestro_grupo':prev.get('maestro_grupo',''),'filas':filas,'as':prev.get('as',[])}
+    from services.planeacion_compartida import docente_grupo
+    return {'maestro_grupo':prev.get('maestro_grupo','') or docente_grupo(doc),'filas':filas,'as':prev.get('as',[])}

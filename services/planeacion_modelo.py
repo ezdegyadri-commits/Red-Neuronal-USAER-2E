@@ -95,6 +95,7 @@ def crear_plantilla(formato, ids, alumnos_autorizados, *, autor, funcion,
         'Condición': texto(r.get('Condicion_Discapacidad')),
         'Maestro de apoyo': texto(r.get('Maestra de Apoyo')),
         'ID_Maestro_Regular': texto(r.get('ID_Maestro_Regular')),
+        'Situacion_Alumno': texto(r.get('Situacion_Alumno')),
         'Fase de inscripción': fase_primaria(r.get('Grado')) if 'PRIMARIA' in texto(r.get('Nivel_Educativo')).upper() else None,
     } for r in filas]
     from services.planeacion_nee import nee_padron

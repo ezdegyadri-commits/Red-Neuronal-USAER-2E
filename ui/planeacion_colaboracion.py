@@ -40,7 +40,9 @@ def _cambio(base,key,filas=None):
 
 @st.fragment(run_every=15)
 def _estado(base):
-    if st.session_state.get(base+'_pending'):_guardar(base,True)
+    if st.session_state.get(base+'_pending'):
+        _guardar(base,True)
+        if not st.session_state.get(base+'_pending'):st.rerun(scope='app')
     if st.session_state.get(base+'_error'):st.warning(st.session_state[base+'_error'])
     elif st.session_state.get(base+'_pending'):st.caption('Aportación pendiente de autoguardado.')
     else:st.caption('Aportación recuperable: último guardado '+st.session_state[base+'_doc'].get('guardado_en','sin cambios')[:19])
@@ -53,14 +55,24 @@ def panel(prefix):
     try:docs=s.compartidos()
     except Exception:
         st.warning('No se pudo consultar el trabajo del equipo. No se han alterado los documentos.');return
-    if not docs:st.info('No hay PI o guías de apoyo compartidas en tus escuelas asignadas.');return
-    escuelas=list(dict.fromkeys(d['datos']['ID_Escuela'] for d in docs))
-    nombres={d['datos']['ID_Escuela']:d['datos']['Escuela regular'] for d in docs}
+    from services.planeacion_matricula import clave_escuela
+    frame=s.padron_autorizado()
+    nombres={clave_escuela(r['ID_Escuela']):str(r.get('Nombre_Escuela',r['ID_Escuela'])) for r in frame.to_dict('records')}
+    escuelas=list(nombres)
+    if not escuelas:st.info('No hay escuelas con alumnos dentro de tu asignación actual.');return
     escuela=st.selectbox('Escuela del trabajo compartido',escuelas,format_func=nombres.get,key=prefix+'_escuela')
-    docs=[d for d in docs if d['datos']['ID_Escuela']==escuela]
+    docs=[d for d in docs if clave_escuela(d['datos']['ID_Escuela'])==escuela]
+    if not docs:st.info('Esta escuela aún no tiene un PI o Anexo XIX compartido. La maestra de apoyo inicia el formato.');return
     por_id={d['id']:d for d in docs}
-    did=st.selectbox('Documento compartido',list(por_id),format_func=lambda i:('PI' if por_id[i]['formato']=='XXI' else 'Guía grupal')+' · '+', '.join(a['Nombre del alumno'] for a in por_id[i]['datos']['Alumnos'])+' · '+por_id[i]['datos']['Curso escolar'],key=prefix+'_id')
+    from services.planeacion_compartida import etiqueta,es_guia
+    did=st.selectbox('Documento compartido · grado, grupo y fecha/hora',list(por_id),format_func=lambda i:etiqueta(por_id[i]),key=prefix+'_id')
     doc=por_id[did]
+    if es_guia(doc) and actor['area'] in ('Psicología','Comunicación','Trabajo Social'):
+        if st.session_state.get(prefix+'_cerrado')==did:
+            if st.button('Abrir Anexo XIX compartido',key=prefix+'_reabrir'):st.session_state.pop(prefix+'_cerrado',None);st.rerun()
+            return
+        from ui.planeacion_anexo_compartido import panel as hoja_compartida
+        hoja_compartida(prefix,doc);return
     for area,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items():
         with st.expander(area+' · '+aporte['autor']):
             st.dataframe(pd.DataFrame(aporte['filas']),hide_index=True)

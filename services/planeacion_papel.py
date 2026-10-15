@@ -1,16 +1,30 @@
 """Contrato de la hoja Word editable; ningún HTML ni clave de navegador es autoridad."""
 from copy import deepcopy
+import hashlib
 from services import planeacion as s,planeacion_formato as f,planeacion_viva as viva
 from services.planeacion_modalidad import guia_grupal,GUIA_XIX
 from services.planeacion_modelo import FORMATOS
-from services.planeacion_edicion import huella
+from services.planeacion_edicion import huella as huella_documento
 from services.curriculo import contexto_ia
 from services import planeacion_equipo as equipo
 from services.planeacion_limpieza import normalizar,tiene_contenido
 
 
-def hoja(doc,para_impresion=False):
-    s.autorizar(doc,True)
+def huella(doc):
+    """Un acuse de persistencia no invalida las celdas que siguen abiertas en el navegador."""
+    copia=deepcopy(doc)
+    for k in ('revision','anterior','guardado_en','_orden'):copia.pop(k,None)
+    for aporte in copia['metadatos'].get('aportaciones_equipo',{}).values():
+        aporte.pop('revision',None);aporte.pop('fecha',None)
+    return huella_documento(copia)
+
+
+def hoja(doc,para_impresion=False,colaborativa=False):
+    actor=s.autorizar(doc,not colaborativa)
+    if colaborativa:
+        from services.planeacion_colaboracion import compartible
+        if not compartible(doc) or actor.get('area') not in ('Psicología','Comunicación','Trabajo Social') or actor.get('director'):
+            raise PermissionError('Esta vista permite aportar solo al área asignada del Anexo XIX.')
     firma=huella(doc);doc=normalizar(doc)
     cells={};tables=[]
     def celda(value,target=None,label='',readonly=''):
@@ -21,8 +35,8 @@ def hoja(doc,para_impresion=False):
     organizacion=doc['metadatos'].get('equipo',{}) if equipo.aplica(doc) else {}
     curricular='\n\n'.join('Contenido: '+r['contenido']+'\nPDA: '+r['pda']+'\n'+r['fuente']+' · p. '+str(r['pagina_pdf']) for r in cur.get('referentes_por_grado',[]))
     if grupal:
-        rows=guia_grupal(doc)['filas'];permitidos=viva.campos_guia(doc)
-        tables.append({'id':'guia','title':'','headers':GUIA_XIX,'rows':[[celda(row.get(c,''),('guia',i,c) if c in permitidos else None,c) for c in GUIA_XIX] for i,row in enumerate(rows)],'add':False,'delete':False,'widths':[14,12,9,14,12,12,12,8,7]})
+        rows=guia_grupal(doc)['filas'];permitidos=[actor['area']] if colaborativa else viva.campos_guia(doc)
+        tables.append({'id':'guia','title':'','headers':GUIA_XIX,'rows':[[celda(row.get(c,''),('aporte' if colaborativa else 'guia',i,c) if c in permitidos else None,c) for c in GUIA_XIX] for i,row in enumerate(rows)],'add':False,'delete':False,'widths':[14,12,9,14,12,12,12,8,7]})
     if doc['formato']=='XXV':
         tables.append({'id':'alumnos_ts','title':'','headers':['Nombre del alumno','Grado','Grupo'],
             'rows':[[celda(a.get(c,''),label=c) for c in ('Nombre del alumno','Grado','Grupo')] for a in alumnos],
@@ -57,6 +71,14 @@ def hoja(doc,para_impresion=False):
             'collapsed':'Otros aprendizajes y objetivos registrados · editables' if table=='aprendizajes' and organizacion.get('competencias') else '',
             'protected':[i for i,r in enumerate(doc['tablas'][table]) if r.get('_aporte') or r.get('_sesion_equipo') and equipo.sesion_vinculada(doc,r['_sesion_equipo']) is None],
             'widths':[18,52,15,15] if table=='dosificacion' else [26,47,27] if table=='aprendizajes' else []})
+    from services import planeacion_evaluacion as evaluacion
+    escala=evaluacion.filas(doc)
+    if escala:
+        tables.append({'id':'escala_trimestral','title':'Escala de valoración de indicadores · cierre del trimestre',
+            'headers':list(evaluacion.CAMPOS),'rows':[[celda(r.get(c,''),None if c=='Alumno' else ('escala',i,c),c) for c in evaluacion.CAMPOS] for i,r in enumerate(escala)],
+            'add':True,'delete':True,'widths':[17,30,25,13,15],
+            'alumnos':[{'id':a['ID_Alumno'],'nombre':a['Nombre del alumno']} for a in alumnos]})
+        for row in tables[-1]['rows']:row[3]['opciones']=list(evaluacion.ESCALA)
     textos=[celda(v,('texto',k),k) for k,v in doc['textos'].items() if not para_impresion or str(v or '').strip()] if not grupal else []
     if datos['Función']=='Psicología' and organizacion and (not para_impresion or str(organizacion.get('sugerencia_familia','')).strip()):
         textos.append(celda(organizacion.get('sugerencia_familia',''),('equipo','sugerencia_familia'),'Sugerencia prevista para la familia y referencia de su hoja'))
@@ -69,18 +91,24 @@ def hoja(doc,para_impresion=False):
         header=[['Servicio de apoyo: '+datos['Servicio de apoyo'],'Zona: '+str(datos['Zona'])],
                 ['Periodo: '+datos['Periodo'],'Escuela Regular: '+datos['Escuela regular']]]
     elif grupal:
-        header=[['Curso escolar: '+datos['Curso escolar'],'Maestro de grupo: '+guia_grupal(doc)['maestro_grupo']],
+        maestro=guia_grupal(doc)['maestro_grupo']
+        campo_maestro=celda(maestro,('maestro_grupo',),'Maestro/a de grupo regular') if not colaborativa else 'Maestro de grupo: '+maestro
+        header=[['Curso escolar: '+datos['Curso escolar'],campo_maestro],
                 ['Escuela: '+datos['Escuela regular'],'Grado y grupo: '+', '.join(sorted({str(a['Grado'])+' '+str(a['Grupo']) for a in alumnos}))]]
     else:
         header=[header[0],[header[1][0]+'\n'+header[2][0]+'\n'+header[3][0],
             header[1][1]+'\n'+header[2][1],header[3][1]+'\n'+header[4][0]+'\n'+header[4][1]]]
     from services.planeacion_revision import pendientes
     _,avisos=pendientes(doc)
+    if grupal and not guia_grupal(doc)['maestro_grupo']:
+        avisos.append({'mensaje':'Falta el nombre del maestro de grupo regular. Captúralo aquí o en el padrón.', 'target':('maestro_grupo',),'panel':'detalle'})
+    if colaborativa:avisos=[]
     for aviso in avisos:
         aviso['celda']=next((k for k,c in cells.items() if c['target']==aviso['target']),None)
         if not aviso['celda'] and aviso['target'] and aviso['target'][0]=='tabla':aviso['panel']='tabla:'+aviso['target'][1]
     return {'documento':doc['id'],'huella':firma,'titulo':'Guía de Planeación Grupal' if grupal else FORMATOS[doc['formato']]['titulo'],
-        'header':header,'tables':tables,'textos':textos,'cells':cells,'grupal':grupal,
+        'header':header,'tables':tables,'textos':textos,'cells':cells,'grupal':grupal,'colaborativa':colaborativa,
+        'cache_id':hashlib.sha256((actor.get('cuenta','')+'|'+actor.get('area','')+'|'+doc['id']).encode()).hexdigest(),
         'pendientes':avisos,
         'firma':datos['Nombre del especialista']+'\nTrabajo Social' if doc['formato']=='XXV' else 'Nombre y firma del Especialista','vobo':'Vo. Bo. Director del Servicio de Apoyo'}
 
@@ -106,10 +134,18 @@ def aplicar(doc,event):
         elif target[0]=='sesion':result=equipo.editar_en_formato(result,*target[1:],value)
         elif target[0]=='competencia':result['metadatos']['equipo']['competencias'][target[1]][target[2]]=value
         elif target[0]=='equipo':result['metadatos']['equipo'][target[1]]=value
+        elif target[0]=='maestro_grupo':result['metadatos'].setdefault('guia_grupal_manual',{})['maestro_grupo']=value
+        elif target[0]=='escala':
+            from services.planeacion_evaluacion import editar
+            result=editar(result,*target[1:],value)
     if patch:result=viva.editar_guia(result,{'edited_rows':patch},base)
     action=event.get('accion','guardar')
     if action in ('agregar','retirar'):
         table=event.get('tabla')
+        if table=='escala_trimestral' and not spec['grupal']:
+            from services.planeacion_evaluacion import cambiar_fila
+            if action=='retirar' and event.get('confirmado') is not True:raise ValueError('Confirma el retiro del indicador.')
+            return cambiar_fila(result,event.get('fila') if action=='retirar' else None,event.get('alumno'))
         if table not in doc['tablas'] or spec['grupal']:raise ValueError('Selecciona una tabla del formato.')
         if action=='agregar':
             result=f.nueva_fila(result,table);result['tablas'][table][-1]['_fila_manual']=True
@@ -123,5 +159,28 @@ def aplicar(doc,event):
         result=proponer(result)
     elif action=='corregir':
         if event.get('panel') not in {a['panel'] for a in spec['pendientes']}:raise ValueError('Destino de corrección no válido.')
-    elif action not in ('guardar','autoguardar','pdf','enviar','antecedentes','referentes','dua','ia','alumnos','detalle'):raise ValueError('Acción no reconocida.')
+    elif action not in ('guardar','autoguardar','pdf','enviar','antecedentes','referentes','dua','ia','alumnos','detalle','inicio','equipo'):raise ValueError('Acción no reconocida.')
     return result
+
+
+def aplicar_aporte(doc,event):
+    """Parche estrictamente acotado; ni el navegador ni el especialista reescriben otra área."""
+    spec=hoja(doc,colaborativa=True);actor=s.identidad()
+    if not isinstance(event,dict) or event.get('documento')!=doc['id'] or event.get('huella')!=spec['huella']:
+        raise ValueError('El formato cambió. Conserva tu texto y actualiza antes de aplicar.')
+    if event.get('accion') not in ('guardar','autoguardar','inicio'):raise PermissionError('Guarda tu aportación; la maestra coordina las demás acciones del Anexo XIX.')
+    from services.planeacion_colaboracion import COLUMNAS
+    filas=deepcopy(doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{}).get('filas',[]))
+    cambios=event.get('cambios',{})
+    if not isinstance(cambios,dict) or len(cambios)>500:raise ValueError('Revisa la aportación.')
+    for key,value in cambios.items():
+        c=spec['cells'].get(key)
+        if not c or not c['editable'] or c['target'][0]!='aporte':raise PermissionError('Solo puedes cambiar tu columna del formato.')
+        if not isinstance(value,str) or len(value)>4000:raise ValueError('Cada aportación admite hasta 4 000 caracteres.')
+        aid=doc['datos']['Alumnos'][c['target'][1]]['ID_Alumno']
+        fila=next((r for r in filas if r['ID_Alumno']==aid),None)
+        if fila is None:
+            fila={k:'' for k in COLUMNAS};fila['ID_Alumno']=aid;filas.append(fila)
+        fila['Texto en formato']=value
+        fila['_celda_viva']=True
+    return filas

@@ -9,7 +9,8 @@ def campos_guia(doc):
     """Identidades y aportaciones de otras áreas no se editan en esta vista."""
     area=doc['datos']['Función']
     if doc['metadatos'].get('guia_compartida'):return []
-    return ['Fecha derivación',area,'Situación inicial','Situación final'] if area in GUIA_XIX else []
+    from services.planeacion_compartida import junio
+    return ['Fecha derivación',area,'Situación inicial']+(['Situación final'] if junio(doc) else []) if area in GUIA_XIX else []
 
 
 def editar_guia(doc,parche,base):

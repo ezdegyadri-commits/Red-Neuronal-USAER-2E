@@ -285,10 +285,10 @@ def _resguardar_pendiente(prefix):
 @st.fragment(run_every=15)
 def _autosave(prefix):
     if st.session_state.get(prefix+'_pending'):
-        _persist(prefix,automatic=True)
+        if _persist(prefix,automatic=True):st.rerun(scope='app')
     current=st.session_state[prefix+'_doc']
     if prefix+'_error' in st.session_state:st.warning(st.session_state[prefix+'_error'])
-    elif st.session_state.get(prefix+'_pending'):st.caption('Cambios pendientes: se agrupan y guardan automáticamente. Usa Guardar borrador antes de cerrar.')
+    elif st.session_state.get(prefix+'_pending'):st.caption('Autoguardado en proceso. Puedes seguir trabajando; se confirmará aquí sin pulsar Guardar.')
     elif current.get('guardado_en'):st.caption('Guardado confirmado: '+current['guardado_en'][:19]+' · '+current['estado'])
     else:st.warning('Este borrador aún no tiene un guardado confirmado.')
 

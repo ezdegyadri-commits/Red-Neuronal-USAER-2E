@@ -16,6 +16,8 @@ BASE_HEADERS={
 'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado'],
 'Configuracion_Oficios':['ID_Configuracion','Fecha_Comision','Asunto','Destino','Horario','Actualizado_Por','Actualizado_En'],
 'Anexo7_Derivacion':['ID_Anexo7','Fecha','ID_Alumno','Escuela','Docente_Regular','Fecha_Nacimiento','Respuestas_JSON','Salud','Seguimiento_Medico','Aspecto_Relevante','Elaborado_Por']}
+# Columna aditiva: ensure_headers conserva columnas y filas anteriores.
+BASE_HEADERS['Alumnos'].append('Fecha_Nacimiento')
 INTEGRATED_HEADERS={
 'Expedientes':['ID_Expediente','ID_Alumno','Estatus','Fecha_Apertura','Ultima_Actualizacion'],
 'Relaciones_Expediente':['ID_Relacion','ID_Expediente','ID_Alumno','Tipo_Registro','ID_Registro','Fecha','Estado'],
@@ -336,6 +338,7 @@ PADRON_FIELDS = {
  'Lengua_Indigena_Mayahablante', 'Afrodescendiente', 'Migrante',
  'Nombre_Escuela', 'Turno_Escuela', 'CCT_Escuela', 'Direccion_Escuela',
  'Localidad_Escuela', 'Municipio_Escuela', 'Condiciones_Adicionales',
+ 'Fecha_Nacimiento',
 }
 
 
@@ -401,6 +404,9 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
  seen_input = set()
  for registro in rows:
   data = dict(registro)
+  from utils.escolar import grado_canonico,grupo_canonico
+  if data.get('Grado'):data['Grado']=grado_canonico(data['Grado'])
+  if data.get('Grupo'):data['Grupo']=grupo_canonico(data['Grupo'])
   curp = str(data.get('CURP', '')).strip().upper()
   if not curp:
    continue
@@ -438,6 +444,8 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
    cambio = False
    for col, header in enumerate(headers):
     nuevo = str(data.get(header, '')).strip()
+    if header=='Grado' and grado_canonico(nuevo)==grado_canonico(actual[col]):continue
+    if header=='Grupo' and grupo_canonico(nuevo)==grupo_canonico(actual[col]):continue
     if header in PADRON_FIELDS and nuevo and nuevo != str(actual[col]).strip():
      updates.append({
       "range": f"{_a1_column(col + 1)}{fila}",

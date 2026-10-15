@@ -14,6 +14,14 @@ def pendientes(doc):
         'curriculo':['NEE','Aprendizajes priorizados y/u objetivos','Descriptor de logro','Temporalidad'],
         'participantes':['Nombre','Función']}
     for falta in faltas:
+        if falta=='capturar el maestro de grupo regular':
+            agregar('Capturar el maestro de grupo regular',('maestro_grupo',));continue
+        if falta in ('describir qué y cómo se trabaja en Aprendizaje para cada alumno','confirmar NI o RI y la situación inicial de cada alumno'):
+            from services.planeacion_modalidad import guia_grupal
+            campo='Aprendizaje' if falta.startswith('describir') else 'Situación inicial'
+            for i,row in enumerate(guia_grupal(doc)['filas']):
+                if not str(row.get(campo,'')).strip():agregar('Completar '+campo+' · '+row['Nombre alumno'],('guia',i,campo))
+            continue
         detallada=False
         for tabla,campos in requeridas.items():
             if falta not in ('completar '+tabla,'completar las celdas requeridas de '+tabla):continue

@@ -69,7 +69,7 @@ def logout(key="cerrar_sesion"):
     pendientes=any(k.startswith(prefix) and k.endswith('_pending') and v for k,v in st.session_state.items())
     salir=False
     if pendientes:
-        st.warning('Hay cambios de Planeación pendientes. Guarda y confirma, o descarga el respaldo antes de salir.')
+        st.info('El autoguardado está en proceso. Puedes continuar trabajando. Para salir ahora, usa «Guardar cambios y cerrar sesión». Si no hay conexión, tu sesión permanecerá abierta para proteger el trabajo.')
         salir=st.checkbox('Quiero cerrar sin guardar los cambios pendientes',key=key+'_confirmar_pendientes')
         if st.button('Guardar cambios y cerrar sesión',key=key+'_guardar',use_container_width=True):
             from ui.planeacion import _guardar_edicion_pendiente

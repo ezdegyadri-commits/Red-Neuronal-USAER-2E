@@ -13,7 +13,13 @@ def _abrir(base,doc):
     from ui.planeacion_simple import _abrir as abrir
     from services.planeacion_modalidad import modalidad_documento
     prefix=base+'_'+modalidad_documento(doc,s.padron_autorizado())
+    for key,value in list(st.session_state.items()):
+        if key.startswith(base+'_') and key.endswith('_doc') and isinstance(value,dict) and st.session_state.get(key[:-4]+'_pending'):
+            if not u._guardar_edicion_pendiente(key[:-4]):raise RuntimeError('El autoguardado aún no se confirmó; tu edición sigue abierta. Reintenta cuando vuelva la conexión.')
+            if value.get('id')==doc.get('id'):doc=deepcopy(st.session_state[key])
     abrir(base,prefix,doc)
+    for suffix in ('_papel_panel','_papel_nonce','_papel_aceptado'):
+        st.session_state.pop(prefix+suffix,None)
     return prefix
 
 
@@ -28,7 +34,8 @@ def _entrada(base,actor):
     if docs:
         with st.expander('Continuar una planeación guardada',expanded=True):
             porid={d['id']:d for d in sorted(docs,key=lambda d:d.get('guardado_en',''),reverse=True)}
-            did=st.selectbox('Mis planeaciones',list(porid),format_func=lambda i:porid[i]['datos']['Escuela regular']+' · '+porid[i]['datos']['Periodo']+' · '+', '.join(a['Nombre del alumno'] for a in porid[i]['datos']['Alumnos']),key=base+'_viva_guardadas')
+            from services.planeacion_compartida import etiqueta
+            did=st.selectbox('Mis planeaciones · escuela, grado, grupo, trimestre y fecha/hora',list(porid),format_func=lambda i:etiqueta(porid[i]),key=base+'_viva_guardadas')
             if st.button('Abrir mi formato',key=base+'_viva_abrir'):
                 try:_abrir(base,porid[did]);st.rerun()
                 except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
@@ -45,7 +52,11 @@ def _entrada(base,actor):
     schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
     indice=st.selectbox('Escuela',range(len(schools)),format_func=lambda i:schools[i]['Nombre_Escuela'],key=base+'_viva_escuela') if len(schools)>1 else 0
     school=schools[indice];st.caption(school['Nombre_Escuela'])
-    modo=st.segmented_control('Modalidad de planeación',['Individual','Grupal','Por grado'],default='Grupal',key=base+'_viva_modalidad') or 'Grupal'
+    especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
+    if especialista:
+        st.info('El Anexo XIX lo inicia la maestra de apoyo. Abre «Trabajo colaborativo» para aportar en esa misma hoja. Aquí elaboras tu formato propio de especialista.')
+    modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
+    modo=st.segmented_control('Modalidad de planeación',modos,default='Mi intervención' if especialista else 'Grupal',key=base+'_viva_modalidad_v3') or modos[0]
     tipo='individual' if modo=='Individual' else 'grupal';ciclo,trimestre=periodo_actual();incluir=False
     with st.expander('Cambiar periodo o incluir atención individual en una sesión grupal'):
         ciclo=st.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
@@ -54,7 +65,7 @@ def _entrada(base,actor):
     if modo=='Por grado':
         incluir=True
         st.caption('Por grado reúne a sus alumnos individuales y grupales autorizados, sin cambiar su modalidad en el padrón.')
-    rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,incluir=incluir)
+    rows=frame.loc[frame['ID_Escuela']==school['ID_Escuela']].copy() if especialista and modo=='Mi intervención' else viva.opciones_padron(frame,school['ID_Escuela'],tipo,incluir=incluir)
     if rows.empty:st.info('No hay alumnos con esta modalidad registrada en esta escuela.');return
     grado=grupo=''
     if tipo=='grupal':
@@ -62,7 +73,9 @@ def _entrada(base,actor):
         grado=left.selectbox('Grado',['Todos']+sorted(set(rows['Grado'].astype(str))),key=base+'_viva_grado')
         grados=rows if grado=='Todos' else rows.loc[rows['Grado'].astype(str)==grado]
         grupo=right.selectbox('Grupo',['Todos']+sorted(set(grados['Grupo'].astype(str))),key=base+'_viva_grupo_'+grado)
-        rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
+        if especialista:
+            rows=grados if grupo=='Todos' else grados.loc[grados['Grupo'].astype(str)==grupo]
+        else:rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
         if modo=='Por grado' and grado=='Todos':
             st.info('Elige el grado para reunir a sus alumnos. La modalidad registrada no cambia.');return
     nombres={str(a['ID_Alumno']):a['Nombre_Completo'] for a in rows.to_dict('records')}
@@ -87,7 +100,10 @@ def _entrada(base,actor):
     st.caption(f'Curso {ciclo}–{ciclo+1} · Trimestre {trimestre}. Se reúnen los antecedentes propios de los alumnos seleccionados.')
     if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear'):
         try:
-            crear_borrador(base,fmt,ids,int(ciclo),trimestre,tipo,incluir,presentacion,proponer_apartados=True);st.rerun()
+            elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
+            if presentacion=='guia' and len(elegidos[['Grado','Grupo']].drop_duplicates())!=1:
+                raise ValueError('Elige un grado y grupo concreto para el Anexo XIX compartido. Así se conectarán automáticamente sus altas nuevas.')
+            crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True);st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
     with st.expander('Actualizar matrícula, recuperar un respaldo o consultar las guías'):
         if st.button('Actualizar matrícula disponible',key=base+'_viva_refresh'):s.refrescar_matricula();st.rerun()
@@ -134,7 +150,8 @@ def _ficha(prefix,grupal):
     doc=st.session_state[prefix+'_doc'];nombres={a['ID_Alumno']:a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
     aid=st.selectbox('Alumno para consultar o completar',list(nombres),format_func=nombres.get,key=f'{prefix}_{doc["id"]}_viva_ficha')
     datos=viva.ficha(doc,aid);persona=datos['alumno']
-    st.caption('Datos del padrón · '+str(persona.get('Grado',''))+'° '+str(persona.get('Grupo',''))+' · '+str(persona.get('Condición','')))
+    from utils.escolar import grado_canonico
+    st.caption('Datos del padrón · '+grado_canonico(persona.get('Grado',''))+' '+str(persona.get('Grupo',''))+' · '+str(persona.get('Condición','')))
     with st.expander('Antecedentes de este alumno y documentos para enriquecer el formato'):
         if not datos['antecedentes']:st.caption('Aún no hay antecedentes individuales vinculados. Puedes incorporar un documento; no se usarán registros de otros alumnos.')
         for i,f in enumerate(datos['antecedentes']):
@@ -238,7 +255,8 @@ def hoja(prefix):
         a.caption(datos['Servicio de apoyo']+' · Zona '+str(datos['Zona']))
         b.write(datos['Nombre del especialista']+' · '+datos['Función'])
         b.caption('Curso '+datos['Curso escolar']+' · '+datos['Periodo'])
-        st.caption('Grado y grupo: '+', '.join(sorted({str(a.get('Grado',''))+'° '+str(a.get('Grupo','')) for a in datos['Alumnos']})))
+        from utils.escolar import grado_canonico
+        st.caption('Grado y grupo: '+', '.join(sorted({grado_canonico(a.get('Grado',''))+' '+str(a.get('Grupo','')) for a in datos['Alumnos']})))
         if not datos.get('CCT'):u._text(prefix,'datos','CCT','CCT pendiente de confirmar')
         if matriz_principal:
             _matriz(prefix)
