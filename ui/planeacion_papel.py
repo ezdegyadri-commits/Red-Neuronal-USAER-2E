@@ -50,6 +50,8 @@ def hoja(prefix):
                 key=prefix+'_papel_dua_'+str(st.session_state.get(prefix+'_generation',0))
                 st.text_area('Apoyos DUA y ajustes que deben guiar las actividades',value=config.get('apoyos',''),key=key,on_change=_ajuste,args=(prefix,key,'apoyos',u._persist))
             elif action=='ia':
+                st.markdown('#### Añadir actividades a esta planeación')
+                st.caption('Elige una ruta. Con IA, al generar se integran automáticamente al borrador. Sin IA, prepara la propuesta, revísala y pulsa «Incorporar actividades locales a mi formato». En ambos casos quedan editables en la hoja.')
                 from ui.planeacion_generacion import panel_generacion
                 if current['formato']=='XXI':u._ai(prefix,current)
                 else:panel_generacion(prefix,u._persist,u._open,compact=True)
@@ -81,3 +83,4 @@ def hoja(prefix):
 def pagina():
     from ui.planeacion_viva import pagina as base
     return base(render_hoja=hoja)
+

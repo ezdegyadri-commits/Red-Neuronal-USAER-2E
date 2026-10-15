@@ -5,6 +5,11 @@ from services import planeacion_local as local,planeacion_edicion as ed
 
 def panel(prefix):
     doc=st.session_state[prefix+'_doc']
+    incorporadas=st.session_state.pop(prefix+'_actividades_locales_integradas',None)
+    if incorporadas:
+        st.success(f'{incorporadas} actividad(es) local(es) se incorporaron al borrador. Las encontrarás en «Organización de las actividades de aprendizaje» → columna «Actividades».')
+    st.markdown('#### Si prefieres continuar sin IA')
+    st.caption('Prepara una propuesta local, revísala y pulsa «Incorporar actividades locales a mi formato». Luego cierra este panel para editar las actividades directamente en la hoja.')
     if st.button('Preparar actividades con mis datos · sin IA',key=prefix+'_local_preparar',use_container_width=True):
         try:
             enfoque=doc['metadatos'].get('configuracion_generacion',{}).get('enfoque','')
@@ -32,7 +37,9 @@ def panel(prefix):
                 from ui.planeacion_simple import PASOS
                 actual=st.session_state[prefix+'_doc']
                 nuevo=local.aplicar(actual,propuesta,ids)
+                st.session_state[prefix+'_actividades_locales_integradas']=len(ids)
                 u._open(prefix,nuevo);u._persist(prefix)
                 st.session_state[prefix.rsplit('_',1)[0]+'_paso_pendiente']=PASOS[2]
                 st.session_state.pop(prefix+'_local_propuesta',None);st.rerun()
             except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+
