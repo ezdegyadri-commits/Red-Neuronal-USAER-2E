@@ -42,12 +42,17 @@ def _revision(prefix,compact):
 def panel_generacion(prefix,persist,abrir,compact=False):
     doc=st.session_state[prefix+'_doc']
     if doc['formato'] not in ('XXIII','XXV'):return
+    integradas=st.session_state.pop(prefix+'_actividades_integradas',None)
+    if integradas:
+        st.success(f'{integradas} propuesta(s) ya están en el borrador, en «Organización de las actividades de aprendizaje» → columna «Actividades». No tienes que copiarlas: edítalas ahí y guarda la hoja.')
     if not compact:st.markdown('#### Generar mi planeación trimestral')
     conexion=configuracion_modelo()
     if not compact:st.caption('Motor de IA: '+conexion['efectivo']+'. Solo se solicita al pulsar Generar; editar o ver el PDF no consume IA.')
     if conexion['migrado']:
         st.info('Se actualizó la configuración heredada '+conexion['solicitado']+' a '+conexion['efectivo']+'. Se conserva el proveedor y la clave; no se activó facturación.')
     st.caption('Configura las sesiones y ajustes. El sistema reúne la información documentada, propone actividades y completa el formato; después puedes editarlo. No redacta resultados futuros ni coloca firmas automáticamente.')
+    if compact:
+        st.markdown('**Para añadir actividades con IA**\n\n1. Revisa el resumen y marca la confirmación.\n2. Pulsa **Generar e integrar actividades al formato**.\n3. Si es una actualización, revisa la vista previa y pulsa **Aplicar actualización conservando mis ediciones**.\n4. Cierra este panel: las actividades están en **Organización de las actividades de aprendizaje → Actividades**. No copies ni pegues; edítalas ahí y guarda la hoja.')
     ajustes={**g.configuracion(doc),**doc['metadatos'].get('configuracion_generacion',{})}
     generation=st.session_state.get(prefix+'_generation',0);base=f'{prefix}_{generation}_generar'
     from datetime import date
@@ -73,7 +78,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
             ajustes={**ajustes,'competencias_priorizadas':prioridades}
         if doc['datos']['Función']=='Trabajo Social':
             key=base+'_contextos'
-            contextos=st.multiselect('¿Con quién trabajarás? (opcional)',['Familia','Escuela','Comunidad'],default=ajustes.get('contextos_priorizados',[]),key=key,on_change=_prioridades,args=(prefix,key,'contextos_priorizados',persist))
+            contextos=st.multiselect('¿En qué contextos trabajarás? (opcional)',['Aula regular','Escuela','Familia','Comunidad'],default=ajustes.get('contextos_priorizados',[]),key=key,on_change=_prioridades,args=(prefix,key,'contextos_priorizados',persist))
             ajustes={**ajustes,'contextos_priorizados':contextos}
         configurar=st.toggle('Cambiar sesiones, apoyos o referencia',key=base+'_cambiar')
     else:configurar=True
@@ -121,7 +126,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     else:consentimiento=False
     previo=doc['metadatos'].get('generacion_completa',{})
     coincide=bool(solicitud and previo.get('huella')==solicitud['huella'] and previo.get('motor')==modelo_configurado())
-    etiqueta='Preparar mi planeación' if compact else 'Generar mi planeación trimestral con IA'
+    etiqueta='Generar e integrar actividades al formato' if compact else 'Generar mi planeación trimestral con IA'
     if coincide:st.caption('La generación para esta información ya está guardada. Puedes recuperar el resultado sin hacer otra solicitud de IA.')
     if st.button('Recuperar la generación guardada' if coincide else etiqueta,type='primary',disabled=not consentimiento or not solicitud,key=base+'_button',use_container_width=True):
         try:
@@ -143,8 +148,9 @@ def panel_generacion(prefix,persist,abrir,compact=False):
                     st.rerun()
                 else:
                     generado['metadatos']['configuracion_generacion']=deepcopy(ajustes)
+                    st.session_state[prefix+'_actividades_integradas']=len(respuesta['unidades'])
                     abrir(prefix,generado);persist(prefix);_revision(prefix,compact);st.rerun()
-        except (ValueError,PermissionError,RuntimeError) as exc:st.info(str(exc))
+        except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
     pendiente=st.session_state.get(prefix+'_propuesta_pendiente')
     if pendiente:
         st.markdown('##### Revisar antes de actualizar el borrador')
@@ -159,6 +165,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
                 generado=g.ensamblar(actual,pendiente['respuesta'],pendiente['solicitud'])
                 generado['metadatos']['generacion_completa']['motor']=modelo_configurado()
                 generado['metadatos']['configuracion_generacion']=deepcopy(st.session_state[prefix+'_doc'].get('metadatos',{}).get('configuracion_generacion',{}))
+                st.session_state[prefix+'_actividades_integradas']=len(pendiente['respuesta']['unidades'])
                 abrir(prefix,generado);persist(prefix);_revision(prefix,compact)
                 st.session_state.pop(prefix+'_propuesta_pendiente',None);st.rerun()
             except (ValueError,PermissionError,RuntimeError) as exc:st.info(str(exc))

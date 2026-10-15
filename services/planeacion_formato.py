@@ -10,7 +10,11 @@ TITULOS={'aprendizajes':'Necesidades educativas específicas, aprendizaje y desc
 def editar_celda(doc,tabla,indice,campo,valor):
     if campo not in FORMATOS[doc['formato']]['tablas'].get(tabla,[]):raise ValueError('Campo fuera del formato.')
     if not 0<=indice<len(doc['tablas'][tabla]):raise ValueError('La fila cambió; vuelve a abrir el documento.')
-    if doc['tablas'][tabla][indice].get('_sesion_equipo'):raise ValueError('Edita esta actividad en sus sesiones vinculadas.')
+    row=doc['tablas'][tabla][indice]
+    if row.get('_aporte'):raise PermissionError('Conserva la aportación de su autor.')
+    if row.get('_sesion_equipo'):
+        from services.planeacion_equipo import editar_en_formato
+        return editar_en_formato(doc,row['_sesion_equipo'],campo,valor)
     result=deepcopy(doc);result['tablas'][tabla][indice][campo]=str(valor or '');return result
 
 def nueva_fila(doc,tabla):
@@ -22,7 +26,12 @@ def nueva_fila(doc,tabla):
 def quitar_fila(doc,tabla,indice):
     if tabla not in FORMATOS[doc['formato']]['tablas']:raise ValueError('Tabla fuera del formato.')
     if not 0<=indice<len(doc['tablas'][tabla]):raise ValueError('La fila cambió.')
-    if doc['tablas'][tabla][indice].get('_sesion_equipo'):raise ValueError('Retira esta actividad desde sus sesiones vinculadas.')
+    row=doc['tablas'][tabla][indice]
+    if row.get('_aporte'):raise PermissionError('Conserva la aportación de su autor.')
+    if row.get('_sesion_equipo'):
+        from services.planeacion_equipo import quitar_sesion,sesion_vinculada
+        if sesion_vinculada(doc,row['_sesion_equipo']) is None:raise ValueError('La sesión vinculada no está disponible.')
+        return quitar_sesion(doc,row['_sesion_equipo'])
     result=deepcopy(doc);result['tablas'][tabla].pop(indice);return result
 
 def editar_guia(doc,parche,base):
@@ -51,6 +60,12 @@ def usar_evidencia(doc,fuente,limite=300):
     tabla,campo=DESTINO_EVIDENCIA[doc['formato']]
     from services.planeacion_nee import es_bapse
     if es_bapse(fuente) and doc['formato'] in ('XXIII','XXI'):raise ValueError('BAPSE describe barreras del contexto, no NEE. Usa la propuesta educativa o las NEE registradas por la maestra.')
+    if doc['formato']=='XXV':
+        from services.planeacion_social import extraer,proponer
+        if not extraer(fuente):raise ValueError('Este antecedente sigue conectado. Para llenar BAP se requiere una barrera redactada en la conclusión de EPP o en un apartado BAP del registro; las respuestas del instrumento se consultan como referencia.')
+        from services.planeacion_generacion import fuentes_pertinentes
+        if fuente not in fuentes_pertinentes(doc):raise PermissionError('La fuente no está vinculada a estos alumnos.')
+        return proponer(doc)
     texto=' '.join(str(fuente.get('texto','')).split())[:limite]
     if not texto:raise ValueError('La evidencia no tiene texto para usar.')
     valor='['+str(fuente.get('tipo','EVIDENCIA'))+' · '+str(fuente.get('referencia',''))+'] '+texto

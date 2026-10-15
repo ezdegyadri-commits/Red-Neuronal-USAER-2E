@@ -10,7 +10,7 @@ from services.planeacion_papel import hoja
 def generar_pdf(doc):
     spec=hoja(doc);output=BytesIO();ancho=landscape(letter)[0]-52
     style=ParagraphStyle('Word',fontName='Times-Roman',fontSize=10,leading=12)
-    title=ParagraphStyle('TituloWord',parent=style,fontName='Times-Bold',fontSize=12,leading=15,alignment=1)
+    title=ParagraphStyle('TituloWord',parent=style,fontName='Times-Bold',fontSize=12,leading=15,alignment=1,keepWithNext=True)
     def p(v,sty=style):return Paragraph(escape(str(v or '')).replace('\n','<br/>') or ' ',sty)
     def tabla(rows,widths=None):
         t=Table(rows,colWidths=widths,repeatRows=1,splitInRow=1)
@@ -39,6 +39,8 @@ def generar_pdf(doc):
     from services.planeacion_equipo import tablas_salida
     for titulo,headers,rows in tablas_salida(doc):
         if not rows:continue
+        if titulo=='Competencias emocionales' and any(t['id']=='competencias' for t in spec['tables']):continue
+        if titulo=='Planeación grupal ajustada de zona' and not any(any(str(r.get(k,'')).strip() for k in ('Fecha derivación','Actividades','Situación inicial','Situación final')) for r in rows):continue
         story.extend([Spacer(1,10),p(titulo,title),tabla([[p(h) for h in headers]]+[[p(r.get(h,'')) for h in headers] for r in rows],[ancho/len(headers)]*len(headers))])
     if spec['grupal']:
         from services.planeacion_modelo import FORMATOS

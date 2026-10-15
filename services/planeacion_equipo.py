@@ -94,6 +94,11 @@ def guardar_sesion(doc,campos,session_id=''):
         raise ValueError('Completa objetivo, actividad, recursos y cómo observarás el avance.')
     if session_id and session_id not in {s['id'] for s in e['sesiones']}:
         raise ValueError('La sesión que deseas editar no existe.')
+    anterior=next((s for s in e['sesiones'] if s['id']==session_id),{})
+    # La redacción editada en la hoja es parte de la misma sesión. No se pierde
+    # al cambiar su fecha o sus recursos desde el editor detallado.
+    for campo in ('texto_formato','duracion'):
+        if campo in campos or campo in anterior:nueva[campo]=deepcopy(campos.get(campo,anterior.get(campo)))
     nueva['id']=session_id or uuid4().hex
     if any(s['id']!=nueva['id'] and all(s.get(k)==nueva.get(k) for k in ('fecha','subgrupo','contexto','objetivo','actividad')) for s in e['sesiones']):
         raise ValueError('Esta sesión ya está registrada; abre la existente para editarla.')
@@ -119,6 +124,7 @@ def sincronizar(doc):
         if s['apoyos']:actividad+='\nApoyos: '+s['apoyos']
         actividad+='\nSeguimiento: '+s['seguimiento']
         if s.get('duracion'):actividad+='\nDuración propuesta: '+str(s['duracion'])+' minutos'
+        if 'texto_formato' in s:actividad=s['texto_formato']
         filas.append({'Contextos':s['contexto'],'Actividades':actividad,
                       'Fecha' if result['formato']=='XXV' else 'Temporalidad':s['fecha'],
                       'Recursos':s['recursos'],'_sesion_equipo':s['id']})
@@ -126,22 +132,44 @@ def sincronizar(doc):
     return result
 
 
+def sesion_vinculada(doc,session_id):
+    if not aplica(doc):return None
+    return next((s for s in doc['metadatos'].get('equipo',{}).get('sesiones',[]) if s['id']==session_id),None)
+
+
+def editar_en_formato(doc,session_id,campo,valor):
+    """Actualiza el origen de una fila, sin duplicarla ni desarmar su redacción."""
+    if sesion_vinculada(doc,session_id) is None:raise ValueError('La sesión vinculada no está disponible; vuelve a abrir el documento.')
+    campos={'Contextos':'contexto','Actividades':'texto_formato','Recursos':'recursos',
+            'Fecha' if doc['formato']=='XXV' else 'Temporalidad':'fecha'}
+    if campo not in campos:raise ValueError('Campo fuera de la sesión.')
+    result=deepcopy(doc);sesion=sesion_vinculada(result,session_id)
+    sesion[campos[campo]]=str(valor or '')
+    edit=result['metadatos']['equipo'].get('edicion_sesion',{})
+    if edit.get('id')==session_id:edit[campos[campo]]=str(valor or '')
+    validar(result)
+    return sincronizar(result)
+
+
 def revisar(doc):
     if not aplica(doc) or 'equipo' not in doc['metadatos']:return []
     e=doc['metadatos']['equipo'];faltas=[]
     try:validar(doc)
     except (ValueError,PermissionError) as exc:return [str(exc)]
-    if not e['subgrupos']:faltas.append('organizar los alumnos en subgrupos de trabajo')
-    if not e['sesiones']:faltas.append('calendarizar las sesiones y acciones del trimestre')
+    manuales=[r for r in doc['tablas']['dosificacion'] if not r.get('_sesion_equipo') and
+        all(str(r.get(k,'')).strip() for k in ('Actividades','Recursos','Fecha' if doc['formato']=='XXV' else 'Temporalidad'))]
+    if not e['subgrupos'] and not manuales:faltas.append('organizar los alumnos en subgrupos de trabajo')
+    if not e['sesiones'] and not manuales:faltas.append('calendarizar las sesiones y acciones del trimestre')
     if doc['datos']['Función']=='Psicología':
-        if len([s for s in e['sesiones'] if s['contexto']=='Aula de apoyo'])<5:
+        if len([s for s in e['sesiones'] if s['contexto']=='Aula de apoyo'])+len([r for r in manuales if r['Contextos']=='Aula de apoyo'])<5:
             faltas.append('calendarizar al menos cinco sesiones de trabajo en subgrupo durante el trimestre')
         cubiertas={c for s in e['sesiones'] for c in s['competencias']}
+        cubiertas.update(c for c in COMPETENCIAS if any(c.casefold() in r['Actividades'].casefold() for r in manuales))
         for row in e['competencias']:
             c=row.get('Competencia')
-            if c not in cubiertas or not all(str(row.get(k,'')).strip() for k in ('Necesidad documentada','Descriptor de logro','Actividad prevista')):
+            if c not in cubiertas or not all(str(row.get(k,'')).strip() for k in ('Necesidad documentada','Descriptor de logro')):
                 faltas.append('completar y vincular actividades para '+str(c))
-        if not any(s['contexto']=='Aula regular' for s in e['sesiones']):faltas.append('prever al menos una sesión en aula regular')
+        if not any(s['contexto']=='Aula regular' for s in e['sesiones']) and not any(r['Contextos']=='Aula regular' for r in manuales):faltas.append('prever al menos una sesión en aula regular')
         if not e.get('sugerencia_familia','').strip():faltas.append('prever una sugerencia a la familia mediante la hoja de sugerencias')
     return faltas
 

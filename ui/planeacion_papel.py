@@ -40,7 +40,10 @@ def hoja(prefix):
             if st.button('Cerrar conexión y seguir en mi hoja',key=prefix+'_papel_cerrar'):st.session_state.pop(prefix+'_papel_panel',None);st.rerun()
             from ui import planeacion_viva as viva
             current=st.session_state[prefix+'_doc']
-            if action=='antecedentes':viva._ficha(prefix,False)
+            if action=='antecedentes':
+                viva._ficha(prefix,False)
+                from ui.planeacion_social import panel as panel_social
+                panel_social(prefix,u._persist,u._open)
             elif action=='referentes':u._curriculo(prefix,current)
             elif action=='dua':
                 from ui.planeacion_generacion import _ajuste
@@ -50,6 +53,8 @@ def hoja(prefix):
                 key=prefix+'_papel_dua_'+str(st.session_state.get(prefix+'_generation',0))
                 st.text_area('Apoyos DUA y ajustes que deben guiar las actividades',value=config.get('apoyos',''),key=key,on_change=_ajuste,args=(prefix,key,'apoyos',u._persist))
             elif action=='ia':
+                st.markdown('#### Añadir actividades a esta planeación')
+                st.caption('Elige una ruta. Con IA, al generar se integran automáticamente al borrador. Sin IA, prepara la propuesta, revísala y pulsa «Incorporar actividades locales a mi formato». En ambos casos quedan editables en la hoja.')
                 from ui.planeacion_generacion import panel_generacion
                 if current['formato']=='XXI':u._ai(prefix,current)
                 else:panel_generacion(prefix,u._persist,u._open,compact=True)

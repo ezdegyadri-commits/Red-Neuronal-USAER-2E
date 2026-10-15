@@ -119,7 +119,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
             'Vinculo_referentes':'una actividad citó un PDA no seleccionado o no vinculó el elegido',
             'Vinculo_destinatarios':'una actividad no identificó correctamente a sus destinatarios',
             'Vinculo_competencias':'se incluyó una competencia no reconocida',
-            'EvidenciaAjena':'una evidencia no correspondía a los destinatarios de la actividad',
+            'EvidenciaAjena':'una evidencia individual no correspondía a los alumnos destinatarios. No se integró ninguna propuesta. Revisa que cada alumno tenga evidencia propia; puedes proponer una actividad por alumno o continuar sin IA con «Preparar actividades con mis datos · sin IA» y después «Incorporar actividades locales a mi formato»',
             'ContextoInvalido':'una actividad usó un contexto distinto al admitido por el formato',
             'FuncionInvalida':'se mezclaron indicaciones de otra función profesional',
             'ContenidoNoVerificable':'la respuesta no superó la revisión de contenido y referencias'}
@@ -132,7 +132,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
         st.session_state['planeacion_ia_diagnostico'] = {
             'codigo': None, 'tipo': 'RespuestaNoVerificable', 'motor': modelo,'motivo':motivo}
         logger.warning('planeacion_ia_error codigo=None tipo=RespuestaNoVerificable motivo=%s',motivo)
-        raise RuntimeError('La IA no completó una propuesta válida: '+motivos[motivo]+'. Puedes preparar actividades con tus datos sin IA. Tu borrador se conserva.') from None
+        raise RuntimeError('La IA no completó una propuesta válida: '+motivos[motivo]+'. Tu borrador se conserva.') from None
     st.session_state.pop('planeacion_ia_diagnostico', None)
     st.session_state.pop('planeacion_ia_reintentar_desde', None)
     return result

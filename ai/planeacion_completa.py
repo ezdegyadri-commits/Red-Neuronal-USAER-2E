@@ -6,7 +6,7 @@ from ai.planeacion_prompt import INSTRUCCIONES
 from services.planeacion_modelo import FORMATOS
 from services.planeacion_equipo import COMPETENCIAS
 
-VERSION='planeacion-completa-2026-10-14-v2'
+VERSION='planeacion-completa-2026-10-14-v3'
 CAMPOS=('necesidad','objetivo','descriptor','actividad','contexto','apoyos','recursos','evaluacion','fundamento')
 LISTAS=('evidencias','fuentes','referentes','destinatarios','competencias')
 
@@ -39,6 +39,10 @@ sesiones configuradas. Cada unidad tiene inicio, desarrollo y cierre en pasos co
 objetivo observable, descriptor, apoyos, recursos accesibles y evaluación formativa:
 instrumento sencillo, qué observar y cuándo. Identifica destinatarios solo con los alias.
 Cita al menos una evidencia educativa y una fuente normativa incluidas por unidad.
+Vincula cada destinatario con evidencia propia: si una evidencia documenta a un
+solo alias, dirige esa actividad únicamente a ese alias. Una actividad para varios
+alumnos requiere evidencia proporcionada para cada uno. No extrapoles ni atribuyas
+a otro alumno la evidencia individual de alguien más.
 Si hay PDA elegidos, vincula identificadores suministrados; no inventes otros.
 Las evidencias indican qué se registró, no que el alumno logró un objetivo futuro.
 No conviertas BAP en diagnósticos. No rellenes resultados, situación final, firmas,

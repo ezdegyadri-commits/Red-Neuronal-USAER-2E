@@ -32,8 +32,9 @@ def actividades(doc):
                 if campo in FORMATOS[doc['formato']]['tablas'][tabla] and str(row.get(campo,'')).strip():
                     result[f'{tabla}:{i}:{campo}']={'tabla':tabla,'indice':i,'campo':campo,'texto':row[campo]}
     for i,row in enumerate(doc['metadatos'].get('equipo',{}).get('sesiones',[])):
-        if row.get('actividad'):
-            result[f'sesion:{i}:actividad']={'tabla':'sesion','indice':i,'campo':'actividad','texto':row['actividad']}
+        campo='texto_formato' if 'texto_formato' in row else 'actividad'
+        if row.get(campo):
+            result[f'sesion:{i}:actividad']={'tabla':'sesion','indice':i,'campo':campo,'texto':row[campo]}
     return result
 
 
@@ -170,7 +171,7 @@ def aplicar_revision(doc,propuesta):
     for row in propuesta['cambios']:
         a=targets[row['referencia']]
         if not isinstance(row.get('actividad'),str) or not 1<=len(row['actividad'].strip())<=4000:raise ValueError('Actividad inválida.')
-        if a['tabla']=='sesion':result['metadatos']['equipo']['sesiones'][a['indice']]['actividad']=row['actividad'].strip()
+        if a['tabla']=='sesion':result['metadatos']['equipo']['sesiones'][a['indice']][a['campo']]=row['actividad'].strip()
         else:result['tablas'][a['tabla']][a['indice']][a['campo']]=row['actividad'].strip()
     from services.planeacion_equipo import aplica,sincronizar
     return sincronizar(result) if aplica(result) else result

@@ -17,15 +17,22 @@ SECUENCIAS={
  'Trabajo Social':('Retomar una barrera del entorno documentada o una rutina escolar que el equipo necesite revisar.','Proponer con las personas implicadas una alternativa viable de participación o acceso; preguntar por recursos reales sin suponer carencias ni culpar a la familia.','Registrar únicamente acuerdos que efectivamente se alcancen después de la actividad y definir su seguimiento.','Hoja de registro y recursos accesibles por confirmar; no supone una visita o acuerdo realizado.')}
 
 
-def preparar(doc,enfoque=''):
+def preparar(doc,enfoque='',contexto_actividad=None):
     s.autorizar(doc,True)
+    contexto_actividad=contexto_actividad or ('Escuela' if doc['formato']=='XXV' else 'Aula regular')
+    if doc['formato']!='XXI' and contexto_actividad not in FORMATOS[doc['formato']]['contextos']:raise ValueError('Elige un contexto de este formato.')
     fuentes=fuentes_pertinentes(doc)
     contexto=contexto_ia(doc)
     refs=contexto.get('referentes_por_grado',[])
     campos=list(dict.fromkeys(r['campo'] for r in refs)) or ['Sin PDA seleccionado']
     materiales=[f for f in fuentes if f.get('tipo')=='MATERIAL' and not f.get('alumno')]
     propios={a['ID_Alumno']:[f for f in fuentes if a['ID_Alumno'] in str(f.get('alumno','')).split(',')] for a in doc['datos']['Alumnos']}
-    if not fuentes and not refs and not str(enfoque).strip() and not doc['metadatos'].get('necesidades_confirmadas','').strip():
+    # La hoja ya redactada también es un punto de partida. No vuelve a pedir
+    # la misma información en otro cuadro ni convierte la planeación en evidencia.
+    tabla='barreras' if doc['formato'] in ('XXV','XXI') else 'aprendizajes'
+    bases=[{h:str(r.get(h,'') or '') for h in FORMATOS[doc['formato']]['tablas'][tabla]} for r in doc['tablas'][tabla]]
+    base_formato='\n'.join(h+': '+v for r in bases for h,v in r.items() if v.strip())[:6000]
+    if not fuentes and not refs and not base_formato and not str(enfoque).strip() and not doc['metadatos'].get('necesidades_confirmadas','').strip():
         raise ValueError('Añade un antecedente, un contenido/PDA o una orientación docente para preparar propuestas locales. No necesitas IA.')
     propuestas=[]
     for a in doc['datos']['Alumnos']:
@@ -33,6 +40,10 @@ def preparar(doc,enfoque=''):
         for campo in campos:
             seleccionados=[r for r in refs if r['campo']==campo]
             datos=' '.join(f['texto'][:1500] for f in individuales+materiales)+' '+str(enfoque)+' '+' '.join(r['contenido'] for r in seleccionados)
+            # Solo usa filas identificadas con este alumno, o las de una hoja
+            # individual, para elegir el contenido de su propuesta local.
+            propias_formato=[r for r in doc['tablas'][tabla] if r.get('_alumnos_apartados')==[a['ID_Alumno']] or len(doc['datos']['Alumnos'])==1]
+            datos+=' '+' '.join(str(r.get(h,'') or '') for r in propias_formato for h in FORMATOS[doc['formato']]['tablas'][tabla])
             area=doc['datos']['Función'];clave=area
             if clave not in SECUENCIAS:
                 normal=normalizar_texto(datos)
@@ -43,11 +54,13 @@ def preparar(doc,enfoque=''):
             if materiales:alcance+=' Materiales generales de apoyo: '+', '.join(f['referencia'] for f in materiales)+'. No equivalen a una evaluación individual.'
             referentes=[r['id'] for r in seleccionados]
             sustento='Referentes seleccionados: '+', '.join(referentes) if referentes else 'Sin PDA específico seleccionado. Revisar su vinculación antes de enviar.'
-            firma=ed.huella({'doc':doc['id'],'alumno':a['ID_Alumno'],'campo':campo,'enfoque':enfoque,'fuentes':individuales+materiales,'referentes':seleccionados,'version':1})
+            if area=='Trabajo Social' and not referentes:sustento='Revisar la barrera documentada, los apoyos y el contexto elegido en el Anexo XXV.'
+            if base_formato:alcance+=' Se reutiliza la orientación escrita en el formato como propuesta de trabajo; no confirma una evaluación ni un resultado.'
+            firma=ed.huella({'doc':doc['id'],'alumno':a['ID_Alumno'],'campo':campo,'enfoque':enfoque,'fuentes':individuales+materiales,'referentes':seleccionados,'base_formato':bases,'contexto':contexto_actividad,'version':2})
             propuestas.append({'id':firma,'alumno':a['ID_Alumno'],'nombre':a['Nombre del alumno'],'campo':campo,
                 'actividad':'PROPUESTA LOCAL PARA REVISIÓN · '+a['Nombre del alumno']+'\n'+alcance+'\n'+sustento+
                 '\nInicio: '+inicio+'\nDesarrollo: '+desarrollo+'\nCierre: '+cierre,
-                'recursos':recursos,'evidencias':antecedentes,'referentes':referentes})
+                'recursos':recursos,'evidencias':antecedentes,'referentes':referentes,'contexto':contexto_actividad})
     return {'huella':ed.huella(doc),'propuestas':propuestas,'enfoque':str(enfoque)}
 
 
@@ -66,7 +79,10 @@ def aplicar(doc,propuesta,ids):
         row={h:'' for h in FORMATOS[doc['formato']]['tablas'][tabla]}
         row['Acciones para minimizarla o eliminarla' if doc['formato']=='XXI' else 'Actividades']=p['actividad']
         if 'Recursos' in row:row['Recursos']=p['recursos']
-        if 'Contextos' in row:row['Contextos']='Escuela' if doc['formato']=='XXV' else 'Aula regular'
+        if 'Contextos' in row:
+            contexto=p.get('contexto') or ('Escuela' if doc['formato']=='XXV' else 'Aula regular')
+            if contexto not in FORMATOS[doc['formato']]['contextos']:raise ValueError('El contexto propuesto no corresponde al formato.')
+            row['Contextos']=contexto
         row['_actividad_local']=p['id'];row['_alumnos_locales']=[p['alumno']]
         result['tablas'][tabla].append(row);aplicadas.add(p['id'])
     if not nuevas:return deepcopy(doc)

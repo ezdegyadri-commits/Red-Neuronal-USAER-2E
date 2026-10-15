@@ -73,7 +73,9 @@ class ApartadosTests(unittest.TestCase):
             d=self.doc(area);new=p.proponer(d)
             self.assertEqual(new['textos'],d['textos'])
             tabla='barreras' if area=='Trabajo Social' else 'aprendizajes'
-            self.assertTrue(new['tablas'][tabla]);self.assertNotIn('diagnóstico',str(new['tablas'][tabla]).lower())
+            if area=='Trabajo Social':self.assertFalse(new['tablas'][tabla])  # El antecedente de lectura no establece una BAP.
+            else:self.assertTrue(new['tablas'][tabla])
+            self.assertNotIn('diagnóstico',str(new['tablas'][tabla]).lower())
 
     def test_hoja_edita_borra_y_retira_sin_regenerar_automaticamente(self):
         d=p.proponer(self.doc());spec=papel.hoja(d)
