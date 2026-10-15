@@ -12,6 +12,83 @@ from services.planeacion_modelo import FORMATOS
 PASOS=('1. ¿A quién planeo?', '2. Preparar con IA', '3. Revisar y enviar')
 
 
+def _inyectar_estilos_planeacion():
+    st.html('''
+    <style>
+    /* Estilos Oficiales USAER 02-E */
+    :root {
+        --usaer-navy: #0F2D59;
+        --usaer-navy-light: #1E3A8A;
+        --usaer-teal: #0D9488;
+        --usaer-teal-light: #14B8A6;
+        --usaer-gold: #D97706;
+        --usaer-slate: #334155;
+    }
+    .usaer-canvas-card {
+        background: #FFFFFF;
+        border: 1px solid #CBD5E1;
+        border-radius: 12px;
+        box-shadow: 0 4px 18px rgba(15, 45, 89, 0.06);
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.25rem;
+    }
+    .usaer-official-header {
+        border-bottom: 2px solid #0F2D59;
+        padding-bottom: 0.6rem;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+    .usaer-sub-badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #475569;
+    }
+    .usaer-main-title {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: #0F2D59;
+        margin: 0.2rem 0;
+    }
+    .usaer-annex-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #0F2D59 0%, #0D9488 100%);
+        color: #FFFFFF !important;
+        font-size: 0.82rem;
+        font-weight: 700;
+        padding: 0.25rem 0.8rem;
+        border-radius: 6px;
+        margin-top: 0.3rem;
+    }
+    .usaer-meta-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.86rem;
+        margin-bottom: 0.75rem;
+    }
+    .usaer-meta-table td {
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #E2E8F0;
+    }
+    .usaer-meta-label {
+        font-weight: 700;
+        color: #0F2D59;
+        background-color: #F8FAFC;
+        width: 25%;
+    }
+    div[data-testid="stButton"] button {
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: transform 0.12s ease !important;
+    }
+    div[data-testid="stButton"] button:hover {
+        transform: translateY(-1px) !important;
+    }
+    </style>
+    ''')
+
+
 def periodo_actual(hoy=None):
     hoy=hoy or datetime.now(ZoneInfo('America/Mexico_City')).date()
     return hoy.year if hoy.month>=8 else hoy.year-1, 2 if hoy.month<=3 else 3 if hoy.month<=6 else 1
@@ -229,6 +306,145 @@ def _pendientes(doc):
     return faltas,resultado
 
 
+def _insertar_en_guia_alumno(prefix,indice,campo,texto_nuevo,persist,abrir,reemplazar=False):
+    from services.planeacion_formato import editar_guia
+    doc=st.session_state[prefix+'_doc'];guia=guia_grupal(doc);base=guia['filas']
+    if 0<=indice<len(base):
+        actual=str(base[indice].get(campo,'') or '').strip()
+        valor_final=texto_nuevo if (reemplazar or not actual) else f'{actual}\n• {texto_nuevo}'
+        actualizado=editar_guia(doc,{'edited_rows':{indice:{campo:valor_final}}},base)
+        gen=st.session_state.get(prefix+'_generation',0);key=f'{prefix}_{gen}_simple_guia'
+        st.session_state[key+'_base']=deepcopy(actualizado['metadatos']['guia_grupal_manual']['filas'])
+        abrir(prefix,actualizado);persist(prefix);return True
+    return False
+
+
+def _lienzo_encabezado_oficial(doc):
+    formato=doc['formato'];modalidad_doc=doc['metadatos'].get('modalidad_planeacion','grupal')
+    if modalidad_doc=='grupal':anexo_txt='ANEXO XIX. GUÍA DE PLANEACIÓN GRUPAL'
+    elif formato=='XXI':anexo_txt='ANEXO XXI. PLAN DE INTERVENCIÓN'
+    elif formato=='XXV':anexo_txt='ANEXO XXV. PLANEACIÓN DEL ÁREA DE TRABAJO SOCIAL'
+    else:anexo_txt='ANEXO XXIII. PLANEACIÓN DEL SERVICIO DE APOYO DE EDUCACIÓN ESPECIAL'
+    datos=doc['datos'];escuela=datos.get('Escuela regular','');cct=datos.get('CCT','31FUA0024E')
+    curso=datos.get('Curso escolar','');esp=datos.get('Nombre del especialista','');func=datos.get('Función','')
+    grados_grupos=', '.join(f"{a.get('Grado','')}° {a.get('Grupo','')}".strip() for a in datos.get('Alumnos',[])) or datos.get('Periodo','')
+    maestro_g=(doc['metadatos'].get('guia_grupal_manual',{}).get('maestro_grupo','')) or datos.get('Maestro de grupo','')
+    st.markdown(f'''
+    <div class="usaer-canvas-card">
+        <div class="usaer-official-header">
+            <div class="usaer-sub-badge">GOBIERNO DEL ESTADO DE YUCATÁN · SECRETARÍA DE EDUCACIÓN</div>
+            <div class="usaer-sub-badge">DIRECCIÓN DE EDUCACIÓN ESPECIAL · ZONA ESCOLAR 001</div>
+            <div class="usaer-main-title">USAER 02-E · SISTEMA INTEGRADO DE PLANEACIÓN</div>
+            <div class="usaer-annex-badge">{anexo_txt}</div>
+        </div>
+        <table class="usaer-meta-table">
+            <tr>
+                <td class="usaer-meta-label">Escuela regular:</td>
+                <td><strong>{escuela}</strong></td>
+                <td class="usaer-meta-label">C.C.T.:</td>
+                <td>{cct}</td>
+            </tr>
+            <tr>
+                <td class="usaer-meta-label">Curso escolar:</td>
+                <td>{curso}</td>
+                <td class="usaer-meta-label">Grado y Grupo:</td>
+                <td>{grados_grupos}</td>
+            </tr>
+            <tr>
+                <td class="usaer-meta-label">Docente de grupo:</td>
+                <td>{maestro_g or '<em>Por especificar</em>'}</td>
+                <td class="usaer-meta-label">Especialista USAER:</td>
+                <td>{esp} ({func})</td>
+            </tr>
+        </table>
+    </div>
+    ''', unsafe_allow_html=True)
+
+
+def _asistente_inteligente_alumno(prefix,doc,actor,u):
+    from services.curriculo import CAMPOS, catalogo
+    alumnos=doc['datos']['Alumnos']
+    if not alumnos:return
+    st.markdown('''
+    <div style="background: linear-gradient(135deg, #F0FDFA 0%, #FFFFFF 100%); border: 1.5px solid #0D9488; border-radius: 10px; padding: 0.85rem 1.1rem; margin-bottom: 1rem;">
+        <span style="background-color: #0D9488; color: white; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 4px; text-transform: uppercase;">
+            ⚡ Asistente Inteligente · Conectividad del Alumno en 1 Clic
+        </span>
+        <div style="font-size: 0.85rem; color: #475569; margin-top: 0.35rem;">
+            Selecciona a un alumno para transferir antecedentes del expediente, insertar referentes oficiales (PDA) o aplicar secuencias didácticas directamente en su fila de la guía.
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+    al_idx=st.selectbox('🎯 Alumno activo para enriquecer con conectividad',range(len(alumnos)),format_func=lambda i:f"{alumnos[i]['Nombre del alumno']} ({alumnos[i].get('Grado','')}° {alumnos[i].get('Grupo','')}) · {alumnos[i].get('Condición','')}",key=prefix+'_asistente_alumno_idx')
+    al_sel=alumnos[al_idx];al_id=str(al_sel['ID_Alumno']);al_nombre=al_sel['Nombre del alumno']
+    area_docente=actor['area'];col_destino=area_docente if area_docente in GUIA_XIX else 'Aprendizaje'
+    tabs=st.tabs(['📁 Antecedentes del expediente','🎯 Referentes NEM / PDA','✨ Secuencia en 3 momentos','🧠 Especialidad / Apoyos'])
+    with tabs[0]:
+        fuentes=doc['metadatos'].get('fuentes',[])
+        fuentes_alumno=[f for f in fuentes if str(f.get('id_alumno',''))==al_id or al_nombre.lower() in str(f.get('texto','')).lower()]
+        fuentes_mostrar=fuentes_alumno if fuentes_alumno else fuentes[:5]
+        if fuentes_mostrar:
+            st.caption(f'Antecedentes disponibles para {al_nombre}. Pulsa en insertar para transferir a su fila ({col_destino}):')
+            for i,f in enumerate(fuentes_mostrar):
+                with st.container(border=True):
+                    st.markdown(f"**{f.get('referencia',f.get('tipo','Registro'))}** · *{f.get('fecha','')}*")
+                    txt_prev=f.get('texto','')
+                    st.write(txt_prev[:250]+('…' if len(txt_prev)>250 else ''))
+                    if st.button(f'➕ Transferir a la fila de {al_nombre.split()[0]}',key=f'{prefix}_asist_fuente_{al_idx}_{i}'):
+                        _insertar_en_guia_alumno(prefix,al_idx,col_destino,f"[{f.get('tipo','Expediente')}] {txt_prev[:200]}",u._persist,u._open)
+                        st.success(f'¡Transferido a la columna {col_destino} de {al_nombre}!');st.rerun()
+        else:st.info(f'No hay antecedentes específicos registrados para {al_nombre}.')
+    with tabs[1]:
+        st.caption(f'Selecciona el campo formativo y el PDA para contextualizar los objetivos de {al_nombre}:')
+        c_col1,c_col2=st.columns([1,2])
+        with c_col1:
+            campo_sel=st.selectbox('Campo formativo curricular (NEM)',list(CAMPOS.keys()),key=f'{prefix}_asist_campo_{al_idx}')
+        with c_col2:
+            grado_al=None
+            try:
+                import re
+                m=re.search(r'([1-6])',str(al_sel.get('Grado','')))
+                if m:grado_al=int(m.group(1))
+            except Exception:grado_al=None
+            cat_data=catalogo().get('registros',[])
+            regs_cat=[r for r in cat_data if r.get('campo')==campo_sel and (grado_al is None or r.get('grado')==grado_al)]
+            if not regs_cat:regs_cat=[r for r in cat_data if r.get('campo')==campo_sel][:15]
+            pda_sel=st.selectbox('Contenido y PDA oficial',range(len(regs_cat)),format_func=lambda i:f"{regs_cat[i]['grado']}° · {regs_cat[i]['contenido'][:50]}... -> {regs_cat[i]['pda'][:60]}...",key=f'{prefix}_asist_pda_{al_idx}') if regs_cat else None
+        if pda_sel is not None and regs_cat:
+            reg=regs_cat[pda_sel]
+            st.markdown(f"**Contenido:** {reg['contenido']}\n\n**PDA ({reg['grado']}°):** {reg['pda']}")
+            if st.button(f'➕ Insertar PDA en columna Aprendizaje de {al_nombre.split()[0]}',key=f'{prefix}_asist_ins_pda_{al_idx}'):
+                texto_pda=f"PDA ({campo_sel} · {reg['grado']}°): {reg['pda']}"
+                _insertar_en_guia_alumno(prefix,al_idx,'Aprendizaje',texto_pda,u._persist,u._open)
+                st.success(f'¡PDA vinculado a la fila de {al_nombre}!');st.rerun()
+    with tabs[2]:
+        st.caption(f'Estructura de educación especial en 3 momentos (tangible, guiado y observable) para {al_nombre}:')
+        cond=al_sel.get('Condición','Sin condición específica')
+        sec_propuesta=f'1. Inicio tangible: Actividad manipulable de activación y encuadre visual adaptada a {cond}.\n2. Desarrollo guiado: Ejercitación con andamiaje paso a paso, material concreto y modelado.\n3. Cierre observable: Demostración práctica del logro y autoevaluación formativa con apoyo pictográfico.'
+        st.text_area('Propuesta pedagógica estructurada',value=sec_propuesta,height=110,key=f'{prefix}_asist_sec_txt_{al_idx}')
+        if st.button(f'➕ Aplicar secuencia a columna {col_destino} de {al_nombre.split()[0]}',key=f'{prefix}_asist_ins_sec_{al_idx}'):
+            _insertar_en_guia_alumno(prefix,al_idx,col_destino,sec_propuesta,u._persist,u._open)
+            st.success(f'¡Secuencia integrada a la fila de {al_nombre}!');st.rerun()
+    with tabs[3]:
+        st.caption('Aportes y estrategias según la función o especialidad:')
+        esp_cols=st.columns(2)
+        with esp_cols[0]:
+            st.markdown('**Estrategia socioemocional / conductual:**')
+            psic_opts=['Estructuración visual de rutinas y normas claras de convivencia','Economía de fichas y reforzamiento positivo contingente','Pausas activas y técnicas de respiración para autorregulación','Canalización socioemocional y diálogo asertivo ante frustración']
+            psic_sel=st.selectbox('Estrategia de conducta',psic_opts,key=f'{prefix}_asist_esp_psic_{al_idx}')
+            if st.button(f'➕ Insertar en Psicología de {al_nombre.split()[0]}',key=f'{prefix}_asist_btn_psic_{al_idx}'):
+                _insertar_en_guia_alumno(prefix,al_idx,'Psicología',psic_sel,u._persist,u._open)
+                st.success('¡Estrategia agregada a Psicología!');st.rerun()
+        with esp_cols[1]:
+            st.markdown('**Comunicación / Trabajo Social:**')
+            com_opts=['Tablero de comunicación aumentativa con pictogramas (SAAC)','Modelado fonoarticulatorio y pausas en turnos conversacionales','Compromiso de corresponsabilidad y seguimiento en el hogar','Visita domiciliaria de verificación de contexto sociofamiliar']
+            com_sel=st.selectbox('Estrategia de apoyo',com_opts,key=f'{prefix}_asist_esp_com_{al_idx}')
+            destino_esp='Trabajo Social' if ('hogar' in com_sel or 'domiciliaria' in com_sel) else 'Comunicación'
+            if st.button(f'➕ Insertar en {destino_esp} de {al_nombre.split()[0]}',key=f'{prefix}_asist_btn_com_{al_idx}'):
+                _insertar_en_guia_alumno(prefix,al_idx,destino_esp,com_sel,u._persist,u._open)
+                st.success(f'¡Estrategia agregada a {destino_esp}!');st.rerun()
+
+
 def _editor(prefix,actor,paso):
     from ui import planeacion as u
     from ui.planeacion_formato import _tabla,_guia,_guia_texto
@@ -355,13 +571,15 @@ def _editor(prefix,actor,paso):
         st.subheader(PASOS[2]);st.caption('Edita directamente en tu formato. Los resultados finales se registran después de trabajar con el alumno.')
         from ui.planeacion_respaldo import informacion
         informacion(prefix, prefix.rsplit('_',1)[0], PASOS[1])
+        _lienzo_encabezado_oficial(doc)
         with st.expander('Datos generales del formato'):
             st.write(doc['datos'])
             if not doc['datos'].get('CCT'):u._text(prefix,'datos','CCT','CCT no registrado: verifica y completa')
             if doc['formato']=='XXI':
                 for campo in ('Necesidades educativas específicas asociadas a','Maestro de grupo','Vigencia en cursos escolares'):u._text(prefix,'datos',campo)
         if doc['metadatos'].get('modalidad_planeacion')=='grupal':
-            st.markdown('#### Actividades por alumno y área')
+            _asistente_inteligente_alumno(prefix,doc,actor,u)
+            st.markdown('#### Actividades por alumno y área · Anexo XIX')
             guia=guia_grupal(doc);enlazada=doc['metadatos'].get('guia_compartida')
             key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_simple_guia';bk=key+'_base'
             if bk not in st.session_state:st.session_state[bk]=deepcopy(guia['filas'])
@@ -375,6 +593,17 @@ def _editor(prefix,actor,paso):
                         for campo in GUIA_XIX[2:]:
                             key=f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_simple_guia_{i}_{campo}'
                             st.text_area(campo,value=str(row.get(campo,'') or ''),key=key,on_change=_guia_texto,args=(prefix,key,i,campo,u._persist,u._open))
+            with st.expander('🌟 Anexo XX: Guía de Planeación Grupal para Alumnos con Aptitudes Sobresalientes (AS)', expanded=bool(guia.get('as'))):
+                st.caption('Manual SEGEY Anexo XX: Registra las aptitudes sobresalientes (I, C, SA, PM, A), enriquecimiento (E, A, EC) y metodología diversificada.')
+                as_activado = st.checkbox('Activar Anexo XX para este grupo', value=bool(guia.get('as')), key=f'{prefix}_as_anexo_check')
+                if as_activado:
+                    as_base = guia.get('as') or [{'Nombre alumno': a['Nombre del alumno'], **{h: '' for h in GUIA_XX[1:]}} for a in doc['datos']['Alumnos']]
+                    key_as = f'{prefix}_{st.session_state.get(prefix+"_generation",0)}_simple_xx'
+                    as_editado = st.data_editor(pd.DataFrame(as_base, columns=GUIA_XX), hide_index=True, disabled=True if enlazada else ['Nombre alumno'], key=key_as).fillna('').to_dict('records')
+                    if st.button('Guardar datos de Anexo XX (AS)', key=f'{prefix}_as_save_btn', disabled=enlazada):
+                        current = deepcopy(st.session_state[prefix+'_doc'])
+                        current['metadatos']['guia_grupal_manual'] = {**current['metadatos'].get('guia_grupal_manual', {}), 'as': as_editado}
+                        u._open(prefix, current); u._persist(prefix); st.success('¡Anexo XX guardado correctamente!'); st.rerun()
         for tabla in FORMATOS[doc['formato']]['tablas']:
             if tabla=='evaluacion_final':
                 with st.expander('Resultados al finalizar'):_tabla(prefix,tabla,u._persist,u._open)
@@ -405,6 +634,7 @@ def _editor(prefix,actor,paso):
 
 def pagina():
     from ui import planeacion as u
+    _inyectar_estilos_planeacion()
     actor=s.identidad();base=u._prefix()
     st.title('Mi planeación · '+actor['area'])
     st.caption('Elige alumnos, prepara tu propuesta y revisa el formato. Captura una vez; reutiliza lo que el equipo ya conoce.')
