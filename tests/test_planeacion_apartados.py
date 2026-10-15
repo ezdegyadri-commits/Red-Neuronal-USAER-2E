@@ -86,7 +86,7 @@ class ApartadosTests(unittest.TestCase):
         self.assertEqual(papel.hoja(blank)['tables'][0]['rows'][0][2]['value'],'')
         retirado=papel.aplicar(blank,ev(blank,accion='retirar',tabla='aprendizajes',fila=0,confirmado=True))
         self.assertFalse(retirado['tablas']['aprendizajes'])
-        self.assertFalse(papel.hoja(retirado)['tables'][0]['rows'][0][2]['value'])
+        self.assertEqual(papel.hoja(retirado)['tables'][0]['rows'],[])
         solicitado=papel.aplicar(retirado,ev(retirado,accion='apartados'))
         self.assertTrue(solicitado['tablas']['aprendizajes'])
 

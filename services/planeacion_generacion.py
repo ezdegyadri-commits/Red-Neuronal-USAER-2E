@@ -182,15 +182,30 @@ def ensamblar(doc,respuesta,solicitud):
         e['sesiones']=[s for s in e['sesiones'] if s['id'] not in reemplazables]
         ids_conservados={s['id'] for s in e['sesiones']}
         nuevas_sesiones=[]
-    grupos={};evaluaciones=[]
+    grupos={};evaluaciones=[];necesidades_unidad={}
     for n,u in enumerate(unidades):
         destinatarios=[aliases[a] for a in u['destinatarios']]
         nombre=' / '.join(a['Nombre del alumno'] for a in doc['datos']['Alumnos'] if a['ID_Alumno'] in destinatarios)
-        necesidad=nombre+': '+u['necesidad']+' ['+', '.join(u['evidencias'])+']'
+        from services.planeacion_nee import necesidad as redactar_necesidad,es_bapse
+        origenes_nee=[]
+        if formato=='XXV':necesidad=nombre+': '+u['necesidad'] if len(doc['datos']['Alumnos'])>1 else u['necesidad']
+        else:
+            textos_nee=[]
+            for alumno in doc['datos']['Alumnos']:
+                if alumno['ID_Alumno'] not in destinatarios:continue
+                propias=[f for f in fuentes_pertinentes(doc) if set(str(f.get('alumno','')).split(','))=={alumno['ID_Alumno']} and not es_bapse(f)]
+                grado=re.match(r'^\s*([1-6])(?:\D|$)',str(alumno.get('Grado','')))
+                refs=[r for r in solicitud['contexto'].get('referentes_por_grado',[]) if grado and str(r['grado'])==grado[1]]
+                nee,origen=redactar_necesidad(alumno,propias,refs,area);origenes_nee.append(origen)
+                textos_nee.append((alumno['Nombre del alumno']+': ' if len(doc['datos']['Alumnos'])>1 else '')+nee)
+            necesidad='\n'.join(textos_nee)
+        necesidades_unidad[n]=necesidad
         key='barreras' if formato=='XXV' else 'aprendizajes'
         row=({'Barreras para el Aprendizaje y la Participación':necesidad,'Apoyos y/o ajustes razonables':u['apoyos']} if formato=='XXV' else
              {'Necesidades educativas específicas':necesidad,'Aprendizaje y/u objetivo':u['objetivo'],'Descriptor de logro':u['descriptor']})
         row['_origenes']=[{k:f.get(k,'') for k in ('tipo','registro','revision','alumno')} for f in fuentes_pertinentes(doc) if f['referencia'] in u['evidencias']]
+        if origenes_nee:row['_nee_origen']={'origen':', '.join(dict.fromkeys(o['origen'] for o in origenes_nee)),
+            'propuesta':any(o['propuesta'] for o in origenes_nee)}
         generadas.setdefault(key,[]).append(row);result['tablas'][key].append(row)
         evaluaciones.append(u['objetivo']+'\n'+u['evaluacion'])
         if es_equipo:
@@ -204,7 +219,7 @@ def ensamblar(doc,respuesta,solicitud):
     # propuesta de trabajo, no un registro de asistencia ni una reserva de horario.
     for i,fecha in enumerate(fechas):
         n=i%len(unidades);u=unidades[n]
-        actividad=u['actividad']+'\nFundamento: '+u['fundamento']+' ['+', '.join(u['fuentes']+u['referentes'])+']'
+        actividad=u['actividad']
         if not es_equipo:actividad+='\nApoyos: '+u['apoyos']+'\nSeguimiento: '+u['evaluacion']
         if es_equipo:
             nueva={'id':'ia-'+solicitud['huella'][:16]+'-'+str(i),'fecha':fecha,'subgrupo':grupos[n],'contexto':u['contexto'],
@@ -226,7 +241,7 @@ def ensamblar(doc,respuesta,solicitud):
         for c in e['competencias']:
             asociadas=[u for u in unidades if c['Competencia'] in u['competencias']]
             if asociadas and not any(c.get(k) for k in ('Necesidad documentada','Descriptor de logro','Actividad prevista')):
-                c.update({'Necesidad documentada':'\n'.join(dict.fromkeys(u['necesidad'] for u in asociadas)),
+                c.update({'Necesidad documentada':'\n'.join(dict.fromkeys(necesidades_unidad[n] for n,u in enumerate(unidades) if c['Competencia'] in u['competencias'])),
                           'Descriptor de logro':'\n'.join(dict.fromkeys(u['descriptor'] for u in asociadas)),
                           'Actividad prevista':'\n'.join(dict.fromkeys(u['actividad'] for u in asociadas))})
         if not e.get('sugerencia_familia'):e['sugerencia_familia']=respuesta['sugerencia_familia']

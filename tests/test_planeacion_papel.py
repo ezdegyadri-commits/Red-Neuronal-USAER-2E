@@ -20,7 +20,7 @@ class PapelTests(unittest.TestCase):
         self.assertEqual(spec['tables'][1]['headers'],['Contextos','Actividades','Temporalidad','Recursos'])
 
     def test_edicion_y_borrado_texto_preservan_referencias_e_identidad(self):
-        d=documento();spec=papel.hoja(d);key=self.celda(spec,('tabla','dosificacion',0,'Actividades'))
+        d=documento();d['tablas']['dosificacion'][0]['_fila_manual']=True;spec=papel.hoja(d);key=self.celda(spec,('tabla','dosificacion',0,'Actividades'))
         antes=deepcopy(d);edited=papel.aplicar(d,self.evento(d,cambios={key:'Actividad redactada'}))
         self.assertEqual(edited['tablas']['dosificacion'][0]['Actividades'],'Actividad redactada')
         blank=papel.aplicar(edited,self.evento(edited,cambios={key:''}))
@@ -29,6 +29,7 @@ class PapelTests(unittest.TestCase):
 
     def test_fila_vacia_se_llena_sin_requerir_configuracion(self):
         d=documento();d['tablas']['aprendizajes']=[]
+        d=papel.aplicar(d,self.evento(d,accion='agregar',tabla='aprendizajes'))
         spec=papel.hoja(d);key=self.celda(spec,('tabla','aprendizajes',0,'Descriptor de logro'))
         new=papel.aplicar(d,self.evento(d,cambios={key:'El alumno identifica una palabra.'}))
         self.assertEqual(new['tablas']['aprendizajes'][0]['Descriptor de logro'],'El alumno identifica una palabra.')
@@ -55,7 +56,7 @@ class PapelTests(unittest.TestCase):
         self.assertFalse(papel.hoja(d)['grupal']);self.assertEqual(papel.hoja(d)['tables'][0]['id'],'aprendizajes')
 
     def test_no_edita_sesiones_ni_aportes_por_copia(self):
-        d=documento();d['tablas']['dosificacion'][0]['_sesion_equipo']='S1'
+        d=documento();d['tablas']['dosificacion'][0].update(_sesion_equipo='S1',Actividades='Actividad vinculada')
         spec=papel.hoja(d)
         self.assertTrue(all(not c['editable'] for c in spec['tables'][1]['rows'][0]))
         with self.assertRaises(ValueError):papel.aplicar(d,self.evento(d,accion='retirar',tabla='dosificacion',fila=0,confirmado=True))
@@ -73,7 +74,7 @@ class PapelTests(unittest.TestCase):
         d=documento();d['tablas']['dosificacion'][0]['Actividades']='ACTIVIDAD EDITADA Y VERIFICADA'
         pdf=generar_pdf(d);texto='\n'.join(p.extract_text() for p in PdfReader(BytesIO(pdf)).pages)
         self.assertIn('ACTIVIDAD EDITADA Y VERIFICADA',texto)
-        self.assertIn('PDA: nacionales',texto)
+        self.assertNotIn('PDA: nacionales',texto)  # Una tabla sin contenido no ocupa espacio en la descarga.
 
     def test_cache_pdf_no_repite_trabajo_ni_confunde_vistas(self):
         from ui import planeacion as u
@@ -173,11 +174,14 @@ class PapelUITests(unittest.TestCase):
         from ui import planeacion_papel as ui
         with patch.object(ui,'editor',side_effect=lambda **kw:st.session_state.get('evento_papel_ficticio')):
             app=self.abrir('Trabajo Social');d=app.session_state.versiones_ficticias[-1];antes=len(app.session_state.versiones_ficticias)
-            spec=papel.hoja(d);key=next(k for k,c in spec['cells'].items() if c['target']==('tabla','dosificacion',0,'Actividades'))
+            app.session_state.evento_papel_ficticio={'nonce':'agregar-fila','documento':d['id'],'huella':papel.huella(d),'cambios':{},'accion':'agregar','tabla':'dosificacion'}
+            app.run();d=app.session_state.versiones_ficticias[-1];antes=len(app.session_state.versiones_ficticias)
+            indice=len(d['tablas']['dosificacion'])-1
+            spec=papel.hoja(d);key=next(k for k,c in spec['cells'].items() if c['target']==('tabla','dosificacion',indice,'Actividades'))
             app.session_state.evento_papel_ficticio={'nonce':'evento-1','documento':d['id'],'huella':papel.huella(d),'cambios':{key:'Cambio dentro del documento'},'accion':'guardar'}
             app.run();self.assertFalse(app.exception)
             self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
-            self.assertEqual(app.session_state.versiones_ficticias[-1]['tablas']['dosificacion'][0]['Actividades'],'Cambio dentro del documento')
+            self.assertEqual(app.session_state.versiones_ficticias[-1]['tablas']['dosificacion'][indice]['Actividades'],'Cambio dentro del documento')
             app.run();self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
 
     def test_por_grado_incluye_individuales_sin_cambiar_su_modalidad(self):

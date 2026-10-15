@@ -296,14 +296,9 @@ def _guia_adicional(prefix,doc):
 
 
 def _pendientes(doc):
-    faltas=s.revisar(doc);resultado=[]
-    for falta in faltas:
-        if falta=='completar las celdas requeridas de aprendizajes':
-            vacios=[i+1 for i,row in enumerate(doc['tablas']['aprendizajes']) if any(str(v or '').strip() for v in row.values()) and not str(row.get('Descriptor de logro','') or '').strip()]
-            if vacios:
-                resultado.extend('Falta el descriptor de logro en la fila '+str(i)+'.' for i in vacios)
-        resultado.append(falta[:1].upper()+falta[1:].replace('_',' ')+'.')
-    return faltas,resultado
+    from services.planeacion_revision import pendientes
+    faltas,items=pendientes(doc)
+    return faltas,[i['mensaje'] for i in items]
 
 
 def _insertar_en_guia_alumno(prefix,indice,campo,texto_nuevo,persist,abrir,reemplazar=False):
@@ -611,8 +606,8 @@ def _editor(prefix,actor,paso):
         for campo in doc['textos']:u._text(prefix,'textos',campo)
     actual=st.session_state[prefix+'_doc'];faltas,avisos=_pendientes(actual)
     with st.expander('Antes de enviar · '+str(len(avisos))+' aspectos por completar'):
-        for falta in avisos:st.write('• '+falta)
-        if not faltas:st.success('Listo para revisar y enviar a Dirección.')
+        from ui.planeacion_revision import panel as revisar
+        revisar(prefix)
     # Solo la clase pública st-key del contenedor propio; no depende del DOM de
     # botones ni columnas internas. La barra acompaña el desplazamiento.
     st.html('<style>.st-key-'+prefix+'_acciones {position:sticky;bottom:0;z-index:10;background:var(--background-color,#fff);padding:0.65rem;border-top:1px solid #bbc8ca;} @media(max-width:640px){.st-key-'+prefix+'_acciones{padding:0.4rem;}}</style>')

@@ -196,7 +196,22 @@ def listar(todas_versiones=False):
     if todas_versiones:
         return resultado
     ultimas={d['id']:d for d in resultado}
-    return list(ultimas.values())
+    return [d for d in ultimas.values() if not d['metadatos'].get('borrador_eliminado')]
+
+
+def eliminar_borrador(doc):
+    actor=autorizar(doc,True)
+    if actor['cuenta']!=doc['cuenta'] or doc['estado']!='BORRADOR':raise PermissionError('Solo el autor puede eliminar su borrador. Los documentos enviados conservan su proceso de revisión.')
+    result=deepcopy(doc);result['metadatos']['borrador_eliminado']=True
+    return guardar(result,'BORRADOR')
+
+
+def restaurar_borrador(doc):
+    actor=autorizar(doc,True)
+    if actor['cuenta']!=doc['cuenta'] or doc['estado']!='BORRADOR' or not doc['metadatos'].get('borrador_eliminado'):
+        raise PermissionError('Selecciona un borrador eliminado de tu cuenta.')
+    result=deepcopy(doc);result['metadatos'].pop('borrador_eliminado',None)
+    return _guardar_version(result,actor,'BORRADOR',restauracion=True)
 
 
 def refrescar():
@@ -274,7 +289,7 @@ def guardar(doc, estado='BORRADOR', observaciones=None):
     return _guardar_version(doc,actor,estado,observaciones)
 
 
-def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=False):
+def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=False,restauracion=False):
     """Persistencia común; las entradas públicas verifican edición completa o aporte acotado."""
     from services.planeacion_equipo import validar, sincronizar, aplica
     validar(doc)
@@ -294,6 +309,12 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         if confirmado is not None:return confirmado
         versiones=[v for v in versiones_actuales() if v['id']==doc['id']]
         latest=versiones[-1] if versiones else None
+        if latest and doc['metadatos'].get('borrador_eliminado') and latest['estado']!='BORRADOR':
+            raise PermissionError('El documento ya fue enviado o revisado; no se puede eliminar como borrador.')
+        if restauracion and (not latest or not latest['metadatos'].get('borrador_eliminado')):
+            raise RuntimeError('El borrador ya fue restaurado o cambió en otra sesión.')
+        if latest and latest['metadatos'].get('borrador_eliminado') and not doc['metadatos'].get('borrador_eliminado') and not restauracion:
+            raise RuntimeError('Este borrador fue eliminado en otra sesión. Su historial se conserva; descarga tu edición antes de continuar.')
         expected=latest['revision'] if latest else ''
         if expected!=doc.get('revision',''):
             raise RuntimeError('Otra sesión guardó cambios. Tu edición sigue aquí; guarda un respaldo y recupera la versión reciente.')
@@ -344,6 +365,7 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
 
 
 def revisar(doc):
+    from services.planeacion_limpieza import tiene_contenido
     faltas=[]; meta=doc['metadatos']; tablas=doc['tablas']
     if not doc['datos'].get('CCT'):
         faltas.append('completar el CCT')
@@ -360,7 +382,7 @@ def revisar(doc):
     usa_competencias=doc['formato']=='XXIII' and any(texto(r.get('Necesidad documentada')) and texto(r.get('Descriptor de logro')) for r in competencias)
     if usa_competencias:required=()
     for key in required:
-        if not any(any(texto(v) for v in row.values()) for row in tablas[key]):
+        if not any(tiene_contenido(doc,key,row) for row in tablas[key]):
             faltas.append('completar '+key)
     columnas={'XXIII':{'aprendizajes':['Necesidades educativas específicas','Aprendizaje y/u objetivo','Descriptor de logro']},
               'XXV':{'barreras':['Barreras para el Aprendizaje y la Participación','Apoyos y/o ajustes razonables']},
@@ -371,7 +393,7 @@ def revisar(doc):
     for key,fields in columnas[doc['formato']].items():
         if usa_competencias and key=='aprendizajes':continue
         for row in tablas[key]:
-            if any(texto(v) for v in row.values()) and any(not texto(row.get(f)) for f in fields):
+            if tiene_contenido(doc,key,row) and any(not texto(row.get(f)) for f in fields):
                 faltas.append('completar las celdas requeridas de '+key);break
     if doc['formato']!='XXI' and not any(texto(r.get('Actividades')) and texto(r.get('Recursos')) and texto(r.get('Temporalidad',r.get('Fecha'))) for r in tablas['dosificacion']):
         faltas.append('describir actividades, tiempos y recursos')

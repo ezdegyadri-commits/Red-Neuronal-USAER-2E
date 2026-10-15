@@ -36,6 +36,7 @@ def panel(prefix):
             with st.expander('Propuesta · '+rows[i]['nombre']+' · '+rows[i]['campo']):
                 if rows[i].get('contexto'):st.caption('Contexto: '+rows[i]['contexto'])
                 st.write(rows[i]['actividad']);st.caption('Recursos propuestos: '+rows[i]['recursos'])
+                if rows[i].get('orientacion'):st.caption(rows[i]['orientacion'])
         confirmar=st.checkbox('Revisé estas propuestas y su pertinencia; las completaré y ajustaré en el formato',key=prefix+'_local_confirmar_'+propuesta['huella'][:12])
         if st.button('Incorporar actividades locales a mi formato',disabled=not ids or not confirmar,key=prefix+'_local_aplicar'):
             try:

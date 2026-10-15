@@ -8,7 +8,19 @@ from services.planeacion_papel import hoja
 
 
 def generar_pdf(doc):
-    spec=hoja(doc);output=BytesIO();ancho=landscape(letter)[0]-52
+    return _generar_pdf(doc,hoja(doc,para_impresion=True))
+
+
+def preparar_descarga(doc):
+    # Streamlit ejecuta la descarga diferida fuera del hilo de la pantalla.
+    # Autorizar ahora y capturar una instantánea evita leer session_state allí.
+    from copy import deepcopy
+    copia=deepcopy(doc);spec=hoja(copia,para_impresion=True)
+    return lambda:_generar_pdf(copia,spec)
+
+
+def _generar_pdf(doc,spec):
+    output=BytesIO();ancho=landscape(letter)[0]-52
     style=ParagraphStyle('Word',fontName='Times-Roman',fontSize=10,leading=12)
     title=ParagraphStyle('TituloWord',parent=style,fontName='Times-Bold',fontSize=12,leading=15,alignment=1,keepWithNext=True)
     def p(v,sty=style):return Paragraph(escape(str(v or '')).replace('\n','<br/>') or ' ',sty)
@@ -19,9 +31,10 @@ def generar_pdf(doc):
     for row in spec['header']:story.append(tabla([[p(v) for v in row]],[ancho/len(row)]*len(row)))
     story.append(Spacer(1,12))
     for section in spec['tables']:
+        if not section['rows']:continue
         if section['title']:story.extend([p(section['title'],title),Spacer(1,5)])
         rows=[[p(v) for v in section['headers']]]
-        rows.extend([[p((c['referente']+'\n\nAdaptación docente / objetivo de trabajo:\n' if c['referente'] else '')+c['value']+('\n\n'+c['nota'] if c.get('nota') else '')) for c in row] for row in section['rows']])
+        rows.extend([[p(c['value']) for c in row] for row in section['rows']])
         widths=[ancho*n/sum(section['widths']) for n in section['widths']] if section['widths'] else [ancho/len(section['headers'])]*len(section['headers'])
         story.extend([tabla(rows,widths),Spacer(1,12)])
     for c in spec['textos']:story.extend([tabla([[p(c['label'])],[p(c['value'])]],[ancho]),Spacer(1,12)])
@@ -33,7 +46,12 @@ def generar_pdf(doc):
         story.extend([Spacer(1,15),p('Antecedentes documentales vinculados',title)])
         for f in fuentes:story.append(p(f.get('referencia','')+' · '+f.get('tipo','')+' · '+str(f.get('fecha',''))))
     cur=doc['metadatos'].get('referente_curricular','')
+    if not cur:
+        from services.planeacion_generacion import texto_curricular
+        cur=texto_curricular(doc)
     if cur:story.extend([Spacer(1,10),p('Referentes y contextualización',title),p(cur)])
+    if any(r.get('_nee_origen',{}).get('propuesta') for r in doc['tablas'].get('aprendizajes',[])):
+        story.extend([Spacer(1,8),p('NEE propuesta para valoración docente. Revisar su pertinencia antes de validarla.')])
     apoyos=doc['metadatos'].get('configuracion_generacion',{}).get('apoyos','')
     if apoyos:story.extend([Spacer(1,10),p('Apoyos y ajustes DUA acordados por el docente',title),p(apoyos)])
     from services.planeacion_equipo import tablas_salida

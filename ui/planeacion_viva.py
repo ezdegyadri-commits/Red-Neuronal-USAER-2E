@@ -20,6 +20,8 @@ def _abrir(base,doc):
 def _entrada(base,actor):
     from ui import planeacion as u
     from ui.planeacion_simple import periodo_actual,crear_borrador
+    from ui.planeacion_borradores import papelera
+    papelera(base)
     try:docs=[d for d in s.listar() if d['cuenta']==actor['cuenta']]
     except Exception:
         docs=[];st.warning('No se pudieron consultar tus documentos. No se eliminó ningún borrador.')
@@ -30,6 +32,12 @@ def _entrada(base,actor):
             if st.button('Abrir mi formato',key=base+'_viva_abrir'):
                 try:_abrir(base,porid[did]);st.rerun()
                 except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+            if st.button('Editar borrador',key=base+'_viva_editar'):
+                try:_abrir(base,porid[did]);st.rerun()
+                except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+            from ui.planeacion_borradores import controles
+            from documents.planeacion_papel import generar_pdf
+            controles(base+'_lista_'+did,porid[did],generar_pdf,lambda:None)
     st.subheader('Elige a quién vas a planear')
     try:frame=s.padron_autorizado()
     except Exception:st.warning('No se pudo consultar la matrícula. Tus documentos se conservan.');return
@@ -180,9 +188,10 @@ def _acciones(prefix,pdf_provider=None,acciones_hoja=False):
     from ui import planeacion as u
     from ui.planeacion_simple import _pendientes
     doc=st.session_state[prefix+'_doc'];faltas,avisos=_pendientes(doc)
-    with st.expander('Revisar antes de entregar · '+str(len(avisos))+' aspectos pendientes'):
-        for aviso in avisos:st.write('• '+aviso)
-        if not faltas:st.success('El formato está listo para tu revisión final.')
+    if not acciones_hoja:
+        with st.expander('Revisar antes de entregar · '+str(len(avisos))+' aspectos pendientes'):
+            from ui.planeacion_revision import panel as revisar
+            revisar(prefix)
     # Solo un contenedor propio; el CSS no depende de clases internas de Streamlit.
     st.html('<style>.st-key-'+prefix+'_viva_acciones{position:sticky;bottom:0;z-index:10;background:var(--background-color,#fff);padding:.7rem;border-top:1px solid #c8d3d5}</style>')
     with st.container(horizontal=True,key=prefix+'_viva_acciones'):
@@ -197,6 +206,8 @@ def _acciones(prefix,pdf_provider=None,acciones_hoja=False):
                 u._preview(prefix+'_viva_preview',pdf)
                 st.download_button('Descargar PDF',pdf,file_name='planeacion-'+doc['id']+'.pdf',mime='application/pdf',key=prefix+'_viva_descarga_pdf')
             except Exception:st.warning('No se pudo preparar la vista. El borrador se conserva.')
+    from ui.planeacion_borradores import controles,cerrar_editor
+    controles(prefix+'_borrador',doc,pdf_provider or u.generar_pdf,lambda:cerrar_editor(prefix.rsplit('_',1)[0],prefix))
     with st.expander('Más opciones · alumnos, versiones, respaldo y herramientas'):
         from ui.planeacion_edicion import panel
         panel(prefix)

@@ -23,6 +23,7 @@ def hoja(prefix):
                 u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar')
             st.session_state[prefix+'_papel_aceptado']=True
             if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados'):st.session_state[prefix+'_papel_panel']=action
+            if action=='corregir':st.session_state[prefix+'_papel_panel']=event['panel']
             if action=='guardar' and nuevo==doc:u._persist(prefix)
             if action=='enviar':
                 if estado=='ENVIADO' and nuevo==doc:u._persist(prefix,'ENVIADO')
@@ -40,7 +41,15 @@ def hoja(prefix):
             if st.button('Cerrar conexión y seguir en mi hoja',key=prefix+'_papel_cerrar'):st.session_state.pop(prefix+'_papel_panel',None);st.rerun()
             from ui import planeacion_viva as viva
             current=st.session_state[prefix+'_doc']
-            if action=='antecedentes':
+            if action.startswith('tabla:'):
+                from ui.planeacion_formato import _tabla
+                tabla=action.split(':',1)[1]
+                if st.button('Añadir fila para completar',key=prefix+'_corregir_nueva_'+tabla):
+                    from services.planeacion_formato import nueva_fila
+                    u._open(prefix,nueva_fila(current,tabla));u._persist(prefix);st.rerun()
+                _tabla(prefix,tabla,u._persist,u._open)
+            elif action=='datos':u._text(prefix,'datos','CCT','CCT de la escuela')
+            elif action=='antecedentes':
                 viva._ficha(prefix,False)
                 from ui.planeacion_social import panel as panel_social
                 panel_social(prefix,u._persist,u._open)
