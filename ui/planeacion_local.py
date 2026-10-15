@@ -48,3 +48,4 @@ def panel(prefix):
                 st.session_state[prefix.rsplit('_',1)[0]+'_paso_pendiente']=PASOS[2]
                 st.session_state.pop(prefix+'_local_propuesta',None);st.rerun()
             except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+

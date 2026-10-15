@@ -176,3 +176,4 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     if previo:
         st.success('Formato preparado como borrador editable. Revisa actividades, destinatarios, apoyos y fechas antes de compartir con Dirección.')
         for pregunta in previo.get('pendientes',[]):st.caption('Aspecto a considerar: '+pregunta)
+

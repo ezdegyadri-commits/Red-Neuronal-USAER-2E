@@ -116,3 +116,4 @@ def generar_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias):
         else:unidad[campo]['maxItems']=0
     return proponer(resumen,formato,area,curriculo=contexto,_prompt=prompt,_schema=schema,
         _max_tokens=6000,_validador=lambda data:validar_completa(data,formato,area,contexto,aliases,evidencias))
+

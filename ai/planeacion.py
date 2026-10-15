@@ -136,3 +136,4 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
     st.session_state.pop('planeacion_ia_diagnostico', None)
     st.session_state.pop('planeacion_ia_reintentar_desde', None)
     return result
+
