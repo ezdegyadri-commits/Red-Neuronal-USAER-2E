@@ -145,9 +145,9 @@ class HojaTests(unittest.TestCase):
         app=self.abrir();app.session_state.fallo_ia_ficticio=True
         next(t for t in app.toggle if t.label=='Solicitar propuesta con IA').set_value(True).run()
         next(c for c in app.checkbox if c.label.startswith('Revisé el resumen')).check().run()
-        next(b for b in app.button if b.label=='Preparar mi planeación').click().run()
+        next(b for b in app.button if b.label=='Generar e integrar actividades al formato').click().run()
         self.assertFalse(app.exception)
-        self.assertTrue(any('IA no disponible' in str(i.value) for i in app.info))
+        self.assertTrue(any('IA no disponible' in str(i.value) for i in app.warning))
         next(t for t in app.text_area if t.label=='Aprendizaje').set_value('Actividad manual de continuidad').run()
         next(b for b in app.button if b.label=='Preparar actividades con mis datos · sin IA').click().run()
         self.assertFalse(app.exception)

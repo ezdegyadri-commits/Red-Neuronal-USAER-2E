@@ -17,6 +17,9 @@ def proponer(doc):
     """
     s.autorizar(doc,True)
     if doc['formato'] not in ('XXIII','XXV'):return deepcopy(doc)
+    if doc['formato']=='XXV':
+        from services.planeacion_social import proponer as proponer_social
+        return proponer_social(doc)
     result=deepcopy(doc);area=doc['datos']['Función']
     tabla='barreras' if doc['formato']=='XXV' else 'aprendizajes'
     headers=FORMATOS[doc['formato']]['tablas'][tabla]

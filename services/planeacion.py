@@ -356,6 +356,9 @@ def revisar(doc):
         required=('barreras','necesidades','curriculo','participantes')
     else:
         required=('barreras',) if doc['formato']=='XXV' else ('aprendizajes',)
+    competencias=doc['metadatos'].get('equipo',{}).get('competencias',[]) if doc['datos']['Función']=='Psicología' else []
+    usa_competencias=doc['formato']=='XXIII' and any(texto(r.get('Necesidad documentada')) and texto(r.get('Descriptor de logro')) for r in competencias)
+    if usa_competencias:required=()
     for key in required:
         if not any(any(texto(v) for v in row.values()) for row in tablas[key]):
             faltas.append('completar '+key)
@@ -366,6 +369,7 @@ def revisar(doc):
                      'curriculo':['NEE','Aprendizajes priorizados y/u objetivos','Descriptor de logro','Temporalidad'],
                      'participantes':['Nombre','Función']}}
     for key,fields in columnas[doc['formato']].items():
+        if usa_competencias and key=='aprendizajes':continue
         for row in tablas[key]:
             if any(texto(v) for v in row.values()) and any(not texto(row.get(f)) for f in fields):
                 faltas.append('completar las celdas requeridas de '+key);break

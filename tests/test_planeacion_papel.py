@@ -162,7 +162,11 @@ class PapelUITests(unittest.TestCase):
                 doc=app.session_state.versiones_ficticias[-1]
                 self.assertEqual(doc['formato'],'XXV' if area=='Trabajo Social' else 'XXIII')
                 spec=papel.hoja(doc)
-                self.assertEqual(spec['tables'][0]['headers'],['Nombre alumno','Discapacidad o condición','Fecha derivación','Aprendizaje','Psicología','Comunicación','Trabajo Social','Situación inicial','Situación final'] if area=='Aprendizaje' else ['Barreras para el Aprendizaje y la Participación','Apoyos y/o ajustes razonables'] if area=='Trabajo Social' else ['Necesidades educativas específicas','Aprendizaje y/u objetivo','Descriptor de logro'])
+                headers={'Aprendizaje':['Nombre alumno','Discapacidad o condición','Fecha derivación','Aprendizaje','Psicología','Comunicación','Trabajo Social','Situación inicial','Situación final'],
+                         'Trabajo Social':['Nombre del alumno','Grado','Grupo'],
+                         'Psicología':['Necesidades educativas específicas','Competencias emocionales','Descriptor de logro'],
+                         'Comunicación':['Necesidades educativas específicas','Aprendizaje y/u objetivo','Descriptor de logro']}
+                self.assertEqual(spec['tables'][0]['headers'],headers[area])
 
     def test_evento_de_edicion_escribe_una_sola_version(self):
         import streamlit as st

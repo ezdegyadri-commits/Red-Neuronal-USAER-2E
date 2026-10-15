@@ -96,10 +96,10 @@ class RecorridoTests(unittest.TestCase):
                 self.assertFalse(any(n.label=='Duración de cada sesión (minutos)' for n in app.number_input))
                 consent=[c for c in app.checkbox if c.label.startswith('Revisé el resumen')]
                 self.assertEqual(len(consent),1)
-                self.assertTrue(next(b for b in app.button if b.label=='Preparar mi planeación').disabled)
+                self.assertTrue(next(b for b in app.button if b.label=='Generar e integrar actividades al formato').disabled)
                 self.assertEqual(app.session_state.llamadas_ficticias,0)
                 consent[0].check().run()
-                next(b for b in app.button if b.label=='Preparar mi planeación').click().run()
+                next(b for b in app.button if b.label=='Generar e integrar actividades al formato').click().run()
                 self.assertFalse(app.exception,area)
                 self.assertEqual(app.session_state.llamadas_ficticias,1)
                 doc=app.session_state.versiones_ficticias[-1];did=doc['id']
@@ -170,9 +170,9 @@ class RecorridoTests(unittest.TestCase):
         for area in ['Psicología','Trabajo Social']:
             app=self.abrir(area)
             if area=='Psicología':next(c for c in app.checkbox if c.label=='Regulación emocional').check().run()
-            else:next(m for m in app.multiselect if m.label=='¿Con quién trabajarás? (opcional)').set_value(['Familia']).run()
+            else:next(m for m in app.multiselect if m.label=='¿En qué contextos trabajarás? (opcional)').set_value(['Familia']).run()
             next(c for c in app.checkbox if c.label.startswith('Revisé el resumen')).check().run()
-            next(b for b in app.button if b.label=='Preparar mi planeación').click().run()
+            next(b for b in app.button if b.label=='Generar e integrar actividades al formato').click().run()
             self.assertFalse(app.exception,area)
             self.assertEqual(app.session_state.llamadas_ficticias,1)
             self.paso(app,1)
@@ -203,7 +203,7 @@ class RecorridoTests(unittest.TestCase):
         self.assertEqual(doc['metadatos']['configuracion_generacion']['competencias_priorizadas'],['Regulación emocional'])
         self.assertTrue(all(not c['Necesidad documentada'] for c in doc['metadatos']['equipo']['competencias']))
         app=self.abrir('Trabajo Social')
-        next(m for m in app.multiselect if m.label=='¿Con quién trabajarás? (opcional)').set_value(['Familia']).run()
+        next(m for m in app.multiselect if m.label=='¿En qué contextos trabajarás? (opcional)').set_value(['Familia']).run()
         self.assertFalse(app.exception)
         next(b for b in app.button if b.label=='Guardar borrador').click().run()
         self.assertEqual(app.session_state.versiones_ficticias[-1]['metadatos']['configuracion_generacion']['contextos_priorizados'],['Familia'])

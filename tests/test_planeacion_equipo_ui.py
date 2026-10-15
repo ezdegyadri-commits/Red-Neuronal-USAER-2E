@@ -3,6 +3,14 @@ import unittest
 from streamlit.testing.v1 import AppTest
 
 class EquipoUITests(unittest.TestCase):
+    def setUp(self):
+        from services import planeacion as s
+        # El fixture reemplaza adaptadores para evitar red. Restaurarlos evita
+        # que las pruebas de concurrencia posteriores ejecuten el guardado demo.
+        for nombre in ('identidad','padron_autorizado','evidencias','listar','guardar','refrescar','versiones_actuales'):
+            self.addCleanup(setattr,s,nombre,getattr(s,nombre))
+        self.addCleanup(setattr,s.repo,'escuelas',s.repo.escuelas)
+
     def test_tres_perfiles_subgrupo_sesion_recuperacion_y_director(self):
         for area in ['Psicología','Comunicación','Trabajo Social']:
             app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_equipo.py')),default_timeout=30).run()

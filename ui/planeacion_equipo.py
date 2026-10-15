@@ -51,7 +51,7 @@ def calendario(prefix,doc):
                 if motivo:st.caption('No lectivo · '+motivo)
                 for s in e['sesiones']:
                     if s['fecha']==key:
-                        st.write(s['subgrupo']);st.caption(s['contexto']+' · '+s['objetivo'])
+                        st.write(s['subgrupo']);st.caption(s['contexto']+' · '+s.get('texto_formato',s['objetivo']))
     st.caption('El calendario muestra lo que tú planeaste; no publica avisos ni modifica el cronograma mensual.')
 
 
@@ -93,7 +93,7 @@ def panel(prefix,doc,persist,abrir,compact=False):
         with st.expander('💡 Orientaciones de aplicación real · Trabajo Social (Anexo XXV)'):
             st.markdown("""
 - **Barreras en contexto escolar/áulico**: Detección y reducción de barreras físicas, actitudinales o de organización escolar.
-- **Contexto sociofamiliar**: Acuerdos tangibles y realistas con la familia (rutinas estructuradas de sueño, horario fijo de tareas, asistencia regular sin ausentismo).
+- **Contexto sociofamiliar**: Revisar las barreras documentadas y proponer apoyos viables con las personas implicadas, según sus recursos y acuerdos.
 - **Redes comunitarias e interinstitucionales**: Articulación con DIF, servicios de salud u organismos comunitarios pertinentes.
 """)
     with st.expander('1. Organizar mis subgrupos',expanded=not bool(e['subgrupos'])):
@@ -144,6 +144,10 @@ def panel(prefix,doc,persist,abrir,compact=False):
                 key=base+'_session_competencias'
                 competencias=st.multiselect('Competencias que se trabajarán',list(equipo.COMPETENCIAS),default=edit.get('competencias',[]),key=key,on_change=_campo,args=(prefix,key,'competencias',persist))
             campos={}
+            if 'texto_formato' in edit:
+                key=base+'_session_texto_formato'
+                campos['texto_formato']=st.text_area('Texto de la actividad en mi formato',value=edit['texto_formato'],key=key,max_chars=20000,on_change=_campo,args=(prefix,key,'texto_formato',persist))
+                st.caption('Esta es la redacción que editaste en la hoja y aparecerá en el PDF. Los campos siguientes conservan la organización de la sesión.')
             for campo,label,ayuda in [('objetivo','Qué queremos lograr','El alumno identifica… / Los alumnos expresan…'),
                  ('actividad','Cómo lo trabajaremos','Inicio, desarrollo y cierre, con acciones concretas.'),
                  ('apoyos','Apoyos y ajustes','Cómo facilitarás el acceso y la participación.'),

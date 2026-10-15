@@ -334,31 +334,8 @@ def _editor(prefix,actor,paso):
                     u._open(prefix, doc); u._persist(prefix); st.success('¡Enfoque de comunicación integrado!'); st.rerun()
         elif actor['area']=='Trabajo Social':
             with st.expander('🤝 2. Barreras de contexto y corresponsabilidad (Manual SEGEY Formato XXV)', expanded=True):
-                st.caption('Identifica BAP en los contextos familiar, escolar y comunitario, y consolida redes de apoyo.')
-                cols_ts = st.columns(2)
-                with cols_ts[0]:
-                    st.markdown('**BAP de contexto a intervenir:**')
-                    bap_ts = st.multiselect('BAP identificadas', [
-                        'Contexto Familiar: falta de involucramiento o sobreprotección',
-                        'Contexto Familiar: condiciones socioeconómicas o de salud vulnerables',
-                        'Contexto Escolar: barreras actitudinales o de organización escolar',
-                        'Contexto Comunitario: falta de servicios o transporte accesible'
-                    ], key=prefix+'_ts_bap')
-                with cols_ts[1]:
-                    st.markdown('**Acciones y redes de apoyo:**')
-                    redes_ts = st.multiselect('Acciones de Trabajo Social', [
-                        'Visitas domiciliarias de seguimiento (Anexo XXX)',
-                        'Vinculación interinstitucional (DIF, salud, becas IBECEY - Anexo XXIX)',
-                        'Talleres de orientación familiar y habilidades de autocuidado',
-                        'Acuerdos de corresponsabilidad con padres de familia'
-                    ], key=prefix+'_ts_redes')
-                if (bap_ts or redes_ts) and st.button('➕ Aplicar al enfoque de mi planeación', key=prefix+'_ts_aplicar'):
-                    texto_ts = []
-                    if bap_ts: texto_ts.append('BAP de contexto:\n• ' + '\n• '.join(bap_ts))
-                    if redes_ts: texto_ts.append('Acciones y redes de corresponsabilidad:\n• ' + '\n• '.join(redes_ts))
-                    previo = doc['metadatos'].get('necesidades_confirmadas', '')
-                    doc['metadatos']['necesidades_confirmadas'] = (previo + '\n\n' + '\n\n'.join(texto_ts)).strip()
-                    u._open(prefix, doc); u._persist(prefix); st.success('¡Enfoque de trabajo social integrado!'); st.rerun()
+                from ui.planeacion_social import panel as panel_social
+                panel_social(prefix,u._persist,u._open)
         with st.expander('✨ 3. Propuesta pedagógica con IA', expanded=True):
             if doc['formato']=='XXI':
                 st.caption('Las NEE y BAP se precargan únicamente de una conclusión vigente de EPP. No se validan automáticamente.')

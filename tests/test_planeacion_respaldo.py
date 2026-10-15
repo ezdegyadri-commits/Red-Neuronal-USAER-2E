@@ -80,7 +80,7 @@ class ContinuidadUITests(unittest.TestCase):
                 doc=deepcopy(app.session_state.versiones_ficticias[-1])
                 next(c for c in app.checkbox if c.label.startswith('Revisé el resumen')).check().run()
                 app.session_state['fallo_ia_ficticio']=True
-                next(b for b in app.button if b.label=='Preparar mi planeación').click().run()
+                next(b for b in app.button if b.label=='Generar e integrar actividades al formato').click().run()
                 self.assertFalse(app.exception)
                 self.assertEqual(app.session_state.llamadas_ficticias,1)
                 next(b for b in app.button if b.label=='Continuar sin IA · abrir mi formato').click().run()
@@ -104,7 +104,7 @@ class ContinuidadUITests(unittest.TestCase):
                 self.paso(app,2)
                 next(b for b in app.button if b.label=='Volver a preparar con IA').click().run()
                 self.assertFalse(app.exception)
-                self.assertTrue(any(b.label=='Preparar mi planeación' for b in app.button))
+                self.assertTrue(any(b.label=='Generar e integrar actividades al formato' for b in app.button))
 
     def test_continuar_no_crea_version_y_respeta_validacion_de_envio(self):
         app=self.abrir();count=len(app.session_state.versiones_ficticias)
@@ -118,7 +118,7 @@ class ContinuidadUITests(unittest.TestCase):
 
     def test_acceso_individual_sin_evidencia_ni_ia(self):
         app=self.abrir(individual=True,sin_fuentes=True)
-        self.assertTrue(next(b for b in app.button if b.label=='Preparar mi planeación').disabled)
+        self.assertTrue(next(b for b in app.button if b.label=='Generar e integrar actividades al formato').disabled)
         next(b for b in app.button if b.label=='Continuar sin IA · abrir mi formato').click().run()
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state.versiones_ficticias[-1]['metadatos']['modalidad_planeacion'],'individual')

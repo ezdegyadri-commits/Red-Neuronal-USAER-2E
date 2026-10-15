@@ -78,7 +78,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
             ajustes={**ajustes,'competencias_priorizadas':prioridades}
         if doc['datos']['Función']=='Trabajo Social':
             key=base+'_contextos'
-            contextos=st.multiselect('¿Con quién trabajarás? (opcional)',['Familia','Escuela','Comunidad'],default=ajustes.get('contextos_priorizados',[]),key=key,on_change=_prioridades,args=(prefix,key,'contextos_priorizados',persist))
+            contextos=st.multiselect('¿En qué contextos trabajarás? (opcional)',['Aula regular','Escuela','Familia','Comunidad'],default=ajustes.get('contextos_priorizados',[]),key=key,on_change=_prioridades,args=(prefix,key,'contextos_priorizados',persist))
             ajustes={**ajustes,'contextos_priorizados':contextos}
         configurar=st.toggle('Cambiar sesiones, apoyos o referencia',key=base+'_cambiar')
     else:configurar=True

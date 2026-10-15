@@ -40,7 +40,10 @@ def hoja(prefix):
             if st.button('Cerrar conexión y seguir en mi hoja',key=prefix+'_papel_cerrar'):st.session_state.pop(prefix+'_papel_panel',None);st.rerun()
             from ui import planeacion_viva as viva
             current=st.session_state[prefix+'_doc']
-            if action=='antecedentes':viva._ficha(prefix,False)
+            if action=='antecedentes':
+                viva._ficha(prefix,False)
+                from ui.planeacion_social import panel as panel_social
+                panel_social(prefix,u._persist,u._open)
             elif action=='referentes':u._curriculo(prefix,current)
             elif action=='dua':
                 from ui.planeacion_generacion import _ajuste
