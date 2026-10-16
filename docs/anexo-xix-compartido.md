@@ -76,6 +76,27 @@ recién confirmada cuando corresponde y limpia el panel auxiliar del documento
 anterior. La lista muestra alumnos, modalidad, grado, grupo y fecha/hora.
 La eliminación de borradores sigue siendo recuperable desde la papelera.
 
+## Recuperación del editor y confirmación de guardado
+
+- El editor muestra una espera visible y repite su aviso de disponibilidad
+  hasta recibir el formato. Esto evita que un saludo perdido deje el espacio
+  vacío; no sustituye una conexión funcional ni elimina las validaciones.
+- Cada envío tiene un identificador. Solo el acuse de ese envío libera sus
+  cambios; un acuse anterior no puede borrar texto más reciente.
+- Si la respuesta tarda 15 segundos, se reintenta el mismo envío. Durante una
+  espera de guardado se permite continuar escribiendo; la respuesta anterior
+  no reemplaza lo escrito después. Las acciones estructurales siguen protegidas.
+- El respaldo de la pestaña se conserva mientras falta confirmar la escritura
+  recuperable. Recibir texto en la sesión no autoriza borrar ese respaldo.
+- Un rechazo deja el texto disponible y detiene los reintentos automáticos de
+  esa edición inválida. Un respaldo de otra revisión no se aplica ni elimina
+  automáticamente: se ofrece su descarga para revisión.
+- La confirmación se muestra con el documento actual tras el autoguardado,
+  no con una copia anterior al intento de persistencia.
+
+La espera y pérdida de conexión se verifican con un servidor ficticio aislado
+(`tests/servidor_editor_guardado.cjs`); jamás se simulan fallos en la base real.
+
 ## Verificación
 
 Ejecutar módulos de pruebas en procesos separados: algunos fixtures de
