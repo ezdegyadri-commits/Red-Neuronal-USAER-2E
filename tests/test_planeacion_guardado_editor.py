@@ -14,6 +14,21 @@ class ClienteTests(unittest.TestCase):
                               capture_output=True,text=True,encoding='utf-8',timeout=30)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
+    def test_componente_integrado_sin_marco_con_mismo_contrato(self):
+        from ui import planeacion_papel as ui
+        from unittest.mock import Mock
+        mount=Mock(return_value={'evento':{'nonce':'envio-ficticio'}})
+        hoja={'documento':'ficticio'}
+        with patch.object(ui.components,'component',return_value=mount) as register:
+            self.assertEqual(ui.editor(key='ficticio',hoja=hoja,aceptado_nonce='previo'),{'nonce':'envio-ficticio'})
+        definition=register.call_args.kwargs
+        self.assertTrue(definition['isolate_styles'])
+        self.assertNotIn('<iframe',definition['html'])
+        self.assertNotIn('/* USAER_RENDERER */',definition['js'])
+        self.assertIn('host.__usaerEditor',definition['js'])
+        self.assertIs(mount.call_args.kwargs['data']['hoja'],hoja)
+        self.assertEqual(mount.call_args.kwargs['height'],'content')
+
 
 class ReciboTests(unittest.TestCase):
     def test_persistencia_fallida_conserva_texto_y_pendiente(self):

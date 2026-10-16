@@ -78,9 +78,15 @@ La eliminación de borradores sigue siendo recuperable desde la papelera.
 
 ## Recuperación del editor y confirmación de guardado
 
-- El editor muestra una espera visible y repite su aviso de disponibilidad
-  hasta recibir el formato. Esto evita que un saludo perdido deje el espacio
-  vacío; no sustituye una conexión funcional ni elimina las validaciones.
+- El formato se monta directamente con componentes v2 de Streamlit 1.65,
+  mecanismo ya usado por el corrector de escritura. No carga un iframe ni
+  depende de la ruta externa del componente, su caché o un saludo postMessage.
+  Se reutilizan el mismo HTML, estilos y renderizador de tablas; no se sustituye
+  la hoja tradicional ni se modifican los documentos para mostrarla.
+- Un adaptador acotado entrega los datos del componente y sus eventos al mismo
+  contrato existente. No escucha mensajes externos ni hace solicitudes de red.
+  El estado de edición se conserva entre renderizados y se liberan los relojes,
+  observadores y avisos al desmontar la vista.
 - Cada envío tiene un identificador. Solo el acuse de ese envío libera sus
   cambios; un acuse anterior no puede borrar texto más reciente.
 - Si la respuesta tarda 15 segundos, se reintenta el mismo envío. Durante una

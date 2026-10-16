@@ -5,8 +5,8 @@ const vm = require('node:vm');
 const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '../ui/planeacion_papel_component/index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
-function fixture(backup) {
-  const nodes = new Map(), listeners = {}, timers = new Map(), messages = [], cache = new Map(backup || []);
+function fixture(backup, referrer='https://usaer.test/', native=false) {
+  const nodes = new Map(), listeners = {}, timers = new Map(), messages = [], targets = [], cache = new Map(backup || []);
   let sequence = 0;
   class Element {
     constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.handlers = {}; this._text = ''; }
@@ -26,21 +26,33 @@ function fixture(backup) {
   const root = new Element('article'); root.id = 'page';
   const tools = new Element('div'); tools.id = 'tools';
   const status = new Element('div'); status.id = 'status';
-  const parent = { postMessage: m => messages.push(m) };
-  const document = { referrer: 'https://usaer.test/', activeElement: null, documentElement: { scrollHeight: 220 },
+  const parent = { postMessage: (m,target) => {messages.push(m);targets.push({type:m.type,target});} };
+  const document = { referrer, activeElement: null, documentElement: { scrollHeight: 220 },
     getElementById: id => nodes.get(id), createElement: tag => new Element(tag) };
   const context = { document, parent, location: { origin: 'https://usaer.test' }, URL, Blob, console,
     sessionStorage: { getItem: k => cache.get(k) || null, setItem: (k,v) => cache.set(k,v), removeItem: k => cache.delete(k) },
     setTimeout: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay }); return id; }, clearTimeout: id => timers.delete(id),
     setInterval: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay, interval: true }); return id; }, clearInterval: id => timers.delete(id),
-    queueMicrotask: fn => fn(), ResizeObserver: class { observe() {} },
-    window: { addEventListener: (type, fn) => { listeners[type] = fn; } } };
-  vm.runInNewContext(script, context);
-  function render(hoja, extra = {}, source = parent) { listeners.message({source, origin:'https://usaer.test', data:{type:'streamlit:render', args:{hoja,...extra}}}); }
+    queueMicrotask: fn => fn(), ResizeObserver: class { observe() {} disconnect() {} },
+    window: { addEventListener: (type, fn) => { listeners[type] = fn; },removeEventListener: type => { delete listeners[type]; } } };
+  let component,host;
+  if(native){
+    host={querySelector: selector=>nodes.get(selector.slice(1)),activeElement:null};
+    component={parentElement:host,data:{},setStateValue:(name,value)=>messages.push({type:'streamlit:setComponentValue',value})};
+    const adapter=fs.readFileSync(path.join(__dirname,'../ui/planeacion_papel_component/native.js'),'utf8')
+      .replace('export default function mount','function mount').replace('/* USAER_RENDERER */',script);
+    vm.runInNewContext(adapter+'\nthis.mountNative=mount;',context);
+    context.mountNative(component);
+  }else vm.runInNewContext(script, context);
+  function render(hoja, extra = {}, source = parent, origin='https://usaer.test') {
+    if(native){component.data={hoja,...extra};context.mountNative(component)}
+    else listeners.message({source, origin, data:{type:'streamlit:render', args:{hoja,...extra}}});
+  }
   function tick(delay) { const pending = [...timers]; for (const [id,t] of pending) if (t.delay === delay && timers.has(id)) { if (!t.interval) timers.delete(id); t.fn(); } }
   function input(value, id='c0') { const e=nodes.get('celda-'+id); e.textContent=value; e.handlers.input({}); root.handlers.input?.({}); }
   const events = () => messages.filter(m => m.type === 'streamlit:setComponentValue').map(m => m.value);
-  return { nodes, root, tools, status, render, tick, input, events, messages, cache, listeners };
+  return { nodes, root, tools, status, render, tick, input, events, messages, targets, cache, listeners, parent,
+    dispose:()=>host?.__usaerEditor.dispose(),timers };
 }
 function hoja(value='', fingerprint='base') {
   const a={id:'c0',value,label:'Actividad',editable:true}, b={id:'c1',value:'Sin valorar',label:'Valoración',editable:true,opciones:['Sin valorar','Logrado']};
@@ -100,4 +112,33 @@ function hoja(value='', fingerprint='base') {
   const f=fixture([['usaer-hoja:ficticio',backup]]); f.render(hoja(),{guardado:'ahora'});
   assert.equal(f.cache.get('usaer-hoja:ficticio'),backup); assert.match(f.status.textContent,/otra revisión/);
 }
-console.log('Editor: 5 escenarios de carga, acuse, espera, rechazo y respaldo aprobados.');
+// Un proxy o referrer ausente no decide el destino de las ediciones.
+for(const referrer of ['', 'https://contenedor.distinto.test/']) {
+  const f=fixture(undefined,referrer);
+  assert.equal(f.targets[0].target,'*');
+  assert.ok(f.targets.every(t=>t.type!=='streamlit:setComponentValue'));
+  f.render(hoja(),{},f.parent,'null');assert.equal(f.tools.children.length,0);
+  f.render(hoja(),{},f.parent,'https://usaer.test');
+  f.input('Solo al padre autenticado por origen');f.tick(4000);
+  assert.equal(f.targets.find(t=>t.type==='streamlit:setComponentValue').target,'https://usaer.test');
+  const count=f.tools.children.length;
+  f.render(hoja('No aceptar','ajena'),{},f.parent,'https://otro.test');
+  assert.equal(f.tools.children.length,count);
+  assert.equal(f.nodes.get('celda-c0').innerText,'Solo al padre autenticado por origen');
+}
+// El adaptador nativo usa exactamente la misma hoja, pero sin marco ni handshake externo.
+{
+  const f=fixture(undefined,'https://contenedor.distinto.test/',true);
+  f.render(hoja(),{guardado:'antes'});
+  const controls=f.tools.children.length;
+  f.input('Edición del formato integrado');f.tick(4000);
+  assert.equal(f.events().length,1);const event=f.events()[0];
+  f.render(hoja('Edición del formato integrado','nativa'),{aceptado_nonce:event.nonce,guardado:'confirmado'});
+  assert.match(f.status.textContent,/Guardado confirmado/);
+  assert.equal(f.nodes.get('celda-c0').innerText,'Edición del formato integrado');
+  f.render(hoja('Edición del formato integrado','nativa'),{guardado:'confirmado'});
+  assert.equal(f.tools.children.length,controls);assert.equal(f.events().length,1);
+  assert.equal(f.cache.has('usaer-hoja:ficticio'),false);
+  f.dispose();assert.equal(f.timers.size,0);assert.equal(f.listeners.beforeunload,undefined);
+}
+console.log('Editor: carga, guardado y adaptador integrado sin iframe aprobados.');
