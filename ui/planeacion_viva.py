@@ -18,7 +18,7 @@ def _abrir(base,doc):
             if not u._guardar_edicion_pendiente(key[:-4]):raise RuntimeError('El autoguardado aún no se confirmó; tu edición sigue abierta. Reintenta cuando vuelva la conexión.')
             if value.get('id')==doc.get('id'):doc=deepcopy(st.session_state[key])
     abrir(base,prefix,doc)
-    for suffix in ('_papel_panel','_papel_nonce','_papel_aceptado'):
+    for suffix in ('_papel_panel','_papel_nonce','_papel_aceptado','_papel_legacy','_papel_rechazado','_papel_error'):
         st.session_state.pop(prefix+suffix,None)
     return prefix
 

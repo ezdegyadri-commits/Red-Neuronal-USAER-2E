@@ -19,9 +19,12 @@ def hoja(prefix):
         doc=st.session_state[prefix+'_doc']
         if altas:st.info('Se añadieron las altas grupales nuevas del mismo grado y grupo. Las filas y aportes anteriores se conservan.')
     u._autosave(prefix)
+    doc=st.session_state[prefix+'_doc']
     event=editor(hoja=papel.hoja(doc),guardado=doc.get('guardado_en','') if not st.session_state.get(prefix+'_pending') else '',
-        aceptado=st.session_state.get(prefix+'_papel_aceptado',False),key=prefix+'_papel_'+doc['id'],default=None)
-    st.session_state[prefix+'_papel_aceptado']=False
+        aceptado=st.session_state.pop(prefix+'_papel_legacy',False),
+        aceptado_nonce=st.session_state.get(prefix+'_papel_aceptado',''),
+        rechazado=st.session_state.get(prefix+'_papel_rechazado',''),
+        error=st.session_state.get(prefix+'_papel_error',''),key=prefix+'_papel_'+doc['id'],default=None)
     if event and event.get('nonce')!=st.session_state.get(prefix+'_papel_nonce'):
         try:
             nuevo=papel.aplicar(doc,event)
@@ -30,7 +33,10 @@ def hoja(prefix):
             estado='ENVIADO' if action=='enviar' and not u.servicio.revisar(nuevo) else 'BORRADOR'
             if nuevo!=doc:
                 u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar')
-            st.session_state[prefix+'_papel_aceptado']=True
+            st.session_state[prefix+'_papel_aceptado']=event['nonce']
+            st.session_state[prefix+'_papel_legacy']=True
+            st.session_state.pop(prefix+'_papel_rechazado',None)
+            st.session_state.pop(prefix+'_papel_error',None)
             if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados','inicio','equipo'):st.session_state[prefix+'_papel_panel']=action
             if action=='corregir':st.session_state[prefix+'_papel_panel']=event['panel']
             if action=='guardar' and nuevo==doc:u._persist(prefix)
@@ -51,7 +57,10 @@ def hoja(prefix):
             if action=='apartados' and nuevo==doc:st.session_state[prefix+'_papel_aviso']='No hay nuevos vacíos vinculados con datos suficientes para proponer. Tu redacción se conserva; puedes conectar antecedentes o elegir referentes sin redactar de nuevo.'
             st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:
-            st.session_state[prefix+'_papel_nonce']=event.get('nonce');st.warning(str(exc))
+            st.session_state[prefix+'_papel_nonce']=event.get('nonce')
+            st.session_state[prefix+'_papel_rechazado']=event.get('nonce')
+            st.session_state[prefix+'_papel_error']=str(exc)
+            st.rerun()
     if st.session_state.get(prefix+'_papel_aviso'):st.info(st.session_state.pop(prefix+'_papel_aviso'))
     if doc['metadatos'].get('propuestas_apartados'):st.caption(doc['metadatos']['propuestas_apartados']['aviso'])
     action=st.session_state.get(prefix+'_papel_panel')

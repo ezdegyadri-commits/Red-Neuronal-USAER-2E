@@ -23,7 +23,10 @@ def panel(prefix,doc):
     st.caption('Escribe directamente en la columna '+actor['area']+'. Las demás áreas se ven aquí mismo y están protegidas. La maestra de apoyo conserva la coordinación del formato.')
     event=editor(hoja=papel.hoja(preview,colaborativa=True),
         guardado=actual.get('guardado_en','') if not st.session_state.get(base+'_pending') else '',
-        aceptado=st.session_state.pop(base+'_ack',False),key=base+'_hoja',default=None)
+        aceptado=st.session_state.pop(base+'_legacy_ack',False),
+        aceptado_nonce=st.session_state.get(base+'_ack',''),
+        rechazado=st.session_state.get(base+'_rechazado',''),
+        error=st.session_state.get(base+'_error_hoja',''),key=base+'_hoja',default=None)
     if event and event.get('nonce')!=st.session_state.get(base+'_nonce'):
         try:
             filas=papel.aplicar_aporte(preview,event)
@@ -31,13 +34,19 @@ def panel(prefix,doc):
             if filas!=st.session_state[base+'_filas'] or event.get('accion')=='guardar':
                 st.session_state[base+'_filas']=filas;st.session_state[base+'_pending']=True
                 _guardar(base,automatic=event.get('accion')=='autoguardar')
-            st.session_state[base+'_ack']=True
+            st.session_state[base+'_ack']=event['nonce']
+            st.session_state[base+'_legacy_ack']=True
+            st.session_state.pop(base+'_rechazado',None)
+            st.session_state.pop(base+'_error_hoja',None)
             if event.get('accion')=='inicio':
                 if st.session_state.get(base+'_pending'):_guardar(base)
                 if not st.session_state.get(base+'_pending'):st.session_state[prefix+'_cerrado']=doc['id']
             st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:
-            st.session_state[base+'_nonce']=event.get('nonce');st.warning(str(exc))
+            st.session_state[base+'_nonce']=event.get('nonce')
+            st.session_state[base+'_rechazado']=event.get('nonce')
+            st.session_state[base+'_error_hoja']=str(exc)
+            st.rerun()
     st.text_area('Observaciones de mi área',value=st.session_state[base+'_obs'],key=base+'_notas',on_change=_cambio,args=(base,base+'_notas'))
     if st.button('Guardar mi aportación',key=base+'_save'):_guardar(base)
     _estado(base)
@@ -69,5 +78,5 @@ def panel(prefix,doc):
                     row=next((r for r in rows if r['ID_Alumno']==a['ID_Alumno']),None)
                     if row is None:row={k:'' for k in COLUMNAS};row['ID_Alumno']=a['ID_Alumno'];rows.append(row)
                     if not row.get('Texto en formato') and not row.get('Actividad / cómo trabajar'):row['Texto en formato']='\n\n'.join(textos)[:4000]
-                st.session_state[base+'_filas']=rows;_guardar(base);st.session_state[base+'_ack']=True;st.rerun()
+                st.session_state[base+'_filas']=rows;_guardar(base);st.rerun()
         else:st.caption('Tu formato de especialista conserva las conexiones al expediente, PDA, DUA y propuestas de IA en «Mi formato».')
