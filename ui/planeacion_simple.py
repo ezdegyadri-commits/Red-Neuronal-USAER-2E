@@ -16,75 +16,400 @@ PASOS=('1. ¿A quién planeo?', '2. Preparar con IA', '3. Revisar y enviar')
 def _inyectar_estilos_planeacion():
     st.html('''
     <style>
-    /* Estilos Oficiales USAER 02-E */
+    /* Estilos Institucionales Premium USAER 02-E */
     :root {
         --usaer-navy: #0F2D59;
         --usaer-navy-light: #1E3A8A;
         --usaer-teal: #0D9488;
         --usaer-teal-light: #14B8A6;
+        --usaer-teal-bg: #F0FDFA;
         --usaer-gold: #D97706;
         --usaer-slate: #334155;
+        --usaer-emerald: #059669;
     }
+
+    /* Lienzo de Documento Oficial */
     .usaer-canvas-card {
         background: #FFFFFF;
-        border: 1px solid #CBD5E1;
-        border-radius: 12px;
-        box-shadow: 0 4px 18px rgba(15, 45, 89, 0.06);
-        padding: 1.25rem 1.5rem;
-        margin-bottom: 1.25rem;
+        border: 1.5px solid #CBD5E1;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(15, 45, 89, 0.08);
+        padding: 1.5rem 1.75rem;
+        margin-bottom: 1.5rem;
     }
     .usaer-official-header {
-        border-bottom: 2px solid #0F2D59;
-        padding-bottom: 0.6rem;
-        margin-bottom: 1rem;
+        border-bottom: 2.5px solid #0F2D59;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.15rem;
         text-align: center;
     }
     .usaer-sub-badge {
-        font-size: 0.72rem;
-        font-weight: 700;
+        font-size: 0.74rem;
+        font-weight: 750;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: #475569;
+        margin-bottom: 0.2rem;
     }
     .usaer-main-title {
-        font-size: 1.2rem;
+        font-size: 1.28rem;
         font-weight: 800;
         color: #0F2D59;
-        margin: 0.2rem 0;
+        margin: 0.25rem 0;
+        letter-spacing: -0.01em;
     }
     .usaer-annex-badge {
         display: inline-block;
         background: linear-gradient(135deg, #0F2D59 0%, #0D9488 100%);
         color: #FFFFFF !important;
-        font-size: 0.82rem;
+        font-size: 0.86rem;
         font-weight: 700;
-        padding: 0.25rem 0.8rem;
-        border-radius: 6px;
-        margin-top: 0.3rem;
+        padding: 0.35rem 0.95rem;
+        border-radius: 8px;
+        margin-top: 0.4rem;
+        letter-spacing: 0.03em;
+        box-shadow: 0 2px 8px rgba(13, 148, 136, 0.25);
     }
     .usaer-meta-table {
         width: 100%;
-        border-collapse: collapse;
-        font-size: 0.86rem;
-        margin-bottom: 0.75rem;
-    }
-    .usaer-meta-table td {
-        padding: 0.4rem 0.6rem;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 0.88rem;
+        margin-bottom: 0.85rem;
+        border-radius: 8px;
+        overflow: hidden;
         border: 1px solid #E2E8F0;
     }
+    .usaer-meta-table td {
+        padding: 0.55rem 0.75rem;
+        border-bottom: 1px solid #E2E8F0;
+        border-right: 1px solid #E2E8F0;
+    }
+    .usaer-meta-table tr:last-child td { border-bottom: none; }
+    .usaer-meta-table td:last-child { border-right: none; }
     .usaer-meta-label {
         font-weight: 700;
         color: #0F2D59;
         background-color: #F8FAFC;
-        width: 25%;
+        width: 22%;
     }
-    div[data-testid="stButton"] button {
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        transition: transform 0.12s ease !important;
+
+    /* ========================================================================== */
+    /* BOTONES GRANDES, AMABLES, VISIBLES Y PROFESIONALES                         */
+    /* ========================================================================== */
+
+    /* Herencia de color y estilo para textos internos en botones de Streamlit */
+    div[data-testid="stButton"] button p,
+    div[data-testid="stDownloadButton"] button p,
+    div.stButton > button p,
+    div.stDownloadButton > button p {
+        color: inherit !important;
+        font-size: inherit !important;
+        font-weight: inherit !important;
+        line-height: inherit !important;
+        margin: 0 !important;
+        letter-spacing: inherit !important;
     }
-    div[data-testid="stButton"] button:hover {
-        transform: translateY(-1px) !important;
+
+    /* Base para todos los botones del módulo: grandes, amables y táctiles */
+    div.stButton > button,
+    div.stDownloadButton > button {
+        border-radius: 13px !important;
+        font-weight: 700 !important;
+        font-size: 1.02rem !important;
+        letter-spacing: 0.01em !important;
+        min-height: 50px !important;
+        padding: 0.75rem 1.45rem !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        box-shadow: 0 2px 8px rgba(15, 45, 89, 0.08) !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.55rem !important;
+    }
+
+    /* Hover general con elevación agradable */
+    div.stButton > button:hover,
+    div.stDownloadButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(15, 45, 89, 0.16) !important;
+    }
+
+    div.stButton > button:active,
+    div.stDownloadButton > button:active {
+        transform: translateY(0) !important;
+        box-shadow: 0 2px 4px rgba(15, 45, 89, 0.1) !important;
+    }
+
+    /* 1. Botones Primarios (Llamados a la Acción Fuertes: Crear, Guardar, etc.) */
+    div.stButton > button[kind="primary"],
+    div.stButton > button[data-testid="baseButton-primary"] {
+        background: linear-gradient(135deg, #0F4C5C 0%, #0D9488 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        font-size: 1.06rem !important;
+        font-weight: 800 !important;
+        min-height: 52px !important;
+        padding: 0.85rem 1.65rem !important;
+        box-shadow: 0 4px 16px rgba(13, 148, 136, 0.35) !important;
+    }
+    div.stButton > button[kind="primary"]:hover,
+    div.stButton > button[data-testid="baseButton-primary"]:hover {
+        background: linear-gradient(135deg, #0A3742 0%, #0B7A6F 100%) !important;
+        box-shadow: 0 8px 25px rgba(13, 148, 136, 0.48) !important;
+        transform: translateY(-2px) scale(1.01) !important;
+    }
+
+    /* 2. Botones Secundarios / Estándar (Blanco Perlado con Borde Definido) */
+    div.stButton > button[kind="secondary"],
+    div.stButton > button[data-testid="baseButton-secondary"] {
+        background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%) !important;
+        color: #0F2D59 !important;
+        border: 1.5px solid #CBD5E1 !important;
+    }
+    div.stButton > button[kind="secondary"]:hover,
+    div.stButton > button[data-testid="baseButton-secondary"]:hover {
+        background: #F0FDFA !important;
+        border-color: #0D9488 !important;
+        color: #0D9488 !important;
+    }
+
+    /* 3. Botones del Asistente Inteligente (Conectividad en 1 Clic: Menta/Teal Amigable) */
+    div[class*="st-key-"][class*="_asist_"] button,
+    div[class*="st-key-"][class*="_step2_usar_"] button {
+        background: linear-gradient(135deg, #F0FDFA 0%, #E6FFFA 100%) !important;
+        border: 1.5px solid #0D9488 !important;
+        color: #0F766E !important;
+        font-weight: 750 !important;
+        font-size: 0.98rem !important;
+        min-height: 48px !important;
+        padding: 0.7rem 1.35rem !important;
+        box-shadow: 0 2px 8px rgba(13, 148, 136, 0.14) !important;
+    }
+    div[class*="st-key-"][class*="_asist_"] button:hover,
+    div[class*="st-key-"][class*="_step2_usar_"] button:hover {
+        background: linear-gradient(135deg, #0D9488 0%, #0F766E 100%) !important;
+        color: #FFFFFF !important;
+        border-color: #0F766E !important;
+        box-shadow: 0 6px 18px rgba(13, 148, 136, 0.35) !important;
+        transform: translateY(-2px) scale(1.01) !important;
+    }
+
+    /* 4. Botones de Continuar en tarjetas de borradores previos (Azul Royal) */
+    div[class*="st-key-"][class*="_continuar_"] button {
+        background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%) !important;
+        border: 1.5px solid #3B82F6 !important;
+        color: #1D4ED8 !important;
+        font-size: 1.0rem !important;
+        font-weight: 750 !important;
+        min-height: 48px !important;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.16) !important;
+    }
+    div[class*="st-key-"][class*="_continuar_"] button:hover {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+        color: #FFFFFF !important;
+        border-color: #1D4ED8 !important;
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35) !important;
+    }
+
+    /* 5. Barra Flotante de Acciones (Bottom Action Dock) */
+    div[class*="st-key-"][class*="_acciones"] {
+        position: sticky !important;
+        bottom: 0 !important;
+        z-index: 99 !important;
+        background: rgba(255, 255, 255, 0.96) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-top: 2.5px solid #0D9488 !important;
+        box-shadow: 0 -8px 25px rgba(15, 45, 89, 0.12) !important;
+        border-radius: 16px 16px 0 0 !important;
+        padding: 0.85rem 1.4rem !important;
+    }
+
+    /* Guardar Borrador (Azul Marino / Real Confiable) */
+    div[class*="st-key-"][class*="_simple_save"] button {
+        background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        font-size: 1.04rem !important;
+        font-weight: 800 !important;
+        min-height: 52px !important;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.32) !important;
+    }
+    div[class*="st-key-"][class*="_simple_save"] button:hover {
+        background: linear-gradient(135deg, #172554 0%, #1D4ED8 100%) !important;
+        box-shadow: 0 8px 22px rgba(37, 99, 235, 0.45) !important;
+        transform: translateY(-2px) !important;
+    }
+    div[class*="st-key-"][class*="_simple_save"] button::before {
+        content: "💾";
+        font-size: 1.15rem;
+    }
+
+    /* Ver PDF (Verde Azulado Institucional) */
+    div[class*="st-key-"][class*="_simple_pdf"] button {
+        background: linear-gradient(135deg, #0F766E 0%, #0D9488 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        font-size: 1.04rem !important;
+        font-weight: 800 !important;
+        min-height: 52px !important;
+        box-shadow: 0 4px 14px rgba(13, 148, 136, 0.32) !important;
+    }
+    div[class*="st-key-"][class*="_simple_pdf"] button:hover {
+        background: linear-gradient(135deg, #115E59 0%, #0F766E 100%) !important;
+        box-shadow: 0 8px 22px rgba(13, 148, 136, 0.45) !important;
+        transform: translateY(-2px) !important;
+    }
+    div[class*="st-key-"][class*="_simple_pdf"] button::before {
+        content: "📄";
+        font-size: 1.15rem;
+    }
+
+    /* Enviar a Dirección (Esmeralda Triunfal y Claro) */
+    div[class*="st-key-"][class*="_simple_send"] button {
+        background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        font-size: 1.08rem !important;
+        font-weight: 850 !important;
+        min-height: 52px !important;
+        box-shadow: 0 4px 16px rgba(16, 185, 129, 0.38) !important;
+    }
+    div[class*="st-key-"][class*="_simple_send"] button:hover {
+        background: linear-gradient(135deg, #047857 0%, #059669 100%) !important;
+        box-shadow: 0 8px 25px rgba(16, 185, 129, 0.52) !important;
+        transform: translateY(-2px) !important;
+    }
+    div[class*="st-key-"][class*="_simple_send"] button::before {
+        content: "🚀";
+        font-size: 1.15rem;
+    }
+    div[class*="st-key-"][class*="_simple_send"] button:disabled {
+        background: #E2E8F0 !important;
+        color: #94A3B8 !important;
+        box-shadow: none !important;
+        transform: none !important;
+        cursor: not-allowed !important;
+    }
+
+    /* Descargar Respaldo Editable (Ámbar / Oro Institucional) */
+    div[class*="st-key-"][class*="_bar_backup"] button,
+    div[class*="st-key-"][class*="_simple_backup"] button {
+        background: linear-gradient(180deg, #FFFFFF 0%, #FFFBEB 100%) !important;
+        border: 1.5px solid #F59E0B !important;
+        color: #B45309 !important;
+        font-size: 1.0rem !important;
+        font-weight: 750 !important;
+        min-height: 52px !important;
+        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.14) !important;
+    }
+    div[class*="st-key-"][class*="_bar_backup"] button:hover,
+    div[class*="st-key-"][class*="_simple_backup"] button:hover {
+        background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%) !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 6px 18px rgba(217, 119, 6, 0.35) !important;
+        transform: translateY(-2px) !important;
+    }
+    div[class*="st-key-"][class*="_bar_backup"] button::before,
+    div[class*="st-key-"][class*="_simple_backup"] button::before {
+        content: "📥";
+        font-size: 1.15rem;
+    }
+
+    /* Botón Hero de transición a Paso 3 */
+    div[class*="st-key-"][class*="_ir_paso3"] button {
+        min-height: 58px !important;
+        font-size: 1.15rem !important;
+        font-weight: 850 !important;
+        border-radius: 14px !important;
+        letter-spacing: 0.02em !important;
+        background: linear-gradient(135deg, #0F4C5C 0%, #0D9488 100%) !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 6px 22px rgba(13, 148, 136, 0.38) !important;
+    }
+    div[class*="st-key-"][class*="_ir_paso3"] button:hover {
+        background: linear-gradient(135deg, #0B3B48 0%, #0B7A6F 100%) !important;
+        box-shadow: 0 10px 30px rgba(13, 148, 136, 0.52) !important;
+        transform: translateY(-2px) scale(1.01) !important;
+    }
+
+    /* Volver a editar tras previsualizar PDF */
+    div[class*="st-key-"][class*="_simple_hidepdf"] button {
+        background: #F8FAFC !important;
+        border: 1.5px solid #0D9488 !important;
+        color: #0D9488 !important;
+        font-weight: 750 !important;
+        font-size: 1.0rem !important;
+        min-height: 48px !important;
+    }
+    div[class*="st-key-"][class*="_simple_hidepdf"] button:hover {
+        background: #F0FDFA !important;
+        color: #0F766E !important;
+    }
+    div[class*="st-key-"][class*="_simple_hidepdf"] button::before {
+        content: "✏️ ";
+        font-size: 1.05rem;
+    }
+
+    /* Descargar PDF */
+    div[class*="st-key-"][class*="_simple_download"] button {
+        background: linear-gradient(135deg, #BE123C 0%, #E11D48 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        font-weight: 800 !important;
+        font-size: 1.04rem !important;
+        min-height: 52px !important;
+        box-shadow: 0 4px 16px rgba(225, 29, 72, 0.35) !important;
+    }
+    div[class*="st-key-"][class*="_simple_download"] button:hover {
+        background: linear-gradient(135deg, #9F1239 0%, #BE123C 100%) !important;
+        box-shadow: 0 8px 24px rgba(225, 29, 72, 0.48) !important;
+        transform: translateY(-2px) !important;
+    }
+    div[class*="st-key-"][class*="_simple_download"] button::before {
+        content: "📥 ";
+        font-size: 1.15rem;
+    }
+
+    /* Guardar datos Anexo XX */
+    div[class*="st-key-"][class*="_as_save_btn"] button {
+        background: linear-gradient(135deg, #0F766E 0%, #0D9488 100%) !important;
+        color: #FFFFFF !important;
+        font-weight: 750 !important;
+        min-height: 48px !important;
+        box-shadow: 0 2px 8px rgba(13, 148, 136, 0.2) !important;
+    }
+
+    /* Editar planeación en historial de borradores */
+    div[class*="st-key-"][class*="_editar_"] button {
+        background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%) !important;
+        border: 1.5px solid #94A3B8 !important;
+        color: #334155 !important;
+        font-size: 0.96rem !important;
+        font-weight: 700 !important;
+        min-height: 46px !important;
+    }
+    div[class*="st-key-"][class*="_editar_"] button:hover {
+        background: #F1F5F9 !important;
+        border-color: #64748B !important;
+        color: #0F172A !important;
+    }
+
+    /* Actualizar matrícula y refrescar documentos */
+    div[class*="st-key-"][class*="_refrescar"] button,
+    div[class*="st-key-"][class*="_simple_fuentes"] button {
+        background: #FFFFFF !important;
+        border: 1.5px solid #0D9488 !important;
+        color: #0D9488 !important;
+        font-weight: 700 !important;
+        min-height: 46px !important;
+    }
+    div[class*="st-key-"][class*="_refrescar"] button:hover,
+    div[class*="st-key-"][class*="_simple_fuentes"] button:hover {
+        background: #F0FDFA !important;
+        color: #0F766E !important;
     }
     </style>
     ''')
@@ -612,7 +937,7 @@ def _editor(prefix,actor,paso):
         revisar(prefix)
     # Solo la clase pública st-key del contenedor propio; no depende del DOM de
     # botones ni columnas internas. La barra acompaña el desplazamiento.
-    st.html('<style>.st-key-'+prefix+'_acciones {position:sticky;bottom:0;z-index:10;background:var(--background-color,#fff);padding:0.65rem;border-top:1px solid #bbc8ca;} @media(max-width:640px){.st-key-'+prefix+'_acciones{padding:0.4rem;}}</style>')
+    st.html('<style>.st-key-'+prefix+'_acciones {position:sticky;bottom:0;z-index:99;background:rgba(255,255,255,0.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:0.85rem 1.2rem;border-top:2.5px solid #0D9488;box-shadow:0 -8px 25px rgba(15,45,89,0.12);border-radius:16px 16px 0 0;} @media(max-width:640px){.st-key-'+prefix+'_acciones{padding:0.5rem;}}</style>')
     with st.container(horizontal=True,vertical_alignment='center',key=prefix+'_acciones'):
         if st.button('Guardar borrador',key=prefix+'_simple_save'):u._persist(prefix);st.rerun()
         if st.button('Ver PDF',key=prefix+'_simple_pdf'):
