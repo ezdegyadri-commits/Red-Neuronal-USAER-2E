@@ -204,6 +204,7 @@ def ensamblar(doc,respuesta,solicitud):
         row=({'Barreras para el Aprendizaje y la Participación':necesidad,'Apoyos y/o ajustes razonables':u['apoyos']} if formato=='XXV' else
              {'Necesidades educativas específicas':necesidad,'Aprendizaje y/u objetivo':u['objetivo'],'Descriptor de logro':u['descriptor']})
         row['_origenes']=[{k:f.get(k,'') for k in ('tipo','registro','revision','alumno')} for f in fuentes_pertinentes(doc) if f['referencia'] in u['evidencias']]
+        row['_alumnos_planeacion']=destinatarios
         if origenes_nee:row['_nee_origen']={'origen':', '.join(dict.fromkeys(o['origen'] for o in origenes_nee)),
             'propuesta':any(o['propuesta'] for o in origenes_nee)}
         generadas.setdefault(key,[]).append(row);result['tablas'][key].append(row)
@@ -231,6 +232,7 @@ def ensamblar(doc,respuesta,solicitud):
                 e['sesiones'].append(nueva);nuevas_sesiones.append(deepcopy(nueva))
         else:
             row={'Contextos':u['contexto'],'Actividades':actividad,'Temporalidad':fecha+' · '+str(solicitud['ajustes']['duracion'])+' minutos','Recursos':u['recursos']}
+            row['_alumnos_planeacion']=[aliases[a] for a in u['destinatarios']]
             result['tablas']['dosificacion'].append(row);generadas.setdefault('dosificacion',[]).append(row)
     if formato=='XXIII':
         previo=anterior.get('evaluacion_generada','')

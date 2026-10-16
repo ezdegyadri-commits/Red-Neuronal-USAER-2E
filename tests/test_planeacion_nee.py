@@ -69,7 +69,7 @@ class FormatoUITests(unittest.TestCase):
         from pathlib import Path
         from streamlit.testing.v1 import AppTest
         from services.planeacion_papel import hoja
-        for area,modo,ids in [('Aprendizaje','Individual',['I1','I2']),('Aprendizaje','Grupal',['A1','A2']),('Psicología','Individual',['I1']),('Trabajo Social','Grupal',['A1'])]:
+        for area,modo,ids in [('Aprendizaje','Individual',['I1','I2']),('Aprendizaje','Grupal',['A1','A2']),('Psicología','Individual',['I1']),('Trabajo Social','Mi intervención',['A1'])]:
             app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
             app.radio[0].set_value(area).run()
             next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value(modo).run()
@@ -77,6 +77,6 @@ class FormatoUITests(unittest.TestCase):
             next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()
             self.assertFalse(app.exception)
             d=app.session_state.versiones_ficticias[-1];spec=hoja(d)
-            self.assertEqual(d['metadatos']['modalidad_planeacion'],modo.lower())
+            self.assertEqual(d['metadatos']['modalidad_planeacion'],'especialista' if modo=='Mi intervención' else modo.lower())
             self.assertEqual(spec['grupal'],area=='Aprendizaje' and modo=='Grupal')
             self.assertEqual(spec['tables'][0]['id'],'guia' if spec['grupal'] else 'alumnos_ts' if area=='Trabajo Social' else 'competencias' if area=='Psicología' else 'aprendizajes')

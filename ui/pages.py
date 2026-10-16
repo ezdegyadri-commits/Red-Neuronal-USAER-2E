@@ -371,6 +371,25 @@ def alta_page(df):
         "TDA/TDAH", "APRENDIZAJE", "COMUNICACIÓN", "CONDUCTA",
     ]
 
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from utils.escolar import edad_septiembre
+    from services.identidad_alumno import ENTIDADES,raiz_curp,comprobar_fecha_curp
+    hoy=datetime.now(ZoneInfo('America/Mexico_City')).date()
+    ciclo=hoy.year if hoy.month>=8 else hoy.year-1
+    nacimiento=st.date_input('Fecha de nacimiento del alumno',value=None,min_value=date(1950,1,1),max_value=hoy,key='alta_nacimiento')
+    edad_calculada=edad_septiembre(nacimiento,ciclo) if nacimiento and nacimiento<=date(ciclo,9,1) else None
+    st.caption(f'Edad al 1 de septiembre de {ciclo}: '+(str(edad_calculada)+' años (calculada automáticamente)' if edad_calculada is not None else 'captura una fecha válida para el corte escolar.'))
+    with st.expander('Ayuda para la CURP · propuesta de raíz, no constancia oficial'):
+        st.caption('La fecha sola no permite calcular la CURP. Se necesitan apellidos, nombres, sexo y entidad; RENAPO asigna las dos posiciones finales. No se guardará una clave inventada.')
+        ap=st.text_input('Primer apellido',key='alta_curp_ap')
+        am=st.text_input('Segundo apellido (si corresponde)',key='alta_curp_am')
+        ns=st.text_input('Nombre(s)',key='alta_curp_ns')
+        sx=st.selectbox('Sexo para la raíz de CURP',['H','M'],key='alta_curp_sx')
+        entidad=st.selectbox('Entidad de nacimiento',list(ENTIDADES),index=list(ENTIDADES).index('Yucatán'),key='alta_curp_entidad')
+        if nacimiento and ap and ns:
+            st.code(raiz_curp(ap,am,ns,nacimiento,sx,entidad)+'__',language=None)
+        st.link_button('Consultar la CURP oficial en RENAPO','https://www.gob.mx/curp/')
     with st.form("alta"):
         st.caption(
             "Captura el nombre con apellido paterno, apellido materno y nombre(s), "
@@ -383,9 +402,8 @@ def alta_page(df):
         )
         c1, c2, c3 = st.columns(3)
         with c1:
-            edad = st.number_input(
-                "Edad al 1 de septiembre", min_value=0, max_value=99, step=1
-            )
+            edad = edad_calculada
+            st.write('Edad calculada: '+str(edad) if edad is not None else 'Falta fecha de nacimiento')
         with c2:
             sexo = st.selectbox("Sexo", ["H", "M"])
         with c3:
@@ -480,17 +498,22 @@ def alta_page(df):
         if not nombre.strip():
             st.error("El nombre completo es obligatorio.")
             return
+        if nacimiento is None or edad_calculada is None:
+            st.error('Captura una fecha de nacimiento válida para calcular la edad al corte escolar.');return
         if len(curp_limpia) != 18 or not curp_limpia.isalnum():
             st.error("La CURP debe contener exactamente 18 caracteres alfanuméricos.")
             return
         if curp_limpia in curps_existentes:
             st.error("Esa CURP ya existe en la base central; el expediente actual se conserva sin cambios.")
             return
+        try:comprobar_fecha_curp(curp_limpia,nacimiento)
+        except ValueError as exc:st.error(str(exc));return
 
         datos_nuevo = {
             "Nombre_Completo": nombre.strip(),
             "CURP": curp_limpia,
             "Edad_1_Septiembre": int(edad),
+            "Fecha_Nacimiento": nacimiento.isoformat(),
             "Sexo": sexo,
             "Situacion_Alumno": situacion,
             "Nivel_Educativo": nivel,

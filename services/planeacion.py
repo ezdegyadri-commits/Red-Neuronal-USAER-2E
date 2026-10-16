@@ -317,10 +317,19 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
             raise RuntimeError('Este borrador fue eliminado en otra sesión. Su historial se conserva; descarga tu edición antes de continuar.')
         expected=latest['revision'] if latest else ''
         if expected!=doc.get('revision',''):
-            raise RuntimeError('Otra sesión guardó cambios. Tu edición sigue aquí; guarda un respaldo y recupera la versión reciente.')
+            base=next((v for v in versiones if v['revision']==doc.get('revision')),None)
+            if not aportacion and base and actor['cuenta']==doc['cuenta']:
+                from services.planeacion_compartida import conciliar_autor
+                doc=conciliar_autor(doc,base,latest)
+            else:raise RuntimeError('Otra sesión guardó cambios. Tu edición sigue aquí; guarda un respaldo y recupera la versión reciente.')
         if latest:
             claves=('ID_Escuela','Curso escolar','Trimestre','Nombre del especialista','Función','Alumnos')
-            if latest['cuenta']!=doc['cuenta'] or latest['formato']!=doc['formato'] or any(latest['datos'].get(k)!=doc['datos'].get(k) for k in claves):
+            identidad_cambia=any(latest['datos'].get(k)!=doc['datos'].get(k) for k in claves if k!='Alumnos')
+            if latest['datos']['Alumnos']!=doc['datos']['Alumnos']:
+                from services.planeacion_compartida import ampliar_matricula
+                ampliada=ampliar_matricula(latest,padron_autorizado())
+                if doc['datos']['Alumnos']!=ampliada['datos']['Alumnos']:identidad_cambia=True
+            if latest['cuenta']!=doc['cuenta'] or latest['formato']!=doc['formato'] or identidad_cambia:
                 raise PermissionError('No se puede cambiar la identidad de un documento guardado.')
             if not aportacion and latest['metadatos'].get('aportaciones_equipo',{})!=doc['metadatos'].get('aportaciones_equipo',{}):
                 raise PermissionError('Las aportaciones se editan desde Trabajo colaborativo, por el profesional de cada área.')
@@ -369,6 +378,14 @@ def revisar(doc):
     faltas=[]; meta=doc['metadatos']; tablas=doc['tablas']
     if not doc['datos'].get('CCT'):
         faltas.append('completar el CCT')
+    from services.planeacion_compartida import es_guia
+    if es_guia(doc):
+        from services.planeacion_modalidad import guia_grupal
+        guia=guia_grupal(doc)
+        if not guia['maestro_grupo']:faltas.append('capturar el maestro de grupo regular')
+        if not all(str(r.get('Aprendizaje','')).strip() for r in guia['filas']):faltas.append('describir qué y cómo se trabaja en Aprendizaje para cada alumno')
+        if not all(str(r.get('Situación inicial','')).strip() for r in guia['filas']):faltas.append('confirmar NI o RI y la situación inicial de cada alumno')
+        return faltas
     if doc['formato']=='XXI' and not (meta.get('fuente_iepp') and meta.get('NEE confirmadas desde IEPP')):
         faltas.append('confirmar el IEPP del plan individual')
     if doc['formato']=='XXI':
@@ -557,14 +574,11 @@ def preparar_contexto(doc):
 def compartidos():
     """Solo PI o guías de apoyo, con todos sus alumnos dentro de la asignación actual."""
     from services.planeacion_colaboracion import compartible,clave_guia
-    resultado=[];guias=set()
+    resultado=[]
     for doc in {d['id']:d for d in versiones_actuales()}.values():
         if not compartible(doc):continue
         try:autorizar(doc)
         except PermissionError:continue
-        clave=clave_guia(doc)
-        if clave and clave in guias:continue
-        if clave:guias.add(clave)
         resultado.append(deepcopy(doc))
     return resultado
 
@@ -572,12 +586,15 @@ def compartidos():
 def guardar_aportacion(doc,filas,observaciones):
     from services.planeacion_colaboracion import aportar
     actor=autorizar(doc)
-    # Recuperar servidor: jamás persistir tablas o identidad recibidas del editor compartido.
-    actual=next((d for d in compartidos() if d['id']==doc['id']),None)
-    if not actual:raise PermissionError('No hay un documento compartido autorizado.')
-    if doc.get('revision')!=actual.get('revision'):raise RuntimeError('El equipo actualizó el documento. Tu aportación sigue aquí; actualiza y revisa antes de guardar.')
-    updated=aportar(actual,actor,filas,observaciones)
-    return _guardar_version(updated,actor,'BORRADOR',aportacion=True)
+    # Lectura y parche comparten el candado del guardado: no hay ventana entre ellos.
+    with candado(doc['id']):
+        actual=next((d for d in compartidos() if d['id']==doc['id']),None)
+        if not actual:raise PermissionError('No hay un documento compartido autorizado.')
+        area=actor['area']
+        if doc['metadatos'].get('aportaciones_equipo',{}).get(area)!=actual['metadatos'].get('aportaciones_equipo',{}).get(area):
+            raise RuntimeError('Otra sesión cambió tu área. Tu aportación se conserva; revisa la versión reciente antes de conciliar.')
+        updated=aportar(actual,actor,filas,observaciones)
+        return _guardar_version(updated,actor,'BORRADOR',aportacion=True)
 
 
 def resumen_previo(doc,fuentes):

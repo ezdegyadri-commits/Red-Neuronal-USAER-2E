@@ -5,19 +5,22 @@ from uuid import uuid4
 
 AREAS=('Aprendizaje','Psicología','Comunicación','Trabajo Social')
 COLUMNAS=['ID_Alumno','Necesidad o barrera documentada','Objetivo / qué trabajar','Descriptor de logro',
-          'Actividad / cómo trabajar','Apoyos y ajustes','Contexto','Responsable','Temporalidad','Referencia']
+          'Actividad / cómo trabajar','Apoyos y ajustes','Contexto','Responsable','Temporalidad','Referencia','Texto en formato']
 
 
 def clave_guia(doc):
     if doc['formato']=='XXI' or not compartible(doc):return None
     a=doc['datos']['Alumnos'][0]
-    return (doc['datos']['ID_Escuela'],doc['datos']['Curso escolar'],str(a['Grado']),str(a['Grupo']))
+    from utils.escolar import grado_canonico,grupo_canonico
+    return (doc['datos']['ID_Escuela'],doc['datos']['Curso escolar'],grado_canonico(a['Grado']),grupo_canonico(a['Grupo']))
 
 
 def compartible(doc):
+    if doc['metadatos'].get('borrador_eliminado'):return False
     if doc['formato']=='XXI':return True
     if doc['datos']['Función']!='Aprendizaje' or doc['metadatos'].get('modalidad_planeacion')!='grupal':return False
-    grupos={(str(a.get('Grado','')),str(a.get('Grupo',''))) for a in doc['datos']['Alumnos']}
+    from utils.escolar import grado_canonico,grupo_canonico
+    grupos={(grado_canonico(a.get('Grado','')),grupo_canonico(a.get('Grupo',''))) for a in doc['datos']['Alumnos']}
     return len(grupos)==1 and all(g and h for g,h in grupos)
 
 
@@ -28,10 +31,12 @@ def aportar(doc,actor,filas,observaciones):
     for row in filas:
         if row.get('ID_Alumno') not in ids:raise PermissionError('La aportación incluye otro alumno.')
         limpia={k:str(row.get(k,'')).strip() for k in COLUMNAS}
+        if row.get('_celda_viva') or row.get('Texto en formato'):limpia['_celda_viva']=True
+        else:limpia.pop('Texto en formato',None)
         from services.planeacion_modelo import FORMATOS
         if limpia['Contexto'] and limpia['Contexto'] not in FORMATOS[doc['formato']]['contextos']:raise ValueError('Elige un contexto del formato correspondiente.')
-        if any(len(v)>4000 for v in limpia.values()):raise ValueError('Cada celda admite hasta 4 000 caracteres.')
-        if any(limpia[k] for k in COLUMNAS[1:]):limpias.append(limpia)
+        if any(len(v)>4000 for v in limpia.values() if isinstance(v,str)):raise ValueError('Cada celda admite hasta 4 000 caracteres.')
+        if any(limpia.get(k) for k in COLUMNAS[1:]) or 'Texto en formato' in limpia:limpias.append(limpia)
     if len(str(observaciones))>6000:raise ValueError('Las observaciones admiten hasta 6 000 caracteres.')
     result=deepcopy(doc)
     previo=result['metadatos'].setdefault('aportaciones_equipo',{}).get(actor['area'],{})

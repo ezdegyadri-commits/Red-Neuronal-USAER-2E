@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 from services import planeacion as s, planeacion_equipo as equipo
 from services.planeacion_modalidad import modalidad, GUIA_XIX, GUIA_XX, guia_grupal
+from utils.escolar import grado_canonico
 from services.planeacion_modelo import FORMATOS
 
 PASOS=('1. ¿A quién planeo?', '2. Preparar con IA', '3. Revisar y enviar')
@@ -322,7 +323,8 @@ def _lienzo_encabezado_oficial(doc):
     else:anexo_txt='ANEXO XXIII. PLANEACIÓN DEL SERVICIO DE APOYO DE EDUCACIÓN ESPECIAL'
     datos=doc['datos'];escuela=datos.get('Escuela regular','');cct=datos.get('CCT','31FUA0024E')
     curso=datos.get('Curso escolar','');esp=datos.get('Nombre del especialista','');func=datos.get('Función','')
-    grados_grupos=', '.join(f"{a.get('Grado','')}° {a.get('Grupo','')}".strip() for a in datos.get('Alumnos',[])) or datos.get('Periodo','')
+    from utils.escolar import grado_canonico
+    grados_grupos=', '.join(f"{grado_canonico(a.get('Grado',''))} {a.get('Grupo','')}".strip() for a in datos.get('Alumnos',[])) or datos.get('Periodo','')
     maestro_g=(doc['metadatos'].get('guia_grupal_manual',{}).get('maestro_grupo','')) or datos.get('Maestro de grupo','')
     st.markdown(f'''
     <div class="usaer-canvas-card">
@@ -370,7 +372,7 @@ def _asistente_inteligente_alumno(prefix,doc,actor,u):
         </div>
     </div>
     ''', unsafe_allow_html=True)
-    al_idx=st.selectbox('🎯 Alumno activo para enriquecer con conectividad',range(len(alumnos)),format_func=lambda i:f"{alumnos[i]['Nombre del alumno']} ({alumnos[i].get('Grado','')}° {alumnos[i].get('Grupo','')}) · {alumnos[i].get('Condición','')}",key=prefix+'_asistente_alumno_idx')
+    al_idx=st.selectbox('🎯 Alumno activo para enriquecer con conectividad',range(len(alumnos)),format_func=lambda i:f"{alumnos[i]['Nombre del alumno']} ({grado_canonico(alumnos[i].get('Grado',''))} {alumnos[i].get('Grupo','')}) · {alumnos[i].get('Condición','')}",key=prefix+'_asistente_alumno_idx')
     al_sel=alumnos[al_idx];al_id=str(al_sel['ID_Alumno']);al_nombre=al_sel['Nombre del alumno']
     area_docente=actor['area'];col_destino=area_docente if area_docente in GUIA_XIX else 'Aprendizaje'
     tabs=st.tabs(['📁 Antecedentes del expediente','🎯 Referentes NEM / PDA','✨ Secuencia en 3 momentos','🧠 Especialidad / Apoyos'])

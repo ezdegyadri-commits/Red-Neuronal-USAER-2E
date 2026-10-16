@@ -15,6 +15,9 @@ def preparar(frame):
     """Agrupa la misma escuela por su clave, después de aplicar permisos."""
     result=frame.copy()
     if result.empty or 'ID_Escuela' not in result:return result
+    from utils.escolar import grado_canonico,grupo_canonico
+    if 'Grado' in result:result['Grado']=result['Grado'].map(grado_canonico)
+    if 'Grupo' in result:result['Grupo']=result['Grupo'].map(grupo_canonico)
     result['ID_Escuela']=result['ID_Escuela'].map(clave_escuela)
     nombres={clave:nombre for nombre,clave in ESCUELAS_USAER.items()}
     if 'Nombre_Escuela' in result:

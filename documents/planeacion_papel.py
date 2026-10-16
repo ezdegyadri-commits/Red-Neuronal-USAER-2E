@@ -28,7 +28,7 @@ def _generar_pdf(doc,spec):
         t=Table(rows,colWidths=widths,repeatRows=1,splitInRow=1)
         t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.6,'black'),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),7),('RIGHTPADDING',(0,0),(-1,-1),7),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]));return t
     story=[p(spec['titulo'],title),Spacer(1,12)]
-    for row in spec['header']:story.append(tabla([[p(v) for v in row]],[ancho/len(row)]*len(row)))
+    for row in spec['header']:story.append(tabla([[p(v['label']+': '+v['value'] if isinstance(v,dict) else v) for v in row]],[ancho/len(row)]*len(row)))
     story.append(Spacer(1,12))
     for section in spec['tables']:
         if not section['rows']:continue
