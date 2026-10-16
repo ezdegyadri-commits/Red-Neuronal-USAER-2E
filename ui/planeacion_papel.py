@@ -1,10 +1,31 @@
 """Editor sobre el formato, sin tablas de aplicación ni escritura externa desde JS."""
 from pathlib import Path
+import re
 import streamlit as st
-import streamlit.components.v1 as components
+import streamlit.components.v2 as components
 from services import planeacion_papel as papel
 
-editor=components.declare_component('usaer_planeacion_papel',path=str(Path(__file__).with_name('planeacion_papel_component')))
+
+def _definicion_editor():
+    """Una sola hoja/renderizador; cambia únicamente el transporte de interfaz."""
+    carpeta=Path(__file__).with_name('planeacion_papel_component')
+    fuente=(carpeta/'index.html').read_text(encoding='utf-8')
+    css=re.search(r'<style>(.*?)</style>',fuente,re.S).group(1).replace('body{',':host{')
+    html=re.search(r'<body>(.*?)<script>',fuente,re.S).group(1)
+    renderer=re.search(r'<script>(.*?)</script>',fuente,re.S).group(1)
+    js=(carpeta/'native.js').read_text(encoding='utf-8').replace('/* USAER_RENDERER */',renderer)
+    return html,css,js
+
+
+def _evento_editor():
+    """El valor persistente llega al mismo validador y deduplicación de nonce."""
+
+
+def editor(*,key,default=None,**datos):
+    html,css,js=_definicion_editor()
+    render=components.component('usaer_formato_vivo_integrado_v1',html=html,css=css,js=js,isolate_styles=True)
+    result=render(key=key,data=datos,default={'evento':None},on_evento_change=_evento_editor,height='content')
+    return result.get('evento',default)
 
 
 def hoja(prefix):
