@@ -18,6 +18,8 @@ def _guardar(base,automatic=False):
         saved=s.guardar_aportacion(st.session_state[base+'_doc'],st.session_state[base+'_filas'],st.session_state.get(base+'_obs',''))
         st.session_state[base+'_doc']=saved
         st.session_state[base+'_pending']=False
+        if st.session_state.get(base+'_nonce'):
+            st.session_state[base+'_ack']=st.session_state[base+'_nonce']
         st.session_state.pop(base+'_error',None)
         st.session_state.pop(base+'_retry_at',None)
     except GuardadoPendiente as exc:
@@ -50,8 +52,10 @@ def _estado(base):
 
 def panel(prefix):
     actor=s.identidad()
-    st.subheader('Trabajo colaborativo · PI y guía grupal')
-    st.caption('Un documento compartido: cada profesional aporta desde su área. La coordinación integra lo acordado; las trimestrales conservan su formato propio.')
+    st.subheader('Continuar la planeación del equipo')
+    st.caption('1. Elige tu escuela → 2. Elige el grupo → 3. Escribe en la columna de tu área. Es la misma hoja iniciada por la maestra de apoyo, no una copia.')
+    if st.button('Actualizar planeaciones del equipo',key=prefix+'_actualizar_lista'):
+        s.refrescar()
     try:docs=s.compartidos()
     except Exception:
         st.warning('No se pudo consultar el trabajo del equipo. No se han alterado los documentos.');return
@@ -62,9 +66,19 @@ def panel(prefix):
     if not escuelas:st.info('No hay escuelas con alumnos dentro de tu asignación actual.');return
     escuela=st.selectbox('Escuela del trabajo compartido',escuelas,format_func=nombres.get,key=prefix+'_escuela')
     docs=[d for d in docs if clave_escuela(d['datos']['ID_Escuela'])==escuela]
-    if not docs:st.info('Esta escuela aún no tiene un PI o Anexo XIX compartido. La maestra de apoyo inicia el formato.');return
-    por_id={d['id']:d for d in docs}
     from services.planeacion_compartida import etiqueta,es_guia
+    tipo=st.radio('Formato compartido',['Planeación grupal · Anexo XIX','Plan de intervención · Anexo XXI'],horizontal=True,key=prefix+'_tipo_compartido')
+    docs=[d for d in docs if es_guia(d)] if tipo.startswith('Planeación grupal') else [d for d in docs if d['formato']=='XXI']
+    if not docs:
+        st.info('No hay formatos de este tipo disponibles en esta escuela. Si apoyo acaba de iniciar uno, confirma su guardado y pulsa «Actualizar planeaciones del equipo». No es necesario crear una copia ni enviarlo a Dirección para colaborar.');return
+    from utils.escolar import grado_canonico,grupo_canonico
+    grupos=lambda d:', '.join(sorted({grado_canonico(a.get('Grado'))+' '+(grupo_canonico(a.get('Grupo')) or '(grupo por confirmar)') for a in d['datos']['Alumnos']}))
+    grados=['Todos']+sorted({grupos(d) for d in docs})
+    grupo=st.selectbox('Grado y grupo',grados,key=prefix+'_grado_grupo')
+    if grupo!='Todos':docs=[d for d in docs if grupos(d)==grupo]
+    docs=sorted(docs,key=lambda d:d.get('guardado_en',''),reverse=True)
+    st.caption(str(len(docs))+' formato(s) disponible(s). Se muestran también los borradores guardados por apoyo.')
+    por_id={d['id']:d for d in docs}
     did=st.selectbox('Documento compartido · grado, grupo y fecha/hora',list(por_id),format_func=lambda i:etiqueta(por_id[i]),key=prefix+'_id')
     doc=por_id[did]
     if es_guia(doc) and actor['area'] in ('Psicología','Comunicación','Trabajo Social'):
