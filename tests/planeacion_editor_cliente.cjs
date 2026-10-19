@@ -154,10 +154,12 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   const nodo=f.nodes.get('celda-c0');
   f.input('Mi actividad');f.tick(4000);const envio=f.events()[0];
   f.input('Mi actividad mientras guarda');
-  f.render(compartida('Apoyo acaba de guardar'),{guardado:'guardado de apoyo'});
+  const actualizada=compartida('Apoyo acaba de guardar');actualizada.header[0][0]='Docente regular actualizado';
+  f.render(actualizada,{guardado:'guardado de apoyo'});
   assert.equal(f.nodes.get('celda-c0'),nodo);
   assert.equal(nodo.innerText,'Mi actividad mientras guarda');
   assert.equal(f.nodes.get('celda-c2').innerText,'Apoyo acaba de guardar');
+  assert.equal(f.nodes.get('encabezado-0-0').innerText,'Docente regular actualizado');
   assert.ok(f.cache.has('usaer-hoja:ficticio'));assert.equal(otra.cache.size,0);
   const confirmado=compartida('Apoyo acaba de guardar');confirmado.huella='propio-guardado';
   f.render(confirmado,{aceptado_nonce:envio.nonce,guardado:'mi guardado'});
