@@ -188,7 +188,8 @@ def _prefix():
 def _persist(prefix,estado='BORRADOR',automatic=False):
     doc=st.session_state[prefix+'_doc']
     st.session_state[prefix+'_pending']=True
-    intervalo=60+int(hashlib.sha256(prefix.encode()).hexdigest()[:2],16)%15
+    from services.planeacion_compartida import es_guia
+    intervalo=(15 if es_guia(st.session_state[prefix+'_doc']) else 60)+int(hashlib.sha256(prefix.encode()).hexdigest()[:2],16)%15
     if automatic and (time.monotonic()<st.session_state.get(prefix+'_retry_at',0) or time.monotonic()-st.session_state.get(prefix+'_last_attempt',0)<intervalo):
         return False
     st.session_state[prefix+'_last_attempt']=time.monotonic()
@@ -198,6 +199,8 @@ def _persist(prefix,estado='BORRADOR',automatic=False):
         st.session_state.pop(prefix+'_error',None)
         st.session_state.pop(prefix+'_pdf',None)
         st.session_state[prefix+'_pending']=False
+        if st.session_state.get(prefix+'_papel_nonce'):
+            st.session_state[prefix+'_papel_aceptado']=st.session_state[prefix+'_papel_nonce']
         st.session_state.pop(prefix+'_retry_at',None)
         return True
     except GuardadoPendiente as exc:

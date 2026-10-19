@@ -74,9 +74,9 @@ function hoja(value='', fingerprint='base') {
 // Un acuse viejo no libera el envío. La espera permite editar y reintenta el MISMO nonce.
 {
   const f=fixture(); f.render(hoja(),{guardado:'ayer'}); f.input('Primera edición'); f.tick(4000);
-  const first=f.events()[0]; assert.equal(f.nodes.get('celda-c0').contentEditable,'false');
+  const first=f.events()[0]; assert.equal(f.nodes.get('celda-c0').contentEditable,'true');
   f.render(hoja(),{aceptado:true,aceptado_nonce:'otro-envío',guardado:'ayer'});
-  assert.equal(f.nodes.get('celda-c0').contentEditable,'false');
+  assert.equal(f.nodes.get('celda-c0').contentEditable,'true');
   f.tick(15000); assert.equal(f.events()[1].nonce,first.nonce);
   assert.equal(f.nodes.get('celda-c0').contentEditable,'true');
   f.input('Texto escrito mientras esperaba'); f.tick(4000); assert.equal(f.events().length,2);
@@ -141,4 +141,39 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   assert.equal(f.cache.has('usaer-hoja:ficticio'),false);
   f.dispose();assert.equal(f.timers.size,0);assert.equal(f.listeners.beforeunload,undefined);
 }
-console.log('Editor: carga, guardado y adaptador integrado sin iframe aprobados.');
+// Un aporte de otra área se actualiza durante el envío, sin sustituir el nodo
+// activo ni el texto más reciente. Dos pestañas no comparten respaldo.
+{
+  const f=fixture(), otra=fixture();
+  function compartida(apoyo){
+    const spec=hoja();const c={id:'c2',value:apoyo,label:'Aprendizaje',editable:false,target:null};
+    spec.cells.c2=c;spec.tables[0].rows[0].push(c);return spec;
+  }
+  f.render(compartida('Texto de apoyo inicial'));
+  otra.render(compartida('Texto de apoyo inicial'));
+  const nodo=f.nodes.get('celda-c0');
+  f.input('Mi actividad');f.tick(4000);const envio=f.events()[0];
+  f.input('Mi actividad mientras guarda');
+  const actualizada=compartida('Apoyo acaba de guardar');actualizada.header[0][0]='Docente regular actualizado';
+  f.render(actualizada,{guardado:'guardado de apoyo'});
+  assert.equal(f.nodes.get('celda-c0'),nodo);
+  assert.equal(nodo.innerText,'Mi actividad mientras guarda');
+  assert.equal(f.nodes.get('celda-c2').innerText,'Apoyo acaba de guardar');
+  assert.equal(f.nodes.get('encabezado-0-0').innerText,'Docente regular actualizado');
+  assert.ok(f.cache.has('usaer-hoja:ficticio'));assert.equal(otra.cache.size,0);
+  const confirmado=compartida('Apoyo acaba de guardar');confirmado.huella='propio-guardado';
+  f.render(confirmado,{aceptado_nonce:envio.nonce,guardado:'mi guardado'});
+  assert.equal(f.nodes.get('celda-c0'),nodo);
+  assert.equal(nodo.innerText,'Mi actividad mientras guarda');
+}
+// Salir es una operación protegida: no se cambia documento durante su envío.
+{
+  const f=fixture();f.render(hoja());f.input('Antes de salir');
+  f.tools.children.find(b=>b.textContent==='Regresar al inicio del módulo').click();
+  assert.equal(f.events()[0].accion,'inicio');
+  assert.equal(f.events()[0].cambios.c0,'Antes de salir');
+  assert.equal(f.nodes.get('celda-c0').contentEditable,'false');
+  f.tick(15000);assert.equal(f.events()[1].nonce,f.events()[0].nonce);
+  assert.ok(f.cache.has('usaer-hoja:ficticio'));
+}
+console.log('Editor: escritura no bloqueante, sincronización por área, respaldo y navegación protegida aprobados.');

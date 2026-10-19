@@ -594,6 +594,10 @@ def guardar_aportacion(doc,filas,observaciones):
         if doc['metadatos'].get('aportaciones_equipo',{}).get(area)!=actual['metadatos'].get('aportaciones_equipo',{}).get(area):
             raise RuntimeError('Otra sesión cambió tu área. Tu aportación se conserva; revisa la versión reciente antes de conciliar.')
         updated=aportar(actual,actor,filas,observaciones)
+        anterior=actual['metadatos'].get('aportaciones_equipo',{}).get(area,{})
+        nuevo=updated['metadatos']['aportaciones_equipo'][area]
+        if anterior and all(anterior.get(k)==nuevo.get(k) for k in ('cuenta','autor','filas','observaciones')):
+            return deepcopy(actual)
         return _guardar_version(updated,actor,'BORRADOR',aportacion=True)
 
 

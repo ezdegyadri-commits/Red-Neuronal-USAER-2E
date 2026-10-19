@@ -28,9 +28,28 @@ def editor(*,key,default=None,**datos):
     return result.get('evento',default)
 
 
-def hoja(prefix):
+@st.fragment(run_every=10)
+def _sincronizar_equipo(prefix):
+    from ui import planeacion as u
+    from services.planeacion_compartida import es_guia,actualizar_aportes_autor
+    doc=st.session_state[prefix+'_doc']
+    if not es_guia(doc):return
+    try:
+        latest=next((d for d in u.servicio.compartidos() if d['id']==doc['id']),None)
+        if latest:
+            nuevo=actualizar_aportes_autor(doc,latest)
+            if nuevo!=doc:
+                st.session_state[prefix+'_doc']=nuevo
+                st.rerun(scope='app')
+    except Exception:
+        st.caption('La actualización del equipo se reintentará. Tu edición se conserva.')
+
+
+def hoja(prefix,volver=None):
     from ui import planeacion as u
     doc=st.session_state[prefix+'_doc'];u.servicio.autorizar(doc,True)
+    _sincronizar_equipo(prefix)
+    doc=st.session_state[prefix+'_doc']
     from services.planeacion_compartida import ampliar_matricula
     ampliado=ampliar_matricula(doc,u.servicio.padron_autorizado())
     if ampliado!=doc:
@@ -54,8 +73,6 @@ def hoja(prefix):
             estado='ENVIADO' if action=='enviar' and not u.servicio.revisar(nuevo) else 'BORRADOR'
             if nuevo!=doc:
                 u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar')
-            st.session_state[prefix+'_papel_aceptado']=event['nonce']
-            st.session_state[prefix+'_papel_legacy']=True
             st.session_state.pop(prefix+'_papel_rechazado',None)
             st.session_state.pop(prefix+'_papel_error',None)
             if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados','inicio','equipo'):st.session_state[prefix+'_papel_panel']=action
@@ -74,8 +91,12 @@ def hoja(prefix):
             if action=='inicio':
                 if st.session_state.get(prefix+'_pending') and not u._persist(prefix):
                     st.session_state[prefix+'_papel_aviso']='Tu edición sigue abierta: no se confirmó aún el guardado. Se reintentará automáticamente.'
+                elif volver:volver()
                 else:st.session_state[prefix.rsplit('_',1)[0]+'_viva_entrada']=True
             if action=='apartados' and nuevo==doc:st.session_state[prefix+'_papel_aviso']='No hay nuevos vacíos vinculados con datos suficientes para proponer. Tu redacción se conserva; puedes conectar antecedentes o elegir referentes sin redactar de nuevo.'
+            if not st.session_state.get(prefix+'_pending'):
+                st.session_state[prefix+'_papel_aceptado']=event['nonce']
+                st.session_state[prefix+'_papel_legacy']=True
             st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:
             st.session_state[prefix+'_papel_nonce']=event.get('nonce')
