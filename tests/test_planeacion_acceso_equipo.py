@@ -74,6 +74,41 @@ class AccesoTests(TestCase):
 
 
 class RecorridoCompartidoTests(TestCase):
+    def setUp(self):
+        self.originales={k:getattr(s,k) for k in ('identidad','autorizar','compartidos','padron_autorizado','listar','refrescar','guardar_aportacion')}
+
+    def tearDown(self):
+        for k,v in self.originales.items():setattr(s,k,v)
+
+    def test_dos_sesiones_fijan_documento_y_ven_apoyo_sin_moverse(self):
+        from pathlib import Path
+        from streamlit.testing.v1 import AppTest
+        import streamlit as st
+        from ui import planeacion_papel as ui
+        def editor(**kwargs):
+            st.session_state['qa_spec']=kwargs['hoja']
+            return None
+        with patch.object(ui,'editor',side_effect=editor):
+            apps=[AppTest.from_file(str(Path(__file__).with_name('fixture_acceso_equipo.py')),default_timeout=30).run() for _ in range(2)]
+            uno=grupal();uno['id']='segundo';uno['datos']['Alumnos'][0]['Grado']='2°'
+            otro=deepcopy(uno);otro['id']='tercero';otro['datos']['Alumnos'][0]['Grado']='3°'
+            for i,app in enumerate(apps):
+                app.session_state['f_docs']=[deepcopy(uno),deepcopy(otro)]
+                app.run()
+                selector=next(w for w in app.selectbox if w.label.startswith('Documento compartido'))
+                selector.set_value('segundo' if i==0 else 'tercero').run()
+                next(w for w in app.button if w.label=='Abrir Anexo XIX compartido').click().run()
+            # Otro integrante guarda 3°; cambia el orden de la lista y actualiza
+            # apoyo en 2°. Ninguna sesión debe cambiar el documento seleccionado.
+            uno['metadatos']['guia_grupal_manual']={'filas':[{'ID_Alumno':'A1','Aprendizaje':'Nuevo aporte de apoyo'}]}
+            otro['guardado_en']='2099-01-01'
+            for i,app in enumerate(apps):
+                app.session_state['f_docs']=[deepcopy(otro),deepcopy(uno)]
+                app.run();self.assertFalse(app.exception)
+                self.assertEqual(app.session_state['qa_spec']['documento'],'segundo' if i==0 else 'tercero')
+                self.assertFalse(any(w.label=='Grado y grupo' for w in app.selectbox))
+            self.assertIn('Nuevo aporte de apoyo',str(apps[0].session_state['qa_spec']['tables']))
+
     def test_formato_visible_edicion_fallo_y_recuperacion_sin_copia(self):
         from pathlib import Path
         from streamlit.testing.v1 import AppTest
@@ -91,22 +126,31 @@ class RecorridoCompartidoTests(TestCase):
                 ruta=next(w for w in app.radio if w.label=='¿Qué vas a continuar?')
                 self.assertEqual(ruta.value,'Planeaciones del equipo')
                 self.assertTrue(any(w.label=='Grado y grupo' for w in app.selectbox))
+                next(w for w in app.button if w.label=='Abrir Anexo XIX compartido').click().run()
                 spec=app.session_state['qa_spec']
-                self.assertEqual({c['label'] for c in spec['cells'].values() if c['editable']},{'Comunicación'})
+                self.assertEqual({c['label'] for c in spec['cells'].values() if c['editable']},{'Comunicación','Observaciones de mi área'})
                 celda=next(k for k,c in spec['cells'].items() if c['editable'])
                 next(w for w in app.checkbox if w.label=='Simular fallo de guardado').check().run()
-                app.session_state['qa_event']={'documento':spec['documento'],'huella':spec['huella'],'nonce':'evento-ficticio','accion':'guardar','cambios':{celda:'Juego de turnos con apoyos visuales.'}}
+                app.session_state['qa_event']={'documento':spec['documento'],'huella':spec['huella'],'nonce':'evento-ficticio','accion':'inicio','cambios':{celda:'Juego de turnos con apoyos visuales.'}}
                 app.run();self.assertFalse(app.exception)
                 base=next(k[:-8] for k in app.session_state.keys() if k.endswith('_pending'))
                 self.assertTrue(app.session_state[base+'_pending'])
+                self.assertTrue(any(k.endswith('_abierto') for k in app.session_state.keys()))
                 self.assertNotIn(base+'_ack',app.session_state)
                 next(w for w in app.checkbox if w.label=='Simular fallo de guardado').uncheck().run()
-                next(w for w in app.button if w.label=='Guardar mi aportación').click().run()
+                actual=app.session_state['qa_spec']
+                app.session_state['qa_event']={'documento':actual['documento'],'huella':actual['huella'],'nonce':'reintento-manual','accion':'guardar','cambios':{}}
+                app.run()
                 self.assertFalse(app.exception)
                 self.assertFalse(app.session_state[base+'_pending'])
-                self.assertEqual(app.session_state[base+'_ack'],'evento-ficticio')
+                self.assertEqual(app.session_state[base+'_ack'],'reintento-manual')
                 docs=app.session_state['f_docs'];self.assertEqual(len(docs),1)
                 self.assertEqual(docs[0]['id'],'test')
                 self.assertIn('Juego de turnos',str(docs[0]['metadatos']['aportaciones_equipo']['Comunicación']))
+                actual=app.session_state['qa_spec']
+                app.session_state['qa_event']={'documento':actual['documento'],'huella':actual['huella'],'nonce':'salida-confirmada','accion':'inicio','cambios':{}}
+                app.run();self.assertFalse(app.exception)
+                self.assertFalse(any(k.endswith('_abierto') for k in app.session_state.keys()))
+                self.assertTrue(any(w.label=='Grado y grupo' for w in app.selectbox))
         finally:
             for k,v in originales.items():setattr(s,k,v)

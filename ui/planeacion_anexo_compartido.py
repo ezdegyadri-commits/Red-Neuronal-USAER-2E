@@ -5,9 +5,10 @@ from services import planeacion as s,planeacion_papel as papel
 from services.planeacion_colaboracion import aportar
 
 
+@st.fragment(run_every=10)
 def panel(prefix,doc):
     from ui.planeacion_papel import editor
-    from ui.planeacion_colaboracion import _guardar,_estado,_cambio
+    from ui.planeacion_colaboracion import _guardar
     actor=s.identidad();base=prefix+'_'+doc['id']+'_'+actor['area']
     if base+'_doc' not in st.session_state:
         previo=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
@@ -15,12 +16,23 @@ def panel(prefix,doc):
         st.session_state[base+'_filas']=deepcopy(previo.get('filas',[]))
         st.session_state[base+'_obs']=previo.get('observaciones','')
     actual=st.session_state[base+'_doc']
+    st.session_state[base+'_intervalo']=15
+    try:
+        reciente=next((d for d in s.compartidos() if d['id']==doc['id']),None)
+        if reciente:
+            from services.planeacion_compartida import actualizar_lectura
+            actual=actualizar_lectura(actual,reciente,actor['area'])
+            st.session_state[base+'_doc']=actual
+    except Exception:
+        st.caption('No se pudo actualizar el equipo en este momento. Tu hoja permanece abierta; se reintentará.')
+    if st.session_state.get(base+'_pending'):_guardar(base,automatic=True)
+    actual=st.session_state[base+'_doc']
     preview=aportar(actual,actor,st.session_state[base+'_filas'],st.session_state[base+'_obs'])
     # La revisión temporal del preview no participa en su huella: debe ser estable.
     previo=actual['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
     preview['metadatos']['aportaciones_equipo'][actor['area']]['revision']=previo.get('revision','local')
     preview['metadatos']['aportaciones_equipo'][actor['area']]['fecha']=previo.get('fecha','')
-    st.caption('Escribe directamente en la columna '+actor['area']+'. Las demás áreas se ven aquí mismo y están protegidas. La maestra de apoyo conserva la coordinación del formato.')
+    st.caption('Escribe en '+actor['area']+' y pulsa «Guardar planeación» si deseas confirmar ahora. El autoguardado trabaja en segundo plano. Los aportes del equipo se actualizan sin cambiar tu grupo ni tu texto.')
     event=editor(hoja=papel.hoja(preview,colaborativa=True),
         guardado=actual.get('guardado_en','') if not st.session_state.get(base+'_pending') else '',
         aceptado=st.session_state.pop(base+'_legacy_ack',False),
@@ -29,10 +41,10 @@ def panel(prefix,doc):
         error=st.session_state.get(base+'_error_hoja',''),key=base+'_hoja',default=None)
     if event and event.get('nonce')!=st.session_state.get(base+'_nonce'):
         try:
-            filas=papel.aplicar_aporte(preview,event)
+            filas,obs=papel.aplicar_aporte(preview,event,con_observaciones=True)
             st.session_state[base+'_nonce']=event['nonce']
-            if filas!=st.session_state[base+'_filas'] or event.get('accion')=='guardar':
-                st.session_state[base+'_filas']=filas;st.session_state[base+'_pending']=True
+            if filas!=st.session_state[base+'_filas'] or obs!=st.session_state[base+'_obs'] or event.get('accion')=='guardar' or event.get('accion')=='inicio' and st.session_state.get(base+'_pending'):
+                st.session_state[base+'_filas']=filas;st.session_state[base+'_obs']=obs;st.session_state[base+'_pending']=True
                 _guardar(base,automatic=event.get('accion')=='autoguardar')
             # Recibir el evento no equivale a guardarlo: el cliente conserva
             # su respaldo mientras el guardado esté pendiente o en reintento.
@@ -42,17 +54,18 @@ def panel(prefix,doc):
             st.session_state.pop(base+'_rechazado',None)
             st.session_state.pop(base+'_error_hoja',None)
             if event.get('accion')=='inicio':
-                if st.session_state.get(base+'_pending'):_guardar(base)
-                if not st.session_state.get(base+'_pending'):st.session_state[prefix+'_cerrado']=doc['id']
+                if not st.session_state.get(base+'_pending'):
+                    st.session_state.pop(prefix+'_abierto',None)
+                    st.rerun(scope='app')
             st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:
             st.session_state[base+'_nonce']=event.get('nonce')
             st.session_state[base+'_rechazado']=event.get('nonce')
             st.session_state[base+'_error_hoja']=str(exc)
             st.rerun()
-    st.text_area('Observaciones de mi área',value=st.session_state[base+'_obs'],key=base+'_notas',on_change=_cambio,args=(base,base+'_notas'))
-    if st.button('Guardar mi aportación',key=base+'_save'):_guardar(base)
-    _estado(base)
+    if st.session_state.get(base+'_error'):st.warning(st.session_state[base+'_error'])
+    elif st.session_state.get(base+'_pending'):st.caption('Guardado pendiente de confirmación. Puedes seguir escribiendo; conserva esta pestaña abierta.')
+    else:st.caption('Guardado confirmado · '+actual.get('guardado_en','sin cambios')[:19])
     import json
     st.download_button('Respaldo de mi aportación',json.dumps({'documento':doc['id'],'area':actor['area'],
         'filas':st.session_state[base+'_filas'],'observaciones':st.session_state[base+'_obs']},ensure_ascii=False),

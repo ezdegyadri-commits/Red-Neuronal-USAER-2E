@@ -94,7 +94,7 @@ class ProyeccionTests(unittest.TestCase):
         with patch.object(s,'autorizar',return_value=actor),patch.object(s,'identidad',return_value=actor):
             spec=papel.hoja(d,colaborativa=True)
             editable={c['label'] for c in spec['cells'].values() if c['editable']}
-            self.assertEqual(editable,{'Psicología'})
+            self.assertEqual(editable,{'Psicología','Observaciones de mi área'})
             key=next(k for k,c in spec['cells'].items() if c['editable'])
             event={'documento':d['id'],'huella':spec['huella'],'accion':'guardar','cambios':{key:'Atención · juego breve'}}
             rows=papel.aplicar_aporte(d,event);nuevo=aportar(d,actor,rows,'')

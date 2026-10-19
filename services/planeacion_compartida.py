@@ -21,6 +21,29 @@ def etiqueta(doc):
         ', '.join(a['Nombre del alumno'] for a in doc['datos']['Alumnos']),doc['id'][:8]])
 
 
+def etiqueta_selector(doc):
+    """La etiqueta de navegación no cambia cuando otra persona guarda."""
+    grupos=sorted({grado_canonico(a.get('Grado'))+' '+grupo_canonico(a.get('Grupo')) for a in doc['datos']['Alumnos']})
+    return ' · '.join([doc['datos']['Escuela regular'],', '.join(grupos),
+        doc['datos']['Curso escolar'],'T'+str(doc['datos']['Trimestre']),doc['id']])
+
+
+def actualizar_lectura(doc,reciente,area):
+    """Refresca otras áreas sin mover documento ni aceptar una revisión propia ajena.
+
+    Se conserva el aporte base del área: guardar_aportacion sigue detectando
+    conflictos entre dos sesiones del mismo profesional antes de escribir.
+    """
+    if doc['id']!=reciente['id'] or doc['datos']['ID_Escuela']!=reciente['datos']['ID_Escuela']:
+        raise ValueError('La actualización no corresponde a la planeación abierta.')
+    nuevo=deepcopy(reciente)
+    propio=doc['metadatos'].get('aportaciones_equipo',{}).get(area)
+    aportes=nuevo['metadatos'].setdefault('aportaciones_equipo',{})
+    if propio is None:aportes.pop(area,None)
+    else:aportes[area]=deepcopy(propio)
+    return nuevo
+
+
 def alumno_padron(r):
     from services.planeacion_nee import nee_padron
     return {'ID_Alumno':str(r['ID_Alumno']), 'Nombre del alumno':str(r.get('Nombre_Completo','')),
@@ -113,4 +136,17 @@ def conciliar_autor(doc,base,latest):
         for area in ('Psicología','Comunicación','Trabajo Social'):
             r[area]=recientes.get(r['ID_Alumno'],{}).get(area,'')
     result['revision']=latest['revision']
+    return result
+
+
+def actualizar_aportes_autor(doc,latest):
+    """Proyección de lectura; no adelanta la revisión base ni toca texto de apoyo."""
+    if doc['id']!=latest['id']:raise ValueError('Documento distinto.')
+    result=deepcopy(doc)
+    for k in ('aportaciones_equipo','aportaciones_integradas','guia_aportes_integrados'):
+        result['metadatos'][k]=deepcopy(latest['metadatos'].get(k,{}))
+    recientes={r['ID_Alumno']:r for r in latest['metadatos'].get('guia_grupal_manual',{}).get('filas',[])}
+    for r in result['metadatos'].get('guia_grupal_manual',{}).get('filas',[]):
+        for area in ('Psicología','Comunicación','Trabajo Social'):
+            if area in recientes.get(r['ID_Alumno'],{}):r[area]=recientes[r['ID_Alumno']][area]
     return result

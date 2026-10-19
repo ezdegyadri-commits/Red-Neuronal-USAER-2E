@@ -1,6 +1,7 @@
 """Contrato de la hoja Word editable; ningún HTML ni clave de navegador es autoridad."""
 from copy import deepcopy
 import hashlib
+import json
 from services import planeacion as s,planeacion_formato as f,planeacion_viva as viva
 from services.planeacion_modalidad import guia_grupal,GUIA_XIX
 from services.planeacion_modelo import FORMATOS
@@ -12,7 +13,8 @@ from services.planeacion_limpieza import normalizar,tiene_contenido
 
 def huella(doc):
     """Un acuse de persistencia no invalida las celdas que siguen abiertas en el navegador."""
-    copia=deepcopy(doc)
+    from services.planeacion_compartida import es_guia,sin_aportes
+    copia=sin_aportes(doc) if es_guia(doc) else deepcopy(doc)
     for k in ('revision','anterior','guardado_en','_orden'):copia.pop(k,None)
     for aporte in copia['metadatos'].get('aportaciones_equipo',{}).values():
         aporte.pop('revision',None);aporte.pop('fecha',None)
@@ -80,6 +82,9 @@ def hoja(doc,para_impresion=False,colaborativa=False):
             'alumnos':[{'id':a['ID_Alumno'],'nombre':a['Nombre del alumno']} for a in alumnos]})
         for row in tables[-1]['rows']:row[3]['opciones']=list(evaluacion.ESCALA)
     textos=[celda(v,('texto',k),k) for k,v in doc['textos'].items() if not para_impresion or str(v or '').strip()] if not grupal else []
+    if colaborativa:
+        aporte=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
+        textos.append(celda(aporte.get('observaciones',''),('aporte_obs',),'Observaciones de mi área'))
     if datos['Función']=='Psicología' and organizacion and (not para_impresion or str(organizacion.get('sugerencia_familia','')).strip()):
         textos.append(celda(organizacion.get('sugerencia_familia',''),('equipo','sugerencia_familia'),'Sugerencia prevista para la familia y referencia de su hoja'))
     header=[['Zona: '+str(datos['Zona']),'Servicio de Apoyo: '+datos['Servicio de apoyo']],
@@ -106,6 +111,13 @@ def hoja(doc,para_impresion=False,colaborativa=False):
     for aviso in avisos:
         aviso['celda']=next((k for k,c in cells.items() if c['target']==aviso['target']),None)
         if not aviso['celda'] and aviso['target'] and aviso['target'][0]=='tabla':aviso['panel']='tabla:'+aviso['target'][1]
+    if colaborativa:
+        # Las celdas de solo lectura pueden actualizarse sin invalidar el texto
+        # en vuelo de esta área. La matrícula y los destinos sí son parte del contrato.
+        contrato=[doc['id'],actor['cuenta'],actor['area'],
+            [a['ID_Alumno'] for a in alumnos],
+            [(k,c['target'],c['value']) for k,c in cells.items() if c['editable']]]
+        firma=hashlib.sha256(json.dumps(contrato,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
     return {'documento':doc['id'],'huella':firma,'titulo':'Guía de Planeación Grupal' if grupal else FORMATOS[doc['formato']]['titulo'],
         'header':header,'tables':tables,'textos':textos,'cells':cells,'grupal':grupal,'colaborativa':colaborativa,
         'cache_id':hashlib.sha256((actor.get('cuenta','')+'|'+actor.get('area','')+'|'+doc['id']).encode()).hexdigest(),
@@ -163,7 +175,7 @@ def aplicar(doc,event):
     return result
 
 
-def aplicar_aporte(doc,event):
+def aplicar_aporte(doc,event,con_observaciones=False):
     """Parche estrictamente acotado; ni el navegador ni el especialista reescriben otra área."""
     spec=hoja(doc,colaborativa=True);actor=s.identidad()
     if not isinstance(event,dict) or event.get('documento')!=doc['id'] or event.get('huella')!=spec['huella']:
@@ -171,16 +183,20 @@ def aplicar_aporte(doc,event):
     if event.get('accion') not in ('guardar','autoguardar','inicio'):raise PermissionError('Guarda tu aportación; la maestra coordina las demás acciones del Anexo XIX.')
     from services.planeacion_colaboracion import COLUMNAS
     filas=deepcopy(doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{}).get('filas',[]))
+    observaciones=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{}).get('observaciones','')
     cambios=event.get('cambios',{})
     if not isinstance(cambios,dict) or len(cambios)>500:raise ValueError('Revisa la aportación.')
     for key,value in cambios.items():
         c=spec['cells'].get(key)
-        if not c or not c['editable'] or c['target'][0]!='aporte':raise PermissionError('Solo puedes cambiar tu columna del formato.')
+        if not c or not c['editable'] or c['target'][0] not in ('aporte','aporte_obs'):raise PermissionError('Solo puedes cambiar tu columna del formato.')
         if not isinstance(value,str) or len(value)>4000:raise ValueError('Cada aportación admite hasta 4 000 caracteres.')
+        if c['target'][0]=='aporte_obs':
+            observaciones=value
+            continue
         aid=doc['datos']['Alumnos'][c['target'][1]]['ID_Alumno']
         fila=next((r for r in filas if r['ID_Alumno']==aid),None)
         if fila is None:
             fila={k:'' for k in COLUMNAS};fila['ID_Alumno']=aid;filas.append(fila)
         fila['Texto en formato']=value
         fila['_celda_viva']=True
-    return filas
+    return (filas,observaciones) if con_observaciones else filas

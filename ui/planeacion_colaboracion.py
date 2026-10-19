@@ -12,7 +12,7 @@ from services.planeacion_estabilidad import GuardadoPendiente
 
 def _guardar(base,automatic=False):
     st.session_state[base+'_pending']=True
-    if automatic and (time.monotonic()<st.session_state.get(base+'_retry_at',0) or time.monotonic()-st.session_state.get(base+'_intento',0)<60):return
+    if automatic and (time.monotonic()<st.session_state.get(base+'_retry_at',0) or time.monotonic()-st.session_state.get(base+'_intento',0)<st.session_state.get(base+'_intervalo',60)):return
     st.session_state[base+'_intento']=time.monotonic()
     try:
         saved=s.guardar_aportacion(st.session_state[base+'_doc'],st.session_state[base+'_filas'],st.session_state.get(base+'_obs',''))
@@ -59,6 +59,30 @@ def panel(prefix):
     try:docs=s.compartidos()
     except Exception:
         st.warning('No se pudo consultar el trabajo del equipo. No se han alterado los documentos.');return
+    # El documento abierto es un ID de esta sesión, no el primer resultado de
+    # una lista que cambia cuando otro integrante guarda.
+    abierto=st.session_state.get(prefix+'_abierto')
+    if abierto:
+        doc=next((d for d in docs if d['id']==abierto),None)
+        if doc is None:
+            st.warning('No se pudo recuperar la planeación abierta. No se abrirá otro grupo automáticamente.')
+            return
+        from services.planeacion_compartida import es_guia
+        if es_guia(doc) and actor['area'] in ('Psicología','Comunicación','Trabajo Social'):
+            from ui.planeacion_anexo_compartido import panel as hoja_compartida
+            hoja_compartida(prefix,doc);return
+        if es_guia(doc) and actor['area']=='Aprendizaje':
+            try:s.autorizar(doc,True)
+            except PermissionError:
+                st.info('La maestra autora conserva la edición del formato. Puedes regresar a la lista sin modificarlo.')
+                if st.button('Volver a la lista del equipo',key=prefix+'_volver_lectura'):
+                    st.session_state.pop(prefix+'_abierto',None);st.rerun()
+                return
+            from ui import planeacion as u
+            from ui.planeacion_papel import hoja
+            base=prefix+'_autor_'+doc['id']
+            if base+'_doc' not in st.session_state:u._open(base,doc)
+            hoja(base,volver=lambda:st.session_state.pop(prefix+'_abierto',None));return
     from services.planeacion_matricula import clave_escuela
     frame=s.padron_autorizado()
     nombres={clave_escuela(r['ID_Escuela']):str(r.get('Nombre_Escuela',r['ID_Escuela'])) for r in frame.to_dict('records')}
@@ -66,7 +90,7 @@ def panel(prefix):
     if not escuelas:st.info('No hay escuelas con alumnos dentro de tu asignación actual.');return
     escuela=st.selectbox('Escuela del trabajo compartido',escuelas,format_func=nombres.get,key=prefix+'_escuela')
     docs=[d for d in docs if clave_escuela(d['datos']['ID_Escuela'])==escuela]
-    from services.planeacion_compartida import etiqueta,es_guia
+    from services.planeacion_compartida import etiqueta,etiqueta_selector,es_guia
     tipo=st.radio('Formato compartido',['Planeación grupal · Anexo XIX','Plan de intervención · Anexo XXI'],horizontal=True,key=prefix+'_tipo_compartido')
     docs=[d for d in docs if es_guia(d)] if tipo.startswith('Planeación grupal') else [d for d in docs if d['formato']=='XXI']
     if not docs:
@@ -79,14 +103,13 @@ def panel(prefix):
     docs=sorted(docs,key=lambda d:d.get('guardado_en',''),reverse=True)
     st.caption(str(len(docs))+' formato(s) disponible(s). Se muestran también los borradores guardados por apoyo.')
     por_id={d['id']:d for d in docs}
-    did=st.selectbox('Documento compartido · grado, grupo y fecha/hora',list(por_id),format_func=lambda i:etiqueta(por_id[i]),key=prefix+'_id')
+    did=st.selectbox('Documento compartido · grado, grupo e identificador',sorted(por_id),format_func=lambda i:etiqueta_selector(por_id[i]),key=prefix+'_id')
     doc=por_id[did]
-    if es_guia(doc) and actor['area'] in ('Psicología','Comunicación','Trabajo Social'):
-        if st.session_state.get(prefix+'_cerrado')==did:
-            if st.button('Abrir Anexo XIX compartido',key=prefix+'_reabrir'):st.session_state.pop(prefix+'_cerrado',None);st.rerun()
-            return
-        from ui.planeacion_anexo_compartido import panel as hoja_compartida
-        hoja_compartida(prefix,doc);return
+    st.caption('Último guardado: '+doc.get('guardado_en','por confirmar'))
+    if es_guia(doc) and not actor['director']:
+        if st.button('Abrir Anexo XIX compartido',key=prefix+'_abrir'):
+            st.session_state[prefix+'_abierto']=did;st.rerun()
+        return
     for area,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items():
         with st.expander(area+' · '+aporte['autor']):
             st.dataframe(pd.DataFrame(aporte['filas']),hide_index=True)
