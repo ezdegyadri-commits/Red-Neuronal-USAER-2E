@@ -54,7 +54,7 @@ def _entrada(base,actor):
     school=schools[indice];st.caption(school['Nombre_Escuela'])
     especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
     if especialista:
-        st.info('El Anexo XIX lo inicia la maestra de apoyo. Abre «Trabajo colaborativo» para aportar en esa misma hoja. Aquí elaboras tu formato propio de especialista.')
+        st.info('Aquí elaboras tu formato propio de especialista. Para continuar el Anexo XIX iniciado por apoyo, elige «Planeaciones del equipo» arriba.')
     modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
     modo=st.segmented_control('Modalidad de planeación',modos,default='Mi intervención' if especialista else 'Grupal',key=base+'_viva_modalidad_v3') or modos[0]
     tipo='individual' if modo=='Individual' else 'grupal';ciclo,trimestre=periodo_actual();incluir=False
@@ -309,9 +309,13 @@ def pagina(render_hoja=None):
     else:
         st.title('Mi formato · '+actor['area'])
         st.caption('Planea en tu hoja de siempre. Los alumnos y sus antecedentes ya están conectados; tú decides qué trabajar y cómo.')
-    labels=['Mi formato','Trabajo colaborativo']+(['Revisión directiva'] if actor['director'] else [])
-    tabs=st.tabs(labels)
-    with tabs[0]:
+    # Una sola vista activa: un fallo o consulta del formato propio no debe
+    # bloquear el acceso a la hoja compartida. No monta dos editores ocultos.
+    especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
+    opciones=['Planeaciones del equipo','Mi formato de especialista'] if especialista else ['Mi formato','Planeaciones del equipo']
+    if actor['director']:opciones.append('Revisión directiva')
+    vista=st.radio('¿Qué vas a continuar?',opciones,horizontal=True,key=base+'_recorrido_equipo_v1')
+    if vista in ('Mi formato','Mi formato de especialista'):
         activo=st.session_state.get(base+'_activa')
         if not activo:
             prefixes=[p for p in (base+'_individual',base+'_grupal') if p+'_doc' in st.session_state]
@@ -326,8 +330,7 @@ def pagina(render_hoja=None):
             if activo and st.button('Volver al formato abierto',key=base+'_viva_retomar'):st.session_state[base+'_viva_entrada']=False;st.rerun()
         with st.expander('Vista anterior y ayuda'):
             if st.button('Usar el recorrido anterior',key=base+'_viva_legacy'):st.session_state[base+'_viva_anterior']=True;st.rerun()
-    with tabs[1]:
+    elif vista=='Planeaciones del equipo':
         from ui.planeacion_colaboracion import panel
         panel(base+'_colaboracion')
-    if actor['director']:
-        with tabs[2]:u.direccion_panel()
+    elif actor['director']:u.direccion_panel()

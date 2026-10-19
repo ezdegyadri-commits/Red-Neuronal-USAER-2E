@@ -34,8 +34,11 @@ def panel(prefix,doc):
             if filas!=st.session_state[base+'_filas'] or event.get('accion')=='guardar':
                 st.session_state[base+'_filas']=filas;st.session_state[base+'_pending']=True
                 _guardar(base,automatic=event.get('accion')=='autoguardar')
-            st.session_state[base+'_ack']=event['nonce']
-            st.session_state[base+'_legacy_ack']=True
+            # Recibir el evento no equivale a guardarlo: el cliente conserva
+            # su respaldo mientras el guardado esté pendiente o en reintento.
+            if not st.session_state.get(base+'_pending'):
+                st.session_state[base+'_ack']=event['nonce']
+                st.session_state[base+'_legacy_ack']=True
             st.session_state.pop(base+'_rechazado',None)
             st.session_state.pop(base+'_error_hoja',None)
             if event.get('accion')=='inicio':

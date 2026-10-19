@@ -101,6 +101,8 @@ class PapelUITests(unittest.TestCase):
             with self.subTest(area=area):
                 app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
                 app.radio[0].set_value(area).run()
+                if area!='Aprendizaje':
+                    next(w for w in app.radio if w.label=='¿Qué vas a continuar?').set_value('Mi formato de especialista').run()
                 next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value('Individual').run()
                 selector=next(w for w in app.multiselect if w.label=='Alumnos de mi formato')
                 self.assertEqual(len(selector.options),2)
@@ -150,6 +152,8 @@ class PapelUITests(unittest.TestCase):
         from pathlib import Path
         app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
         app.radio[0].set_value(area).run()
+        if area!='Aprendizaje':
+            next(w for w in app.radio if w.label=='¿Qué vas a continuar?').set_value('Mi formato de especialista').run()
         next(m for m in app.multiselect if m.label=='Alumnos de mi formato').set_value(['A1']).run()
         next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()
         self.assertFalse(app.exception)
