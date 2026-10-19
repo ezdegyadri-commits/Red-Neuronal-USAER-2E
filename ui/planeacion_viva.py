@@ -222,6 +222,12 @@ def _acciones(prefix,pdf_provider=None,acciones_hoja=False):
                 pdf=u._pdf_sesion(prefix,doc,provider=pdf_provider) if pdf_provider else u._pdf_sesion(prefix,doc)
                 u._preview(prefix+'_viva_preview',pdf)
                 st.download_button('Descargar PDF',pdf,file_name='planeacion-'+doc['id']+'.pdf',mime='application/pdf',key=prefix+'_viva_descarga_pdf')
+                from ui.archivo_expediente import boton
+                boton([a['ID_Alumno'] for a in doc['datos']['Alumnos']],
+                    'Planeación grupal' if doc['metadatos'].get('modalidad_planeacion')=='grupal' else 'Plan de intervención' if doc['formato']=='XXI' else 'Planeación del servicio',
+                    pdf,'planeacion-'+doc['id']+'.pdf',prefix+'_archivar',doc['id'],doc['datos']['Curso escolar'],
+                    'EPP iniciada' if doc['metadatos'].get('modalidad_planeacion')=='individual' or doc['formato']=='XXI' else '',
+                    disabled=bool(st.session_state.get(prefix+'_pending')))
             except Exception:st.warning('No se pudo preparar la vista. El borrador se conserva.')
     from ui.planeacion_borradores import controles,cerrar_editor
     controles(prefix+'_borrador',doc,pdf_provider or u.generar_pdf,lambda:cerrar_editor(prefix.rsplit('_',1)[0],prefix))

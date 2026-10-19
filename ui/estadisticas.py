@@ -67,10 +67,18 @@ def estadisticas_page(df):
     )
     nombre = st.session_state.get("nombre", "")
     rol = st.session_state.get("rol", "")
+    from ui.padron_movimientos import recuperar
+    recuperar()
     asignadas = escuelas_asignadas(nombre, rol)
+    if st.session_state.get('mov_padron_resultado'):st.success(st.session_state.pop('mov_padron_resultado'))
     if not asignadas:
         st.error("No se encontraron escuelas asignadas a tu cuenta; por seguridad no se muestran estadísticas.")
         return
+    from services.padron_movimientos import visibles
+    if st.session_state.get('autenticado'):
+        try:df=visibles()
+        except Exception:
+            st.error('No se pudo verificar el padrón actualizado. Reintenta antes de gestionar alumnos.');return
     if df is None or df.empty:
         st.info("No hay alumnos disponibles en tu ámbito de acceso.")
         return
@@ -84,10 +92,16 @@ def estadisticas_page(df):
         muestra = alumnos_de_escuela(df, seleccion)
     if "ID_Alumno" in muestra.columns:
         muestra = muestra.drop_duplicates(subset=["ID_Alumno"], keep="first")
+    from ui.padron_movimientos import panel as movimientos
+    movimientos(muestra)
+    mostrar_bajas=st.toggle('Incluir bajas recuperables en esta consulta',value=False,key='estadisticas_incluir_bajas')
+    if not mostrar_bajas and 'Estatus' in muestra:
+        muestra=muestra.loc[~muestra['Estatus'].fillna('').map(normalizar_texto).isin({'BAJA','INACTIVO','RETIRADO','ELIMINADO'})].copy()
     total = len(muestra)
     if not total:
         st.info("No hay alumnos en el ámbito seleccionado.")
         return
+    vista=st.radio('¿Qué deseas consultar?',['Padrón','Estadísticas'],horizontal=True,key='padron_vista_simple')
 
     sexo = _serie(muestra, "Sexo", "").map(normalizar_texto)
     hombres = int(sexo.isin({"H", "HOMBRE", "MASCULINO"}).sum())
@@ -105,6 +119,10 @@ def estadisticas_page(df):
     a2.metric("Edad mínima", int(edades_validas.min()) if not edades_validas.empty else "Sin dato")
     a3.metric("Edad máxima", int(edades_validas.max()) if not edades_validas.empty else "Sin dato")
     st.caption(f"Ámbito: {seleccion}. Las edades registradas corresponden al corte del 1 de septiembre indicado en el padrón.")
+    if vista=='Padrón':
+        from ui.tablas import tabla_paginada
+        columnas=[c for c in ('Nombre_Completo','Grado','Grupo','Condicion_Discapacidad','Tipo_Atencion','Estatus') if c in muestra]
+        tabla_paginada(muestra[columnas].rename(columns={'Nombre_Completo':'Alumno','Condicion_Discapacidad':'Condición','Tipo_Atencion':'Atención'}),'padron_tabla')
 
     st.markdown("### Listado nominal para impresión")
     st.caption(
@@ -150,7 +168,7 @@ def estadisticas_page(df):
     if listado.empty:
         st.info("No hay alumnos en el filtro de función seleccionado.")
     vista_listado = listado_alumnos_html(listado, seleccion, firma_nombre)
-    with st.expander("Vista previa del formato oficial", expanded=True):
+    with st.expander("Vista previa del formato oficial", expanded=False):
         st.html(vista_listado)
     st.download_button(
         "Descargar listado nominal en PDF carta",
@@ -160,7 +178,7 @@ def estadisticas_page(df):
         width="stretch",
         key=f"listado_nominal_pdf_{normalizar_texto(seleccion)}",
     )
-    with st.expander("Editar o actualizar datos del listado nominal", expanded=True):
+    with st.expander("Editar o actualizar datos del listado nominal", expanded=False):
         st.caption(
             "Selecciona un alumno para corregir sus datos, incluida la condición. "
             "Los cambios se guardan en la base central. Los campos vacíos no borran "
@@ -238,6 +256,7 @@ def estadisticas_page(df):
                     except Exception as exc:
                         st.error(f"No se pudo actualizar el alumno: {exc}")
 
+    if vista=='Padrón':return
     st.markdown("### Distribuciones")
     left, right = st.columns(2)
     with left:

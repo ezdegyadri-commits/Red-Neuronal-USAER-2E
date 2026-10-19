@@ -166,6 +166,16 @@ def inicio(df):
 
 
 def expedientes_page(df):
+    from ui.archivo_expediente import pagina_grupal,panel
+    vista=st.radio('Expedientes',['Individual','Grupal'],horizontal=True,key='expediente_ambito')
+    if vista=='Grupal':pagina_grupal(df);return
+    _expediente_individual(df)
+    aid=st.session_state.get('selected_alumno')
+    if aid and str(aid) in set(df.get('ID_Alumno',pd.Series(dtype=str)).astype(str)):
+        panel([str(aid)],'archivo_individual_'+str(aid))
+
+
+def _expediente_individual(df):
     hero("Expedientes únicos", "Selecciona un alumno para consultar toda su trazabilidad.")
     if df.empty: st.warning("No hay alumnos disponibles para tu ámbito de acceso."); return
     id_alumno, selected = _seleccionar_alumno(df, "Alumno", "exp_alumno")
@@ -1025,6 +1035,9 @@ def bap_page(df):
                 width="stretch",
                 key=f"bap_guardadas_pdf_{id_a}",
             )
+            from ui.archivo_expediente import boton,ids_contexto
+            boton(ids_contexto(alumnos_asignados,id_a),'BAP áulico',lambda:anexo3_pdf(sujeto_bap,baps_guardadas),
+                f'Anexo_III_{id_a}.pdf',f'archivo_bap_{id_a}',fuente='Anexo III guardado')
             if "ID_Anexo3" in baps_guardadas.columns:
                 ids_guardados = baps_guardadas["ID_Anexo3"].fillna("").astype(str).tolist()
                 ids_guardados = [valor for valor in ids_guardados if valor]
@@ -1678,6 +1691,9 @@ def eventos_page(df):
             width="stretch",
             key=f"vista_previa_anexo5_pdf_{id_alumno}",
         )
+        from ui.archivo_expediente import boton,ids_contexto
+        boton(ids_contexto(df,id_alumno),'Eventos significativos',lambda:anexo5_pdf(datos,eventos_registrados),
+            f'Anexo_V_{id_alumno}.pdf',f'archivo_eventos_{id_alumno}',fuente='Anexo V guardado',disabled=eventos_registrados.empty or bool(borrador['Evento']))
     with descargas[1]:
         st.download_button(
             "Descargar vista actual imprimible",
@@ -1940,6 +1956,14 @@ def documentos_page(df):
             ].copy()
 
     st.markdown(f"### Documentos de {etiqueta}")
+    ids_archivo=[str(id_alumno)] if tipo=='Alumno individual' else []
+    if tipo=='Grupo / contexto áulico' and grado_grupo_partes:
+        from utils.escolar import grado_canonico,grupo_canonico
+        alumnos_contexto=alumnos_de_escuela(df,escuela_grupo)
+        ids_archivo=[str(r['ID_Alumno']) for r in alumnos_contexto.fillna('').to_dict('records')
+            if grado_canonico(r.get('Grado'))==grado_canonico(grado_grupo_partes[0])
+            and (len(grado_grupo_partes)<2 or grupo_canonico(r.get('Grupo'))==grupo_canonico(grado_grupo_partes[1]))]
+    from ui.archivo_expediente import boton as archivar_documento
     if tipo == "Grupo / contexto áulico":
         datos_sensibles_grupo = [escuela_grupo]
         if not df.empty and escuela_grupo and "Nombre_Completo" in df.columns:
@@ -1975,6 +1999,8 @@ def documentos_page(df):
                 width="stretch",
                 key=f"descargar_a3_pdf_{archivo_base}",
             )
+            archivar_documento(ids_archivo,'BAP áulico',
+                lambda:anexo3_pdf(alumno_documento,a3),f'Anexo_III_{archivo_base}.pdf',f'archivo_a3_{archivo_base}',fuente='Anexo III')
             st.download_button(
                 "Descargar Anexo III en HTML imprimible",
                 vista_anexo3,
@@ -2106,6 +2132,8 @@ def documentos_page(df):
                 type="primary",
                 key=f"descargar_a4_{archivo_base}",
             )
+            archivar_documento(ids_archivo,'Sugerencias',lambda:anexo4_pdf(alumno_documento,a4),
+                f'Anexo_IV_{archivo_base}.pdf',f'archivo_a4_{archivo_base}',fuente='Anexo IV')
 
             st.download_button(
                 "Descargar versión imprimible HTML",
@@ -2200,6 +2228,8 @@ def documentos_page(df):
                 width="stretch",
                 key=f"descargar_a5_pdf_{archivo_base}",
             )
+            archivar_documento(ids_archivo,'Eventos significativos',lambda:anexo5_pdf(alumno_documento,a5),
+                f'Anexo_V_{archivo_base}.pdf',f'archivo_a5_{archivo_base}',fuente='Anexo V')
             st.download_button(
                 "Descargar Anexo V imprimible",
                 vista_anexo5,

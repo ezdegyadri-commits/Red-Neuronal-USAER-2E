@@ -76,10 +76,12 @@ def baps_de_alumno(registros, alumno_registro, incluir_inactivos=False):
     )
 
 
-def alumnos_visibles(rol, escuelas_permitidas, nombre=""):
+def alumnos_visibles(rol, escuelas_permitidas, nombre="", incluir_bajas=True):
     df = repo.alumnos()
     if df.empty:
         return df
+    if not incluir_bajas and 'Estatus' in df:
+        df=df.loc[~df['Estatus'].fillna('').map(normalizar_texto).isin({'BAJA','ELIMINADO','RETIRADO','INACTIVO'})].copy()
     rol = normalizar_texto(rol)
     escuelas_permitidas = normalizar_texto(escuelas_permitidas)
     if "DIRECTOR" in rol or "TRABAJO" in rol or "TODAS" in escuelas_permitidas:

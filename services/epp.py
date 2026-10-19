@@ -21,8 +21,12 @@ def puede_crear():
     a = actor()
     return not a['director'] and 'APOYO' in normalizar_texto(a['rol'])
 
-def alumno_autorizado(id_alumno):
-    frame = planes.padron_autorizado()
+def alumno_autorizado(id_alumno,incluir_bajas=False):
+    if incluir_bajas:
+        actor()
+        from services.padron_movimientos import visibles
+        frame=visibles()
+    else:frame = planes.padron_autorizado()
     rows = frame.loc[frame['ID_Alumno'].astype(str).eq(str(id_alumno))] if 'ID_Alumno' in frame else frame
     if len(rows) != 1: raise PermissionError('Alumno fuera de tu matrícula o registro ambiguo.')
     return rows.iloc[0].to_dict()
@@ -39,9 +43,12 @@ def recientes():
 def hoja():
     return ensure_headers(HOJA, HEADERS)
 
-def listar(incluir_eliminados=False):
+def listar(incluir_eliminados=False,incluir_bajas=False):
     actor()
-    frame = planes.padron_autorizado()
+    if incluir_bajas:
+        from services.padron_movimientos import visibles
+        frame=visibles()
+    else:frame = planes.padron_autorizado()
     ids = set(frame['ID_Alumno'].astype(str)) if 'ID_Alumno' in frame else set()
     # No se crea una hoja por visitar la pantalla.
     try: rows = df_sheet(HOJA)

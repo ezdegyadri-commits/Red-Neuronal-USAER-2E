@@ -223,6 +223,13 @@ def epp_page():
                 with st.expander('Cargar mis evaluaciones y revisar la lectura'):
                     st.caption('Hasta 32 MB; transcripción local. No se envían archivos originales a IA. Copia únicamente los hallazgos de este alumno, no cuadernillos completos ni pruebas con datos de terceros.')
                     upload=st.file_uploader('Evaluación de mi área',type=TIPOS,key=edit+'_upload')
+                    if upload:
+                        if upload.name.rsplit('.',1)[-1].lower() in ('pdf','png','jpg','jpeg') and len(upload.getvalue())<=5*1024*1024:
+                            from ui.archivo_expediente import boton
+                            confirma_archivo=st.checkbox('El archivo original corresponde solo a este alumno; revisé que no contiene datos de terceros',key=edit+'_archivo_solo_alumno')
+                            tipo_archivo={'Aprendizaje':'Competencia curricular','Psicología':'Estudio psicológico','Comunicación':'Evaluación de comunicación y lenguaje','Trabajo Social':'Estudio social'}.get(area,'Otro documento educativo')
+                            boton([doc['alumno']],tipo_archivo,upload.getvalue,upload.name,edit+'_archivar_evaluacion',doc['id'],doc['ciclo'],'EPP iniciada',disabled=not confirma_archivo)
+                        else:st.caption('La lectura conserva su límite actual. Para archivar el original, usa PDF/JPG/PNG de hasta 5 MB en el expediente.')
                     if upload and st.button('Leer evaluación',key=edit+'_read'):
                         try:
                             read=leer_material(upload.name,upload.getvalue())
@@ -355,4 +362,6 @@ def epp_page():
             from ui.planeacion import _preview
             _preview(prefix+'_preview_'+selected,pdf)
             st.download_button('Descargar informe único en PDF',pdf,file_name='EPP-'+doc['id'][:12]+'.pdf',mime='application/pdf',key=prefix+'_pdf_'+selected)
+            from ui.archivo_expediente import boton
+            boton([doc['alumno']],'EPP',pdf,'EPP-'+doc['id'][:12]+'.pdf',prefix+'_archivar_'+selected,doc['id'],doc['ciclo'],'EPP iniciada')
         except Exception:st.info('No se pudo actualizar el PDF. Los apartados guardados permanecen intactos.')

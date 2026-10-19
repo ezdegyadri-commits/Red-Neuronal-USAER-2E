@@ -57,14 +57,14 @@ def alumno_padron(r):
 
 
 def ampliar_matricula(doc,frame):
-    """Solo añade altas grupales autorizadas del mismo grupo; conserva toda fila previa."""
+    """Matrícula activa autorizada; las bajas y traslados conservan su historial."""
     from services.planeacion_modalidad import modalidad
     from services.planeacion_matricula import clave_escuela
-    result=deepcopy(doc)
+    result=proyectar_retiros(doc,frame)
     if not es_guia(doc):return result
     grupos={(grado_canonico(a.get('Grado')),grupo_canonico(a.get('Grupo'))) for a in doc['datos']['Alumnos']}
     if len(grupos)!=1 or not all(next(iter(grupos))):return result
-    presentes={a['ID_Alumno'] for a in doc['datos']['Alumnos']}
+    presentes={a['ID_Alumno'] for a in result['datos']['Alumnos']}
     contexto={}
     for r in frame.to_dict('records'):
         if (str(r.get('ID_Alumno','')) in presentes or modalidad(r)!='grupal'
@@ -85,6 +85,64 @@ def ampliar_matricula(doc,frame):
     if result['datos']['Alumnos']!=doc['datos']['Alumnos']:
         from services.planeacion_modalidad import guia_grupal
         result['metadatos']['guia_grupal_manual']=guia_grupal(result)
+    return result
+
+
+def lectura_grupal_historica(doc,frame,actor,faltantes):
+    """Solo el equipo de origen puede consultar el formato colectivo anterior."""
+    if not es_guia(doc):return False
+    from services.asignaciones import escuelas_asignadas
+    from services.planeacion_matricula import clave_escuela
+    from services.padron_movimientos import traslado_confirmado
+    from data import repository as repo
+    escuela=normalizar_texto(doc['datos']['Escuela regular'])
+    asignadas={normalizar_texto(e) for e in escuelas_asignadas(actor['nombre'],actor['rol'])}
+    if not actor['director'] and escuela not in asignadas:return False
+    if actor['area']=='Aprendizaje' and doc.get('cuenta')!=actor['cuenta']:return False
+    try:
+        actuales={str(r['ID_Alumno']):r for r in repo.alumnos().fillna('').to_dict('records')}
+        return all(aid in actuales and traslado_confirmado(aid,doc['datos']['ID_Escuela'],actuales[aid]['ID_Escuela']) for aid in faltantes)
+    except Exception:return False
+
+
+def proyectar_retiros(doc,frame):
+    """Matrícula viva sin perder las filas previas de bajas/traslados.
+
+    Solo retira de la vista activa una baja del mismo plantel o un traslado
+    auditado. Los datos se conservan en metadatos y en las versiones anteriores.
+    Un alumno ausente sin prueba nunca se retira por inferencia.
+    """
+    result=deepcopy(doc)
+    if not es_guia(doc):return result
+    vigentes=set(frame.get('ID_Alumno',[]).astype(str)) if 'ID_Alumno' in frame else set()
+    pendientes={str(a['ID_Alumno']) for a in doc['datos']['Alumnos']}-vigentes
+    if not pendientes:return result
+    from data import repository as repo
+    from services.padron_movimientos import traslado_confirmado
+    from services.planeacion_matricula import clave_escuela
+    try:padron=repo.alumnos().fillna('')
+    except Exception:return result
+    porid={str(a['ID_Alumno']):a for a in padron.to_dict('records')}
+    retiros={}
+    for aid in pendientes:
+        actual=porid.get(aid)
+        if not actual:continue
+        mismo=clave_escuela(actual.get('ID_Escuela'))==clave_escuela(doc['datos']['ID_Escuela'])
+        if mismo and normalizar_texto(actual.get('Estatus')) in {'BAJA','INACTIVO','RETIRADO','ELIMINADO'}:retiros[aid]='Baja'
+        elif not mismo:
+            try:
+                if traslado_confirmado(aid,doc['datos']['ID_Escuela'],actual.get('ID_Escuela')):retiros[aid]='Traslado'
+            except Exception:continue
+    if not retiros:return result
+    historia=result['metadatos'].setdefault('alumnos_retirados_del_grupo',{})
+    manual={str(r['ID_Alumno']):r for r in doc['metadatos'].get('guia_grupal_manual',{}).get('filas',[])}
+    for a in doc['datos']['Alumnos']:
+        aid=str(a['ID_Alumno'])
+        if aid in retiros:
+            historia[aid]={'motivo':retiros[aid],'alumno':deepcopy(a),'fila':deepcopy(manual.get(aid,{})),
+                'aportaciones':{area:[deepcopy(r) for r in aporte.get('filas',[]) if str(r.get('ID_Alumno'))==aid]
+                    for area,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items()}}
+    result['datos']['Alumnos']=[a for a in result['datos']['Alumnos'] if str(a['ID_Alumno']) not in retiros]
     return result
 
 

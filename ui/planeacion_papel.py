@@ -47,17 +47,26 @@ def _sincronizar_equipo(prefix):
 
 def hoja(prefix,volver=None):
     from ui import planeacion as u
-    doc=st.session_state[prefix+'_doc'];u.servicio.autorizar(doc,True)
+    doc=st.session_state[prefix+'_doc']
     _sincronizar_equipo(prefix)
     doc=st.session_state[prefix+'_doc']
     from services.planeacion_compartida import ampliar_matricula
     ampliado=ampliar_matricula(doc,u.servicio.padron_autorizado())
     if ampliado!=doc:
         altas=len(ampliado['datos']['Alumnos'])-len(doc['datos']['Alumnos'])
-        if altas:ampliado=u.servicio.preparar_contexto(ampliado)
+        if not ampliado['datos']['Alumnos']:
+            st.info('Este grupo ya no tiene alumnos activos. Sus versiones y aportaciones anteriores se conservan en el expediente; vuelve al inicio para trabajar otro grupo.')
+            if st.button('Regresar al inicio',key=prefix+'_grupo_cerrado'):
+                if volver:volver()
+                else:st.session_state[prefix.rsplit('_',1)[0]+'_viva_entrada']=True
+                st.rerun()
+            return
+        if altas>0:ampliado=u.servicio.preparar_contexto(ampliado)
         u._open(prefix,ampliado);st.session_state[prefix+'_pending']=True
         doc=st.session_state[prefix+'_doc']
-        if altas:st.info('Se añadieron las altas grupales nuevas del mismo grado y grupo. Las filas y aportes anteriores se conservan.')
+        if altas>0:st.info('Se añadieron las altas grupales nuevas del mismo grado y grupo. Las filas y aportes anteriores se conservan.')
+        elif altas<0:st.info('La matrícula activa refleja las bajas y traslados confirmados. Las filas y aportes anteriores se conservan en el historial.')
+    u.servicio.autorizar(doc,True)
     u._autosave(prefix)
     doc=st.session_state[prefix+'_doc']
     event=editor(hoja=papel.hoja(doc),guardado=doc.get('guardado_en','') if not st.session_state.get(prefix+'_pending') else '',

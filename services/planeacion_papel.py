@@ -21,16 +21,18 @@ def huella(doc):
     return huella_documento(copia)
 
 
-def hoja(doc,para_impresion=False,colaborativa=False):
-    actor=s.autorizar(doc,not colaborativa)
+def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
+    if archivo and not para_impresion:raise PermissionError('El acceso al archivo es solo para lectura e impresión.')
+    actor=s.autorizar(doc,False,incluir_bajas=True) if archivo else s.autorizar(doc,not colaborativa and not para_impresion)
     if colaborativa:
         from services.planeacion_colaboracion import compartible
         if not compartible(doc) or actor.get('area') not in ('Psicología','Comunicación','Trabajo Social') or actor.get('director'):
             raise PermissionError('Esta vista permite aportar solo al área asignada del Anexo XIX.')
     firma=huella(doc);doc=normalizar(doc)
     cells={};tables=[]
-    def celda(value,target=None,label='',readonly=''):
+    def celda(value,target=None,label='',readonly='',destinatario=''):
         key='c'+str(len(cells));cell={'id':key,'value':str(value or ''),'label':label,'editable':target is not None,'referente':readonly}
+        if destinatario:cell['destinatario']=str(destinatario)
         cells[key]={'target':target,**cell};return cell
     grupal=doc['metadatos'].get('modalidad_planeacion')=='grupal' and doc['datos']['Función']=='Aprendizaje' and doc['metadatos'].get('vista_formato')!='trimestral'
     datos=doc['datos'];alumnos=datos['Alumnos'];cur=contexto_ia(doc)
@@ -38,7 +40,7 @@ def hoja(doc,para_impresion=False,colaborativa=False):
     curricular='\n\n'.join('Contenido: '+r['contenido']+'\nPDA: '+r['pda']+'\n'+r['fuente']+' · p. '+str(r['pagina_pdf']) for r in cur.get('referentes_por_grado',[]))
     if grupal:
         rows=guia_grupal(doc)['filas'];permitidos=[actor['area']] if colaborativa else viva.campos_guia(doc)
-        tables.append({'id':'guia','title':'','headers':GUIA_XIX,'rows':[[celda(row.get(c,''),('aporte' if colaborativa else 'guia',i,c) if c in permitidos else None,c) for c in GUIA_XIX] for i,row in enumerate(rows)],'add':False,'delete':False,'widths':[14,12,9,14,12,12,12,8,7]})
+        tables.append({'id':'guia','title':'','headers':GUIA_XIX,'rows':[[celda(row.get(c,''),('aporte' if colaborativa else 'guia',i,c) if c in permitidos else None,c,destinatario=row['ID_Alumno']) for c in GUIA_XIX] for i,row in enumerate(rows)],'add':False,'delete':False,'widths':[14,12,9,14,12,12,12,8,7]})
     if doc['formato']=='XXV':
         tables.append({'id':'alumnos_ts','title':'','headers':['Nombre del alumno','Grado','Grupo'],
             'rows':[[celda(a.get(c,''),label=c) for c in ('Nombre del alumno','Grado','Grupo')] for a in alumnos],
