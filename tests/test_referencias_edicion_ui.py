@@ -20,6 +20,8 @@ u.horarios_apoyo_page()
 '''
         at=AppTest.from_string(code,default_timeout=30).run()
         self.assertFalse(at.exception)
+        next(r for r in at.radio if r.label=='¿Qué necesitas hacer?').set_value('Referencias de la escuela').run()
+        self.assertFalse(at.exception)
         confirmar=next(c for c in at.checkbox if 'confirmo actualizar' in c.label)
         confirmar.check().run()
         next(b for b in at.button if b.label=='Guardar corrección de referencia').click().run()

@@ -33,7 +33,11 @@ def _vinculo_individual(r, alumno, padron):
         return False
     rid=texto(r.get('ID_Alumno'))
     escuela_id=texto(r.get('ID_Escuela'))
-    if escuela_id and clave_escuela(escuela_id)!=clave_escuela(alumno.get('ID_Escuela')):return False
+    if escuela_id and clave_escuela(escuela_id)!=clave_escuela(alumno.get('ID_Escuela')):
+        if not rid or rid!=texto(alumno.get('ID_Alumno')):return False
+        from services.padron_movimientos import traslado_confirmado
+        try:return traslado_confirmado(rid,escuela_id,alumno.get('ID_Escuela'))
+        except Exception:return False
     if rid:return rid==texto(alumno.get('ID_Alumno'))
     nombre=normalizar_texto(r.get('Nombre_Alumno',''))
     escuela=normalizar_texto(r.get('Escuela',''))
@@ -62,6 +66,8 @@ def padron_autorizado():
     # Diego usa su identidad canónica aunque Usuarios haya abreviado la función.
     rol = 'TRABAJO SOCIAL' if actor['area']=='Trabajo Social' else actor['rol']
     frame = preparar_matricula(alumnos_visibles(rol, st.session_state.get('escuelas_permitidas',''), actor['nombre']))
+    if 'Estatus' in frame:
+        frame=frame.loc[~frame['Estatus'].fillna('').map(normalizar_texto).isin({'BAJA','INACTIVO','RETIRADO','ELIMINADO'})].copy()
     if actor['perfil'] and not actor['director'] and not frame.empty:
         permitidas = {normalizar_texto(e) for e in actor['perfil']['escuelas']}
         frame = frame.loc[frame['Nombre_Escuela'].map(normalizar_texto).isin(permitidas)].copy()
@@ -96,19 +102,32 @@ def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individ
     return preparar(doc)
 
 
-def autorizar(doc, escribir=False):
+def autorizar(doc, escribir=False, incluir_bajas=False):
     actor = identidad()
     if doc.get('formato') not in FORMATOS or doc.get('estado') not in ESTADOS:
         raise ValueError('Documento no válido.')
     ids = [texto(r.get('ID_Alumno')) for r in doc['datos']['Alumnos']]
     if not ids or len(set(ids))!=len(ids):
         raise ValueError('Selección de alumnos no válida.')
-    frame = padron_autorizado()
-    if not set(ids).issubset(set(frame['ID_Alumno'].astype(str)) if 'ID_Alumno' in frame else set()):
-        raise PermissionError('Este documento contiene alumnos fuera de tu asignación actual.')
+    if incluir_bajas:
+        if escribir:raise PermissionError('La consulta histórica de bajas es solo de lectura.')
+        from services.padron_movimientos import visibles
+        frame=visibles()
+    else:frame = padron_autorizado()
+    faltantes=set(ids)-(set(frame['ID_Alumno'].astype(str)) if 'ID_Alumno' in frame else set())
     actuales = frame.loc[frame['ID_Alumno'].astype(str).isin(ids)]
+    ajenos={str(r['ID_Alumno']) for r in actuales.to_dict('records') if clave_escuela(r['ID_Escuela'])!=clave_escuela(doc['datos']['ID_Escuela'])}
+    if incluir_bajas and (faltantes or ajenos):
+        from services.planeacion_compartida import lectura_grupal_historica
+        if lectura_grupal_historica(doc,frame,actor,faltantes|ajenos):return actor
+    if faltantes:raise PermissionError('Este documento contiene alumnos fuera de tu asignación actual.')
     if set(actuales['ID_Escuela'].map(clave_escuela)) != {clave_escuela(doc['datos']['ID_Escuela'])}:
-        raise PermissionError('La escuela del documento no corresponde al padrón.')
+        from services.padron_movimientos import traslado_confirmado
+        try:
+            historico_individual=not escribir and doc['metadatos'].get('modalidad_planeacion')!='grupal' and all(
+                (clave_escuela(r['ID_Escuela'])==clave_escuela(doc['datos']['ID_Escuela']) or traslado_confirmado(str(r['ID_Alumno']),doc['datos']['ID_Escuela'],r['ID_Escuela'])) for r in actuales.to_dict('records'))
+        except Exception:historico_individual=False
+        if not historico_individual:raise PermissionError('La escuela del documento no corresponde al padrón.')
     if doc['formato']=='XXI' and len(ids)!=1:
         raise ValueError('El plan de intervención es individual.')
     if escribir and doc.get('cuenta')!=actor['cuenta'] and not actor['director']:
@@ -188,6 +207,10 @@ def listar(todas_versiones=False):
     for doc in versiones_actuales():
         if not actor['director'] and doc.get('cuenta')!=actor['cuenta']:
             continue
+        if not todas_versiones:
+            from services.planeacion_compartida import proyectar_retiros
+            doc=proyectar_retiros(doc,padron_autorizado())
+            if not doc['datos']['Alumnos']:continue
         try:
             autorizar(doc)
         except PermissionError:
@@ -576,6 +599,8 @@ def compartidos():
     from services.planeacion_colaboracion import compartible,clave_guia
     resultado=[]
     for doc in {d['id']:d for d in versiones_actuales()}.values():
+        from services.planeacion_compartida import proyectar_retiros
+        doc=proyectar_retiros(doc,padron_autorizado())
         if not compartible(doc):continue
         try:autorizar(doc)
         except PermissionError:continue

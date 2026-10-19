@@ -1264,6 +1264,45 @@ div[data-testid="stAlert"]:has([data-testid="stAlertInfoIcon"]) {
   }
 }
 
+/* Capa SaaS: superficies tranquilas, estados accesibles y movimiento discreto.
+   No selecciona tablas oficiales HTML ni el formato vivo aislado en Shadow DOM. */
+.stApp, [data-testid="stAppViewContainer"] {
+  background-color:#f4f8fa;
+  background-image:radial-gradient(ellipse at 6% 0%,rgba(56,139,143,.075),transparent 48%),
+    radial-gradient(ellipse at 96% 24%,rgba(107,130,180,.06),transparent 48%);
+}
+[data-testid="stMetric"], [data-testid="stVerticalBlockBorderWrapper"] {
+  border-radius:16px;
+  box-shadow:0 2px 5px rgba(18,51,62,.025),0 14px 30px -22px rgba(18,51,62,.25);
+}
+.stApp button:not([disabled]),.stApp a[data-testid="stLinkButton"] {
+  transition:background-color .22s ease,border-color .22s ease,box-shadow .22s ease,transform .12s ease;
+}
+.stApp div.stButton > button:active:not([disabled]),.stApp div.stDownloadButton > button:active:not([disabled]) {transform:scale(.98)}
+.stApp button:disabled {opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
+.stApp button[kind="primary"] p,.stApp button[kind="primaryFormSubmit"] p {color:#fff !important}
+.st-key-padron_baja button[kind="primary"] {background:#9f2330 !important;border-color:#9f2330 !important;color:#fff !important}
+.st-key-padron_baja button[kind="primary"]:hover:not([disabled]) {background:#801b26 !important;border-color:#801b26 !important}
+.stApp button:focus-visible,.stApp input:focus-visible,.stApp select:focus-visible,
+.stApp textarea:focus-visible,.stApp a:focus-visible {
+  outline:3px solid #257d8e !important;outline-offset:3px;
+}
+[data-testid="stDataFrame"],[data-testid="stDataEditor"] {
+  border:1px solid #d5e2e7;border-radius:14px;overflow:hidden;
+  box-shadow:0 8px 24px -20px rgba(18,51,62,.3);
+}
+.usaer-table-wrap {overflow-x:auto;border:1px solid #d5e2e7;border-radius:16px;background:white;box-shadow:0 10px 28px -22px rgba(18,51,62,.3);margin:0 0 1rem}
+.usaer-data-table {width:100%;border-collapse:collapse;font:14px/1.5 'Inter','Segoe UI',sans-serif;color:#1e333c}
+.usaer-data-table th {background:#eef4f6;color:#12333e;font-weight:600;text-align:left;padding:13px 16px;white-space:nowrap}
+.usaer-data-table td {padding:12px 16px;border-top:1px solid #edf2f4;transition:background-color .18s ease;vertical-align:top}
+.usaer-data-table tbody tr:hover td {background:#edf6f7}
+.usaer-table-wrap:focus-visible {outline:3px solid #257d8e;outline-offset:3px}
+[data-testid="stDialog"] [role="dialog"] {
+  border-radius:20px;box-shadow:0 20px 70px -24px rgba(18,51,62,.35);
+  animation:usaer-enter .2s ease-out;
+}
+@keyframes usaer-enter {from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
 @media(prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     transition: none !important;

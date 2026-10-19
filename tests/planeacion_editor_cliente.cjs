@@ -176,4 +176,14 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   f.tick(15000);assert.equal(f.events()[1].nonce,f.events()[0].nonce);
   assert.ok(f.cache.has('usaer-hoja:ficticio'));
 }
+// Un traslado/baja nunca reasigna el texto en vuelo al alumno que ocupa su fila.
+{
+  const f=fixture();const inicial=hoja();inicial.cells.c0.destinatario='A1';
+  f.render(inicial);f.input('Actividad de A1');f.tick(4000);const envio=f.events()[0];
+  f.input('Texto posterior de A1');const respaldo=f.cache.get('usaer-hoja:ficticio');
+  const siguiente=hoja('Actividad de A2','otra-matricula');siguiente.cells.c0.destinatario='A2';
+  f.render(siguiente,{aceptado_nonce:envio.nonce,guardado:'confirmado'});
+  assert.equal(f.nodes.get('celda-c0').innerText,'Actividad de A2');
+  assert.equal(f.cache.get('usaer-hoja:ficticio'),respaldo);
+}
 console.log('Editor: escritura no bloqueante, sincronización por área, respaldo y navegación protegida aprobados.');

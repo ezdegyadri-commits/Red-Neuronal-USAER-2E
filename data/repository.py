@@ -111,6 +111,27 @@ def update_alumno(id_alumno, cambios, allowed_ids):
 def personal(): return read('Personal')
 
 
+def actualizar_ubicacion_alumno(id_alumno,cambios,esperado):
+ """Escritura acotada del servicio de movimientos, sin mover otras hojas."""
+ permitidos={'ID_Escuela','Nombre_Escuela','CCT_Escuela','Turno_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Grado','Grupo','Estatus'}
+ if not cambios or set(cambios)-permitidos or set(esperado)!=set(cambios):raise ValueError('Campos de movimiento no válidos.')
+ ws=worksheet('Alumnos');headers=retry_google(lambda:ws.row_values(1))
+ if set(cambios)-set(headers):raise ValueError('Faltan columnas del destino en el padrón; no se aplicó el traslado.')
+ ids=retry_google(lambda:ws.col_values(headers.index('ID_Alumno')+1))
+ filas=[i for i,v in enumerate(ids,start=1) if str(v).strip()==str(id_alumno).strip()]
+ if len(filas)!=1:raise ValueError('Identificador ausente o duplicado; Dirección debe revisarlo.')
+ fila=filas[0];values=retry_google(lambda:ws.row_values(fila));values+=['']*max(0,len(headers)-len(values))
+ actual={k:str(values[headers.index(k)]) for k in cambios}
+ if actual=={k:str(v) for k,v in cambios.items()}:
+  clear_cache('Alumnos')
+  return id_alumno
+ if actual!={k:str(v) for k,v in esperado.items()}:raise RuntimeError('Otra sesión modificó el padrón. Actualiza antes de confirmar el movimiento.')
+ updates=[{'range':f'{_a1_column(headers.index(k)+1)}{fila}','values':[[v]]} for k,v in cambios.items()]
+ retry_google(lambda:ws.batch_update(updates,value_input_option='RAW'))
+ clear_cache('Alumnos')
+ return id_alumno
+
+
 def personal_para_formato():
  """Obtiene personal del formulario; usa la hoja central como respaldo."""
  respuestas = pd.DataFrame(read_personal_responses())

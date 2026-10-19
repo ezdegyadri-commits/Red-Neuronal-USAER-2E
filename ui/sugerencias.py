@@ -19,7 +19,7 @@ from utils.text import normalizar_texto
 from services.sugerencias_fisicas import leer_sugerencia
 
 
-def _cargar_hoja(prefijo):
+def _cargar_hoja(prefijo,ids=None):
     abierta = st.session_state.get(prefijo + '_carga', False)
     etiqueta = 'Ocultar carga de hoja física' if abierta else 'Cargar hoja física entregada a padres'
     if st.button(etiqueta, key=prefijo + '_abrir_carga'):
@@ -32,6 +32,9 @@ def _cargar_hoja(prefijo):
     if archivo is None:
         return
     st.image(archivo, caption='Original para cotejar', width=450)
+    if ids:
+        from ui.archivo_expediente import boton
+        boton(ids,'Sugerencias',archivo.getvalue,archivo.name,prefijo+'_archivar_scan',fuente='Hoja física de sugerencias')
     st.caption('Lectura local, sin enviar la hoja a servicios externos. Revisa especialmente la letra manuscrita.')
     st.checkbox('Reemplazar el texto actual con esta lectura', key=prefijo + '_reemplazar')
     if st.button('Leer y pasar al borrador', key=prefijo + '_leer'):
@@ -60,7 +63,11 @@ def _sugerencias_grupales(alumnos, escuelas, autor):
         return
     grupo = st.selectbox('Grado y grupo', grupos, key='sug_grupal_grupo')
     prefijo = 'sug_grupal_' + hashlib.sha256(f'{autor}|{escuela}|{grupo}'.encode()).hexdigest()[:18]
-    _cargar_hoja(prefijo)
+    from ui.archivo_expediente import ids_contexto
+    partes=grupo.split()
+    ident='GRUPO-'+str(ESCUELAS_USAER.get(escuela,''))+'-'+partes[0]+'-'+(partes[1] if len(partes)>1 else '')
+    destinatarios=ids_contexto(disponibles,ident)
+    _cargar_hoja(prefijo,destinatarios)
     area = st.text_input('Área / especialidad', key=prefijo + '_area')
     motivo = st.text_area('Motivo de la sugerencia grupal', key=prefijo + '_motivo')
     texto = st.text_area('Sugerencias para el grupo', height=200, key=prefijo + '_texto')
@@ -89,6 +96,9 @@ def _sugerencias_grupales(alumnos, escuelas, autor):
         if not filas.empty:
             st.download_button('Descargar sugerencias grupales PDF', anexo4_pdf({'Nombre_Completo': 'Grupo ' + grupo, 'Nombre_Escuela': escuela, 'Grado': grupo}, filas),
                                'Sugerencias_grupales.pdf', 'application/pdf', key=prefijo + '_pdf')
+            from ui.archivo_expediente import boton
+            boton(destinatarios,'Sugerencias',lambda:anexo4_pdf({'Nombre_Completo':'Grupo '+grupo,'Nombre_Escuela':escuela,'Grado':grupo},filas),
+                'Sugerencias_grupales.pdf',prefijo+'_archivar',fuente='Anexo IV grupal')
 
 
 def _school_code(value):
@@ -215,7 +225,7 @@ def anexo4_page(df):
     fecha = date.today()
     guardar = False
     with st.expander("➕ Añadir nueva sugerencia", expanded=True):
-        _cargar_hoja(key_prefix)
+        _cargar_hoja(key_prefix,[str(id_alumno)])
         st.caption(
             "Escribe una sugerencia para este alumno. Al guardarla aparecerá en la misma hoja "
             "que consulta la maestra de apoyo y el equipo especialista."
@@ -298,6 +308,9 @@ def anexo4_page(df):
         key=f"anexo4_html_{id_alumno}",
         width="stretch",
     )
+    from ui.archivo_expediente import boton
+    boton([str(id_alumno)],'Sugerencias',lambda:anexo4_pdf(alumno_vista,filas_vista),
+        f'Anexo_IV_{id_alumno}.pdf',f'archivo_sugerencias_{id_alumno}',fuente='Anexo IV',disabled=hay_borrador)
 
     if not historial.empty and "ID_Anexo4" in historial.columns:
         st.markdown("### Corregir o retirar una sugerencia")

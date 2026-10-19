@@ -48,6 +48,8 @@ TIPOS_ARCHIVO_HORARIOS = ["xlsx", "xls", "csv", "doc", "docx", "pdf", "png", "jp
 def _alumnos_de_maestra(nombre, escuela):
     """Entrega alumnos de la docente; en escuela compartida no ofrece cuentas ajenas."""
     todos = filtrar_alumnos_por_escuelas(repo.alumnos(), [escuela]).copy()
+    if 'Estatus' in todos:
+        todos=todos.loc[~todos['Estatus'].fillna('').map(normalizar_texto).isin({'BAJA','INACTIVO','RETIRADO','ELIMINADO'})].copy()
     if todos.empty:
         return todos, todos
     if normalizar_texto(escuela) in {"ICHCAANZIHO", "ESC-002"}:
@@ -814,23 +816,24 @@ def _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo):
             _persistir_plantilla(prefijo, nombre, escuela)
             st.rerun()
     st.markdown("### Mi plantilla semanal · lunes a viernes")
-    st.caption("Elige cuánto dura cada módulo. Puedes escribir una duración repetida (60) o varias (60,60,30,60); la última se repite hasta terminar la jornada.")
-    c1, c2 = st.columns(2)
-    with c1:
-        inicio = st.time_input("Inicio", value=time(7, 0), key=f"{prefijo}_inicio", **cambio)
-    with c2:
-        fin = st.time_input("Fin", value=time(13, 0), key=f"{prefijo}_fin", **cambio)
-    st.caption("Configura duraciones distintas por día, separadas por comas. El descanso indicado se replica durante toda la semana.")
-    duraciones_por_dia = {}
-    columnas_dias = st.columns(5)
-    for dia, columna in zip(DIAS, columnas_dias):
-        with columna:
-            duraciones_por_dia[dia] = st.text_input(f"{dia} · minutos", value="60", key=f"{prefijo}_dur_{dia}", **cambio)
-    pausa_cols = st.columns([1, 1, 2])
-    with pausa_cols[0]:
-        descanso_inicio = st.text_input("Descanso desde · HH:MM", value="", key=f"{prefijo}_descanso_inicio", placeholder="10:00", **cambio)
-    with pausa_cols[1]:
-        descanso_fin = st.text_input("Descanso hasta · HH:MM", value="", key=f"{prefijo}_descanso_fin", placeholder="10:30", **cambio)
+    with st.expander("Ajustar jornada, duración de sesiones y descanso"):
+        st.caption("Elige cuánto dura cada módulo. Puedes escribir una duración repetida (60) o varias (60,60,30,60); la última se repite hasta terminar la jornada.")
+        c1, c2 = st.columns(2)
+        with c1:
+            inicio = st.time_input("Inicio", value=time(7, 0), key=f"{prefijo}_inicio", **cambio)
+        with c2:
+            fin = st.time_input("Fin", value=time(13, 0), key=f"{prefijo}_fin", **cambio)
+        st.caption("Configura duraciones distintas por día, separadas por comas. El descanso indicado se replica durante toda la semana.")
+        duraciones_por_dia = {}
+        columnas_dias = st.columns(5)
+        for dia, columna in zip(DIAS, columnas_dias):
+            with columna:
+                duraciones_por_dia[dia] = st.text_input(f"{dia} · minutos", value="60", key=f"{prefijo}_dur_{dia}", **cambio)
+        pausa_cols = st.columns([1, 1, 2])
+        with pausa_cols[0]:
+            descanso_inicio = st.text_input("Descanso desde · HH:MM", value="", key=f"{prefijo}_descanso_inicio", placeholder="10:00", **cambio)
+        with pausa_cols[1]:
+            descanso_fin = st.text_input("Descanso hasta · HH:MM", value="", key=f"{prefijo}_descanso_fin", placeholder="10:30", **cambio)
     try:
         franjas_por_dia = {dia: franjas_semanales(inicio, fin, duraciones_por_dia[dia]) for dia in DIAS}
     except ValueError as exc:
@@ -1112,7 +1115,6 @@ def horarios_apoyo_page():
     st.title("Horarios de apoyo")
     st.caption("Organiza tus sesiones, consulta referencias de la escuela y recibe aquí los cronogramas del equipo especialista.")
     escuela = st.selectbox("Escuela asignada", escuelas, key="horario_apoyo_escuela")
-    _avisos_maestra(nombre, escuela)
     clave_identidad = f"{normalizar_texto(nombre)}_{normalizar_texto(escuela)}"
     if st.button("↻ Actualizar horarios guardados", key=f"actualizar_horarios_{clave_identidad}"):
         cargar_restricciones.clear()
@@ -1127,6 +1129,19 @@ def horarios_apoyo_page():
         st.error(f"No se pudieron leer los horarios compartidos: {exc}")
         return
 
+    vista=st.radio("¿Qué necesitas hacer?",["Mi semana","Referencias de la escuela","Avisos del equipo"],horizontal=True,key="horario_recorrido_simple")
+    if vista=="Referencias de la escuela":
+        _referencias_escolares(nombre,escuela,clave_identidad,restricciones,horarios_equipo)
+    elif vista=="Avisos del equipo":
+        _avisos_maestra(nombre,escuela)
+    else:
+        st.caption("1. Elige un espacio → 2. Selecciona alumnos o grupo → 3. Añádelo a tu semana. El borrador se respalda sin publicar.")
+        _cuadricula_horario(nombre,escuela,restricciones,horarios_equipo)
+        with st.expander("Consultar o descargar mi horario vigente"):
+            _horario_vigente(nombre,escuela,horarios_equipo)
+
+
+def _referencias_escolares(nombre,escuela,clave_identidad,restricciones,horarios_equipo):
     st.markdown("### 📎 Horarios de referencia de la escuela")
     st.info("**1. Sube los archivos → 2. Revisa o completa los bloques → 3. Guarda.** Las imágenes necesitan lectura o captura antes de convertirse en horarios que permitan detectar choques. Los horarios anteriores se conservan.")
     plantilla = pd.DataFrame([{"Día": "Lunes", "Inicio": "08:00", "Fin": "08:50", "Actividad": "Inglés", "Grupo": "2A", "Responsable": ""}])
@@ -1308,9 +1323,9 @@ def horarios_apoyo_page():
             colega = st.selectbox("Consultar horario de una colega", colegas_opciones, key=f"horario_colega_{normalizar_texto(escuela)}")
             st.dataframe(_tabla_vista(colegas.loc[colegas["Maestra"].astype(str).eq(colega)]), hide_index=True, width="stretch")
 
-    st.divider()
-    _cuadricula_horario(nombre, escuela, restricciones, horarios_equipo)
-    st.divider()
+
+
+def _horario_vigente(nombre,escuela,horarios_equipo):
     propio = horarios_equipo.loc[horarios_equipo["Maestra"].astype(str).eq(nombre)].copy() if not horarios_equipo.empty and "Maestra" in horarios_equipo.columns else pd.DataFrame()
     if not propio.empty:
         st.markdown("### Mi horario vigente")

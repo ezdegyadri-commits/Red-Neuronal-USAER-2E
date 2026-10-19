@@ -25,6 +25,14 @@ def panel(prefix,doc):
             st.session_state[base+'_doc']=actual
     except Exception:
         st.caption('No se pudo actualizar el equipo en este momento. Tu hoja permanece abierta; se reintentará.')
+    activos={str(a['ID_Alumno']) for a in actual['datos']['Alumnos']}
+    retirados=[r for r in st.session_state[base+'_filas'] if str(r.get('ID_Alumno')) not in activos]
+    if retirados:
+        respaldo=st.session_state.setdefault(base+'_filas_retiradas',[])
+        for r in retirados:
+            if r not in respaldo:respaldo.append(deepcopy(r))
+        st.session_state[base+'_filas']=[r for r in st.session_state[base+'_filas'] if str(r.get('ID_Alumno')) in activos]
+        st.caption('Las aportaciones de alumnos con baja o traslado se conservan en el historial y en tu respaldo; ya no se editan en la matrícula activa.')
     if st.session_state.get(base+'_pending'):_guardar(base,automatic=True)
     actual=st.session_state[base+'_doc']
     preview=aportar(actual,actor,st.session_state[base+'_filas'],st.session_state[base+'_obs'])
@@ -68,7 +76,7 @@ def panel(prefix,doc):
     else:st.caption('Guardado confirmado · '+actual.get('guardado_en','sin cambios')[:19])
     import json
     st.download_button('Respaldo de mi aportación',json.dumps({'documento':doc['id'],'area':actor['area'],
-        'filas':st.session_state[base+'_filas'],'observaciones':st.session_state[base+'_obs']},ensure_ascii=False),
+        'filas':st.session_state[base+'_filas'],'filas_retiradas':st.session_state.get(base+'_filas_retiradas',[]),'observaciones':st.session_state[base+'_obs']},ensure_ascii=False),
         file_name='aporte-'+doc['id']+'.json',mime='application/json',key=base+'_backup')
     if st.button('Actualizar aportaciones del equipo',key=base+'_refresh'):
         if st.session_state.get(base+'_pending'):_guardar(base)
