@@ -127,9 +127,10 @@ def panel(prefix):
         st.caption('Documento único del grupo: reúne el trabajo previo sin borrar sus documentos de origen. Todos los integrantes abren esta misma hoja.')
     st.caption('Último guardado: '+doc.get('guardado_en','por confirmar'))
     if es_guia(doc) and not actor['director']:
-        if st.button('Abrir Anexo XIX compartido',key=prefix+'_abrir'):
+        c_op1,c_op2=st.columns([1,1])
+        if c_op1.button('Abrir en formato oficial Anexo XIX',key=prefix+'_abrir'):
             st.session_state[prefix+'_abierto']=did;st.rerun()
-        return
+        c_op2.caption('O edita tus aportaciones directamente en la tabla ágil de abajo:')
     for area,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items():
         with st.expander(area+' · '+aporte['autor']):
             st.dataframe(pd.DataFrame(aporte['filas']),hide_index=True)

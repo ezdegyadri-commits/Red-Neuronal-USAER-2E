@@ -54,9 +54,15 @@ class NeeTests(unittest.TestCase):
 
     def test_pdf_distingue_la_nee_propuesta_de_una_determinacion(self):
         from documents.planeacion_papel import generar_pdf
-        from pypdf import PdfReader
         from io import BytesIO
-        d=apartados.proponer(self.doc());texto='\n'.join(p.extract_text() for p in PdfReader(BytesIO(generar_pdf(d))).pages)
+        d=apartados.proponer(self.doc())
+        pdf_bytes=generar_pdf(d)
+        try:
+            from pypdf import PdfReader
+            texto='\n'.join(p.extract_text() for p in PdfReader(BytesIO(pdf_bytes)).pages)
+        except ModuleNotFoundError:
+            import fitz
+            texto='\n'.join(p.get_text() for p in fitz.open(stream=pdf_bytes,filetype='pdf'))
         self.assertIn('NEE propuesta para valoración',texto)
 
 

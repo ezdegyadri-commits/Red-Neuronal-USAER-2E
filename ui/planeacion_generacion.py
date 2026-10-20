@@ -155,17 +155,42 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     if pendiente:
         st.markdown('##### Revisar antes de actualizar el borrador')
         st.caption('Se conservan las ediciones y eliminaciones de sesiones registradas desde la última generación. Solo se sustituyen las partes que siguen iguales a su versión automática.')
-        for unidad in pendiente['respuesta']['unidades']:
-            with st.expander('Nueva propuesta · '+unidad['objetivo']):st.write(unidad['actividad'])
+        unidades_disponibles=pendiente['respuesta'].get('unidades',[])
+        for i,unidad in enumerate(unidades_disponibles):
+            with st.expander(f"Propuesta {i+1} · {unidad.get('objetivo','')}",expanded=True):
+                st.markdown(f"**Actividad:**\n{unidad.get('actividad','')}")
+                c_ap,c_rec=st.columns(2)
+                c_ap.markdown(f"**Apoyos y ajustes:**\n{unidad.get('apoyos','')}")
+                c_rec.markdown(f"**Recursos accesibles:**\n{unidad.get('recursos','')}")
+                st.caption(f"Indicador observable / evaluación: {unidad.get('evaluacion','')}")
+                check_key=f'{base}_inc_unidad_{i}'
+                if check_key not in st.session_state:st.session_state[check_key]=True
+                incluir=st.checkbox('✅ Incluir esta propuesta en mi formato',key=check_key)
+                if not incluir:
+                    motivo_key=f'{base}_motivo_{i}'
+                    motivo=st.selectbox('¿Por qué no es adecuada? (opcional)',[
+                        'Elige un motivo...',
+                        'Demasiado compleja para su nivel actual',
+                        'Muy básica o infantil para su edad cronológica',
+                        'Material no disponible en el aula',
+                        'No corresponde a su nivel real de lectoescritura/cálculo',
+                        'Enfocar en otra habilidad prioritaria'
+                    ],key=motivo_key)
+                    if motivo!='Elige un motivo...':
+                        st.info(f'Retroalimentación registrada: {motivo}. Puedes ajustar "¿Qué deseas priorizar?" arriba para solicitar una alternativa orientada.')
         st.caption('Tu borrador actual sigue intacto; puedes compararlo con la vista previa de abajo.')
         if st.button('Aplicar actualización conservando mis ediciones',key=base+'_apply'):
             try:
                 actual=st.session_state[prefix+'_doc']
                 if actual.get('revision','')!=pendiente['revision']:raise ValueError('Cambió el borrador. Revisa o genera una nueva propuesta antes de aplicar.')
-                generado=g.ensamblar(actual,pendiente['respuesta'],pendiente['solicitud'])
+                seleccionadas=[u for i,u in enumerate(unidades_disponibles) if st.session_state.get(f'{base}_inc_unidad_{i}',True)]
+                if not seleccionadas:raise ValueError('Selecciona al menos una propuesta para integrar al formato, o pulsa «Conservar mi borrador».')
+                resp_filtrada=deepcopy(pendiente['respuesta'])
+                resp_filtrada['unidades']=seleccionadas
+                generado=g.ensamblar(actual,resp_filtrada,pendiente['solicitud'])
                 generado['metadatos']['generacion_completa']['motor']=modelo_configurado()
                 generado['metadatos']['configuracion_generacion']=deepcopy(st.session_state[prefix+'_doc'].get('metadatos',{}).get('configuracion_generacion',{}))
-                st.session_state[prefix+'_actividades_integradas']=len(pendiente['respuesta']['unidades'])
+                st.session_state[prefix+'_actividades_integradas']=len(seleccionadas)
                 abrir(prefix,generado);persist(prefix);_revision(prefix,compact)
                 st.session_state.pop(prefix+'_propuesta_pendiente',None);st.rerun()
             except (ValueError,PermissionError,RuntimeError) as exc:st.info(str(exc))

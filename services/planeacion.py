@@ -559,9 +559,8 @@ def evidencias(doc):
             if plan['estado'] not in {'ENVIADO','VALIDADO'}:continue
             from services.planeacion_continuidad import vigente_pi
             if plan['formato']=='XXI' and not vigente_pi(plan,doc['datos']['Curso escolar']):continue
-            autorizar(plan)
-            contenido={'tablas':plan['tablas'],'textos':plan['textos'],'necesidades_documentadas':plan['metadatos'].get('necesidades_confirmadas','')}
-            fuentes.append({'tipo':'PLAN','alumno':','.join(sorted(ids_plan&elegidos)),'fecha':plan.get('guardado_en','')[:10],'registro':plan['id'],'documento_origen':plan['id'],'formato':plan['formato'],'revision':plan['revision'],'texto':json.dumps(contenido,ensure_ascii=False),'alcance':'plan o planeación anterior enviada; no equivale a resultado alcanzado'})
+            from services.planeacion_nee import resumir_plan_previo
+            fuentes.append({'tipo':'PLAN','alumno':','.join(sorted(ids_plan&elegidos)),'fecha':plan.get('guardado_en','')[:10],'registro':plan['id'],'documento_origen':plan['id'],'formato':plan['formato'],'revision':plan['revision'],'texto':resumir_plan_previo(plan),'alcance':'plan o planeación anterior enviada; no equivale a resultado alcanzado'})
             for seguimiento in plan['metadatos'].get('seguimiento_formativo',[]):
                 fuentes.append({'tipo':'SEGUIMIENTO','alumno':','.join(sorted(ids_plan)),'fecha':seguimiento['fecha'],'registro':plan['id']+'-'+seguimiento['fecha'],
                     'texto':seguimiento['hallazgos']+'\nDecisión docente: '+seguimiento['decision'],'alcance':'resultados registrados por el profesional; verificar sus evidencias'})
@@ -684,7 +683,9 @@ def guardar_aportacion(doc,filas,observaciones):
 def resumen_previo(doc,fuentes):
     """Borrador local de minimización; la persona revisa antes de transmitirlo."""
     autorizar(doc)
-    partes=[f"{f['referencia']} ({f['alcance']}): {f['texto']}" for f in fuentes if f.get('texto')]
+    prioridades={'EPP':0,'III':1,'IV':2,'SEGUIMIENTO':3,'ACTA':4,'V':5,'DOCENTE':6,'PLAN':7,'MATERIAL':8}
+    fuentes_ordenadas=sorted(fuentes,key=lambda f:prioridades.get(f.get('tipo',''),9))
+    partes=[f"{f['referencia']} ({f['alcance']}): {f['texto']}" for f in fuentes_ordenadas if f.get('texto')]
     grados=set()
     for alumno in doc['datos']['Alumnos']:
         grado=re.match(r'^\s*([1-6])(?:\D|$)',str(alumno.get('Grado','')))

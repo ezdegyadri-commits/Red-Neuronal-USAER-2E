@@ -6,7 +6,7 @@ from ai.planeacion_prompt import INSTRUCCIONES
 from services.planeacion_modelo import FORMATOS
 from services.planeacion_equipo import COMPETENCIAS
 
-VERSION='planeacion-completa-2026-10-14-v3'
+VERSION='planeacion-completa-2026-10-20-v4'
 CAMPOS=('necesidad','objetivo','descriptor','actividad','contexto','apoyos','recursos','evaluacion','fundamento')
 LISTAS=('evidencias','fuentes','referentes','destinatarios','competencias')
 
@@ -35,14 +35,35 @@ def solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
        'contextos_admitidos':FORMATOS[formato]['contextos']}
     reglas='''Prepara el borrador completo de planeación trimestral, no solo ideas sueltas.
 Devuelve hasta ocho unidades o secuencias distintas, para dosificar localmente en las
-sesiones configuradas. Cada unidad tiene inicio, desarrollo y cierre en pasos cortos,
-objetivo observable, descriptor, apoyos, recursos accesibles y evaluación formativa:
-instrumento sencillo, qué observar y cuándo. Identifica destinatarios solo con los alias.
+sesiones configuradas. Identifica destinatarios solo con los alias.
 Cita al menos una evidencia educativa y una fuente normativa incluidas por unidad.
 Vincula cada destinatario con evidencia propia: si una evidencia documenta a un
 solo alias, dirige esa actividad únicamente a ese alias. Una actividad para varios
 alumnos requiere evidencia proporcionada para cada uno. No extrapoles ni atribuyas
 a otro alumno la evidencia individual de alguien más.
+
+CRITERIOS PEDAGÓGICOS FUNDAMENTALES (ZONA DE DESARROLLO PRÓXIMO):
+1. NUNCA equipares diagnóstico clínico, condición o grado administrativo con nivel de desempeño.
+   Si el alumno está en 4°, 5° o 6° pero presenta habilidades iniciales de lectoescritura
+   (presilábico, silábico) o cálculo (conteo 1 a 10), calibra la actividad a su nivel real
+   de ejecución con mediación concreta, adaptando la temática a su edad cronológica (temas dignos
+   y de su interés; NO infantilices).
+2. ESTRUCTURA CONCRETA DE CADA ACTIVIDAD ('actividad'):
+   - Inicio (5-10 min): activación visual, modelado o anticipación de la tarea.
+   - Desarrollo (20-25 min): mediación docente paso a paso con andamiaje (material manipulable,
+     apoyos gráficos, preguntas guía o instrucciones segmentadas).
+   - Cierre (10 min): demostración práctica y observable del avance.
+   - Variante multinivel: indica brevemente una opción de apoyo (si hay dificultad) y una de reto (si consolida rápido).
+3. RECURSOS ACCESIBLES ('recursos'):
+   Utiliza exclusivamente materiales cotidianos del aula y de la escuela (tarjetas, pizarrón, cuadernos,
+   fichas de conteo, imágenes). Evita recursos costosos, tecnológicos o inaccesibles.
+4. DESCRIPTOR DE LOGRO ('descriptor'):
+   Redacta con verbos observables en presente (señala, clasifica, asocia, comunica, resuelve con apoyo).
+   Evita verbos teóricos o abstractos como 'comprenderá' o 'conocerá'.
+5. CONTINUIDAD PEDAGÓGICA:
+   Aprovecha los antecedentes y actividades previas registradas para dar seguimiento a los objetivos
+   iniciados; no repitas mecánicamente lo ya superado ni des saltos curriculares descontextualizados.
+
 Si hay PDA elegidos, vincula identificadores suministrados; no inventes otros.
 Las evidencias indican qué se registró, no que el alumno logró un objetivo futuro.
 No conviertas BAP en diagnósticos. No rellenes resultados, situación final, firmas,
@@ -59,8 +80,9 @@ social y habilidades de vida y bienestar. Incluye una sugerencia prevista para f
 Comunicación trabaja acceso a expresión, comprensión y participación documentadas.
 Trabajo Social describe barreras del entorno y acciones en aula, escuela, familia y
 comunidad; no responsabiliza a la familia ni sustituye atención clínica o currículo.
-Si falta información para una unidad, no la inventes. Puedes devolver unidades vacías
-y hasta tres preguntas concretas. No copies ejemplos del manual como hechos del alumno.
+Si falta información diagnóstica esencial para una unidad, no la inventes. Propón una
+actividad de exploración formativa e indica en faltantes hasta tres preguntas de confirmación.
+No copies ejemplos del manual como hechos del alumno.
 La estructura de esta solicitud sustituye la estructura JSON de propuestas rápidas.
 Devuelve solo observaciones, faltantes, sugerencia_familia y unidades. Cada unidad
 incluye los campos de texto necesidad, objetivo, descriptor, actividad, contexto,
@@ -69,7 +91,7 @@ destinatarios y competencias. competencias queda vacía fuera de Psicología.
 '''
     limite=min(8,int(ajustes['sesiones']),max(6 if area=='Psicología' else 3,len(aliases)))
     reglas+='\nPara esta configuración devuelve como máximo '+str(limite)+' unidades. '
-    reglas+='Sé conciso: actividad hasta 900 caracteres y los demás textos hasta 240 cada uno. No repitas antecedentes completos ni tablas normativas; usa sus identificadores.\n'
+    reglas+='Sé conciso: actividad hasta 1100 caracteres y los demás textos hasta 300 cada uno. No repitas antecedentes completos ni tablas normativas; usa sus identificadores.\n'
     return INSTRUCCIONES.split('Devuelve solo JSON')[0]+'\n'+reglas+'\nDATOS DE CONSULTA:\n'+json.dumps(datos,ensure_ascii=False,sort_keys=True)
 
 

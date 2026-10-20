@@ -76,3 +76,26 @@ def necesidad(alumno,fuentes,referentes,area):
         propuestas=['Necesita '+text+'.']
     return '\n'.join(propuestas[:3]),{'origen':'hipótesis educativa para valoración docente' if datos else 'hipótesis inicial sin hallazgos suficientes; valorar antes de mantener',
         'propuesta':True,'manual':'SEGEY-USAER · pp. 64 y 168-169','referencias':[f.get('referencia','') for f in fuentes if not es_bapse(f)]}
+
+
+def resumir_plan_previo(plan):
+    """Resumen pedagógico breve de un plan previo para dar continuidad sin saturar tokens."""
+    lineas=[]
+    formato=plan.get('formato','XXIII')
+    lineas.append(f"Planeación anterior ({formato}):")
+    necesidades=str(plan.get('metadatos',{}).get('necesidades_confirmadas','')).strip()
+    if necesidades:
+        lineas.append('Necesidades previas: '+necesidades[:250])
+    tablas=plan.get('tablas',{})
+    for k in ('aprendizajes','barreras','necesidades'):
+        for fila in tablas.get(k,[])[:3]:
+            obj=fila.get('Aprendizaje y/u objetivo') or fila.get('Aprendizajes y/u Objetivos','')
+            if obj:lineas.append('Objetivo previo: '+str(obj)[:200])
+            apoyos=fila.get('Apoyos o ajustes') or fila.get('Apoyos y/o ajustes razonables','')
+            if apoyos:lineas.append('Apoyos previos: '+str(apoyos)[:200])
+    for fila in tablas.get('dosificacion',[])[:3]:
+        act=fila.get('Actividades','')
+        if act:lineas.append('Actividad previa: '+str(act)[:250])
+    for s in plan.get('metadatos',{}).get('equipo',{}).get('sesiones',[])[:3]:
+        if s.get('actividad'):lineas.append('Actividad previa: '+str(s.get('actividad'))[:250])
+    return '\n'.join(lineas) if len(lineas)>1 else f"Planeación anterior ({formato}) registrada sin detalle de actividades."

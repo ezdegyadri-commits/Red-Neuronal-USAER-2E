@@ -37,18 +37,13 @@ def _entrada(base,actor):
         with st.expander('Continuar una planeación guardada', expanded=True):
             from services.planeacion_recuperacion import ordenar, etiqueta, actividades_redactadas
             docs_ordenados = ordenar(docs)
-            limite_defecto = 5
-            mostrar_todos = False
-            if len(docs_ordenados) > limite_defecto:
-                mostrar_todos = st.toggle('Ver historial completo de planeaciones', key=base+'_viva_ver_todos', value=False)
-            docs_visibles = docs_ordenados if mostrar_todos else docs_ordenados[:limite_defecto]
-            porid = {d['id']: d for d in docs_visibles}
+            porid = {d['id']: d for d in docs_ordenados}
             if actividades_redactadas(next(iter(porid.values()))):
                 st.caption('Mostrando las planeaciones más recientes y editadas. Selecciona una para continuar redactando o eliminar borradores que ya no ocupes.')
             did = st.selectbox('Mis planeaciones recientes', list(porid), format_func=lambda i: etiqueta(porid[i]), key=base+'_viva_guardadas')
             col_abrir, _ = st.columns([2, 1])
             with col_abrir:
-                if st.button('✏️ Continuar editando este formato', type='primary', key=base+'_viva_abrir'):
+                if st.button('Abrir mi formato', type='primary', key=base+'_viva_abrir'):
                     try:
                         _abrir(base, porid[did])
                         st.rerun()
