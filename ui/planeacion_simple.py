@@ -453,13 +453,16 @@ def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=
         if key.startswith(base+'_') and key.endswith('_doc') and st.session_state.get(key[:-4]+'_pending'):
             if not u._guardar_edicion_pendiente(key[:-4]):raise RuntimeError('Primero confirma el guardado de tu edición pendiente.')
     with st.spinner('Reuniendo la información que ya registró el equipo…'):
-        doc=s.preparar_contexto(s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=tipo,incluir_individuales=incluir))
+        solicitud='especialista' if tipo=='grupal' and s.identidad()['area'] in ('Comunicación','Psicología','Trabajo Social') else tipo
+        doc=s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=solicitud,incluir_individuales=incluir,vista_formato=presentacion)
+        existente=bool(doc.get('revision'))
+        if not existente:doc=s.preparar_contexto(doc)
         if equipo.aplica(doc) and not doc['metadatos'].get('equipo',{}).get('subgrupos'):
             doc=equipo.guardar_subgrupo(equipo.preparar(doc),'Subgrupo 1',ids)
         if fmt=='XXI' and any(v['tipo']=='EPP' for v in doc['metadatos'].get('vinculos_documentales',[])):
             from services.planeacion_continuidad import trasladar_epp
             doc=trasladar_epp(doc)
-    if proponer_apartados:
+    if proponer_apartados and not existente:
         from services.planeacion_apartados import proponer
         doc=proponer(doc)
     if presentacion in ('guia','trimestral'):doc['metadatos']['vista_formato']=presentacion

@@ -64,7 +64,7 @@ class MatriculaTests(unittest.TestCase):
 
     def test_se_puede_crear_grupal_con_ambas_representaciones(self):
         frame=self.padron()
-        with patch.object(s,'identidad',return_value=self.actor),patch.object(s,'padron_autorizado',return_value=frame),patch.object(s.repo,'escuelas',return_value=pd.DataFrame()):
+        with patch.object(s,'identidad',return_value=self.actor),patch.object(s,'padron_autorizado',return_value=frame),patch.object(s.repo,'escuelas',return_value=pd.DataFrame()),patch.object(s,'versiones_actuales',return_value=[]):
             doc=s.nueva('XXIII',['FICTICIO-0','FICTICIO-8'],modalidad='grupal')
         self.assertEqual(doc['datos']['ID_Escuela'],'ESC-006')
         self.assertEqual(len(doc['datos']['Alumnos']),2)

@@ -74,8 +74,10 @@ def padron_autorizado():
     return frame
 
 
-def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individuales=False):
+def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individuales=False,vista_formato=None):
     actor = identidad()
+    if modalidad=='grupal' and actor['area']!='Aprendizaje':
+        raise PermissionError('El Anexo XIX lo inicia la maestra de apoyo. Continúa el documento existente en Planeaciones del equipo; tu intervención propia conserva el formato de especialista.')
     if modalidad is not None:
         from services.planeacion_modalidad import comprobar
         comprobar(padron_autorizado(), ids, modalidad, incluir_individuales)
@@ -98,6 +100,16 @@ def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individ
     if modalidad is not None:
         doc['metadatos']['modalidad_planeacion'] = modalidad
         doc['metadatos']['individuales_en_sesion_grupal']=bool(incluir_individuales and modalidad=='grupal')
+    if vista_formato:doc['metadatos']['vista_formato']=vista_formato
+    from services.planeacion_compartida import es_guia
+    if es_guia(doc):
+        from services.planeacion_grupo_unico import clave,identificador,vigente
+        if not clave(doc):raise ValueError('Elige un solo grado y grupo para el Anexo XIX compartido.')
+        existente=vigente(doc,versiones_actuales())
+        if existente:
+            autorizar(existente,True)
+            return existente
+        doc['id']=identificador(doc)
     from services.planeacion_equipo import preparar
     return preparar(doc)
 
@@ -204,7 +216,9 @@ def _versiones():
 
 def listar(todas_versiones=False):
     actor=identidad(); resultado=[]
-    for doc in versiones_actuales():
+    from services.planeacion_grupo_unico import documentos
+    versiones=versiones_actuales()
+    for doc in versiones if todas_versiones else documentos(versiones):
         if not actor['director'] and doc.get('cuenta')!=actor['cuenta']:
             continue
         if not todas_versiones:
@@ -309,6 +323,13 @@ def _conciliar_otros_intentos(documento,clave):
 
 def guardar(doc, estado='BORRADOR', observaciones=None):
     actor=autorizar(doc,True)
+    from services.planeacion_grupo_unico import clave
+    grupo=clave(doc)
+    if grupo:
+        if actor['area']!='Aprendizaje' and not actor['director']:raise PermissionError('Solo apoyo inicia el Anexo XIX; los especialistas aportan a su columna.')
+        # Incluye borradores antiguos que todavía traen UUID aleatorio.
+        with candado('grupo:'+json.dumps(grupo)):
+            return _guardar_version(doc,actor,estado,observaciones)
     return _guardar_version(doc,actor,estado,observaciones)
 
 
@@ -330,8 +351,21 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         _conciliar_otros_intentos(doc['id'],clave)
         confirmado=_resolver_intento(clave,firma)
         if confirmado is not None:return confirmado
-        versiones=[v for v in versiones_actuales() if v['id']==doc['id']]
+        instantanea=versiones_actuales()
+        versiones=[v for v in instantanea if v['id']==doc['id']]
         latest=versiones[-1] if versiones else None
+        requiere_conciliacion=False
+        from services.planeacion_compartida import es_guia
+        if es_guia(doc):
+            from services.planeacion_grupo_unico import vigente
+            unico=vigente(doc,instantanea)
+            if unico and unico['id']!=doc['id']:
+                raise RuntimeError('Este formato ya está reunido en un único Anexo XIX del grupo. Tu texto se conserva: respáldalo y abre el documento de Planeaciones del equipo antes de continuar.')
+            if unico:
+                requiere_conciliacion=latest is not None and _firma_guardado(latest,latest['estado'],None)!=_firma_guardado(unico,unico['estado'],None)
+                latest=unico
+                if doc['metadatos'].get('unificacion_grupal')!=latest['metadatos'].get('unificacion_grupal'):
+                    raise RuntimeError('Se recuperaron aportes de otro documento del grupo. Conserva tu texto y abre la hoja unificada antes de guardar.')
         if latest and doc['metadatos'].get('borrador_eliminado') and latest['estado']!='BORRADOR':
             raise PermissionError('El documento ya fue enviado o revisado; no se puede eliminar como borrador.')
         if restauracion and (not latest or not latest['metadatos'].get('borrador_eliminado')):
@@ -342,6 +376,10 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         if expected!=doc.get('revision',''):
             base=next((v for v in versiones if v['revision']==doc.get('revision')),None)
             if not aportacion and base and actor['cuenta']==doc['cuenta']:
+                if es_guia(doc):
+                    from services.planeacion_grupo_unico import conciliar
+                    fuentes=latest['metadatos'].get('unificacion_grupal',{}).get('fuentes',{})
+                    base=conciliar(base,[v for v in instantanea if fuentes.get(v['id'])==v['revision']]) if fuentes else base
                 from services.planeacion_compartida import conciliar_autor
                 doc=conciliar_autor(doc,base,latest)
             else:raise RuntimeError('Otra sesión guardó cambios. Tu edición sigue aquí; guarda un respaldo y recupera la versión reciente.')
@@ -373,7 +411,7 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
         saved['metadatos']['firma_aprobada_por']=actor['nombre'] if estado=='VALIDADO' else ''
         if actor['director']:
             saved['metadatos']['revisado_por']=actor['nombre']
-        if latest and _firma_guardado(saved,estado,None)==_firma_guardado(latest,estado,None):
+        if latest and not requiere_conciliacion and _firma_guardado(saved,estado,None)==_firma_guardado(latest,estado,None):
             return deepcopy(latest)
         revision=uuid4().hex
         fecha=datetime.now(ZoneInfo('America/Mexico_City')).isoformat(timespec='microseconds')
@@ -576,29 +614,17 @@ def preparar_contexto(doc):
     from services.planeacion_generacion import prellenar
     from services.planeacion_continuidad import actualizar_vinculos
     resultado=actualizar_vinculos(prellenar(resultado))
-    from services.planeacion_colaboracion import clave_guia
-    clave=clave_guia(resultado)
-    if clave:
-        origen=next((d for d in compartidos() if clave_guia(d)==clave),None)
-        if origen and origen['id']!=doc['id']:
-            from services.planeacion_modalidad import guia_grupal
-            guia=guia_grupal(origen)
-            ids={a['ID_Alumno'] for a in doc['datos']['Alumnos']}
-            guia['filas']=[r for r in guia['filas'] if r['ID_Alumno'] in ids]
-            nombres={a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
-            guia['as']=[r for r in guia.get('as',[]) if r.get('Nombre alumno') in nombres]
-            resultado['metadatos']['guia_compartida']={'documento':origen['id'],'revision':origen['revision']}
-            if resultado['metadatos'].get('guia_grupal_manual')!=guia:
-                resultado['metadatos']['guia_local_anterior']=resultado['metadatos'].get('guia_grupal_manual',{})
-                resultado['metadatos']['guia_grupal_manual']=guia
+    # El XIX se reutiliza por identidad en nueva(); nunca se clona su guía
+    # dentro de otro documento al actualizar los antecedentes.
     return resultado
 
 
 def compartidos():
     """Solo PI o guías de apoyo, con todos sus alumnos dentro de la asignación actual."""
-    from services.planeacion_colaboracion import compartible,clave_guia
+    from services.planeacion_colaboracion import compartible
+    from services.planeacion_grupo_unico import documentos
     resultado=[]
-    for doc in {d['id']:d for d in versiones_actuales()}.values():
+    for doc in documentos(versiones_actuales()):
         from services.planeacion_compartida import proyectar_retiros
         doc=proyectar_retiros(doc,padron_autorizado())
         if not compartible(doc):continue
@@ -616,6 +642,8 @@ def guardar_aportacion(doc,filas,observaciones):
         actual=next((d for d in compartidos() if d['id']==doc['id']),None)
         if not actual:raise PermissionError('No hay un documento compartido autorizado.')
         area=actor['area']
+        if area in actual['metadatos'].get('unificacion_grupal',{}).get('conflictos_area',[]):
+            raise RuntimeError('Se conservaron aportaciones de dos cuentas de tu área. Dirección debe conciliar su autoría antes de editar esa columna; ninguna aportación se ha borrado.')
         if doc['metadatos'].get('aportaciones_equipo',{}).get(area)!=actual['metadatos'].get('aportaciones_equipo',{}).get(area):
             raise RuntimeError('Otra sesión cambió tu área. Tu aportación se conserva; revisa la versión reciente antes de conciliar.')
         updated=aportar(actual,actor,filas,observaciones)

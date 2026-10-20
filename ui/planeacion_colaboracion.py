@@ -105,6 +105,8 @@ def panel(prefix):
     por_id={d['id']:d for d in docs}
     did=st.selectbox('Documento compartido · grado, grupo e identificador',sorted(por_id),format_func=lambda i:etiqueta_selector(por_id[i]),key=prefix+'_id')
     doc=por_id[did]
+    if doc['metadatos'].get('unificacion_grupal',{}).get('fuentes'):
+        st.caption('Documento único del grupo: reúne el trabajo previo sin borrar sus documentos de origen. Todos los integrantes abren esta misma hoja.')
     st.caption('Último guardado: '+doc.get('guardado_en','por confirmar'))
     if es_guia(doc) and not actor['director']:
         if st.button('Abrir Anexo XIX compartido',key=prefix+'_abrir'):

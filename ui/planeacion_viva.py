@@ -98,6 +98,7 @@ def _entrada(base,actor):
     elif tipo=='individual' and len(ids)>1 and actor['area']=='Aprendizaje':
         st.caption('El Plan de intervención anual se elabora por alumno y conserva su IEPP; esta selección abre la planeación trimestral.')
     st.caption(f'Curso {ciclo}–{ciclo+1} · Trimestre {trimestre}. Se reúnen los antecedentes propios de los alumnos seleccionados.')
+    if presentacion=='guia':st.caption('Un único documento por escuela, grado, grupo y trimestre. Si ya existe, se continúa el mismo; no se crea otra copia.')
     if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear'):
         try:
             elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]

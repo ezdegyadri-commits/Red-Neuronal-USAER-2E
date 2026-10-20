@@ -62,13 +62,16 @@ def panel(prefix):
                     try:_guardar(prefix,e.reordenar(doc,tabla,indice,delta));st.rerun()
                     except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
         elif opcion=='Alumnos o periodo · copia adaptada':
+            from services.planeacion_compartida import es_guia
+            if es_guia(doc):st.info('El Anexo XIX del mismo grupo y trimestre es único: edita aquí o continúa la hoja del equipo. Una copia solo se permite para otro grupo/periodo; los subgrupos de varios grados usan el formato trimestral, no otra guía XIX.')
             st.caption('Cambiar alumnos o periodo crea otro borrador vinculado al original. Solo reutiliza propuestas de actividades, recursos y referentes oficiales. No copia resultados, NEE, evaluaciones, firmas ni aportaciones. Revisa la pertinencia de cada actividad.')
             frame=s.padron_autorizado()
             frame=frame.loc[frame['ID_Escuela'].map(clave_escuela)==clave_escuela(doc['datos']['ID_Escuela'])]
             nombres={str(r['ID_Alumno']):str(r['Nombre_Completo']) for r in frame.to_dict('records')}
             previos=[str(a['ID_Alumno']) for a in doc['datos']['Alumnos'] if str(a['ID_Alumno']) in nombres]
             ids=st.multiselect('Alumnos de la copia adaptada',list(nombres),default=previos,format_func=nombres.get,key=prefix+'_copia_alumnos')
-            tipo=st.radio('Modalidad de la copia',['individual','grupal'],index=1 if modalidad_documento(doc,frame)=='grupal' else 0,key=prefix+'_copia_modalidad')
+            tipo=st.radio('Modalidad de la copia',['individual','grupal'],index=1 if modalidad_documento(doc,frame) in ('grupal','especialista') else 0,key=prefix+'_copia_modalidad')
+            if s.identidad()['area'] in ('Comunicación','Psicología','Trabajo Social'):st.caption('La copia usa tu formato propio de especialista; no crea otra guía XIX del grupo.')
             incluir=st.checkbox('Incluir alumnos individuales en esta copia grupal',key=prefix+'_copia_incluir') if tipo=='grupal' else False
             ciclo=st.number_input('Ciclo de la copia (año de inicio)',2020,2040,int(doc['datos']['Curso escolar'][:4]),key=prefix+'_copia_ciclo')
             trimestre=st.selectbox('Trimestre de la copia',[1,2,3],index=int(doc['datos']['Trimestre'])-1,key=prefix+'_copia_trimestre')

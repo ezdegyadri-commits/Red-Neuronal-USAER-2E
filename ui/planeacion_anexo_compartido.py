@@ -7,7 +7,7 @@ from services.planeacion_colaboracion import aportar
 
 @st.fragment(run_every=10)
 def panel(prefix,doc):
-    from ui.planeacion_papel import editor
+    from ui.planeacion_papel import editor,refrescar_editor
     from ui.planeacion_colaboracion import _guardar
     actor=s.identidad();base=prefix+'_'+doc['id']+'_'+actor['area']
     if base+'_doc' not in st.session_state:
@@ -25,6 +25,15 @@ def panel(prefix,doc):
             st.session_state[base+'_doc']=actual
     except Exception:
         st.caption('No se pudo actualizar el equipo en este momento. Tu hoja permanece abierta; se reintentará.')
+    propio=actual['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
+    if actor['area'] in actual['metadatos'].get('unificacion_grupal',{}).get('conflictos_area',[]) or propio and propio.get('cuenta')!=actor['cuenta']:
+        st.warning('Los aportes de esta columna se conservaron, pero su autoría requiere revisión de Dirección. La hoja queda disponible para lectura; no se reemplazará trabajo de otra cuenta.')
+        editor(hoja=papel.hoja(actual,colaborativa=True),key=base+'_hoja',default=None)
+        import json
+        st.download_button('Respaldar mi texto pendiente',json.dumps({'filas':st.session_state[base+'_filas'],'observaciones':st.session_state[base+'_obs']},ensure_ascii=False),file_name='aporte-pendiente.json',key=base+'_respaldo_conflicto')
+        if st.button('Regresar a los grupos',key=base+'_volver_conflicto'):
+            st.session_state.pop(prefix+'_abierto',None);st.rerun(scope='app')
+        return
     activos={str(a['ID_Alumno']) for a in actual['datos']['Alumnos']}
     retirados=[r for r in st.session_state[base+'_filas'] if str(r.get('ID_Alumno')) not in activos]
     if retirados:
@@ -65,12 +74,12 @@ def panel(prefix,doc):
                 if not st.session_state.get(base+'_pending'):
                     st.session_state.pop(prefix+'_abierto',None)
                     st.rerun(scope='app')
-            st.rerun()
+            refrescar_editor()
         except (ValueError,PermissionError,RuntimeError) as exc:
             st.session_state[base+'_nonce']=event.get('nonce')
             st.session_state[base+'_rechazado']=event.get('nonce')
             st.session_state[base+'_error_hoja']=str(exc)
-            st.rerun()
+            refrescar_editor()
     if st.session_state.get(base+'_error'):st.warning(st.session_state[base+'_error'])
     elif st.session_state.get(base+'_pending'):st.caption('Guardado pendiente de confirmación. Puedes seguir escribiendo; conserva esta pestaña abierta.')
     else:st.caption('Guardado confirmado · '+actual.get('guardado_en','sin cambios')[:19])
@@ -83,7 +92,7 @@ def panel(prefix,doc):
         if not st.session_state.get(base+'_pending'):
             s.refrescar()
             reciente=next((d for d in s.compartidos() if d['id']==doc['id']),None)
-            if reciente:st.session_state[base+'_doc']=reciente;st.rerun()
+            if reciente:st.session_state[base+'_doc']=reciente;refrescar_editor()
     with st.expander('Reutilizar actividades de mi formato de especialista'):
         candidatos=[d for d in s.listar() if d['datos']['ID_Escuela']==doc['datos']['ID_Escuela'] and d['datos']['Función']==actor['area']]
         if candidatos:
@@ -102,5 +111,5 @@ def panel(prefix,doc):
                     row=next((r for r in rows if r['ID_Alumno']==a['ID_Alumno']),None)
                     if row is None:row={k:'' for k in COLUMNAS};row['ID_Alumno']=a['ID_Alumno'];rows.append(row)
                     if not row.get('Texto en formato') and not row.get('Actividad / cómo trabajar'):row['Texto en formato']='\n\n'.join(textos)[:4000]
-                st.session_state[base+'_filas']=rows;_guardar(base);st.rerun()
+                st.session_state[base+'_filas']=rows;_guardar(base);refrescar_editor()
         else:st.caption('Tu formato de especialista conserva las conexiones al expediente, PDA, DUA y propuestas de IA en «Mi formato».')

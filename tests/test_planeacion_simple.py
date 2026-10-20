@@ -160,7 +160,8 @@ class RecorridoTests(unittest.TestCase):
         self.assertEqual(len(app.session_state.versiones_ficticias),count)
 
     def test_director_conserva_revision_y_colaboracion(self):
-        app=self.abrir('Dirección')
+        app=self.abrir()
+        app.radio[0].set_value('Dirección').run()
         self.assertFalse(app.exception)
         self.assertEqual({t.label for t in app.tabs},{'Mi planeación','Trabajo colaborativo','Revisión directiva'})
         self.assertTrue(any(b.label=='Validar revisión' for b in app.button))
