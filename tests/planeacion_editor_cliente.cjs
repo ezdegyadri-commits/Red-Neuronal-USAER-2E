@@ -35,24 +35,25 @@ function fixture(backup, referrer='https://usaer.test/', native=false) {
     setInterval: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay, interval: true }); return id; }, clearInterval: id => timers.delete(id),
     queueMicrotask: fn => fn(), ResizeObserver: class { observe() {} disconnect() {} },
     window: { addEventListener: (type, fn) => { listeners[type] = fn; },removeEventListener: type => { delete listeners[type]; } } };
-  let component,host;
+  let component,host,cleanup;
+  const cleanups=[];
   if(native){
     host={querySelector: selector=>nodes.get(selector.slice(1)),activeElement:null};
     component={parentElement:host,data:{},setStateValue:(name,value)=>messages.push({type:'streamlit:setComponentValue',value})};
     const adapter=fs.readFileSync(path.join(__dirname,'../ui/planeacion_papel_component/native.js'),'utf8')
       .replace('export default function mount','function mount').replace('/* USAER_RENDERER */',script);
     vm.runInNewContext(adapter+'\nthis.mountNative=mount;',context);
-    context.mountNative(component);
+    cleanup=context.mountNative(component);cleanups.push(cleanup);
   }else vm.runInNewContext(script, context);
   function render(hoja, extra = {}, source = parent, origin='https://usaer.test') {
-    if(native){component.data={hoja,...extra};context.mountNative(component)}
+    if(native){component.data={hoja,...extra};cleanup=context.mountNative(component);cleanups.push(cleanup)}
     else listeners.message({source, origin, data:{type:'streamlit:render', args:{hoja,...extra}}});
   }
   function tick(delay) { const pending = [...timers]; for (const [id,t] of pending) if (t.delay === delay && timers.has(id)) { if (!t.interval) timers.delete(id); t.fn(); } }
   function input(value, id='c0') { const e=nodes.get('celda-'+id); e.textContent=value; e.handlers.input({}); root.handlers.input?.({}); }
   const events = () => messages.filter(m => m.type === 'streamlit:setComponentValue').map(m => m.value);
   return { nodes, root, tools, status, render, tick, input, events, messages, targets, cache, listeners, parent,
-    dispose:()=>host?.__usaerEditor.dispose(),timers };
+    dispose:()=>cleanup?.(),cleanups,timers };
 }
 function hoja(value='', fingerprint='base') {
   const a={id:'c0',value,label:'Actividad',editable:true}, b={id:'c1',value:'Sin valorar',label:'Valoración',editable:true,opciones:['Sin valorar','Logrado']};
@@ -140,6 +141,20 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   assert.equal(f.tools.children.length,controls);assert.equal(f.events().length,1);
   assert.equal(f.cache.has('usaer-hoja:ficticio'),false);
   f.dispose();assert.equal(f.timers.size,0);assert.equal(f.listeners.beforeunload,undefined);
+}
+// Cleanup tardío de un efecto anterior no desmonta el editor actualizado.
+{
+  const f=fixture(undefined,'https://usaer.test/',true);
+  f.render(hoja(),{guardado:'antes'});
+  const nodo=f.nodes.get('celda-c0');f.input('Sigo escribiendo');
+  f.render(hoja(),{guardado:'antes'});
+  for(const cleanup of f.cleanups.slice(0,-1))cleanup();
+  assert.equal(f.nodes.get('celda-c0'),nodo);
+  assert.equal(nodo.innerText,'Sigo escribiendo');
+  f.tick(4000);assert.equal(f.events().length,1);
+  assert.equal(f.events()[0].cambios.c0,'Sigo escribiendo');
+  assert.ok(f.cache.has('usaer-hoja:ficticio'));
+  f.dispose();assert.equal(f.timers.size,0);
 }
 // Un aporte de otra área se actualiza durante el envío, sin sustituir el nodo
 // activo ni el texto más reciente. Dos pestañas no comparten respaldo.

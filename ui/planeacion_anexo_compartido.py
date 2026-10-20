@@ -5,9 +5,37 @@ from services import planeacion as s,planeacion_papel as papel
 from services.planeacion_colaboracion import aportar
 
 
+def _preview(base,actor):
+    actual=st.session_state[base+'_doc']
+    preview=aportar(actual,actor,st.session_state[base+'_filas'],st.session_state[base+'_obs'])
+    previo=actual['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
+    preview['metadatos']['aportaciones_equipo'][actor['area']]['revision']=previo.get('revision','local')
+    preview['metadatos']['aportaciones_equipo'][actor['area']]['fecha']=previo.get('fecha','')
+    return preview
+
+
+def recibir_edicion(base,event):
+    """Valida y guarda el parche antes del único render del fragmento."""
+    from ui.planeacion_colaboracion import _guardar
+    if event.get('nonce')==st.session_state.get(base+'_nonce'):return
+    try:
+        filas,obs=papel.aplicar_aporte(_preview(base,s.identidad()),event,con_observaciones=True)
+        st.session_state[base+'_nonce']=event['nonce']
+        if filas!=st.session_state[base+'_filas'] or obs!=st.session_state[base+'_obs'] or event['accion']=='guardar':
+            st.session_state[base+'_filas']=filas;st.session_state[base+'_obs']=obs
+            _guardar(base,automatic=event['accion']=='autoguardar')
+        if not st.session_state.get(base+'_pending'):st.session_state[base+'_ack']=event['nonce']
+        st.session_state.pop(base+'_rechazado',None)
+        st.session_state.pop(base+'_error_hoja',None)
+    except (ValueError,PermissionError,RuntimeError) as exc:
+        st.session_state[base+'_nonce']=event.get('nonce')
+        st.session_state[base+'_rechazado']=event.get('nonce')
+        st.session_state[base+'_error_hoja']=str(exc)
+
+
 @st.fragment(run_every=10)
 def panel(prefix,doc):
-    from ui.planeacion_papel import editor,refrescar_editor
+    from ui.planeacion_papel import editor,refrescar_editor,lectura_equipo
     from ui.planeacion_colaboracion import _guardar
     actor=s.identidad();base=prefix+'_'+doc['id']+'_'+actor['area']
     if base+'_doc' not in st.session_state:
@@ -18,7 +46,7 @@ def panel(prefix,doc):
     actual=st.session_state[base+'_doc']
     st.session_state[base+'_intervalo']=15
     try:
-        reciente=next((d for d in s.compartidos() if d['id']==doc['id']),None)
+        reciente=lectura_equipo(base,doc['id'])
         if reciente:
             from services.planeacion_compartida import actualizar_lectura
             actual=actualizar_lectura(actual,reciente,actor['area'])
@@ -44,18 +72,15 @@ def panel(prefix,doc):
         st.caption('Las aportaciones de alumnos con baja o traslado se conservan en el historial y en tu respaldo; ya no se editan en la matrícula activa.')
     if st.session_state.get(base+'_pending'):_guardar(base,automatic=True)
     actual=st.session_state[base+'_doc']
-    preview=aportar(actual,actor,st.session_state[base+'_filas'],st.session_state[base+'_obs'])
-    # La revisión temporal del preview no participa en su huella: debe ser estable.
-    previo=actual['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
-    preview['metadatos']['aportaciones_equipo'][actor['area']]['revision']=previo.get('revision','local')
-    preview['metadatos']['aportaciones_equipo'][actor['area']]['fecha']=previo.get('fecha','')
-    st.caption('Escribe en '+actor['area']+' y pulsa «Guardar planeación» si deseas confirmar ahora. El autoguardado trabaja en segundo plano. Los aportes del equipo se actualizan sin cambiar tu grupo ni tu texto.')
+    preview=_preview(base,actor)
+    st.caption('Escribe en '+actor['area']+'. Tu hoja permanece abierta mientras se guardan los cambios y se reciben los aportes del equipo. Usa «Guardar planeación» para confirmar ahora.')
     event=editor(hoja=papel.hoja(preview,colaborativa=True),
         guardado=actual.get('guardado_en','') if not st.session_state.get(base+'_pending') else '',
         aceptado=st.session_state.pop(base+'_legacy_ack',False),
         aceptado_nonce=st.session_state.get(base+'_ack',''),
         rechazado=st.session_state.get(base+'_rechazado',''),
-        error=st.session_state.get(base+'_error_hoja',''),key=base+'_hoja',default=None)
+        error=st.session_state.get(base+'_error_hoja',''),key=base+'_hoja',default=None,
+        on_edicion=lambda event:recibir_edicion(base,event))
     if event and event.get('nonce')!=st.session_state.get(base+'_nonce'):
         try:
             filas,obs=papel.aplicar_aporte(preview,event,con_observaciones=True)
@@ -94,7 +119,9 @@ def panel(prefix,doc):
             reciente=next((d for d in s.compartidos() if d['id']==doc['id']),None)
             if reciente:st.session_state[base+'_doc']=reciente;refrescar_editor()
     with st.expander('Reutilizar actividades de mi formato de especialista'):
-        candidatos=[d for d in s.listar() if d['datos']['ID_Escuela']==doc['datos']['ID_Escuela'] and d['datos']['Función']==actor['area']]
+        if st.button('Consultar actividades de mi área',key=base+'_consultar_origen'):
+            st.session_state[base+'_candidatos']=[d for d in s.listar() if d['datos']['ID_Escuela']==doc['datos']['ID_Escuela'] and d['datos']['Función']==actor['area']]
+        candidatos=st.session_state.get(base+'_candidatos',[])
         if candidatos:
             from services.planeacion_compartida import etiqueta
             porid={d['id']:d for d in candidatos}
@@ -102,7 +129,8 @@ def panel(prefix,doc):
             st.caption('Reutiliza solo actividades vinculadas a los mismos alumnos. Puedes editarlas o borrarlas después; no se modificará el documento de origen.')
             if st.button('Proponer mi aporte con esas actividades',key=base+'_usar'):
                 from services.planeacion_colaboracion import COLUMNAS
-                origen=porid[did];propios={a['ID_Alumno'] for a in origen['datos']['Alumnos']};rows=deepcopy(st.session_state[base+'_filas'])
+                origen=porid[did];s.autorizar(origen)
+                propios={a['ID_Alumno'] for a in origen['datos']['Alumnos']};rows=deepcopy(st.session_state[base+'_filas'])
                 for a in doc['datos']['Alumnos']:
                     if a['ID_Alumno'] not in propios:continue
                     textos=[r.get('Actividades','') for r in origen['tablas'].get('dosificacion',[]) if r.get('Actividades') and
