@@ -35,4 +35,6 @@ def generar(resumen,formato,area,contexto,ajustes,aliases,evidencias):
     st.session_state.llamadas_ficticias+=1
     return resultado({'contexto':contexto,'aliases':aliases,'evidencias':evidencias},area)
 generador.generar_completa=generar
+from ui import planeacion as u
+st.session_state[u._prefix()+'_submodulo'] = 'revision' if actor['director'] else 'propio'
 planeacion_page()
