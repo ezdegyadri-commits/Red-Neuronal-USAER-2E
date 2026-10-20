@@ -41,8 +41,10 @@ def ficha(doc,alumno):
 
 def opciones_padron(frame,escuela,tipo,grado='',grupo='',incluir=False):
     from services.planeacion_modalidad import filtrar
-    rows=filtrar(frame,tipo,incluir)
-    rows=rows.loc[rows['ID_Escuela'].astype(str)==str(escuela)]
-    if grado:rows=rows.loc[rows['Grado'].astype(str)==str(grado)]
-    if grupo:rows=rows.loc[rows['Grupo'].astype(str)==str(grupo)]
+    from services.planeacion_matricula import preparar,clave_escuela
+    from utils.escolar import grado_canonico,grupo_canonico
+    rows=preparar(filtrar(frame,tipo,incluir))
+    rows=rows.loc[rows['ID_Escuela'].astype(str)==clave_escuela(escuela)]
+    if grado:rows=rows.loc[rows['Grado']==grado_canonico(grado)]
+    if grupo:rows=rows.loc[rows['Grupo']==grupo_canonico(grupo)]
     return rows.copy()

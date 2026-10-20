@@ -63,10 +63,10 @@ def identidad():
 
 def padron_autorizado():
     actor = identidad()
-    cache_key = f"_padron_autorizado_{actor['cuenta']}_{st.session_state.get('escuelas_permitidas','')}"
+    cache_key = f"_padron_autorizado_grados_v2_{actor['cuenta']}_{st.session_state.get('escuelas_permitidas','')}"
     cached = getattr(st, 'session_state', {}).get(cache_key)
     if cached is not None:
-        return cached.copy()
+        return preparar_matricula(cached)
     # Diego usa su identidad canónica aunque Usuarios haya abreviado la función.
     rol = 'TRABAJO SOCIAL' if actor['area']=='Trabajo Social' else actor['rol']
     frame = preparar_matricula(alumnos_visibles(rol, st.session_state.get('escuelas_permitidas',''), actor['nombre']))
