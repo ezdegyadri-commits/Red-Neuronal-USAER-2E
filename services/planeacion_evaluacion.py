@@ -11,7 +11,7 @@ def filas(doc):
     prev=doc['metadatos'].get('escala_trimestral',{})
     rows=deepcopy(prev.get('filas',[]));presentes={r.get('_origen') for r in rows}
     borrados=set(prev.get('retirados',[]))
-    for tabla,clave in [('aprendizajes','Descriptor de logro'),('necesidades','Descriptor de Logro'),('curriculo','Descriptor de logro')]:
+    for tabla,clave in [('aprendizajes','Descriptor de logro'),('necesidades','Descriptor de Logro'),('curriculo','Descriptor de logro'),('dosificacion','_indicador_propuesto')]:
         for r in doc['tablas'].get(tabla,[]):
             indicador=str(r.get(clave,'') or '').strip()
             if not indicador:continue
