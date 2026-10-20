@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "ID_Registro": "DOC-C0ADE501",
+    "Fecha_Registro": "2026-10-20T08:45:46-06:00",
+    "Ciclo_Escolar": "2026 – 2027",
+    "ID_Escuela": "ESC-001",
+    "Nombre_Escuela": "Damián Carmona",
+    "Turno": "Matutino",
+    "Grado": "3°",
+    "Grupo": "B",
+    "Nombre_Docente": "Docente Prueba Test",
+    "Telefono": "9991234567",
+    "Email": "",
+    "Observaciones": ""
+  },
+  {
+    "ID_Registro": "DOC-DB280F6C",
+    "Fecha_Registro": "2026-10-20T08:45:46-06:00",
+    "Ciclo_Escolar": "2026 – 2027",
+    "ID_Escuela": "ESC-006",
+    "Nombre_Escuela": "Manuel Sarrado",
+    "Turno": "Matutino",
+    "Grado": "1°",
+    "Grupo": "A",
+    "Nombre_Docente": "Mtra. Ana",
+    "Telefono": "",
+    "Email": "",
+    "Observaciones": ""
+  },
+  {
+    "ID_Registro": "DOC-C6BD5C74",
+    "Fecha_Registro": "2026-10-20T08:45:46-06:00",
+    "Ciclo_Escolar": "2026 – 2027",
+    "ID_Escuela": "ESC-006",
+    "Nombre_Escuela": "Manuel Sarrado",
+    "Turno": "Matutino",
+    "Grado": "2°",
+    "Grupo": "A",
+    "Nombre_Docente": "Mtro. Beto",
+    "Telefono": "",
+    "Email": "",
+    "Observaciones": ""
+  }
+]

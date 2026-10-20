@@ -75,12 +75,14 @@ class DocentesRegularesTests(TestCase):
 
 class AppPublicaTests(TestCase):
     def test_formulario_publico_sin_login(self):
-        app = AppTest.from_file("app.py", default_timeout=30)
+        from pathlib import Path
+        app_path = str(Path(__file__).parents[1] / "app.py")
+        app = AppTest.from_file(app_path, default_timeout=30)
         app.query_params["p"] = "docentes"
         app.run()
         self.assertFalse(app.exception)
         # Debe haber renderizado el título del formulario público
-        self.assertTrue(any("Directorio de Maestros de Grupo" in str(m.value) for m in app.markdown))
+        self.assertTrue(any("Maestros de Grupo de Primaria" in str(m.value) for m in app.markdown))
         # Debe tener el botón de guardar
         botones = [b for b in app.button if "Guardar" in b.label]
         self.assertTrue(len(botones) >= 1)
