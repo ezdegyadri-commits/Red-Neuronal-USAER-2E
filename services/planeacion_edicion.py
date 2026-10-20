@@ -67,9 +67,15 @@ def copiar(doc,ids,ciclo,trimestre,grupal=False,incluir_individuales=False):
     tipo='grupal' if grupal else 'individual'
     if doc['formato']=='XXI' and not grupal and len(ids)!=1:raise ValueError('El Plan de intervención anual conserva un solo alumno y su IEPP.')
     formato=('XXIII' if doc['formato']=='XXI' and grupal else doc['formato'])
-    nuevo=s.nueva(formato,ids,int(ciclo),int(trimestre),modalidad=tipo,incluir_individuales=incluir_individuales)
+    vista=None
+    if grupal and actor['area']=='Aprendizaje':
+        from utils.escolar import grado_canonico,grupo_canonico
+        grupos={(grado_canonico(r.get('Grado')),grupo_canonico(r.get('Grupo'))) for r in rows.to_dict('records')}
+        vista='guia' if len(grupos)==1 else 'trimestral'
+    if grupal and actor['area'] in ('Comunicación','Psicología','Trabajo Social'):tipo='especialista'
+    nuevo=s.nueva(formato,ids,int(ciclo),int(trimestre),modalidad=tipo,incluir_individuales=incluir_individuales,vista_formato=vista)
     if nuevo.get('revision'):
-        raise ValueError('Ya existe un Plan de Intervención para ese alumno y ciclo. Abre el existente o elige otro ciclo.')
+        raise ValueError('Ya existe el documento para esos destinatarios y periodo. El Anexo XIX del mismo grupo y trimestre no se duplica: continúa la hoja del equipo o elige otro periodo.')
     # Solo propuestas de actividad y recursos. No copiar necesidades, resultados,
     # firmas, evaluaciones, evidencias, materiales ni aportaciones de terceros.
     if formato==doc['formato']:

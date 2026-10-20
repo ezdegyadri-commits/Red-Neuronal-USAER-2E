@@ -1,8 +1,11 @@
 """Editor sobre el formato, sin tablas de aplicación ni escritura externa desde JS."""
 from pathlib import Path
 import re
+import threading
+from weakref import WeakKeyDictionary
 import streamlit as st
 import streamlit.components.v2 as components
+from streamlit.components.v2.get_bidi_component_manager import get_bidi_component_manager as _registro_componentes
 from services import planeacion_papel as papel
 
 
@@ -21,14 +24,34 @@ def _evento_editor():
     """El valor persistente llega al mismo validador y deduplicación de nonce."""
 
 
+_COMPONENTES=WeakKeyDictionary()
+_COMPONENT_LOCK=threading.RLock()
+
+
+def _componente_editor():
+    # El registro pertenece al runtime activo, no a la sesión ni a un caché
+    # global que pueda sobrevivir al reemplazo de ese runtime (AppTest/reinicio).
+    registro=_registro_componentes()
+    with _COMPONENT_LOCK:
+        if registro not in _COMPONENTES:
+            html,css,js=_definicion_editor()
+            _COMPONENTES[registro]=components.component('usaer_formato_vivo_integrado_v1',html=html,css=css,js=js,isolate_styles=True)
+        return _COMPONENTES[registro]
+
+
 def editor(*,key,default=None,**datos):
-    html,css,js=_definicion_editor()
-    render=components.component('usaer_formato_vivo_integrado_v1',html=html,css=css,js=js,isolate_styles=True)
+    render=_componente_editor()
     result=render(key=key,data=datos,default={'evento':None},on_evento_change=_evento_editor,height='content')
     return result.get('evento',default)
 
 
-@st.fragment(run_every=10)
+def refrescar_editor():
+    """Eventos/ticks reales actualizan solo su fragmento; entrada completa compatible."""
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+    ctx=get_script_run_ctx()
+    st.rerun(scope='fragment' if ctx and ctx.fragment_ids_this_run else 'app')
+
+
 def _sincronizar_equipo(prefix):
     from ui import planeacion as u
     from services.planeacion_compartida import es_guia,actualizar_aportes_autor
@@ -40,11 +63,11 @@ def _sincronizar_equipo(prefix):
             nuevo=actualizar_aportes_autor(doc,latest)
             if nuevo!=doc:
                 st.session_state[prefix+'_doc']=nuevo
-                st.rerun(scope='app')
     except Exception:
         st.caption('La actualización del equipo se reintentará. Tu edición se conserva.')
 
 
+@st.fragment(run_every=10)
 def hoja(prefix,volver=None):
     from ui import planeacion as u
     doc=st.session_state[prefix+'_doc']
@@ -59,7 +82,7 @@ def hoja(prefix,volver=None):
             if st.button('Regresar al inicio',key=prefix+'_grupo_cerrado'):
                 if volver:volver()
                 else:st.session_state[prefix.rsplit('_',1)[0]+'_viva_entrada']=True
-                st.rerun()
+                st.rerun(scope='app')
             return
         if altas>0:ampliado=u.servicio.preparar_contexto(ampliado)
         u._open(prefix,ampliado);st.session_state[prefix+'_pending']=True
@@ -67,7 +90,9 @@ def hoja(prefix,volver=None):
         if altas>0:st.info('Se añadieron las altas grupales nuevas del mismo grado y grupo. Las filas y aportes anteriores se conservan.')
         elif altas<0:st.info('La matrícula activa refleja las bajas y traslados confirmados. Las filas y aportes anteriores se conservan en el historial.')
     u.servicio.autorizar(doc,True)
-    u._autosave(prefix)
+    # Guardado y lectura remota viven en el mismo fragmento que la hoja:
+    # ninguna pausa de escritura desmonta el módulo completo.
+    if st.session_state.get(prefix+'_pending'):u._persist(prefix,automatic=True)
     doc=st.session_state[prefix+'_doc']
     event=editor(hoja=papel.hoja(doc),guardado=doc.get('guardado_en','') if not st.session_state.get(prefix+'_pending') else '',
         aceptado=st.session_state.pop(prefix+'_papel_legacy',False),
@@ -102,22 +127,25 @@ def hoja(prefix,volver=None):
                     st.session_state[prefix+'_papel_aviso']='Tu edición sigue abierta: no se confirmó aún el guardado. Se reintentará automáticamente.'
                 elif volver:volver()
                 else:st.session_state[prefix.rsplit('_',1)[0]+'_viva_entrada']=True
+                if not st.session_state.get(prefix+'_pending'):st.rerun(scope='app')
             if action=='apartados' and nuevo==doc:st.session_state[prefix+'_papel_aviso']='No hay nuevos vacíos vinculados con datos suficientes para proponer. Tu redacción se conserva; puedes conectar antecedentes o elegir referentes sin redactar de nuevo.'
             if not st.session_state.get(prefix+'_pending'):
                 st.session_state[prefix+'_papel_aceptado']=event['nonce']
                 st.session_state[prefix+'_papel_legacy']=True
-            st.rerun()
+            refrescar_editor()
         except (ValueError,PermissionError,RuntimeError) as exc:
             st.session_state[prefix+'_papel_nonce']=event.get('nonce')
             st.session_state[prefix+'_papel_rechazado']=event.get('nonce')
             st.session_state[prefix+'_papel_error']=str(exc)
-            st.rerun()
+            refrescar_editor()
     if st.session_state.get(prefix+'_papel_aviso'):st.info(st.session_state.pop(prefix+'_papel_aviso'))
+    if st.session_state.get(prefix+'_error'):st.warning(st.session_state[prefix+'_error'])
+    elif st.session_state.get(prefix+'_pending'):st.caption('Guardado pendiente. Tu texto permanece protegido en esta pestaña.')
     if doc['metadatos'].get('propuestas_apartados'):st.caption(doc['metadatos']['propuestas_apartados']['aviso'])
     action=st.session_state.get(prefix+'_papel_panel')
     if action:
         with st.expander('Conexión con este formato',expanded=True):
-            if st.button('Cerrar conexión y seguir en mi hoja',key=prefix+'_papel_cerrar'):st.session_state.pop(prefix+'_papel_panel',None);st.rerun()
+            if st.button('Cerrar conexión y seguir en mi hoja',key=prefix+'_papel_cerrar'):st.session_state.pop(prefix+'_papel_panel',None);refrescar_editor()
             from ui import planeacion_viva as viva
             current=st.session_state[prefix+'_doc']
             if action.startswith('tabla:'):
@@ -125,7 +153,7 @@ def hoja(prefix,volver=None):
                 tabla=action.split(':',1)[1]
                 if st.button('Añadir fila para completar',key=prefix+'_corregir_nueva_'+tabla):
                     from services.planeacion_formato import nueva_fila
-                    u._open(prefix,nueva_fila(current,tabla));u._persist(prefix);st.rerun()
+                    u._open(prefix,nueva_fila(current,tabla));u._persist(prefix);refrescar_editor()
                 _tabla(prefix,tabla,u._persist,u._open)
             elif action=='datos':u._text(prefix,'datos','CCT','CCT de la escuela')
             elif action=='antecedentes':

@@ -28,6 +28,8 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
         from services.planeacion_colaboracion import compartible
         if not compartible(doc) or actor.get('area') not in ('Psicología','Comunicación','Trabajo Social') or actor.get('director'):
             raise PermissionError('Esta vista permite aportar solo al área asignada del Anexo XIX.')
+    aporte_propio=doc['metadatos'].get('aportaciones_equipo',{}).get(actor.get('area'),{})
+    bloqueada=colaborativa and (actor['area'] in doc['metadatos'].get('unificacion_grupal',{}).get('conflictos_area',[]) or bool(aporte_propio and aporte_propio.get('cuenta')!=actor['cuenta']))
     firma=huella(doc);doc=normalizar(doc)
     cells={};tables=[]
     def celda(value,target=None,label='',readonly='',destinatario=''):
@@ -39,7 +41,7 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
     organizacion=doc['metadatos'].get('equipo',{}) if equipo.aplica(doc) else {}
     curricular='\n\n'.join('Contenido: '+r['contenido']+'\nPDA: '+r['pda']+'\n'+r['fuente']+' · p. '+str(r['pagina_pdf']) for r in cur.get('referentes_por_grado',[]))
     if grupal:
-        rows=guia_grupal(doc)['filas'];permitidos=[actor['area']] if colaborativa else viva.campos_guia(doc)
+        rows=guia_grupal(doc)['filas'];permitidos=[] if bloqueada else [actor['area']] if colaborativa else viva.campos_guia(doc)
         tables.append({'id':'guia','title':'','headers':GUIA_XIX,'rows':[[celda(row.get(c,''),('aporte' if colaborativa else 'guia',i,c) if c in permitidos else None,c,destinatario=row['ID_Alumno']) for c in GUIA_XIX] for i,row in enumerate(rows)],'add':False,'delete':False,'widths':[14,12,9,14,12,12,12,8,7]})
     if doc['formato']=='XXV':
         tables.append({'id':'alumnos_ts','title':'','headers':['Nombre del alumno','Grado','Grupo'],
@@ -86,7 +88,7 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
     textos=[celda(v,('texto',k),k) for k,v in doc['textos'].items() if not para_impresion or str(v or '').strip()] if not grupal else []
     if colaborativa:
         aporte=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
-        textos.append(celda(aporte.get('observaciones',''),('aporte_obs',),'Observaciones de mi área'))
+        textos.append(celda(aporte.get('observaciones',''),None if bloqueada else ('aporte_obs',),'Observaciones de mi área'))
     if datos['Función']=='Psicología' and organizacion and (not para_impresion or str(organizacion.get('sugerencia_familia','')).strip()):
         textos.append(celda(organizacion.get('sugerencia_familia',''),('equipo','sugerencia_familia'),'Sugerencia prevista para la familia y referencia de su hoja'))
     header=[['Zona: '+str(datos['Zona']),'Servicio de Apoyo: '+datos['Servicio de apoyo']],

@@ -174,8 +174,12 @@ class EdicionUITests(unittest.TestCase):
                 next(b for b in app.button if b.label=='Crear copia adaptada en borrador').click().run()
                 self.assertFalse(app.exception)
                 nuevo=app.session_state.versiones_ficticias[-1]
-                self.assertNotEqual(nuevo['id'],old)
-                self.assertEqual(nuevo['metadatos']['copia_de']['documento'],old)
+                if area=='Aprendizaje':
+                    self.assertEqual(nuevo['id'],old)
+                    self.assertTrue(any('no se duplica' in w.value for w in app.warning))
+                else:
+                    self.assertNotEqual(nuevo['id'],old)
+                    self.assertEqual(nuevo['metadatos']['copia_de']['documento'],old)
                 self.assertEqual(app.session_state.llamadas_ficticias,0)
 
     def test_fallo_ia_no_modifica_formato(self):
@@ -196,6 +200,7 @@ class EdicionUITests(unittest.TestCase):
     def test_reintento_de_copia_no_cambia_su_id_tras_fallo(self):
         app=self.abrir()
         next(w for w in app.selectbox if w.label=='¿Qué quieres modificar?').set_value('Alumnos o periodo · copia adaptada').run()
+        next(w for w in app.selectbox if w.label=='Trimestre de la copia').set_value(2).run()
         next(c for c in app.checkbox if c.label.startswith('Revisé que las actividades')).check().run()
         from ui import planeacion_edicion as ui
         pending=[]
