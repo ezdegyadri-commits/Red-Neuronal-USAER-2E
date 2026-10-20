@@ -170,9 +170,20 @@ class PapelUITests(unittest.TestCase):
                 self.assertEqual(spec['tables'][0]['headers'],headers[area])
 
     def test_evento_de_edicion_escribe_una_sola_version(self):
+        import json
+        from streamlit.proto.WidgetStates_pb2 import WidgetStates
         app=self.abrir('Trabajo Social');antes=len(app.session_state.versiones_ficticias)
-        next(t for t in app.text_area if t.label=='Actividades').set_value('Cambio dentro del documento')
-        next(b for b in app.button if b.label=='Guardar Planeación').click().run()
+        component=app.get('bidi_component')[0];spec=json.loads(component.proto.json)['hoja']
+        if not any(c['label']=='Actividades' and c['editable'] for c in spec['cells'].values()):
+            agregar=dict(documento=spec['documento'],huella=spec['huella'],nonce='nueva-fila',accion='agregar',tabla='dosificacion',cambios={})
+            states=WidgetStates();states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':agregar}))
+            app._run(states);self.assertFalse(app.exception)
+            antes=len(app.session_state.versiones_ficticias)
+            component=app.get('bidi_component')[0];spec=json.loads(component.proto.json)['hoja']
+        celda=next(k for k,c in spec['cells'].items() if c['label']=='Actividades' and c['editable'])
+        event=dict(documento=spec['documento'],huella=spec['huella'],nonce='edicion-directa',accion='guardar',cambios={celda:'Cambio dentro del documento'})
+        states=WidgetStates();states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':event}))
+        app._run(states)
         self.assertFalse(app.exception)
         self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
         self.assertTrue(any(r['Actividades']=='Cambio dentro del documento' for r in app.session_state.versiones_ficticias[-1]['tablas']['dosificacion']))

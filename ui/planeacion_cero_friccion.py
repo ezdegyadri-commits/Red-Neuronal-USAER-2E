@@ -141,6 +141,8 @@ def hoja(prefix,volver=None):
                 consent=st.checkbox(label,disabled=not preview,key=key+'_consent')
             st.caption(spec['firma']+' · '+spec['vobo']+' (sin firmas automáticas)')
         guardar=st.form_submit_button('Guardar Planeación',type='primary',use_container_width=True)
+        migrar=st.form_submit_button('Guardar y abrir la hoja de edición directa',use_container_width=True)
+        guardar=guardar or migrar
     if guardar:
         try:
             current=flujo.capturar(doc,spec,cambios,nuevas,retirar)
@@ -168,6 +170,7 @@ def hoja(prefix,volver=None):
             st.session_state[prefix+'_doc']=current
             estado='ENVIADO' if accion=='Guardar y enviar a Dirección' else 'BORRADOR'
             if u._persist(prefix,estado):
+                if migrar:st.session_state[prefix+'_editor_directo']=True
                 st.session_state[prefix+'_captura_preview']=preview_next
                 st.session_state[prefix+'_captura_generation']=generation+1
                 st.session_state[prefix+'_captura_aviso']=aviso_fuentes+(notice or 'Planeación guardada. Puedes seguir editando.')

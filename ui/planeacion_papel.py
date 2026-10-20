@@ -1,6 +1,7 @@
 """Editor sobre el formato, sin tablas de aplicación ni escritura externa desde JS."""
 from pathlib import Path
 import re
+import hashlib
 import threading
 import time
 from weakref import WeakKeyDictionary
@@ -45,7 +46,12 @@ def _componente_editor():
 
 def editor(*,key,default=None,on_edicion=None,**datos):
     render=_componente_editor()
-    result=render(key=key,data=datos,default={'evento':None},on_evento_change=lambda:_evento_editor(key,on_edicion),height='content')
+    stable='usaer_editor_'+hashlib.sha256(key.encode()).hexdigest()[:12]
+    # La hoja tiene su propio respaldo/acuse. Una lectura de equipo no debe
+    # atenuar su DOM persistente; no se alteran disabled, permisos ni avisos.
+    st.html('<style>.st-key-'+stable+' [data-stale="true"]{opacity:1!important}</style>')
+    with st.container(key=stable):
+        result=render(key=key,data=datos,default={'evento':None},on_evento_change=lambda:_evento_editor(key,on_edicion),height='content')
     return result.get('evento',default)
 
 
@@ -181,7 +187,7 @@ def hoja(prefix,volver=None):
     elif st.session_state.get(prefix+'_pending'):st.caption('Guardado pendiente. Tu texto permanece protegido en esta pestaña.')
     if doc['metadatos'].get('propuestas_apartados'):st.caption(doc['metadatos']['propuestas_apartados']['aviso'])
     action=st.session_state.get(prefix+'_papel_panel')
-    if action:
+    if action and action!='opciones':
         with st.expander('Conexión con este formato',expanded=True):
             if st.button('Cerrar conexión y seguir en mi hoja',key=prefix+'_papel_cerrar'):st.session_state.pop(prefix+'_papel_panel',None);refrescar_editor()
             from ui import planeacion_viva as viva
@@ -207,13 +213,10 @@ def hoja(prefix,volver=None):
                 key=prefix+'_papel_dua_'+str(st.session_state.get(prefix+'_generation',0))
                 st.text_area('Apoyos DUA y ajustes que deben guiar las actividades',value=config.get('apoyos',''),key=key,on_change=_ajuste,args=(prefix,key,'apoyos',u._persist))
             elif action=='ia':
-                st.markdown('#### Añadir actividades a esta planeación')
-                st.caption('Elige una ruta. Con IA, al generar se integran automáticamente al borrador. Sin IA, prepara la propuesta, revísala y pulsa «Incorporar actividades locales a mi formato». En ambos casos quedan editables en la hoja.')
-                from ui.planeacion_generacion import panel_generacion
                 if current['formato']=='XXI':u._ai(prefix,current)
-                else:panel_generacion(prefix,u._persist,u._open,compact=True)
-                from ui.planeacion_local import panel
-                panel(prefix)
+                else:
+                    from ui.planeacion_asistente import panel
+                    panel(prefix)
             elif action=='alumnos':
                 from ui.planeacion_edicion import panel
                 st.caption('Añade o retira destinatarios mediante una copia adaptada. Se conserva el documento previo y no se elimina ningún registro del padrón.')
@@ -234,14 +237,21 @@ def hoja(prefix,volver=None):
     st.caption('Autoguardado activo: al pausar la escritura se transmite el texto y se confirma el guardado recuperable. Si falla la conexión, conserva esta ventana abierta: se reintenta sin borrar tu trabajo. Guardar es también una opción manual.')
     from ui.planeacion_viva import _acciones
     from documents.planeacion_papel import generar_pdf
-    _acciones(prefix,pdf_provider=generar_pdf,acciones_hoja=True)
+    # Los expanders cerrados también ejecutan Python: no consultar versiones,
+    # generar descargas o montar herramientas hasta una petición explícita.
+    if action=='opciones' or st.session_state.get(prefix+'_mostrar_pdf'):
+        _acciones(prefix,pdf_provider=generar_pdf,acciones_hoja=True)
+        if st.button('Cerrar opciones y volver a mi hoja',key=prefix+'_cerrar_opciones'):
+            st.session_state.pop(prefix+'_papel_panel',None)
+            st.session_state.pop(prefix+'_mostrar_pdf',None);refrescar_editor()
 
 
 def presentar(prefix,volver=None):
-    # El formulario agrupado NO debe vivir en el fragmento periódico: desmontarlo
-    # cada diez segundos perdería datos todavía no enviados desde el navegador.
-    from services.planeacion_cero_friccion import aplica
-    if aplica(st.session_state[prefix+'_doc']):
+    # Compatibilidad: una sesión con el formulario antiguo conserva sus campos
+    # hasta un envío explícito. Las nuevas aperturas usan el documento directo.
+    doc=st.session_state[prefix+'_doc']
+    old=prefix+'_'+doc['id']+'_captura_'
+    if not st.session_state.get(prefix+'_editor_directo') and any(str(k).startswith(old) for k in st.session_state):
         from ui.planeacion_cero_friccion import hoja as captura
         return captura(prefix,volver)
     return hoja(prefix,volver)
