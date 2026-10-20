@@ -1638,15 +1638,20 @@ def eventos_page(df):
         date.today(),
         key="evento_fecha",
     )
+    MAX_CHARS_EVENTO = 4000
     evento = st.text_area(
         "¿Qué ocurrió? Incluye avances, acuerdos, apoyos y próximo paso.",
         height=180,
+        max_chars=MAX_CHARS_EVENTO,
         placeholder=(
             "Ejemplo: Se observó mayor participación durante la lectura. "
             "Se acordó mantener el apoyo visual y revisar avances en dos semanas."
         ),
         key="evento_descripcion",
     )
+    longitud_evento = len(st.session_state.get("evento_descripcion", ""))
+    st.caption(f"📝 Caracteres: {longitud_evento:,} / {MAX_CHARS_EVENTO:,} permitidos · El texto se conserva automáticamente mientras redactas.")
+
     especialista = st.text_input(
         "Quien registra el evento",
         nombre_usuario,
@@ -1764,6 +1769,7 @@ def eventos_page(df):
     st.success(
         "Evento guardado en su hoja Anexo V y vinculado al expediente concentrador."
     )
+    st.session_state.pop("evento_descripcion", None)
     st.download_button(
         "Descargar Anexo V en PDF carta",
         anexo5_pdf(datos, documento_actualizado),
@@ -2904,9 +2910,14 @@ def visitas_page(df):
             detalles_motivos = st.text_input(
                 "Participantes o tema de trabajo (opcional)", key="visita_detalles_reunion"
             )
+            MAX_CHARS_VISITA = 4000
+            if not st.session_state.get("visita_descripcion_reunion") and st.session_state.get("visita_descripcion"):
+                st.session_state["visita_descripcion_reunion"] = st.session_state["visita_descripcion"]
             descripcion_actividad = st.text_area(
-                "Temas tratados y acuerdos de trabajo", height=140, key="visita_descripcion_reunion"
+                "Temas tratados y acuerdos de trabajo", height=160, max_chars=MAX_CHARS_VISITA, key="visita_descripcion_reunion"
             )
+            cant_reunion = len(st.session_state.get("visita_descripcion_reunion", ""))
+            st.caption(f"📝 Caracteres: {cant_reunion:,} / {MAX_CHARS_VISITA:,} permitidos · El texto se conserva automáticamente mientras redactas.")
         else:
             st.markdown("### Motivo de la visita")
             col_mot1, col_mot2 = st.columns(2)
@@ -2937,10 +2948,15 @@ def visitas_page(df):
             detalles_motivos = st.text_input(
                 "Especifica nombres o detalles del motivo (opcional)", key="visita_detalles"
             )
+            MAX_CHARS_VISITA = 4000
+            if not st.session_state.get("visita_descripcion") and st.session_state.get("visita_descripcion_reunion"):
+                st.session_state["visita_descripcion"] = st.session_state["visita_descripcion_reunion"]
             descripcion_actividad = st.text_area(
-                "Breve descripción de las actividades desarrolladas", height=140,
+                "Breve descripción de las actividades desarrolladas", height=160, max_chars=MAX_CHARS_VISITA,
                 key="visita_descripcion"
             )
+            cant_visita = len(st.session_state.get("visita_descripcion", ""))
+            st.caption(f"📝 Caracteres: {cant_visita:,} / {MAX_CHARS_VISITA:,} permitidos · El texto se conserva automáticamente mientras redactas.")
 
         generar_acta = st.form_submit_button(
             "🖨️ Generar Constancia Oficial",

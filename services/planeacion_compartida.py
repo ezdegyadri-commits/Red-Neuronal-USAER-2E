@@ -12,13 +12,30 @@ def es_guia(doc):
             and doc['metadatos'].get('vista_formato')!='trimestral')
 
 
+def _fecha_corta(fecha_iso):
+    if not fecha_iso:
+        return ''
+    try:
+        val = str(fecha_iso)
+        if 'T' in val:
+            f, h = val.split('T', 1)
+            h_corta = h[:5]
+            partes = f.split('-')
+            if len(partes) == 3:
+                return f"{partes[2]}/{partes[1]} {h_corta}"
+        return val[:16]
+    except Exception:
+        return str(fecha_iso)[:16]
+
+
 def etiqueta(doc):
     grupos=sorted({grado_canonico(a.get('Grado'))+' '+grupo_canonico(a.get('Grupo')) for a in doc['datos']['Alumnos']})
-    return ' · '.join([doc['datos']['Escuela regular'],', '.join(grupos),
+    fecha = _fecha_corta(doc.get('guardado_en') or doc['datos'].get('Fecha de elaboración',''))
+    return ' · '.join(filter(None, [doc['datos']['Escuela regular'],', '.join(grupos),
         doc['datos']['Curso escolar'],'T'+str(doc['datos']['Trimestre']),
-        doc.get('guardado_en') or doc['datos'].get('Fecha de elaboración',''),
+        fecha,
         doc['datos']['Función'],doc['metadatos'].get('modalidad_planeacion','Por confirmar'),
-        str(len(doc['datos']['Alumnos']))+' alumno(s)'])
+        str(len(doc['datos']['Alumnos']))+' alumno(s)']))
 
 
 def etiqueta_selector(doc):

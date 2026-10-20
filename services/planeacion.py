@@ -139,7 +139,20 @@ def autorizar(doc, escribir=False, incluir_bajas=False, frame=None):
     if incluir_bajas and (faltantes or ajenos):
         from services.planeacion_compartida import lectura_grupal_historica
         if lectura_grupal_historica(doc,frame,actor,faltantes|ajenos):return actor
-    if faltantes:raise PermissionError('Este documento contiene alumnos fuera de tu asignación actual.')
+    if faltantes:
+        es_propio = (doc.get('cuenta') == actor['cuenta']) or actor['director']
+        if es_propio:
+            try:
+                escuela_doc = clave_escuela(doc['datos']['ID_Escuela'])
+                df_alumnos = repo.alumnos()
+                en_escuela = df_alumnos.loc[df_alumnos['ID_Escuela'].map(clave_escuela) == escuela_doc]
+                ids_en_escuela = set(en_escuela['ID_Alumno'].astype(str)) if 'ID_Alumno' in en_escuela.columns else set()
+                if faltantes.issubset(ids_en_escuela):
+                    faltantes = set()
+                    actuales = pd.concat([actuales, en_escuela.loc[en_escuela['ID_Alumno'].astype(str).isin(ids)]], ignore_index=True).drop_duplicates(subset=['ID_Alumno'])
+            except Exception:
+                pass
+        if faltantes:raise PermissionError('Este documento contiene alumnos fuera de tu asignación actual.')
     if set(actuales['ID_Escuela'].map(clave_escuela)) != {clave_escuela(doc['datos']['ID_Escuela'])}:
         from services.padron_movimientos import traslado_confirmado
         try:

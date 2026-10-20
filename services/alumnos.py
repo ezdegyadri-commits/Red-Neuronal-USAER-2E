@@ -12,6 +12,15 @@ DOCENTES_ICHC_AANZIHO = {
 }
 
 
+def _canonizar_docente_apoyo(valor):
+    docente = _nombre_docente(valor)
+    if "CECILIA" in docente:
+        return "MARIA CECILIA SOLIS VAZQUEZ"
+    if "MARYCRUZ" in docente or "CAAMAL" in docente:
+        return "MARYCRUZ CAAMAL CORAL"
+    return docente
+
+
 def _nombre_docente(valor):
     """Compara la identidad completa sin títulos como Mtra. o Maestra."""
     texto = normalizar_texto(valor)
@@ -23,13 +32,14 @@ def filtrar_alumnos_por_docente_compartido(df, nombre):
     """Separa las dos cuentas de apoyo de Ichcaanziho por asignación central explícita."""
     if df is None or df.empty:
         return pd.DataFrame() if df is None else df
-    docente = _nombre_docente(nombre)
+    docente = _canonizar_docente_apoyo(nombre)
     if docente not in DOCENTES_ICHC_AANZIHO:
         return df
     if "Maestra de Apoyo" not in df.columns:
         return df.iloc[0:0].copy()
-    asignaciones = df["Maestra de Apoyo"].fillna("").astype(str).map(_nombre_docente)
-    return df.loc[asignaciones.eq(docente)].copy()
+    asignaciones = df["Maestra de Apoyo"].fillna("").astype(str).map(_canonizar_docente_apoyo)
+    coincidentes = df.loc[asignaciones.eq(docente)].copy()
+    return coincidentes if not coincidentes.empty else df
 
 
 def _columnas_identidad_escuela(df):
