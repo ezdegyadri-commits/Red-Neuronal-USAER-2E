@@ -29,6 +29,12 @@ inject()
 # Instaladores móviles 1.0.0 disponibles en ingreso y barra lateral.
 install_metadata()
 
+# Acceso público directo para maestros y directores de primarias regulares
+if st.query_params.get("p") in ("docentes", "docentes_primaria", "maestros_regulares") or st.query_params.get("form") in ("docentes", "docentes_primaria"):
+    from ui.docentes_regulares_form import formulario_publico_docentes
+    formulario_publico_docentes()
+    st.stop()
+
 if not st.session_state.get("autenticado"):
     login()
     st.stop()
@@ -79,11 +85,11 @@ with st.sidebar:
     if perfil_cronograma and perfil_cronograma["area"] != "Dirección":
         menu += ["Cronograma mensual"]
     if "DIRECTOR" in rol.upper():
-        menu += ["Panel de Dirección", "Novedades de supervisión", "Constancias de visita"]
+        menu += ["Panel de Dirección", "Maestros de primaria", "Novedades de supervisión", "Constancias de visita"]
         if puede_dar_alta_alumnos(st.session_state.get("nombre", ""), rol):
             menu += ["Alta de alumnos"]
     elif "APOYO" in rol.upper():
-        menu += ["Horarios de apoyo"]
+        menu += ["Horarios de apoyo", "Maestros de primaria"]
         if puede_dar_alta_alumnos(st.session_state.get("nombre", ""), rol):
             menu += ["Alta de alumnos"]
         menu += ["Oficios de comisión", "Anexo VII Derivación"]
@@ -99,6 +105,7 @@ with st.sidebar:
         "Cronograma mensual": "Equipo especialista · Cronograma",
         "Horarios de apoyo": "Maestras de apoyo · Horarios y avisos",
         "Panel de Dirección": "Dirección · Panel",
+        "Maestros de primaria": "Directorio · Maestros de Primaria",
         "Trámites": "Trámites y solicitudes de expedientes",
         "Constancias de visita": "Equipo · Constancias de visita",
         "Alta de alumnos": "Alta de alumnos",
@@ -143,6 +150,10 @@ elif page=="Panel de Dirección":
             direccion_panel()
     horarios_apoyo_direccion()
     st.divider()
+    with st.expander("Directorio de Maestros de Grupo (7 Primarias)"):
+        from ui.docentes_regulares_form import vista_docentes_regulares_admin
+        vista_docentes_regulares_admin()
+    st.divider()
     configuracion_oficios_direccion()
     st.divider()
     st.subheader("Cronogramas del equipo")
@@ -160,6 +171,9 @@ elif page=="Panel de Dirección":
             cronogramas_page()
         with actividades:
             eventos_direccion()
+elif page=="Maestros de primaria":
+    from ui.docentes_regulares_form import vista_docentes_regulares_admin
+    vista_docentes_regulares_admin()
 elif page=="Constancias de visita": visitas_page(authorized)
 elif page=="Alta de alumnos": alta_page(authorized)
 elif page=="Oficios de comisión": oficios_comision_page()

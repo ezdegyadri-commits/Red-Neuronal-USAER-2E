@@ -15,7 +15,8 @@ BASE_HEADERS={
 'Registro_Visitas':['ID_Visita','Fecha','Escuela','Personal','Motivo','Observaciones','Evidencia','Estatus','Tipo_Acta','Lugar'],
 'Oficios_Comision':['ID_Oficio','Folio','Clave_Operacion','Fecha_Emision','Fecha_Comision','Escuela','ID_Escuela','Maestra_Apoyo','Director_Escuela','Asunto','Destino','Horario','Estado'],
 'Configuracion_Oficios':['ID_Configuracion','Fecha_Comision','Asunto','Destino','Horario','Actualizado_Por','Actualizado_En'],
-'Anexo7_Derivacion':['ID_Anexo7','Fecha','ID_Alumno','Escuela','Docente_Regular','Fecha_Nacimiento','Respuestas_JSON','Salud','Seguimiento_Medico','Aspecto_Relevante','Elaborado_Por']}
+'Anexo7_Derivacion':['ID_Anexo7','Fecha','ID_Alumno','Escuela','Docente_Regular','Fecha_Nacimiento','Respuestas_JSON','Salud','Seguimiento_Medico','Aspecto_Relevante','Elaborado_Por'],
+'Docentes_Regulares':['ID_Registro','Fecha_Registro','Ciclo_Escolar','ID_Escuela','Nombre_Escuela','Turno','Grado','Grupo','Nombre_Docente','Telefono','Email','Observaciones']}
 # Columna aditiva: ensure_headers conserva columnas y filas anteriores.
 BASE_HEADERS['Alumnos'].append('Fecha_Nacimiento')
 INTEGRATED_HEADERS={
