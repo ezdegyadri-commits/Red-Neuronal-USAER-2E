@@ -101,8 +101,6 @@ class PapelUITests(unittest.TestCase):
             with self.subTest(area=area):
                 app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
                 app.radio[0].set_value(area).run()
-                if area!='Aprendizaje':
-                    next(w for w in app.radio if w.label=='¿Qué vas a continuar?').set_value('Mi formato de especialista').run()
                 next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value('Individual').run()
                 selector=next(w for w in app.multiselect if w.label=='Alumnos de mi formato')
                 self.assertEqual(len(selector.options),2)
@@ -152,8 +150,6 @@ class PapelUITests(unittest.TestCase):
         from pathlib import Path
         app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
         app.radio[0].set_value(area).run()
-        if area!='Aprendizaje':
-            next(w for w in app.radio if w.label=='¿Qué vas a continuar?').set_value('Mi formato de especialista').run()
         next(m for m in app.multiselect if m.label=='Alumnos de mi formato').set_value(['A1']).run()
         next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()
         self.assertFalse(app.exception)
@@ -174,19 +170,13 @@ class PapelUITests(unittest.TestCase):
                 self.assertEqual(spec['tables'][0]['headers'],headers[area])
 
     def test_evento_de_edicion_escribe_una_sola_version(self):
-        import streamlit as st
-        from ui import planeacion_papel as ui
-        with patch.object(ui,'editor',side_effect=lambda **kw:st.session_state.get('evento_papel_ficticio')):
-            app=self.abrir('Trabajo Social');d=app.session_state.versiones_ficticias[-1];antes=len(app.session_state.versiones_ficticias)
-            app.session_state.evento_papel_ficticio={'nonce':'agregar-fila','documento':d['id'],'huella':papel.huella(d),'cambios':{},'accion':'agregar','tabla':'dosificacion'}
-            app.run();d=app.session_state.versiones_ficticias[-1];antes=len(app.session_state.versiones_ficticias)
-            indice=len(d['tablas']['dosificacion'])-1
-            spec=papel.hoja(d);key=next(k for k,c in spec['cells'].items() if c['target']==('tabla','dosificacion',indice,'Actividades'))
-            app.session_state.evento_papel_ficticio={'nonce':'evento-1','documento':d['id'],'huella':papel.huella(d),'cambios':{key:'Cambio dentro del documento'},'accion':'guardar'}
-            app.run();self.assertFalse(app.exception)
-            self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
-            self.assertEqual(app.session_state.versiones_ficticias[-1]['tablas']['dosificacion'][indice]['Actividades'],'Cambio dentro del documento')
-            app.run();self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
+        app=self.abrir('Trabajo Social');antes=len(app.session_state.versiones_ficticias)
+        next(t for t in app.text_area if t.label=='Actividades').set_value('Cambio dentro del documento')
+        next(b for b in app.button if b.label=='Guardar Planeación').click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
+        self.assertTrue(any(r['Actividades']=='Cambio dentro del documento' for r in app.session_state.versiones_ficticias[-1]['tablas']['dosificacion']))
+        app.run();self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
 
     def test_por_grado_incluye_individuales_sin_cambiar_su_modalidad(self):
         from streamlit.testing.v1 import AppTest

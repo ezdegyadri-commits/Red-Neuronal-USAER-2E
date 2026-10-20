@@ -691,7 +691,8 @@ def _planeacion_page_clasica():
         try:
             from services.planeacion_modalidad import modalidad_documento
             padron=servicio.padron_autorizado()
-            docs=[d for d in servicio.listar() if d['cuenta']==actor['cuenta'] and modalidad_documento(d,padron)==modalidad]
+            admitidas={modalidad}|({'especialista'} if modalidad=='grupal' and actor['area'] in ('Psicología','Comunicación','Trabajo Social') else set())
+            docs=[d for d in servicio.listar() if d['cuenta']==actor['cuenta'] and modalidad_documento(d,padron) in admitidas]
             if docs:
                 i=st.selectbox('Mis documentos guardados',range(len(docs)),format_func=lambda i:f"{docs[i]['datos']['Escuela regular']} · Anexo {docs[i]['formato']} · {docs[i]['datos'].get('Periodo','')} · {docs[i]['estado']}",key=prefix+'_recover')
                 if st.button('Abrir documento',key=prefix+'_open'):
@@ -715,7 +716,8 @@ def _planeacion_page_clasica():
         padron_actual=servicio.padron_autorizado()
         try:
             from services.planeacion_modalidad import modalidad_documento
-            mis_recientes=[d for d in servicio.listar() if d['cuenta']==actor['cuenta'] and modalidad_documento(d,padron_actual)==modalidad]
+            admitidas={modalidad}|({'especialista'} if modalidad=='grupal' and actor['area'] in ('Psicología','Comunicación','Trabajo Social') else set())
+            mis_recientes=[d for d in servicio.listar() if d['cuenta']==actor['cuenta'] and modalidad_documento(d,padron_actual) in admitidas]
         except Exception:
             mis_recientes=[]
         if prefix+'_doc' not in st.session_state and mis_recientes:
@@ -764,7 +766,8 @@ def _planeacion_page_clasica():
             if st.button('Crear y guardar borrador',key=prefix+'_create',disabled=not ids):
                 try:
                     with st.spinner('Reuniendo la información que ya registró el equipo…'):
-                        doc=servicio.preparar_contexto(servicio.nueva(formato,ids,int(ciclo),trimestre,modalidad=modalidad,incluir_individuales=incluir))
+                        tipo='especialista' if modalidad=='grupal' and actor['area'] in ('Psicología','Comunicación','Trabajo Social') else modalidad
+                        doc=servicio.preparar_contexto(servicio.nueva(formato,ids,int(ciclo),trimestre,modalidad=tipo,incluir_individuales=incluir))
                     _open(prefix,doc);_persist(prefix);st.rerun()
                 except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
         if prefix+'_doc' in st.session_state:_editor(prefix)

@@ -39,9 +39,6 @@ def _entrada(base,actor):
             if st.button('Abrir mi formato',key=base+'_viva_abrir'):
                 try:_abrir(base,porid[did]);st.rerun()
                 except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
-            if st.button('Editar borrador',key=base+'_viva_editar'):
-                try:_abrir(base,porid[did]);st.rerun()
-                except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
             from ui.planeacion_borradores import controles
             from documents.planeacion_papel import generar_pdf
             controles(base+'_lista_'+did,porid[did],generar_pdf,lambda:None)
@@ -50,13 +47,17 @@ def _entrada(base,actor):
     except Exception:st.warning('No se pudo consultar la matrícula. Tus documentos se conservan.');return
     if frame.empty:st.info('No hay alumnos disponibles en tu asignación.');return
     schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
-    indice=st.selectbox('Escuela',range(len(schools)),format_func=lambda i:schools[i]['Nombre_Escuela'],key=base+'_viva_escuela') if len(schools)>1 else 0
-    school=schools[indice];st.caption(school['Nombre_Escuela'])
+    por_escuela={str(e['ID_Escuela']):e for e in schools}
+    escuela_key=base+'_escuela_exacta'
+    if st.session_state.get(escuela_key) not in por_escuela:st.session_state[escuela_key]=next(iter(por_escuela))
+    izquierda,derecha=st.columns([2,1])
+    escuela=izquierda.selectbox('Escuela asignada',list(por_escuela),format_func=lambda i:por_escuela[i]['Nombre_Escuela'],key=escuela_key)
+    school=por_escuela[escuela]
     especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
     if especialista:
         st.info('Aquí elaboras tu formato propio de especialista. Para continuar el Anexo XIX iniciado por apoyo, elige «Planeaciones del equipo» arriba.')
     modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
-    modo=st.segmented_control('Modalidad de planeación',modos,default='Mi intervención' if especialista else 'Grupal',key=base+'_viva_modalidad_v3') or modos[0]
+    modo=derecha.segmented_control('Modalidad de planeación',modos,default='Mi intervención' if especialista else 'Grupal',key=base+'_viva_modalidad_v3') or modos[0]
     tipo='individual' if modo=='Individual' else 'grupal';ciclo,trimestre=periodo_actual();incluir=False
     with st.expander('Cambiar periodo o incluir atención individual en una sesión grupal'):
         ciclo=st.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
@@ -316,13 +317,15 @@ def pagina(render_hoja=None):
     else:
         st.title('Mi formato · '+actor['area'])
         st.caption('Planea en tu hoja de siempre. Los alumnos y sus antecedentes ya están conectados; tú decides qué trabajar y cómo.')
-    # Una sola vista activa: un fallo o consulta del formato propio no debe
-    # bloquear el acceso a la hoja compartida. No monta dos editores ocultos.
-    especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
-    opciones=['Planeaciones del equipo','Mi formato de especialista'] if especialista else ['Mi formato','Planeaciones del equipo']
-    if actor['director']:opciones.append('Revisión directiva')
-    vista=st.radio('¿Qué vas a continuar?',opciones,horizontal=True,key=base+'_recorrido_equipo_v1')
-    if vista in ('Mi formato','Mi formato de especialista'):
+    from services.planeacion_cero_friccion import campos_del_rol
+    opciones=campos_del_rol(actor)
+    # Tabs sin rerun al cambiar: la captura del form permanece en el navegador.
+    # Solo existe el formato propio del rol, nunca formularios de otras áreas.
+    tabs=st.tabs(opciones)
+    with tabs[0]:
+      if actor['director']:
+        u.direccion_panel()
+      else:
         activo=st.session_state.get(base+'_activa')
         if not activo:
             prefixes=[p for p in (base+'_individual',base+'_grupal') if p+'_doc' in st.session_state]
@@ -335,9 +338,8 @@ def pagina(render_hoja=None):
             _entrada(base,actor)
             if st.session_state.get(base+'_activa')!=anterior:st.session_state[base+'_viva_entrada']=False
             if activo and st.button('Volver al formato abierto',key=base+'_viva_retomar'):st.session_state[base+'_viva_entrada']=False;st.rerun()
-        with st.expander('Vista anterior y ayuda'):
+        with st.expander('Ayuda y herramientas anteriores',expanded=False):
             if st.button('Usar el recorrido anterior',key=base+'_viva_legacy'):st.session_state[base+'_viva_anterior']=True;st.rerun()
-    elif vista=='Planeaciones del equipo':
+    with tabs[1]:
         from ui.planeacion_colaboracion import panel
         panel(base+'_colaboracion')
-    elif actor['director']:u.direccion_panel()
