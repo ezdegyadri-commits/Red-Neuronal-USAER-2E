@@ -3,13 +3,17 @@
 export default function mount(component) {
   const host = component.parentElement;
   if (host.__usaerEditor) {
-    host.__usaerEditor.component = component;
-    host.__usaerEditor.update(component.data);
-    return host.__usaerEditor.dispose;
+    const state = host.__usaerEditor;
+    const generation = ++state.generation;
+    state.component = component;
+    state.update(component.data);
+    // Un efecto asíncrono anterior puede terminar después del nuevo montaje.
+    // Su cleanup no debe destruir el editor vigente ni sus timers/respaldo.
+    return () => { if (state.generation === generation) state.dispose(); };
   }
   const nativeWindow = globalThis.window, nativeDocument = globalThis.document;
   const timeouts = new Set(), intervals = new Set(), observers = new Set(), listeners = [];
-  const state = { component, receive: null, disposed: false };
+  const state = { component, receive: null, disposed: false, generation: 1 };
   host.__usaerEditor = state;
   const document = new Proxy(nativeDocument, { get(target, key) {
     if (key === 'getElementById') return id => host.querySelector('#' + id);
@@ -51,14 +55,15 @@ export default function mount(component) {
   state.update = data => state.receive?.({ source: parent, origin: globalThis.location.origin,
     data: { type: 'streamlit:render', args: data } });
   state.dispose = () => {
+    if (state.disposed) return;
     state.disposed = true;
     for (const id of timeouts) globalThis.clearTimeout(id);
     for (const id of intervals) globalThis.clearInterval(id);
     for (const observer of observers) observer.disconnect();
     for (const [type, callback] of listeners) nativeWindow.removeEventListener(type, callback);
-    delete host.__usaerEditor;
+    if (host.__usaerEditor === state) delete host.__usaerEditor;
   };
   /* USAER_RENDERER */
   state.update(component.data);
-  return state.dispose;
+  return () => { if (state.generation === 1) state.dispose(); };
 }

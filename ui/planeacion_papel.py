@@ -2,6 +2,7 @@
 from pathlib import Path
 import re
 import threading
+import time
 from weakref import WeakKeyDictionary
 import streamlit as st
 import streamlit.components.v2 as components
@@ -20,8 +21,11 @@ def _definicion_editor():
     return html,css,js
 
 
-def _evento_editor():
-    """El valor persistente llega al mismo validador y deduplicación de nonce."""
+def _evento_editor(key,on_edicion):
+    """Procesa la escritura antes del render: un evento, una ejecución."""
+    event=st.session_state.get(key,{}).get('evento')
+    if on_edicion and event and event.get('accion') in ('guardar','autoguardar'):
+        on_edicion(event)
 
 
 _COMPONENTES=WeakKeyDictionary()
@@ -39,9 +43,9 @@ def _componente_editor():
         return _COMPONENTES[registro]
 
 
-def editor(*,key,default=None,**datos):
+def editor(*,key,default=None,on_edicion=None,**datos):
     render=_componente_editor()
-    result=render(key=key,data=datos,default={'evento':None},on_evento_change=_evento_editor,height='content')
+    result=render(key=key,data=datos,default={'evento':None},on_evento_change=lambda:_evento_editor(key,on_edicion),height='content')
     return result.get('evento',default)
 
 
@@ -52,13 +56,46 @@ def refrescar_editor():
     st.rerun(scope='fragment' if ctx and ctx.fragment_ids_this_run else 'app')
 
 
+def recibir_edicion(prefix,event):
+    """Mismo validador y persistencia; sin una segunda recarga del editor."""
+    from ui import planeacion as u
+    if event.get('nonce')==st.session_state.get(prefix+'_papel_nonce'):return
+    try:
+        doc=st.session_state[prefix+'_doc']
+        nuevo=papel.aplicar(doc,event)
+        st.session_state[prefix+'_papel_nonce']=event['nonce']
+        if nuevo!=doc:u._open(prefix,nuevo)
+        if nuevo!=doc or event['accion']=='guardar':u._persist(prefix,automatic=event['accion']=='autoguardar')
+        if not st.session_state.get(prefix+'_pending'):
+            st.session_state[prefix+'_papel_aceptado']=event['nonce']
+        st.session_state.pop(prefix+'_papel_rechazado',None)
+        st.session_state.pop(prefix+'_papel_error',None)
+    except (ValueError,PermissionError,RuntimeError) as exc:
+        st.session_state[prefix+'_papel_nonce']=event.get('nonce')
+        st.session_state[prefix+'_papel_rechazado']=event.get('nonce')
+        st.session_state[prefix+'_papel_error']=str(exc)
+
+
+def lectura_equipo(base,did):
+    """La recepción de cada campo no dispara otra consulta del catálogo completo."""
+    from services import planeacion as s
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+    ctx=get_script_run_ctx(suppress_warning=True)
+    # La navegación/actualización explícita sí debe consultar en el momento.
+    completa=bool(ctx and not ctx.fragment_ids_this_run)
+    now=time.monotonic()
+    if not completa and now-st.session_state.get(base+'_lectura_equipo',float('-inf'))<10:return None
+    st.session_state[base+'_lectura_equipo']=now
+    return next((d for d in s.compartidos() if d['id']==did),None)
+
+
 def _sincronizar_equipo(prefix):
     from ui import planeacion as u
     from services.planeacion_compartida import es_guia,actualizar_aportes_autor
     doc=st.session_state[prefix+'_doc']
     if not es_guia(doc):return
     try:
-        latest=next((d for d in u.servicio.compartidos() if d['id']==doc['id']),None)
+        latest=lectura_equipo(prefix,doc['id'])
         if latest:
             nuevo=actualizar_aportes_autor(doc,latest)
             if nuevo!=doc:
@@ -98,7 +135,8 @@ def hoja(prefix,volver=None):
         aceptado=st.session_state.pop(prefix+'_papel_legacy',False),
         aceptado_nonce=st.session_state.get(prefix+'_papel_aceptado',''),
         rechazado=st.session_state.get(prefix+'_papel_rechazado',''),
-        error=st.session_state.get(prefix+'_papel_error',''),key=prefix+'_papel_'+doc['id'],default=None)
+        error=st.session_state.get(prefix+'_papel_error',''),key=prefix+'_papel_'+doc['id'],default=None,
+        on_edicion=lambda event:recibir_edicion(prefix,event))
     if event and event.get('nonce')!=st.session_state.get(prefix+'_papel_nonce'):
         try:
             nuevo=papel.aplicar(doc,event)
