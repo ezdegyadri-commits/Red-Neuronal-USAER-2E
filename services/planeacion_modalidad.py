@@ -49,11 +49,12 @@ def guia_grupal(doc):
         z=zona.get(a['ID_Alumno'],{})
         for key in ['Fecha derivación','Situación inicial','Situación final']:
             if not row[key]:row[key]=z.get(key,'')
-        if not row['Situación inicial']:
-            from services.planeacion_compartida import situacion_inicial
+        from services.planeacion_compartida import situacion_inicial,copia_instrumento
+        if not row['Situación inicial'] or copia_instrumento(row['Situación inicial']):
             fuentes=[f for f in doc['metadatos'].get('fuentes',[]) if a['ID_Alumno'] in str(f.get('alumno','')).split(',')]
             contexto=doc['metadatos'].get('contexto_padron_grupo',{}).get(a['ID_Alumno'],{})
-            row['Situación inicial']=situacion_inicial({**a,**{k:v for k,v in contexto.items() if v}},fuentes)
+            resumen=situacion_inicial({**a,**{k:v for k,v in contexto.items() if v}},fuentes)
+            row['Situación inicial']=resumen or ('Situación de ingreso por confirmar; revisar la valoración inicial.' if copia_instrumento(row['Situación inicial']) else '')
         # Un aporte forma parte del mismo Anexo, sin requerir que la maestra lo copie.
         for especialidad,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items():
             if especialidad not in ('Psicología','Comunicación','Trabajo Social'):continue

@@ -201,6 +201,12 @@ def tablas_salida(doc):
     for r in e['grupal']:
         if r['ID_Alumno'] not in alumnos:continue
         a=alumnos[r['ID_Alumno']]
-        filas.append({**r,'Nombre del alumno':a['Nombre del alumno'],'Discapacidad o condición':a['Condición'],'Área':doc['datos']['Función']})
+        fila={**r,'Nombre del alumno':a['Nombre del alumno'],'Discapacidad o condición':a['Condición'],'Área':doc['datos']['Función']}
+        from services.planeacion_compartida import copia_instrumento,situacion_inicial
+        if copia_instrumento(fila.get('Situación inicial','')):
+            contexto=doc['metadatos'].get('contexto_padron_grupo',{}).get(a['ID_Alumno'],{})
+            fuentes=[f for f in doc['metadatos'].get('fuentes',[]) if str(f.get('alumno','')).split(',')==[str(a['ID_Alumno'])]]
+            fila['Situación inicial']=situacion_inicial({**a,**{k:v for k,v in contexto.items() if v}},fuentes) or 'Situación de ingreso por confirmar; revisar la valoración inicial.'
+        filas.append(fila)
     tablas.append(('Planeación grupal ajustada de zona',headers,filas))
     return tablas

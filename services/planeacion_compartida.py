@@ -152,10 +152,39 @@ def situacion_inicial(alumno,fuentes):
     status=normalizar_texto(alumno.get('Situacion_Alumno',''))
     if status not in {'NI','RI'}:return ''
     texto=nee_padron(alumno)
-    if texto:return status+' · '+texto[:350]
-    epp=any(f.get('tipo')=='EPP' and not es_bapse(f) for f in fuentes)
+    if not texto:
+        # Solo conclusiones estructuradas y verificadas del mismo alumno;
+        # nunca interpretar preguntas/frecuencias de BAPSE como hallazgos.
+        import json
+        for f in fuentes:
+            if f.get('tipo')!='EPP' or f.get('parte')!='Conclusión' or not f.get('vinculo_verificado') or es_bapse(f):continue
+            if str(f.get('alumno','')).split(',')!=[str(alumno.get('ID_Alumno',''))]:continue
+            try:datos=json.loads(f.get('texto',''))
+            except (ValueError,TypeError):continue
+            filas=datos.get('NEE',[]) if isinstance(datos,dict) else []
+            if not isinstance(filas,list):continue
+            texto=' '.join(str(r.get('NEE','')).strip() for r in filas if isinstance(r,dict))
+            if texto and not es_bapse({'texto':texto}):break
+            texto=''
+    if texto:
+        import re
+        texto=re.sub(r'\s+',' ',texto).strip()
+        # Una o dos ideas, sin cortar una palabra ni volcar el expediente.
+        texto=' '.join(re.split(r'(?<=[.!?])\s+',texto)[:2])
+        if len(texto)>230:texto=texto[:227].rsplit(' ',1)[0].rstrip(' ,;:')+'…'
+        return status+' · '+texto
+    epp=any(f.get('tipo')=='EPP' and f.get('vinculo_verificado') and str(f.get('alumno','')).split(',')==[str(alumno.get('ID_Alumno',''))] and not es_bapse(f) for f in fuentes)
     return status+' · '+('Cuenta con EPP vinculada; revisar los apoyos acordados.' if epp else
         'Nuevo ingreso; revisar la valoración inicial.' if status=='NI' else 'Reingreso; revisar antecedentes y continuidad de apoyos.')
+
+
+def copia_instrumento(texto):
+    """Reconoce copias técnicas antiguas, no prosa docente que debe conservarse."""
+    from services.planeacion_nee import es_bapse
+    import re
+    valor=str(texto or '')
+    return es_bapse({'texto':valor}) or bool(re.search(r'[\{\[]\s*[\"\'](?:Item_\d+|NEE|pregunta|Conclusion)[\"\']\s*:',valor,re.I) or
+        re.search(r'(?:^|\n)E\d+\s*·\s*\d{4}-\d{2}-\d{2}\s*:',valor))
 
 
 def junio(doc,ahora=None):
