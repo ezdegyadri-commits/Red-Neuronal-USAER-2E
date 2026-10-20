@@ -176,6 +176,8 @@ def hoja(prefix,volver=None):
             if not st.session_state.get(prefix+'_pending'):
                 st.session_state[prefix+'_papel_aceptado']=event['nonce']
                 st.session_state[prefix+'_papel_legacy']=True
+            if action in ('pdf','antecedentes','referentes','dua','ia','alumnos','detalle','opciones','corregir'):
+                st.rerun(scope='app')
             refrescar_editor()
         except (ValueError,PermissionError,RuntimeError) as exc:
             st.session_state[prefix+'_papel_nonce']=event.get('nonce')
@@ -186,10 +188,16 @@ def hoja(prefix,volver=None):
     if st.session_state.get(prefix+'_error'):st.warning(st.session_state[prefix+'_error'])
     elif st.session_state.get(prefix+'_pending'):st.caption('Guardado pendiente. Tu texto permanece protegido en esta pestaña.')
     if doc['metadatos'].get('propuestas_apartados'):st.caption(doc['metadatos']['propuestas_apartados']['aviso'])
+
+
+def _contenido_conexiones(prefix):
+    """La ayuda no tiene reloj: no reconstruir formularios durante su captura."""
+    from ui import planeacion as u
     action=st.session_state.get(prefix+'_papel_panel')
     if action and action!='opciones':
         with st.expander('Conexión con este formato',expanded=True):
-            if st.button('Cerrar conexión y seguir en mi hoja',key=prefix+'_papel_cerrar'):st.session_state.pop(prefix+'_papel_panel',None);refrescar_editor()
+            if st.button('Cerrar conexión y seguir en mi hoja',key=prefix+'_papel_cerrar'):
+                st.session_state.pop(prefix+'_papel_panel',None);st.rerun(scope='app')
             from ui import planeacion_viva as viva
             current=st.session_state[prefix+'_doc']
             if action.startswith('tabla:'):
@@ -243,7 +251,17 @@ def hoja(prefix,volver=None):
         _acciones(prefix,pdf_provider=generar_pdf,acciones_hoja=True)
         if st.button('Cerrar opciones y volver a mi hoja',key=prefix+'_cerrar_opciones'):
             st.session_state.pop(prefix+'_papel_panel',None)
-            st.session_state.pop(prefix+'_mostrar_pdf',None);refrescar_editor()
+            st.session_state.pop(prefix+'_mostrar_pdf',None);st.rerun(scope='app')
+
+
+def conexiones(prefix):
+    if not st.session_state.get(prefix+'_papel_panel') and not st.session_state.get(prefix+'_mostrar_pdf'):return
+    def cerrar():
+        st.session_state.pop(prefix+'_papel_panel',None)
+        st.session_state.pop(prefix+'_mostrar_pdf',None)
+    @st.dialog('Ayuda para mi formato',width='large',on_dismiss=cerrar)
+    def mostrar():_contenido_conexiones(prefix)
+    mostrar()
 
 
 def presentar(prefix,volver=None):
@@ -254,7 +272,8 @@ def presentar(prefix,volver=None):
     if not st.session_state.get(prefix+'_editor_directo') and any(str(k).startswith(old) for k in st.session_state):
         from ui.planeacion_cero_friccion import hoja as captura
         return captura(prefix,volver)
-    return hoja(prefix,volver)
+    hoja(prefix,volver)
+    conexiones(prefix)
 
 
 def pagina():

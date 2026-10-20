@@ -34,7 +34,7 @@ const toolbar=document.getElementById('tools');
 if(!args.colaborativa){const help=button('Ayúdame a planear',()=>emit('ia'));help.className='primary';toolbar.append(help)}
 toolbar.append(button('Guardar planeación',()=>emit('guardar')));
 if(!args.colaborativa)toolbar.append(button('Descargar',()=>emit('pdf')));
-toolbar.append(button('Regresar al inicio del módulo',()=>emit('inicio')));
+const volver=button('Regresar al inicio del módulo',()=>emit('inicio'));volver.className='navigation';volver.style.border='0';volver.style.background='transparent';volver.style.textDecoration='underline';toolbar.append(volver);
 const mas=document.createElement('details');mas.append(text('summary','Más opciones'));
 mas.append(button('Respaldar texto sin conexión',respaldo));
 if(args.grupal&&!args.colaborativa)mas.append(button('Actualizar aportes del equipo',()=>emit('equipo')));

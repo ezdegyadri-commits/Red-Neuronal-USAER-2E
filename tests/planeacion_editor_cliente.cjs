@@ -9,7 +9,7 @@ function fixture(backup, referrer='https://usaer.test/', native=false) {
   const nodes = new Map(), listeners = {}, timers = new Map(), messages = [], targets = [], cache = new Map(backup || []);
   let sequence = 0;
   class Element {
-    constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.handlers = {}; this._text = ''; }
+    constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.style = {}; this.handlers = {}; this._text = ''; }
     set id(v) { this._id = v; nodes.set(v, this); } get id() { return this._id; }
     set textContent(v) { this._text = v; this.children = []; } get textContent() { return this._text + this.children.map(c => c.textContent || '').join(''); }
     get innerText() { return this.textContent; }
@@ -71,6 +71,14 @@ function hoja(value='', fingerprint='base') {
   f.render(hoja(),{guardado:'ayer'}); f.tick(5000);
   assert.equal(f.messages.filter(m=>m.type==='streamlit:componentReady').length,2);
   assert.ok(f.tools.children.some(b=>b.textContent==='Guardar planeación'));
+}
+// Barra breve y acciones inequívocas: guardar no es ayuda y descargar recoge el texto.
+{
+  const f=fixture();f.render(hoja());
+  assert.deepEqual(f.tools.children.filter(e=>e.tagName==='BUTTON'&&e.className!=='navigation').map(e=>e.textContent),['Ayúdame a planear','Guardar planeación','Descargar']);
+  assert.ok(f.tools.children.some(e=>e.tagName==='DETAILS'));
+  f.input('Texto aún no enviado');f.tools.children.find(e=>e.textContent==='Descargar').click();
+  assert.equal(f.events()[0].accion,'pdf');assert.equal(f.events()[0].cambios.c0,'Texto aún no enviado');
 }
 // Un acuse viejo no libera el envío. La espera permite editar y reintenta el MISMO nonce.
 {

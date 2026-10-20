@@ -176,13 +176,15 @@ class PapelUITests(unittest.TestCase):
         component=app.get('bidi_component')[0];spec=json.loads(component.proto.json)['hoja']
         if not any(c['label']=='Actividades' and c['editable'] for c in spec['cells'].values()):
             agregar=dict(documento=spec['documento'],huella=spec['huella'],nonce='nueva-fila',accion='agregar',tabla='dosificacion',cambios={})
-            states=WidgetStates();states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':agregar}))
+            states=app._tree.get_widget_states()
+            states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':agregar}))
             app._run(states);self.assertFalse(app.exception)
             antes=len(app.session_state.versiones_ficticias)
             component=app.get('bidi_component')[0];spec=json.loads(component.proto.json)['hoja']
         celda=next(k for k,c in spec['cells'].items() if c['label']=='Actividades' and c['editable'])
         event=dict(documento=spec['documento'],huella=spec['huella'],nonce='edicion-directa',accion='guardar',cambios={celda:'Cambio dentro del documento'})
-        states=WidgetStates();states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':event}))
+        states=app._tree.get_widget_states()
+        states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':event}))
         app._run(states)
         self.assertFalse(app.exception)
         self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)

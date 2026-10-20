@@ -1,5 +1,6 @@
 """Ayuda opcional: guardar no genera, generar no reemplaza la redacción."""
 import streamlit as st
+import logging
 from services import planeacion as s,planeacion_generacion as g
 from services.planeacion_papel import huella
 from services.planeacion_propuesta import conservar_redaccion,aplicar
@@ -33,6 +34,9 @@ def panel(prefix):
                 candidate=local.aplicar(doc,p,[r['id'] for r in p['propuestas']])
                 st.session_state[key+'_propuesta']={'base':huella(doc),'documento':conservar_redaccion(doc,candidate)}
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+        except Exception as exc:
+            logging.getLogger(__name__).warning('No se pudo preparar la ayuda: %s',type(exc).__name__)
+            st.warning('No se pudo preparar la ayuda ahora. Tu hoja se conserva; puedes seguir editando y guardar sin IA.')
     solicitud=st.session_state.get(key+'_solicitud')
     if solicitud:
         st.caption('Revisa el resumen educativo. No se envían archivos originales ni el padrón; no incluyas datos identificadores.')
@@ -66,7 +70,7 @@ def panel(prefix):
             result=aplicar(st.session_state[prefix+'_doc'],propuesta)
             u._open(prefix,result);u._persist(prefix)
             st.session_state.pop(key+'_propuesta',None);st.session_state.pop(key+'_solicitud',None)
-            st.session_state.pop(prefix+'_papel_panel',None);refrescar_editor()
+            st.session_state.pop(prefix+'_papel_panel',None);st.rerun(scope='app')
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
     if b.button('Descartar propuesta',key=key+'_descartar'):
         st.session_state.pop(key+'_propuesta',None);st.session_state.pop(key+'_solicitud',None);refrescar_editor()
