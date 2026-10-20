@@ -82,7 +82,7 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
     if escala:
         tables.append({'id':'escala_trimestral','title':'Escala de valoración de indicadores · cierre del trimestre',
             'headers':list(evaluacion.CAMPOS),'rows':[[celda(r.get(c,''),None if c=='Alumno' else ('escala',i,c),c) for c in evaluacion.CAMPOS] for i,r in enumerate(escala)],
-            'add':True,'delete':True,'widths':[17,30,25,13,15],
+            'add':True,'delete':True,'widths':[17,30,25,13,15],'collapsed':'Evaluación al cierre del trimestre',
             'alumnos':[{'id':a['ID_Alumno'],'nombre':a['Nombre del alumno']} for a in alumnos]})
         for row in tables[-1]['rows']:row[3]['opciones']=list(evaluacion.ESCALA)
     textos=[celda(v,('texto',k),k) for k,v in doc['textos'].items() if not para_impresion or str(v or '').strip()] if not grupal else []
@@ -175,7 +175,7 @@ def aplicar(doc,event):
         result=proponer(result)
     elif action=='corregir':
         if event.get('panel') not in {a['panel'] for a in spec['pendientes']}:raise ValueError('Destino de corrección no válido.')
-    elif action not in ('guardar','autoguardar','pdf','enviar','antecedentes','referentes','dua','ia','alumnos','detalle','inicio','equipo'):raise ValueError('Acción no reconocida.')
+    elif action not in ('guardar','autoguardar','pdf','enviar','antecedentes','referentes','dua','ia','alumnos','detalle','inicio','equipo','opciones'):raise ValueError('Acción no reconocida.')
     return result
 
 

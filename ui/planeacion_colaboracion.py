@@ -92,10 +92,10 @@ def panel(prefix):
                     st.session_state.pop(prefix+'_abierto',None);st.rerun()
                 return
             from ui import planeacion as u
-            from ui.planeacion_papel import hoja
+            from ui.planeacion_papel import presentar
             base=prefix+'_autor_'+doc['id']
             if base+'_doc' not in st.session_state:u._open(base,doc)
-            hoja(base,volver=lambda:st.session_state.pop(prefix+'_abierto',None));return
+            presentar(base,volver=lambda:st.session_state.pop(prefix+'_abierto',None));return
     from services.planeacion_matricula import clave_escuela
     frame=s.padron_autorizado()
     nombres={clave_escuela(r['ID_Escuela']):str(r.get('Nombre_Escuela',r['ID_Escuela'])) for r in frame.to_dict('records')}
