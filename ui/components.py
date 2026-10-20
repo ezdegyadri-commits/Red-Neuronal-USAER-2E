@@ -1,5 +1,6 @@
 import streamlit as st
 from html import escape
+import pandas as pd
 
 
 def hero(title, subtitle="", badge="USAER 02-E · Gestión educativa"):
@@ -47,3 +48,34 @@ def progress_bar(value, total, label=""):
         unsafe_allow_html=True,
     )
 
+
+def data_table(df, title="", max_rows=15):
+    """Data table moderna con bordes redondeados, encabezados de contraste y filas interactivas."""
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        st.info("No hay registros para mostrar en la tabla.")
+        return
+    if not isinstance(df, pd.DataFrame):
+        df = pd.DataFrame(df)
+    
+    header_html = "".join(f"<th>{escape(str(c))}</th>" for c in df.columns)
+    rows_html = []
+    for _, row in df.head(max_rows).iterrows():
+        cells = "".join(f"<td>{escape(str(val))}</td>" for val in row.values)
+        rows_html.append(f"<tr>{cells}</tr>")
+    
+    title_html = f"<div style='padding:0.85rem 1.15rem;border-bottom:1px solid #E2E8F0;font-weight:700;color:var(--bs-primary-dark);font-size:1.02rem;'>{escape(title)}</div>" if title else ""
+    footer_html = f"<div style='padding:0.65rem 1.15rem;background:#F8FAFC;border-top:1px solid #E2E8F0;font-size:0.82rem;color:#64748B;'>Mostrando {min(len(df), max_rows)} de {len(df)} registros</div>" if len(df) > max_rows else ""
+    
+    table_markup = f"""
+    <div class='saas-data-table-container'>
+      {title_html}
+      <div style='overflow-x:auto;'>
+        <table class='saas-data-table'>
+          <thead><tr>{header_html}</tr></thead>
+          <tbody>{''.join(rows_html)}</tbody>
+        </table>
+      </div>
+      {footer_html}
+    </div>
+    """
+    st.markdown(table_markup, unsafe_allow_html=True)
