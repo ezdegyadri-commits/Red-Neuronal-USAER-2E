@@ -199,7 +199,17 @@ def hoja(prefix,volver=None):
     _acciones(prefix,pdf_provider=generar_pdf,acciones_hoja=True)
 
 
+def presentar(prefix,volver=None):
+    # El formulario agrupado NO debe vivir en el fragmento periódico: desmontarlo
+    # cada diez segundos perdería datos todavía no enviados desde el navegador.
+    from services.planeacion_cero_friccion import aplica
+    if aplica(st.session_state[prefix+'_doc']):
+        from ui.planeacion_cero_friccion import hoja as captura
+        return captura(prefix,volver)
+    return hoja(prefix,volver)
+
+
 def pagina():
     from ui.planeacion_viva import pagina as base
-    return base(render_hoja=hoja)
+    return base(render_hoja=presentar)
 

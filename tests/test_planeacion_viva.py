@@ -66,8 +66,6 @@ class HojaTests(unittest.TestCase):
     def abrir(self,area='Aprendizaje',tipo='Grupal',pi=False):
         app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_viva.py')),default_timeout=30).run()
         app.radio[0].set_value(area).run()
-        if area!='Aprendizaje':
-            next(w for w in app.radio if w.label=='¿Qué vas a continuar?').set_value('Mi formato de especialista').run()
         if tipo=='Individual':
             next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value('Individual').run()
             next(w for w in app.multiselect if w.label=='Alumnos de mi formato').set_value(['I1']).run()
@@ -133,9 +131,7 @@ class HojaTests(unittest.TestCase):
     def test_director_conserva_revision_y_colaboracion(self):
         app=self.abrir('Aprendizaje')
         app.radio[0].set_value('Dirección').run()
-        ruta=next(w for w in app.radio if w.label=='¿Qué vas a continuar?')
-        self.assertEqual(ruta.options,['Mi formato','Planeaciones del equipo','Revisión directiva'])
-        ruta.set_value('Revisión directiva').run()
+        self.assertEqual([t.label for t in app.tabs],['Revisión directiva','Planeaciones grupales del equipo'])
         self.assertTrue(any(b.label=='Validar revisión' for b in app.button))
 
     def test_fallo_guardado_no_oculta_hoja_ni_pierde_texto(self):
