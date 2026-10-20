@@ -42,19 +42,18 @@ class AccesoTests(TestCase):
         from ui import planeacion_viva as ui, planeacion as u, planeacion_colaboracion as equipo
         for area in ('Psicología','Comunicación','Trabajo Social'):
             with self.subTest(area=area),patch.object(ui,'st') as st,patch.object(s,'identidad',return_value={**ACTOR,'area':area}),patch.object(u,'_prefix',return_value='p'),patch.object(ui,'_entrada') as entrada,patch.object(equipo,'panel') as panel:
-                st.session_state={}
+                st.session_state={'p_submodulo':'equipo'};st.button.return_value=False
                 st.radio.side_effect=lambda label,options,**kwargs:options[0]
                 ui.pagina()
                 panel.assert_called_once_with('p_colaboracion')
-                entrada.assert_called_once()
-                st.tabs.assert_called_once_with(['Planeación del Equipo de Paradocentes','Planeaciones grupales del equipo'])
+                entrada.assert_not_called();st.tabs.assert_not_called()
 
     def test_formato_propio_y_equipo_disponibles_en_pestanas_del_rol(self):
         from ui import planeacion_viva as ui, planeacion as u, planeacion_colaboracion as equipo
         with patch.object(ui,'st') as st,patch.object(s,'identidad',return_value={**ACTOR,'area':'Comunicación'}),patch.object(u,'_prefix',return_value='p'),patch.object(ui,'_entrada') as entrada,patch.object(equipo,'panel') as panel:
-            st.session_state={};st.radio.return_value='Mi formato de especialista'
+            st.session_state={'p_submodulo':'propio'};st.button.return_value=False
             ui.pagina()
-            entrada.assert_called_once();panel.assert_called_once_with('p_colaboracion')
+            entrada.assert_called_once();panel.assert_not_called()
 
     def test_no_confirma_el_respaldo_del_editor_antes_de_persistir(self):
         from ui import planeacion_colaboracion as ui
@@ -124,7 +123,7 @@ class RecorridoCompartidoTests(TestCase):
             with patch.object(ui,'editor',side_effect=editor):
                 app=AppTest.from_file(str(Path(__file__).with_name('fixture_acceso_equipo.py')),default_timeout=30).run()
                 self.assertFalse(app.exception)
-                self.assertEqual([t.label for t in app.tabs],['Planeación del Equipo de Paradocentes','Planeaciones grupales del equipo'])
+                self.assertFalse(app.tabs)
                 self.assertTrue(any(w.label=='Grado y grupo' for w in app.selectbox))
                 next(w for w in app.button if w.label=='Abrir Anexo XIX compartido').click().run()
                 spec=app.session_state['qa_spec']

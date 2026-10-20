@@ -53,10 +53,14 @@ def _estado(base):
 def panel(prefix):
     actor=s.identidad()
     st.subheader('Continuar la planeación del equipo')
-    st.caption('1. Elige tu escuela → 2. Elige el grupo → 3. Escribe en la columna de tu área. Es la misma hoja iniciada por la maestra de apoyo, no una copia.')
+    st.caption('Elige tu escuela y grupo. Escribe en tu columna de la misma hoja iniciada por apoyo; las demás áreas conservan sus aportes.')
     if st.button('Actualizar planeaciones del equipo',key=prefix+'_actualizar_lista'):
         s.refrescar()
-    try:docs=s.compartidos()
+    try:
+        from services.planeacion_grupo_unico import documentos
+        docs=documentos(s.compartidos())
+        # La defensa del selector tampoco puede ampliar asignaciones.
+        for d in docs:s.autorizar(d,False)
     except Exception:
         st.warning('No se pudo consultar el trabajo del equipo. No se han alterado los documentos.');return
     # El documento abierto es un ID de esta sesión, no el primer resultado de
@@ -64,6 +68,15 @@ def panel(prefix):
     abierto=st.session_state.get(prefix+'_abierto')
     if abierto:
         doc=next((d for d in docs if d['id']==abierto),None)
+        if doc is None:
+            raiz=next((d for d in docs if abierto in d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{})),None)
+            base_anterior=prefix+'_'+abierto+'_'+actor['area']
+            if raiz and st.session_state.get(base_anterior+'_pending'):
+                st.warning('Esta copia se reunió en la hoja única. Tu texto pendiente sigue protegido; descarga el respaldo antes de conciliarlo con la hoja del equipo.')
+                st.download_button('Respaldar mi aporte pendiente',json.dumps({'filas':st.session_state.get(base_anterior+'_filas',[]),'observaciones':st.session_state.get(base_anterior+'_obs','')},ensure_ascii=False),file_name='aporte-pendiente.json',key=base_anterior+'_respaldo_union')
+                return
+            if raiz:
+                doc=raiz;st.session_state[prefix+'_abierto']=raiz['id']
         if doc is None:
             st.warning('No se pudo recuperar la planeación abierta. No se abrirá otro grupo automáticamente.')
             return
@@ -103,7 +116,12 @@ def panel(prefix):
     docs=sorted(docs,key=lambda d:d.get('guardado_en',''),reverse=True)
     st.caption(str(len(docs))+' formato(s) disponible(s). Se muestran también los borradores guardados por apoyo.')
     por_id={d['id']:d for d in docs}
-    did=st.selectbox('Documento compartido · grado, grupo e identificador',sorted(por_id),format_func=lambda i:etiqueta_selector(por_id[i]),key=prefix+'_id')
+    elegido=st.session_state.get(prefix+'_id')
+    if elegido and elegido not in por_id:
+        raiz=next((d['id'] for d in docs if elegido in d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{})),None)
+        if raiz:st.session_state[prefix+'_id']=raiz
+    orden=sorted(por_id,key=lambda i:(grupos(por_id[i]),por_id[i]['datos']['Curso escolar'],str(por_id[i]['datos']['Trimestre'])))
+    did=st.selectbox('Documento compartido · grado y periodo',orden,format_func=lambda i:etiqueta_selector(por_id[i]),key=prefix+'_id')
     doc=por_id[did]
     if doc['metadatos'].get('unificacion_grupal',{}).get('fuentes'):
         st.caption('Documento único del grupo: reúne el trabajo previo sin borrar sus documentos de origen. Todos los integrantes abren esta misma hoja.')

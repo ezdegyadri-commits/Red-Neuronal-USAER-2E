@@ -317,15 +317,21 @@ def pagina(render_hoja=None):
     else:
         st.title('Mi formato · '+actor['area'])
         st.caption('Planea en tu hoja de siempre. Los alumnos y sus antecedentes ya están conectados; tú decides qué trabajar y cómo.')
-    from services.planeacion_cero_friccion import campos_del_rol
-    opciones=campos_del_rol(actor)
-    # Tabs sin rerun al cambiar: la captura del form permanece en el navegador.
-    # Solo existe el formato propio del rol, nunca formularios de otras áreas.
-    tabs=st.tabs(opciones)
-    with tabs[0]:
-      if actor['director']:
+    from ui.planeacion_accesos import opciones,menu
+    permitidas={id for id,_,_,_ in opciones(actor)}
+    vista=st.session_state.get(base+'_submodulo')
+    st.caption('Accesos claros · una sola hoja grupal por grado, grupo y periodo')
+    if vista not in permitidas:
+        menu(base,actor);return
+    activo=st.session_state.get(base+'_activa')
+    editando=(vista=='propio' and activo and activo+'_doc' in st.session_state and not st.session_state.get(base+'_viva_entrada')) or (vista=='equipo' and st.session_state.get(base+'_colaboracion_abierto'))
+    # El editor dispone de su regreso protegido: no añadir un atajo que ignore
+    # su texto todavía en el navegador o una aportación pendiente.
+    if not editando and st.button('Volver a los accesos de Planeación',key=base+'_accesos_volver'):
+        st.session_state.pop(base+'_submodulo',None);st.rerun()
+    if vista=='revision':
         u.direccion_panel()
-      else:
+    elif vista=='propio':
         activo=st.session_state.get(base+'_activa')
         if not activo:
             prefixes=[p for p in (base+'_individual',base+'_grupal') if p+'_doc' in st.session_state]
@@ -340,6 +346,6 @@ def pagina(render_hoja=None):
             if activo and st.button('Volver al formato abierto',key=base+'_viva_retomar'):st.session_state[base+'_viva_entrada']=False;st.rerun()
         with st.expander('Ayuda y herramientas anteriores',expanded=False):
             if st.button('Usar el recorrido anterior',key=base+'_viva_legacy'):st.session_state[base+'_viva_anterior']=True;st.rerun()
-    with tabs[1]:
+    elif vista=='equipo':
         from ui.planeacion_colaboracion import panel
         panel(base+'_colaboracion')

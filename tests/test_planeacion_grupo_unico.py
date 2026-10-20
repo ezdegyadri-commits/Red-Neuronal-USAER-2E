@@ -25,6 +25,22 @@ def duplicados():
 
 
 class DocumentoUnicoTests(TestCase):
+    def test_selector_con_solo_ultimas_no_revive_copia_tras_guardar_raiz(self):
+        a,b=duplicados();unido=unico.documentos([a,b])[0]
+        unido.update(revision='consolidado',guardado_en='2026-10-20T11:00:00')
+        actual=unico.documentos([b,unido])
+        self.assertEqual(len(actual),1);self.assertEqual(actual[0]['id'],'origen')
+        fila=guia_grupal(actual[0])['filas'][0]
+        self.assertEqual(fila['Aprendizaje'],'Texto de apoyo')
+        self.assertEqual(fila['Comunicación'],'Actividad de comunicación')
+
+    def test_identificadores_tecnicos_no_se_muestran_al_equipo(self):
+        from services.planeacion_compartida import etiqueta,etiqueta_selector
+        a,b=duplicados()
+        for f in (etiqueta,etiqueta_selector):
+            self.assertNotIn(a['id'],f(a))
+        self.assertIn('Trimestre',etiqueta_selector(a))
+
     def test_dos_documentos_sin_letra_se_reunen_y_no_mutan_originales(self):
         a,b=duplicados();antes=deepcopy([a,b]);docs=unico.documentos([a,b])
         self.assertEqual(len(docs),1);self.assertEqual(docs[0]['id'],'origen')
