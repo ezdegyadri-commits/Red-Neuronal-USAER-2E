@@ -1174,41 +1174,153 @@ div[data-testid="stAlert"]:has([data-testid="stAlertInfoIcon"]) {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--bs-primary-dark);
-  margin-top: 1.8rem;
-  margin-bottom: 1rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.85rem;
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.45rem;
   border-bottom: 1.5px solid var(--bs-border-color);
 }
 
-/* Tarjeta / Tile del Hub Launchpad */
+/* ========================================================================== */
+/* DOCK INTERACTIVO DE ACCESOS RÁPIDOS (FLOATING HOVER DOCK)                  */
+/* ========================================================================== */
+.hub-dock-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0 1.5rem 0;
+  width: 100%;
+}
+
+.hub-dock {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--bs-border-color);
+  box-shadow: 0 8px 24px -4px rgba(15, 58, 74, 0.1), 0 2px 6px rgba(0,0,0,0.04);
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: none;
+}
+.hub-dock::-webkit-scrollbar { display: none; }
+
+.hub-dock-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  background: var(--bs-surface-alt);
+  color: var(--bs-primary-dark);
+  font-size: 1.45rem;
+  cursor: pointer;
+  transition: all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-decoration: none;
+  border: 1.5px solid transparent;
+  flex-shrink: 0;
+}
+
+.hub-dock-item:hover {
+  transform: translateY(-8px) scale(1.18);
+  background: #FFFFFF;
+  border-color: var(--bs-teal);
+  box-shadow: 0 10px 22px rgba(13, 148, 136, 0.28);
+}
+
+.hub-dock-item .dock-tooltip {
+  position: absolute;
+  bottom: -32px;
+  background: var(--bs-primary-dark);
+  color: #FFFFFF !important;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: all 0.18s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 50;
+}
+
+.hub-dock-item:hover .dock-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ========================================================================== */
+/* TARJETAS UNIFICADAS CON VISTA PREVIA FLOTANTE AL PASAR EL CURSOR           */
+/* ========================================================================== */
 .hub-tile {
   background: #FFFFFF;
   border: 1.5px solid var(--bs-border-color);
   border-radius: var(--radius-lg);
-  padding: 1.35rem 1.4rem;
+  padding: 1.25rem 1.3rem;
   box-shadow: var(--shadow-sm);
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
-  height: calc(100% - 4.2rem);
-  min-height: 145px;
   margin-bottom: 0.5rem;
 }
 
-.hub-tile:hover {
-  border-color: var(--bs-teal);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-3px);
+div[class*="st-key-hub_card_"] {
+  background: #FFFFFF !important;
+  border: 1.5px solid var(--bs-border-color) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 1.25rem 1.3rem !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  height: 100% !important;
+  margin-bottom: 0.75rem !important;
+}
+
+div[class*="st-key-hub_card_"]:hover {
+  border-color: var(--bs-teal) !important;
+  box-shadow: 0 14px 28px -4px rgba(13, 148, 136, 0.18), 0 4px 10px -2px rgba(15, 23, 42, 0.05) !important;
+  transform: translateY(-5px) !important;
+}
+
+/* Botón interno integrado perfectamente en la tarjeta */
+div[class*="st-key-hub_card_"] button {
+  margin-top: 0.9rem !important;
+  border-radius: var(--radius-md) !important;
+  font-weight: 750 !important;
+  font-size: 0.9rem !important;
+  background: var(--bs-surface-alt) !important;
+  color: var(--bs-primary-dark) !important;
+  border: 1px solid var(--bs-border-color) !important;
+  transition: all 0.22s ease !important;
+  min-height: 44px !important;
+}
+
+div[class*="st-key-hub_card_"]:hover button {
+  background: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-teal) 100%) !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.32) !important;
+  transform: scale(1.01) !important;
 }
 
 .hub-tile-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.75rem;
 }
 
 .hub-tile-icon {
@@ -1218,16 +1330,21 @@ div[data-testid="stAlert"]:has([data-testid="stAlertInfoIcon"]) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.35rem;
+  font-size: 1.4rem;
   box-shadow: var(--shadow-xs);
+  transition: transform 0.2s ease;
+}
+
+div[class*="st-key-hub_card_"]:hover .hub-tile-icon {
+  transform: scale(1.08) rotate(3deg);
 }
 
 .hub-tile-badge {
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 750;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 0.2rem 0.55rem;
+  padding: 0.22rem 0.6rem;
   background: var(--bs-surface-alt);
   color: var(--bs-secondary-color);
   border-radius: var(--radius-full);
@@ -1246,6 +1363,35 @@ div[data-testid="stAlert"]:has([data-testid="stAlertInfoIcon"]) {
   color: var(--bs-secondary-color);
   line-height: 1.45;
   flex: 1;
+}
+
+/* Vista previa de etiquetas flotantes (Hover Chips) */
+.hub-preview-chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-top: 0.65rem;
+  margin-bottom: 0.25rem;
+}
+
+.hub-chip {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.18rem 0.5rem;
+  background: var(--bs-teal-light);
+  color: var(--bs-teal-dark);
+  border: 1px solid var(--bs-teal-subtle);
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  transition: all 0.2s ease;
+}
+
+div[class*="st-key-hub_card_"]:hover .hub-chip {
+  background: var(--bs-teal-subtle);
+  border-color: var(--bs-teal);
+  color: var(--bs-teal-dark);
 }
 
 /* Breadcrumb y Barra de Retorno en Módulos */
