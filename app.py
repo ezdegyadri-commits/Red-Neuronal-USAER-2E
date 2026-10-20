@@ -23,6 +23,7 @@ from services.tramites import gestor as gestor_tramites, puede_solicitar
 from ui.planeacion import planeacion_page, direccion_panel
 from ui.epp import epp_page
 from ui.novedades_supervision import novedades_page
+from ui.sidebar import render_sidebar_navigation
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="auto")
 inject()
@@ -94,31 +95,7 @@ with st.sidebar:
             menu += ["Alta de alumnos"]
         menu += ["Oficios de comisión", "Anexo VII Derivación"]
     else: menu += ["Constancias de visita", "Anexo VII Derivación"]
-    grupos_menu = {
-        "Inicio": "Inicio",
-        "Expedientes": "Expedientes",
-        "Anexo III BAP": "Anexo III · Barreras para el Aprendizaje y la Participación",
-        "Anexo IV Hoja de sugerencias": "Anexo IV · Hoja de sugerencias",
-        "Anexo V Eventos significativos": "Anexo V · Eventos significativos",
-        "Estadística": "Estadística y listado nominal",
-        "Documentos": "Documentos",
-        "Cronograma mensual": "Equipo especialista · Cronograma",
-        "Horarios de apoyo": "Maestras de apoyo · Horarios y avisos",
-        "Panel de Dirección": "Dirección · Panel",
-        "Maestros de primaria": "Directorio · Maestros de Primaria",
-        "Trámites": "Trámites y solicitudes de expedientes",
-        "Constancias de visita": "Equipo · Constancias de visita",
-        "Alta de alumnos": "Alta de alumnos",
-        "Oficios de comisión": "Oficios de comisión",
-        "Anexo VII Derivación": "Anexo VII · Derivación",
-    }
-    page=st.radio(
-        "Ir al apartado",
-        menu,
-        format_func=lambda apartado: grupos_menu.get(apartado, apartado),
-        label_visibility="collapsed",
-        key="navegacion_principal",
-    )
+    page = render_sidebar_navigation(menu)
 
 # No se lee el padrón central en módulos que no lo necesitan.
 if page in {"Inicio", "Expedientes", "Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos", "Estadística", "Documentos", "Alta de alumnos"}:

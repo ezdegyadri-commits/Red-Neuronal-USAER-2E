@@ -5,9 +5,12 @@ import streamlit as st
 
 @st.cache_resource(show_spinner=False)
 def _palabras():
-    from spellchecker import SpellChecker
-    dictionary = SpellChecker(language='es', distance=1).word_frequency.dictionary
-    words = sorted(dictionary, key=lambda word: (-dictionary[word], word))
+    try:
+        from spellchecker import SpellChecker
+        dictionary = SpellChecker(language='es', distance=1).word_frequency.dictionary
+        words = sorted(dictionary, key=lambda word: (-dictionary[word], word))
+    except (ImportError, ModuleNotFoundError):
+        words = []
     return ['usaer', 'segey', 'bap', 'cte', 'psicoeducativo', 'psicoeducativa', 'lectoescritura', *words]
 
 

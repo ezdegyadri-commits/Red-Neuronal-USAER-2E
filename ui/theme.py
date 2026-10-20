@@ -98,6 +98,14 @@ CSS = """
 /* ========================================================================== */
 /* BASE, FONDO MESH Y TIPOGRAFÍA WCAG AA                                      */
 /* ========================================================================== */
+* {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+button, a, input, select, textarea, [role="button"], [role="tab"] {
+  touch-action: manipulation;
+}
+
 html, body {
   font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   -webkit-font-smoothing: antialiased;
@@ -300,40 +308,137 @@ html, body {
   border: 1px solid rgba(217, 119, 6, 0.4);
 }
 
-/* Menú de Navegación Lateral (Pills Modernos con Micro-Interacciones) */
-[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label > div:first-child {
+/* ========================================================================== */
+/* SIDEBAR: MENÚ DE NAVEGACIÓN MODERNO (TABS LIMPIOS, CERO RADIO BUTTONS)     */
+/* ========================================================================== */
+
+/* Eliminación de Radio Buttons residuales */
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label > div:first-child,
+[data-testid="stSidebar"] input[type="radio"] {
   display: none !important;
 }
 
-[data-testid="stSidebar"] .stRadio label {
-  padding: 0.68rem 1rem !important;
-  border-radius: 11px !important;
-  margin-bottom: 4px !important;
-  transition: all 0.22s var(--ease-spring) !important;
+/* Encabezados de Categoría (GENERAL, ANEXOS, ADMINISTRACIÓN) */
+.nav-category-header {
+  font-size: 0.72rem !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  color: #94A3B8 !important;
+  -webkit-text-fill-color: #94A3B8 !important;
+  margin-top: 1.2rem !important;
+  margin-bottom: 0.45rem !important;
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.nav-category-header::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin-left: 0.6rem;
+}
+
+/* Botones de Navegación del Menú Lateral (Pestañas / Tabs Táctiles 48px) */
+[data-testid="stSidebar"] div.stButton > button {
+  width: 100% !important;
+  min-height: 48px !important; /* Zona de toque táctil mínima 48x48px */
+  padding: 0.65rem 1rem !important;
+  border-radius: 12px !important;
+  margin-bottom: 5px !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  font-size: 0.92rem !important;
+  font-weight: 550 !important;
   color: #CBD5E1 !important;
-  font-size: 0.91rem !important;
+  -webkit-text-fill-color: #CBD5E1 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-left: 4px solid transparent !important;
+  box-shadow: none !important;
+  gap: 0.75rem !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  display: flex !important;
+  align-items: center !important;
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Hover en Escritorio */
+[data-testid="stSidebar"] div.stButton > button:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  border-left: 4px solid rgba(255, 255, 255, 0.3) !important;
+  transform: translateX(4px) !important;
+}
+
+/* Estado Activo / Seleccionado */
+[data-testid="stSidebar"] div.stButton > button[kind="primary"],
+[data-testid="stSidebar"] div.stButton > button[data-testid="baseButton-primary"] {
+  background: linear-gradient(90deg, rgba(13, 148, 136, 0.35) 0%, rgba(15, 76, 92, 0.15) 100%) !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  font-weight: 750 !important;
+  border-left: 4px solid #F59E0B !important; /* Línea de acento a la izquierda */
+  border-top: 1px solid rgba(13, 148, 136, 0.35) !important;
+  border-right: 1px solid rgba(13, 148, 136, 0.2) !important;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.35) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22), inset 0 0 10px rgba(13, 148, 136, 0.12) !important;
+  transform: none !important;
+}
+
+/* Feedback táctil :active al tocar o presionar */
+[data-testid="stSidebar"] div.stButton > button:active {
+  transform: scale(0.96) !important;
+  opacity: 0.95 !important;
+}
+
+/* Compatibilidad para stRadio estilizado como tabs si fuese necesario */
+[data-testid="stSidebar"] .stRadio label {
+  padding: 0.72rem 1rem !important;
+  border-radius: 12px !important;
+  margin-bottom: 5px !important;
+  min-height: 48px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  color: #CBD5E1 !important;
+  font-size: 0.92rem !important;
   font-weight: 550 !important;
   cursor: pointer !important;
   border: 1px solid transparent !important;
+  border-left: 4px solid transparent !important;
   width: 100% !important;
   box-sizing: border-box !important;
   display: flex !important;
   align-items: center !important;
+  touch-action: manipulation !important;
 }
 
 [data-testid="stSidebar"] .stRadio label:hover {
   background: rgba(255, 255, 255, 0.08) !important;
   color: #FFFFFF !important;
   border-color: rgba(255, 255, 255, 0.12) !important;
+  border-left: 4px solid rgba(255, 255, 255, 0.3) !important;
   transform: translateX(4px) !important;
 }
 
 [data-testid="stSidebar"] .stRadio label:has(input:checked) {
-  background: linear-gradient(90deg, rgba(13, 148, 136, 0.9) 0%, rgba(15, 76, 92, 0.65) 100%) !important;
+  background: linear-gradient(90deg, rgba(13, 148, 136, 0.35) 0%, rgba(15, 76, 92, 0.15) 100%) !important;
   color: #FFFFFF !important;
-  font-weight: 700 !important;
-  border-color: rgba(13, 148, 136, 0.6) !important;
-  box-shadow: inset 4px 0 0 #F59E0B, 0 4px 12px rgba(0, 0, 0, 0.18) !important;
+  font-weight: 750 !important;
+  border-left: 4px solid #F59E0B !important;
+  border-top: 1px solid rgba(13, 148, 136, 0.35) !important;
+  border-right: 1px solid rgba(13, 148, 136, 0.2) !important;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.35) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22), inset 0 0 10px rgba(13, 148, 136, 0.12) !important;
+}
+
+[data-testid="stSidebar"] .stRadio label:active {
+  transform: scale(0.96) !important;
 }
 
 /* ========================================================================== */
@@ -354,7 +459,7 @@ div.stDownloadButton > button p,
   letter-spacing: inherit !important;
 }
 
-/* Base Universal para Todos los Botones */
+/* Base Universal para Todos los Botones (48px Touch Target) */
 div.stButton > button,
 div.stDownloadButton > button,
 [data-testid="stFormSubmitButton"] button,
@@ -363,9 +468,9 @@ div.stLinkButton > a {
   font-weight: 650 !important;
   font-size: 0.96rem !important;
   letter-spacing: 0.01em !important;
-  min-height: 46px !important;
-  padding: 0.65rem 1.35rem !important;
-  transition: all 0.22s var(--ease-spring) !important;
+  min-height: 48px !important; /* WCAG AA: Área interactiva mínima 48x48px */
+  padding: 0.72rem 1.35rem !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   cursor: pointer !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -376,6 +481,7 @@ div.stLinkButton > a {
   color: var(--bs-primary-dark) !important;
   box-shadow: var(--shadow-xs) !important;
   will-change: transform, box-shadow !important;
+  touch-action: manipulation !important;
 }
 
 /* Micro-interacción: Hover (Ligera elevación suave y resplandor) */
@@ -390,12 +496,13 @@ div.stLinkButton > a:hover {
   transform: translateY(-2px) !important;
 }
 
-/* Micro-interacción: Active (Escalado táctil scale(0.98) solicitado por el usuario) */
+/* Micro-interacción: Active (Escalado táctil scale(0.96) solicitado) */
 div.stButton > button:active,
 div.stDownloadButton > button:active,
 [data-testid="stFormSubmitButton"] button:active,
 div.stLinkButton > a:active {
-  transform: scale(0.98) translateY(0) !important;
+  transform: scale(0.96) translateY(0) !important;
+  opacity: 0.95 !important;
   box-shadow: var(--shadow-xs) !important;
 }
 
@@ -412,7 +519,7 @@ div.stDownloadButton > button:disabled,
   filter: grayscale(30%) !important;
 }
 
-/* 1. Botones Primarios (Llamados a la Acción Fuertes SaaS) */
+/* 1. Botones Primarios (Llamados a la Acción Fuertes SaaS - Alto Contraste WCAG AA) */
 div.stButton > button[kind="primary"],
 div.stDownloadButton > button[kind="primary"],
 div.stButton > button[data-testid="baseButton-primary"],
@@ -420,6 +527,7 @@ div.stButton > button[data-testid="baseButton-primary"],
 [data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"] {
   background: linear-gradient(135deg, #0F4C5C 0%, #0D9488 100%) !important;
   color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
   border: none !important;
   font-weight: 750 !important;
   box-shadow: 0 4px 14px rgba(13, 148, 136, 0.35) !important;
@@ -428,6 +536,14 @@ div.stButton > button[data-testid="baseButton-primary"],
 div.stButton > button[kind="primary"]:hover,
 div.stDownloadButton > button[kind="primary"]:hover,
 div.stButton > button[data-testid="baseButton-primary"]:hover,
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover {
+  background: linear-gradient(135deg, #0A3742 0%, #0F766E 100%) !important;
+  box-shadow: 0 8px 24px rgba(13, 148, 136, 0.48) !important;
+  transform: translateY(-2px) !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+}
 [data-testid="stFormSubmitButton"] button[kind="primary"]:hover,
 [data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover {
   background: linear-gradient(135deg, #0A3742 0%, #0F766E 100%) !important;
@@ -476,6 +592,12 @@ div[class*="st-key-"][class*="danger"] button:hover {
 /* ========================================================================== */
 /* FORMULARIOS, INPUTS Y SELECTORES MODERNOS                                  */
 /* ========================================================================== */
+.stApp [data-baseweb="input"] > div,
+.stApp [data-baseweb="select"] > div,
+.stApp input {
+  min-height: 48px !important; /* Zona táctil mínima 48x48px WCAG AA */
+}
+
 .stApp [data-baseweb="input"] > div,
 .stApp [data-baseweb="textarea"] > div,
 .stApp [data-baseweb="select"] > div,
