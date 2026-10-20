@@ -196,7 +196,7 @@ class PapelUITests(unittest.TestCase):
         from pathlib import Path
         app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
         next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value('Por grado').run()
-        next(w for w in app.selectbox if w.label=='Grado').set_value('1').run()
+        next(w for w in app.selectbox if w.label=='Grado').set_value('1°').run()
         selector=next(w for w in app.multiselect if w.label=='Alumnos de mi formato')
         self.assertEqual(len(selector.options),1)
         selector.set_value(['I1']).run()

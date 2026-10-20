@@ -50,6 +50,11 @@ def alumnos():
     .drop(columns=['_curp_operativa', '_prioridad_operativa'])
     .reset_index(drop=True)
    )
+ # Una representación operativa para todos los módulos. La hoja y los
+ # documentos históricos no se reescriben por consultar el padrón.
+ if 'Grado' in frame:
+  from utils.escolar import grado_canonico
+  frame=frame.copy();frame['Grado']=frame['Grado'].map(grado_canonico)
  return frame
 
 def update_alumno(id_alumno, cambios, allowed_ids):
@@ -70,6 +75,9 @@ def update_alumno(id_alumno, cambios, allowed_ids):
  if not id_alumno or id_alumno not in {str(value).strip() for value in allowed_ids}:
   raise PermissionError('El alumno no está dentro del ámbito autorizado para edición.')
  cambios = {campo: valor for campo, valor in dict(cambios).items() if campo in campos_editables}
+ if 'Grado' in cambios:
+  from utils.escolar import grado_canonico
+  cambios['Grado']=grado_canonico(cambios['Grado'])
  if not cambios:
   raise ValueError('No hay campos válidos para actualizar.')
 

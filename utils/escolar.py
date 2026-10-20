@@ -6,9 +6,15 @@ from utils.text import normalizar_texto
 
 def grado_canonico(valor):
     text=normalizar_texto(valor).strip()
-    nombres={'PRIMERO':1,'SEGUNDO':2,'TERCERO':3,'CUARTO':4,'QUINTO':5,'SEXTO':6}
+    if not text:return ''
+    # Solo etiquetas completas: nunca extraer un dígito de un grupo, un ciclo
+    # o una selección ambigua como «1 y 2».
+    text=re.sub(r'^(?:GRADO|PRIMARIA|SECUNDARIA|PREESCOLAR)\s*[:.-]?\s+','',text)
+    text=re.sub(r'\s+(?:(?:GRADO(?:\s+DE)?|DE)\s+)?(?:PRIMARIA|SECUNDARIA|PREESCOLAR)$','',text)
+    text=re.sub(r'\s+GRADO$','',text).strip()
+    nombres={'PRIMER':1,'PRIMERO':1,'SEGUNDO':2,'TERCER':3,'TERCERO':3,'CUARTO':4,'QUINTO':5,'SEXTO':6}
     if text in nombres:return str(nombres[text])+'°'
-    match=re.fullmatch(r'([1-6])(?:\.0+|(?:\s*(?:[°ºO.]|ER|RO|DO|TO))*)',text)
+    match=re.fullmatch(r'0?([1-6])(?:\.0+|(?:\s*(?:[°ºO.]|ERO|ER|RO|DO|TO))*)',text)
     return match[1]+'°' if match else str(valor or '').strip()
 
 

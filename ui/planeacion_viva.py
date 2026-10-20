@@ -47,7 +47,9 @@ def _entrada(base,actor):
             from documents.planeacion_papel import generar_pdf
             controles(base+'_lista_'+did,porid[did],generar_pdf,lambda:None)
     st.subheader('Elige a quién vas a planear')
-    try:frame=s.padron_autorizado()
+    try:
+        from services.planeacion_matricula import preparar
+        frame=preparar(s.padron_autorizado())
     except Exception:st.warning('No se pudo consultar la matrícula. Tus documentos se conservan.');return
     if frame.empty:st.info('No hay alumnos disponibles en tu asignación.');return
     schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
@@ -66,7 +68,10 @@ def _entrada(base,actor):
     with st.expander('Cambiar periodo o incluir atención individual en una sesión grupal'):
         ciclo=st.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
         trimestre=st.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
-        if tipo=='grupal' and modo!='Por grado':incluir=st.checkbox('Incluir alumnos de atención individual en esta sesión grupal',key=base+'_viva_incluir')
+        if tipo=='grupal' and modo!='Por grado':
+            incluir=st.checkbox('Reunir alumnos de atención grupal e individual en este formato',value=not especialista,key=base+'_viva_incluir_v2')
+    if tipo=='grupal' and not especialista:
+        st.caption('La hoja grupal incluye por defecto a los alumnos del grado, también a quienes reciben atención individual. No cambia su tipo de atención en el padrón.')
     if modo=='Por grado':
         incluir=True
         st.caption('Por grado reúne a sus alumnos individuales y grupales autorizados, sin cambiar su modalidad en el padrón.')
