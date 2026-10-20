@@ -37,6 +37,26 @@ class TestSidebarNavegacion(unittest.TestCase):
         self.assertIn("transform: scale(0.96)", CSS)
         self.assertIn(".nav-category-header", CSS)
         self.assertIn("border-left: 4px solid #F59E0B", CSS)
+        self.assertIn(".hub-hero", CSS)
+        self.assertIn(".hub-tile", CSS)
+        self.assertIn(".module-breadcrumb", CSS)
+
+    def test_central_hub_modules(self):
+        """Verifica que el Hub Central defina correctamente los módulos de las 3 categorías."""
+        from ui.hub import MODULOS_INFO
+        self.assertIn("Expedientes", MODULOS_INFO)
+        self.assertEqual(MODULOS_INFO["Expedientes"]["categoria"], "GENERAL")
+
+        self.assertIn("Anexo III BAP", MODULOS_INFO)
+        self.assertEqual(MODULOS_INFO["Anexo III BAP"]["categoria"], "ANEXOS")
+        self.assertIn("Anexo IV Hoja de sugerencias", MODULOS_INFO)
+        self.assertIn("Anexo V Eventos significativos", MODULOS_INFO)
+
+        self.assertIn("Estadística", MODULOS_INFO)
+        self.assertEqual(MODULOS_INFO["Estadística"]["categoria"], "ADMINISTRACIÓN")
+        self.assertIn("Documentos", MODULOS_INFO)
+        self.assertIn("Calendario de actividades", MODULOS_INFO)
+        self.assertIn("Planeación e intervención", MODULOS_INFO)
 
 if __name__ == '__main__':
     unittest.main()

@@ -1117,11 +1117,197 @@ div[data-testid="stAlert"]:has([data-testid="stAlertInfoIcon"]) {
 .usaer-data-table td {padding:12px 16px;border-top:1px solid #edf2f4;transition:background-color .18s ease;vertical-align:top}
 .usaer-data-table tbody tr:hover td {background:#edf6f7}
 .usaer-table-wrap:focus-visible {outline:3px solid #257d8e;outline-offset:3px}
-[data-testid="stDialog"] [role="dialog"] {
-  border-radius:20px;box-shadow:0 20px 70px -24px rgba(18,51,62,.35);
-  animation:usaer-enter .2s ease-out;
+/* ========================================================================== */
+/* CENTRO DE CONTROL CENTRAL (HUB / LAUNCHPAD)                               */
+/* ========================================================================== */
+
+.hub-hero {
+  background: linear-gradient(135deg, rgba(15, 58, 74, 0.95) 0%, rgba(13, 148, 136, 0.88) 100%);
+  border-radius: var(--radius-xl);
+  padding: 2.2rem 2.4rem;
+  color: #FFFFFF !important;
+  margin-bottom: 1.75rem;
+  box-shadow: 0 10px 30px -5px rgba(15, 58, 74, 0.25);
+  position: relative;
+  overflow: hidden;
 }
-@keyframes usaer-enter {from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+.hub-hero::after {
+  content: "◈";
+  position: absolute;
+  right: 1.5rem;
+  bottom: -1rem;
+  font-size: 8rem;
+  color: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.hub-hero-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #FFFFFF !important;
+  margin-bottom: 0.75rem;
+}
+
+.hub-hero h1 {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  font-size: 2.1rem !important;
+  margin: 0 0 0.5rem 0 !important;
+  font-weight: 800 !important;
+}
+
+.hub-hero p {
+  color: #E2EFF2 !important;
+  -webkit-text-fill-color: #E2EFF2 !important;
+  font-size: 0.98rem !important;
+  margin: 0 !important;
+  max-width: 800px;
+}
+
+/* Tarjetas de Métricas Rápidas */
+.hub-metric-card {
+  background: #FFFFFF;
+  border: 1.5px solid var(--bs-border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.hub-metric-card:hover {
+  border-color: var(--bs-teal);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.hub-metric-num {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--bs-primary-dark);
+  line-height: 1.1;
+}
+
+.hub-metric-label {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.25rem;
+}
+
+/* Encabezados de Sección en el Hub */
+.hub-section-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bs-primary-dark);
+  margin-top: 1.8rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1.5px solid var(--bs-border-color);
+}
+
+/* Tarjeta / Tile del Hub Launchpad */
+.hub-tile {
+  background: #FFFFFF;
+  border: 1.5px solid var(--bs-border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.35rem 1.4rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 4.2rem);
+  min-height: 145px;
+  margin-bottom: 0.5rem;
+}
+
+.hub-tile:hover {
+  border-color: var(--bs-teal);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+
+.hub-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.hub-tile-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.hub-tile-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.55rem;
+  background: var(--bs-surface-alt);
+  color: var(--bs-secondary-color);
+  border-radius: var(--radius-full);
+}
+
+.hub-tile-title {
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: var(--bs-primary-dark);
+  margin-bottom: 0.35rem;
+  line-height: 1.3;
+}
+
+.hub-tile-desc {
+  font-size: 0.84rem;
+  color: var(--bs-secondary-color);
+  line-height: 1.45;
+  flex: 1;
+}
+
+/* Breadcrumb y Barra de Retorno en Módulos */
+.module-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1.1rem;
+  background: #FFFFFF;
+  border: 1.5px solid var(--bs-border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  color: var(--bs-secondary-color);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 1.25rem;
+  min-height: 48px;
+}
+
+.module-breadcrumb strong {
+  color: var(--bs-primary-dark);
+}
 
 @media(prefers-reduced-motion: reduce) {
   *, *::before, *::after {

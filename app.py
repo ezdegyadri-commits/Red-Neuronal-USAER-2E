@@ -23,7 +23,8 @@ from services.tramites import gestor as gestor_tramites, puede_solicitar
 from ui.planeacion import planeacion_page, direccion_panel
 from ui.epp import epp_page
 from ui.novedades_supervision import novedades_page
-from ui.sidebar import render_sidebar_navigation
+from ui.sidebar import render_sidebar_navigation, TITULOS_SIMPLIFICADOS
+from ui.hub import pagina_central_hub
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="auto")
 inject()
@@ -103,7 +104,26 @@ if page in {"Inicio", "Expedientes", "Anexo III BAP", "Anexo IV Hoja de sugerenc
 else:
     authorized = None
 
-if page=="Inicio": inicio(authorized)
+# Barra superior fluida de retorno hacia el Centro de Control
+if page != "Inicio":
+    c_back, c_bc = st.columns([2.3, 7.7])
+    with c_back:
+        if st.button("← Centro de Control", key="btn_volver_al_hub", use_container_width=True):
+            st.session_state["navegacion_principal"] = "Inicio"
+            st.rerun()
+    with c_bc:
+        titulo_modulo = TITULOS_SIMPLIFICADOS.get(page, page)
+        st.markdown(
+            f"<div class='module-breadcrumb'>"
+            f"<span>USAER 02-E</span>"
+            f"<span style='color:var(--bs-muted-color);'>›</span>"
+            f"<strong>{titulo_modulo}</strong>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+if page=="Inicio":
+    pagina_central_hub(authorized, menu, rol, st.session_state.get("nombre", ""))
 elif page=="Expedientes": expedientes_page(authorized)
 elif page=="Anexo III BAP": bap_page(authorized)
 elif page=="Anexo IV Hoja de sugerencias": anexo4_page(authorized)
