@@ -1,8 +1,10 @@
 """Pruebas unitarias para el registro de docentes regulares de las 7 escuelas primarias."""
+import tempfile
+import os
 from unittest import TestCase
 from unittest.mock import patch
-import pandas as pd
 from streamlit.testing.v1 import AppTest
+from services import docentes_regulares
 from services.docentes_regulares import (
     ESCUELAS_PRIMARIAS,
     GRADOS,
@@ -15,6 +17,18 @@ from services.docentes_regulares import (
 
 
 class DocentesRegularesTests(TestCase):
+    def setUp(self):
+        self.tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+        self.tmp.write(b"[]")
+        self.tmp.close()
+        self.patcher = patch.object(docentes_regulares, "_LOCAL_BACKUP_PATH", self.tmp.name)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        if os.path.exists(self.tmp.name):
+            os.remove(self.tmp.name)
+
     def test_las_siete_escuelas_primarias_exactas(self):
         self.assertEqual(len(ESCUELAS_PRIMARIAS), 7)
         esperadas = {
@@ -43,7 +57,7 @@ class DocentesRegularesTests(TestCase):
             escuela="Damián Carmona",
             grado="3°",
             grupo="B",
-            nombre_docente="Docente Prueba Test",
+            nombre_docente="Mtra. Carmen Rodríguez",
             turno="Matutino",
             telefono="9991234567",
         )
@@ -54,15 +68,15 @@ class DocentesRegularesTests(TestCase):
 
         todos = listar_docentes_regulares(escuela="Damián Carmona")
         encontrado = next(
-            (d for d in todos if d.get("Nombre_Docente") == "Docente Prueba Test" and d.get("Grado") == "3°" and d.get("Grupo") == "B"),
+            (d for d in todos if d.get("Nombre_Docente") == "Mtra. Carmen Rodríguez" and d.get("Grado") == "3°" and d.get("Grupo") == "B"),
             None,
         )
         self.assertIsNotNone(encontrado)
 
     def test_lote_plantilla_y_cobertura(self):
         plantilla = [
-            {"Grado": "1°", "Grupo": "A", "Nombre_Docente": "Mtra. Ana"},
-            {"Grado": "2°", "Grupo": "A", "Nombre_Docente": "Mtro. Beto"},
+            {"Grado": "1°", "Grupo": "A", "Nombre_Docente": "Mtra. Ana María"},
+            {"Grado": "2°", "Grupo": "A", "Nombre_Docente": "Mtro. Roberto Carlos"},
         ]
         guardados = registrar_lote_docentes("Manuel Sarrado", "Matutino", plantilla)
         self.assertEqual(len(guardados), 2)
@@ -81,8 +95,6 @@ class AppPublicaTests(TestCase):
         app.query_params["p"] = "docentes"
         app.run()
         self.assertFalse(app.exception)
-        # Debe haber renderizado el título del formulario público
         self.assertTrue(any("Maestros de Grupo de Primaria" in str(m.value) for m in app.markdown))
-        # Debe tener el botón de guardar
         botones = [b for b in app.button if "Guardar" in b.label]
         self.assertTrue(len(botones) >= 1)

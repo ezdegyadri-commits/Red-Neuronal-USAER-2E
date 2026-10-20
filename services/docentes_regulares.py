@@ -189,6 +189,11 @@ def listar_docentes_regulares(escuela=None):
             mapa[k] = r
 
     todos = list(mapa.values())
+    # Omitir cualquier registro generado por pruebas o con palabras clave de test
+    todos = [
+        r for r in todos
+        if not any(token in str(r.get("Nombre_Docente", "")).lower() for token in ("prueba", "test", "ficticio"))
+    ]
     if escuela:
         escuela_norm = escuela.strip().lower()
         todos = [r for r in todos if r.get("Nombre_Escuela", "").strip().lower() == escuela_norm]
@@ -201,6 +206,19 @@ def listar_docentes_regulares(escuela=None):
         x.get("Grupo", ""),
     ))
     return todos
+
+
+def eliminar_docente_regular(id_registro):
+    """Elimina un registro de docente del respaldo local y de Sheets si aplica."""
+    id_registro = str(id_registro).strip()
+    locales = _leer_local()
+    nuevos = [r for r in locales if r.get("ID_Registro") != id_registro]
+    if len(nuevos) != len(locales):
+        try:
+            with open(_LOCAL_BACKUP_PATH, "w", encoding="utf-8") as f:
+                json.dump(nuevos, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
 
 def resumen_cobertura_escuelas():
