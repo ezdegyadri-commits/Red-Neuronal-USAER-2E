@@ -27,109 +27,129 @@ def _entrada(base,actor):
     from ui import planeacion as u
     from ui.planeacion_simple import periodo_actual,crear_borrador
     from ui.planeacion_borradores import papelera
-    papelera(base)
     try:docs=[d for d in s.listar() if d['cuenta']==actor['cuenta']]
     except Exception:
         docs=[];st.warning('No se pudieron consultar tus documentos. No se eliminó ningún borrador.')
-    if st.button('Actualizar mis planeaciones guardadas',key=base+'_viva_actualizar_documentos'):
-        s.refrescar();st.rerun()
-    if docs:
-        with st.expander('Continuar una planeación guardada', expanded=True):
-            from services.planeacion_recuperacion import ordenar, etiqueta, actividades_redactadas
-            docs_ordenados = ordenar(docs)
-            porid = {d['id']: d for d in docs_ordenados}
+
+    tab_nueva,tab_continuar=st.tabs(['➕ Nueva planeación','📂 Continuar planeación'])
+
+    with tab_nueva:
+        try:
+            from services.planeacion_matricula import preparar
+            frame=preparar(s.padron_autorizado())
+        except Exception:st.warning('No se pudo consultar la matrícula. Tus documentos se conservan.');return
+        if frame.empty:st.info('No hay alumnos disponibles en tu asignación.');return
+
+        schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
+        por_escuela={str(e['ID_Escuela']):e for e in schools}
+        escuela_key=base+'_escuela_exacta'
+        if st.session_state.get(escuela_key) not in por_escuela:st.session_state[escuela_key]=next(iter(por_escuela))
+
+        c_esc,c_modo=st.columns([1,1])
+        if len(por_escuela)>1:
+            escuela=c_esc.selectbox('Escuela asignada',list(por_escuela),format_func=lambda i:por_escuela[i]['Nombre_Escuela'],key=escuela_key)
+        else:
+            escuela=list(por_escuela)[0]
+            c_esc.markdown(f"**🏫 Escuela:** {por_escuela[escuela]['Nombre_Escuela']}")
+        school=por_escuela[escuela]
+
+        especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
+        modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
+        modo=c_modo.segmented_control('Modalidad de planeación',modos,default='Mi intervención' if especialista else 'Grupal',key=base+'_viva_modalidad_v3') or modos[0]
+        tipo='individual' if modo=='Individual' else 'grupal'
+        ciclo,trimestre=periodo_actual()
+        incluir=(modo=='Por grado' or not especialista)
+
+        with st.expander('Ajustar ciclo escolar o trimestre',expanded=False):
+            c_c,c_t=st.columns(2)
+            ciclo=c_c.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
+            trimestre=c_t.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
+            if tipo=='grupal' and modo!='Por grado':
+                incluir=st.checkbox('Reunir alumnos de atención grupal e individual en este formato',value=not especialista,key=base+'_viva_incluir_v2')
+
+        rows=frame.loc[frame['ID_Escuela']==school['ID_Escuela']].copy() if especialista and modo=='Mi intervención' else viva.opciones_padron(frame,school['ID_Escuela'],tipo,incluir=incluir)
+        if rows.empty:st.info('No hay alumnos con esta modalidad registrada en esta escuela.');return
+
+        grado=grupo=''
+        if tipo=='grupal':
+            left,right=st.columns(2)
+            grado=left.selectbox('Grado',['Todos']+sorted(set(rows['Grado'].astype(str))),key=base+'_viva_grado')
+            grados=rows if grado=='Todos' else rows.loc[rows['Grado'].astype(str)==grado]
+            grupo=right.selectbox('Grupo',['Todos']+sorted(set(grados['Grupo'].astype(str))),key=base+'_viva_grupo_'+grado)
+            if especialista:
+                rows=grados if grupo=='Todos' else grados.loc[grados['Grupo'].astype(str)==grupo]
+            else:rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
+            if modo=='Por grado' and grado=='Todos':
+                st.info('Elige el grado para reunir a sus alumnos. La modalidad registrada no cambia.');return
+
+        nombres={str(a['ID_Alumno']):a['Nombre_Completo'] for a in rows.to_dict('records')}
+        selection_key=f'{base}_viva_alumnos_{school["ID_Escuela"]}_{tipo}_{grado}_{grupo}_{incluir}'
+        if tipo=='individual':selection_key+='_multiple'
+        label='Seleccionar todos los alumnos individuales' if tipo=='individual' else 'Seleccionar alumnos del grado' if modo=='Por grado' else 'Seleccionar todo este grupo'
+        if st.button(label,key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
+        ids=st.multiselect('Alumnos de mi formato',list(nombres),format_func=nombres.get,key=selection_key)
+        if tipo=='individual':st.caption('Se reúnen los antecedentes propios de cada alumno seleccionado.')
+
+        fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
+        presentacion=None
+        if tipo=='grupal' and actor['area']=='Aprendizaje':
+            elegido=st.selectbox('Formato para trabajar',['Guía grupal horizontal por alumno y área · Anexo XIX','Planeación trimestral para el subgrupo · Anexo XXIII'],key=base+'_papel_formato_v2')
+            presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
+        if tipo=='individual' and len(ids)<=1 and actor['area']=='Aprendizaje' and not actor['director']:
+            opcion=st.selectbox('Formato',['Planeación trimestral','Plan de intervención anual'],key=base+'_viva_tipo')
+            if opcion=='Plan de intervención anual':fmt='XXI'
+        elif tipo=='individual' and len(ids)>1 and actor['area']=='Aprendizaje':
+            st.caption('El Plan de intervención anual se elabora por alumno y conserva su IEPP; esta selección abre la planeación trimestral.')
+
+        nuevo_independiente=False
+        if ids and tipo=='individual':
+            from services.planeacion_recuperacion import equivalentes
+            existentes=equivalentes(docs,actor,fmt,ids,school['ID_Escuela'],ciclo,trimestre,tipo)
+            if existentes:
+                st.info('Ya tienes una planeación para estos alumnos y periodo. Al abrir el formato continuarás el documento guardado, sin crear otra plantilla.')
+                nuevo_independiente=st.checkbox('Necesito crear otro borrador independiente; conservar el anterior',key=base+'_viva_otro_borrador')
+        if presentacion=='guia':st.caption('Un único documento por escuela, grado, grupo y trimestre. Si ya existe, se continúa el mismo; no se crea otra copia.')
+
+        if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear',use_container_width=True):
+            try:
+                elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
+                if presentacion=='guia' and len(elegidos[['Grado','Grupo']].drop_duplicates())!=1:
+                    raise ValueError('Elige un grado y grupo concreto para el Anexo XIX compartido. Así se conectarán automáticamente sus altas nuevas.')
+                crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente);st.rerun()
+            except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+
+    with tab_continuar:
+        if st.button('Actualizar mis planeaciones guardadas',key=base+'_viva_actualizar_documentos'):
+            s.refrescar();st.rerun()
+        if docs:
+            from services.planeacion_recuperacion import ordenar,etiqueta,actividades_redactadas
+            docs_ordenados=ordenar(docs)
+            porid={d['id']:d for d in docs_ordenados}
             if actividades_redactadas(next(iter(porid.values()))):
                 st.caption('Mostrando las planeaciones más recientes y editadas. Selecciona una para continuar redactando o eliminar borradores que ya no ocupes.')
-            did = st.selectbox('Mis planeaciones recientes', list(porid), format_func=lambda i: etiqueta(porid[i]), key=base+'_viva_guardadas')
-            col_abrir, _ = st.columns([2, 1])
+            did=st.selectbox('Mis planeaciones recientes',list(porid),format_func=lambda i:etiqueta(porid[i]),key=base+'_viva_guardadas')
+            col_abrir,_=st.columns([2,1])
             with col_abrir:
-                if st.button('Abrir mi formato', type='primary', key=base+'_viva_abrir'):
+                if st.button('Abrir mi formato',type='primary',key=base+'_viva_abrir',use_container_width=True):
                     try:
-                        _abrir(base, porid[did])
+                        _abrir(base,porid[did])
                         st.rerun()
-                    except (ValueError, PermissionError, RuntimeError) as exc:
+                    except (ValueError,PermissionError,RuntimeError) as exc:
                         st.warning(str(exc))
             from ui.planeacion_borradores import controles
             from documents.planeacion_papel import generar_pdf
-            controles(base+'_lista_'+did, porid[did], generar_pdf, lambda: None)
-    st.subheader('Elige a quién vas a planear')
-    try:
-        from services.planeacion_matricula import preparar
-        frame=preparar(s.padron_autorizado())
-    except Exception:st.warning('No se pudo consultar la matrícula. Tus documentos se conservan.');return
-    if frame.empty:st.info('No hay alumnos disponibles en tu asignación.');return
-    schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
-    por_escuela={str(e['ID_Escuela']):e for e in schools}
-    escuela_key=base+'_escuela_exacta'
-    if st.session_state.get(escuela_key) not in por_escuela:st.session_state[escuela_key]=next(iter(por_escuela))
-    izquierda,derecha=st.columns([2,1])
-    escuela=izquierda.selectbox('Escuela asignada',list(por_escuela),format_func=lambda i:por_escuela[i]['Nombre_Escuela'],key=escuela_key)
-    school=por_escuela[escuela]
-    especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
-    if especialista:
-        st.info('Aquí elaboras tu formato propio de especialista. Para continuar el Anexo XIX iniciado por apoyo, elige «Planeaciones del equipo» arriba.')
-    modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
-    modo=derecha.segmented_control('Modalidad de planeación',modos,default='Mi intervención' if especialista else 'Grupal',key=base+'_viva_modalidad_v3') or modos[0]
-    tipo='individual' if modo=='Individual' else 'grupal';ciclo,trimestre=periodo_actual();incluir=False
-    with st.expander('Cambiar periodo o incluir atención individual en una sesión grupal'):
-        ciclo=st.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
-        trimestre=st.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
-        if tipo=='grupal' and modo!='Por grado':
-            incluir=st.checkbox('Reunir alumnos de atención grupal e individual en este formato',value=not especialista,key=base+'_viva_incluir_v2')
-    if tipo=='grupal' and not especialista:
-        st.caption('La hoja grupal incluye por defecto a los alumnos del grado, también a quienes reciben atención individual. No cambia su tipo de atención en el padrón.')
-    if modo=='Por grado':
-        incluir=True
-        st.caption('Por grado reúne a sus alumnos individuales y grupales autorizados, sin cambiar su modalidad en el padrón.')
-    rows=frame.loc[frame['ID_Escuela']==school['ID_Escuela']].copy() if especialista and modo=='Mi intervención' else viva.opciones_padron(frame,school['ID_Escuela'],tipo,incluir=incluir)
-    if rows.empty:st.info('No hay alumnos con esta modalidad registrada en esta escuela.');return
-    grado=grupo=''
-    if tipo=='grupal':
-        left,right=st.columns(2)
-        grado=left.selectbox('Grado',['Todos']+sorted(set(rows['Grado'].astype(str))),key=base+'_viva_grado')
-        grados=rows if grado=='Todos' else rows.loc[rows['Grado'].astype(str)==grado]
-        grupo=right.selectbox('Grupo',['Todos']+sorted(set(grados['Grupo'].astype(str))),key=base+'_viva_grupo_'+grado)
-        if especialista:
-            rows=grados if grupo=='Todos' else grados.loc[grados['Grupo'].astype(str)==grupo]
-        else:rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
-        if modo=='Por grado' and grado=='Todos':
-            st.info('Elige el grado para reunir a sus alumnos. La modalidad registrada no cambia.');return
-    nombres={str(a['ID_Alumno']):a['Nombre_Completo'] for a in rows.to_dict('records')}
-    selection_key=f'{base}_viva_alumnos_{school["ID_Escuela"]}_{tipo}_{grado}_{grupo}_{incluir}'
-    # Clave nueva: una sesión abierta podía conservar el valor escalar del
-    # selector individual anterior; no reutilizarlo como lista del multiselect.
-    if tipo=='individual':selection_key+='_multiple'
-    label='Seleccionar todos los alumnos individuales' if tipo=='individual' else 'Seleccionar alumnos del grado' if modo=='Por grado' else 'Seleccionar todo este grupo'
-    if st.button(label,key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
-    ids=st.multiselect('Alumnos de mi formato',list(nombres),format_func=nombres.get,key=selection_key)
-    if tipo=='individual':st.caption('Puedes reunir varios alumnos de atención individual en un formato trimestral; sus antecedentes se conservan vinculados a cada alumno.')
-    fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
-    presentacion=None
-    if tipo=='grupal' and actor['area']=='Aprendizaje':
-        elegido=st.selectbox('Formato para trabajar',['Guía grupal horizontal por alumno y área · Anexo XIX','Planeación trimestral para el subgrupo · Anexo XXIII'],key=base+'_papel_formato_v2')
-        presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
-    if tipo=='individual' and len(ids)<=1 and actor['area']=='Aprendizaje' and not actor['director']:
-        opcion=st.selectbox('Formato',['Planeación trimestral','Plan de intervención anual'],key=base+'_viva_tipo')
-        if opcion=='Plan de intervención anual':fmt='XXI'
-    elif tipo=='individual' and len(ids)>1 and actor['area']=='Aprendizaje':
-        st.caption('El Plan de intervención anual se elabora por alumno y conserva su IEPP; esta selección abre la planeación trimestral.')
-    st.caption(f'Curso {ciclo}–{ciclo+1} · Trimestre {trimestre}. Se reúnen los antecedentes propios de los alumnos seleccionados.')
-    nuevo_independiente=False
-    if ids and tipo=='individual':
-        from services.planeacion_recuperacion import equivalentes
-        existentes=equivalentes(docs,actor,fmt,ids,school['ID_Escuela'],ciclo,trimestre,tipo)
-        if existentes:
-            st.info('Ya tienes una planeación para estos alumnos y periodo. Al abrir el formato continuarás el documento guardado, sin crear otra plantilla.')
-            nuevo_independiente=st.checkbox('Necesito crear otro borrador independiente; conservar el anterior',key=base+'_viva_otro_borrador')
-    if presentacion=='guia':st.caption('Un único documento por escuela, grado, grupo y trimestre. Si ya existe, se continúa el mismo; no se crea otra copia.')
-    if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear'):
-        try:
-            elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
-            if presentacion=='guia' and len(elegidos[['Grado','Grupo']].drop_duplicates())!=1:
-                raise ValueError('Elige un grado y grupo concreto para el Anexo XIX compartido. Así se conectarán automáticamente sus altas nuevas.')
-            crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente);st.rerun()
-        except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
-    with st.expander('Actualizar matrícula, recuperar un respaldo o consultar las guías'):
+            controles(base+'_lista_'+did,porid[did],generar_pdf,lambda:None)
+        else:
+            st.info('Aún no tienes planeaciones guardadas en tu cuenta. Usa la pestaña «➕ Nueva planeación» para comenzar una.')
+
+        with st.expander('👥 Planeación grupal compartida del equipo',expanded=False):
+            st.caption('Consulta o aporta en la misma hoja grupal de apoyo, psicología, comunicación y trabajo social.')
+            from ui.planeacion_colaboracion import panel as panel_colaboracion
+            panel_colaboracion(base+'_equipo_cont')
+
+        papelera(base)
+
+    with st.expander('Actualizar matrícula, recuperar un respaldo o consultar las guías',expanded=False):
         if st.button('Actualizar matrícula disponible',key=base+'_viva_refresh'):s.refrescar_matricula();st.rerun()
         from ui.planeacion_simple import _recuperar
         _recuperar(base)
@@ -337,37 +357,36 @@ def pagina(render_hoja=None):
     if render_hoja:
         st.subheader('Planeación · '+actor['area'])
     else:
-        st.title('Mi formato · '+actor['area'])
-        st.caption('Planea en tu hoja de siempre. Los alumnos y sus antecedentes ya están conectados; tú decides qué trabajar y cómo.')
-    from ui.planeacion_accesos import opciones,menu
-    permitidas={id for id,_,_,_ in opciones(actor)}
+        st.title('Planeación · '+actor['area'])
+        st.caption('Cero burocracia · Tu información conectada y lista para trabajar.')
+
     vista=st.session_state.get(base+'_submodulo')
-    st.caption('Accesos claros · una sola hoja grupal por grado, grupo y periodo')
-    if vista not in permitidas:
-        menu(base,actor);return
+    if actor['director'] or vista=='revision':
+        u.direccion_panel();return
+
+    if vista=='equipo':
+        if st.button('← Volver a mis planeaciones',key=base+'_colab_volver'):
+            st.session_state.pop(base+'_submodulo',None);st.rerun()
+        from ui.planeacion_colaboracion import panel as panel_colab
+        panel_colab(base+'_colaboracion')
+        return
+
     activo=st.session_state.get(base+'_activa')
-    editando=(vista=='propio' and activo and activo+'_doc' in st.session_state and not st.session_state.get(base+'_viva_entrada')) or (vista=='equipo' and st.session_state.get(base+'_colaboracion_abierto'))
-    # El editor dispone de su regreso protegido: no añadir un atajo que ignore
-    # su texto todavía en el navegador o una aportación pendiente.
-    if not editando and st.button('Volver a los accesos de Planeación',key=base+'_accesos_volver'):
-        st.session_state.pop(base+'_submodulo',None);st.rerun()
-    if vista=='revision':
-        u.direccion_panel()
-    elif vista=='propio':
-        activo=st.session_state.get(base+'_activa')
-        if not activo:
-            prefixes=[p for p in (base+'_individual',base+'_grupal') if p+'_doc' in st.session_state]
-            activo=next((p for p in prefixes if st.session_state.get(p+'_pending')),next(iter(prefixes),None))
-            if activo:st.session_state[base+'_activa']=activo
-        if activo and activo+'_doc' in st.session_state and not st.session_state.get(base+'_viva_entrada'):
-            (render_hoja or hoja)(activo)
-        else:
-            anterior=st.session_state.get(base+'_activa')
-            _entrada(base,actor)
-            if st.session_state.get(base+'_activa')!=anterior:st.session_state[base+'_viva_entrada']=False
-            if activo and st.button('Volver al formato abierto',key=base+'_viva_retomar'):st.session_state[base+'_viva_entrada']=False;st.rerun()
-        with st.expander('Ayuda y herramientas anteriores',expanded=False):
-            if st.button('Usar el recorrido anterior',key=base+'_viva_legacy'):st.session_state[base+'_viva_anterior']=True;st.rerun()
-    elif vista=='equipo':
-        from ui.planeacion_colaboracion import panel
-        panel(base+'_colaboracion')
+    if not activo:
+        prefixes=[p for p in (base+'_individual',base+'_grupal') if p+'_doc' in st.session_state]
+        activo=next((p for p in prefixes if st.session_state.get(p+'_pending')),next(iter(prefixes),None))
+        if activo:st.session_state[base+'_activa']=activo
+
+    if activo and activo+'_doc' in st.session_state and not st.session_state.get(base+'_viva_entrada'):
+        c_ret,_=st.columns([1,4])
+        if c_ret.button('← Volver a mis planeaciones',key=base+'_viva_volver_hub'):
+            u._guardar_edicion_pendiente(activo)
+            st.session_state[base+'_viva_entrada']=True;st.rerun()
+        (render_hoja or hoja)(activo)
+    else:
+        anterior=st.session_state.get(base+'_activa')
+        _entrada(base,actor)
+        if st.session_state.get(base+'_activa')!=anterior:st.session_state[base+'_viva_entrada']=False
+        if activo and st.button('Volver al formato abierto',key=base+'_viva_retomar'):st.session_state[base+'_viva_entrada']=False;st.rerun()
+    with st.expander('Ayuda y herramientas anteriores',expanded=False):
+        if st.button('Usar el recorrido anterior',key=base+'_viva_legacy'):st.session_state[base+'_viva_anterior']=True;st.rerun()

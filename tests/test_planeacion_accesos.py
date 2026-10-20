@@ -54,20 +54,23 @@ class AccesosTests(TestCase):
             self.assertEqual(labels[1],'Planeación grupal compartida')
             self.assertIn('apoyo' if area=='Aprendizaje' else area,labels[0])
 
-    def test_inicio_no_monta_editores_y_clic_abre_solo_submodulo_elegido(self):
+    def test_inicio_abre_directamente_sin_bloqueo_de_menu(self):
         app=AppTest.from_string(APP,default_timeout=30).run()
-        self.assertFalse(app.exception);self.assertFalse(app.radio);self.assertFalse(app.tabs)
-        self.assertEqual([b.label for b in app.button],['Mi planeación de Comunicación','Planeación grupal compartida'])
-        self.assertFalse(any('ENTRADA' in t.value for t in app.text))
-        next(b for b in app.button if b.label=='Planeación grupal compartida').click().run()
-        self.assertFalse(app.exception)
-        self.assertTrue(any(t.value=='ENTRADA COMPARTIDA' for t in app.text))
-        self.assertFalse(any(t.value=='ENTRADA PROPIA' for t in app.text))
-        next(b for b in app.button if b.label=='Volver a los accesos de Planeación').click().run()
-        next(b for b in app.button if b.label=='Mi planeación de Comunicación').click().run()
         self.assertFalse(app.exception)
         self.assertTrue(any(t.value=='ENTRADA PROPIA' for t in app.text))
         self.assertFalse(any(t.value=='ENTRADA COMPARTIDA' for t in app.text))
+
+    def test_menu_accesos_aislado(self):
+        MENU_APP='''
+import streamlit as st
+from ui.planeacion_accesos import menu
+from tests.test_planeacion_panel import ACTOR
+actor={**ACTOR,'area':'Comunicación'}
+menu('p',actor)
+'''
+        app=AppTest.from_string(MENU_APP,default_timeout=30).run()
+        self.assertFalse(app.exception)
+        self.assertEqual([b.label for b in app.button],['Mi planeación de Comunicación','Planeación grupal compartida'])
 
     def test_css_respetar_movimiento_reducido(self):
         from pathlib import Path
