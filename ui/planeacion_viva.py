@@ -31,10 +31,14 @@ def _entrada(base,actor):
     try:docs=[d for d in s.listar() if d['cuenta']==actor['cuenta']]
     except Exception:
         docs=[];st.warning('No se pudieron consultar tus documentos. No se eliminó ningún borrador.')
+    if st.button('Actualizar mis planeaciones guardadas',key=base+'_viva_actualizar_documentos'):
+        s.refrescar();st.rerun()
     if docs:
         with st.expander('Continuar una planeación guardada',expanded=True):
-            porid={d['id']:d for d in sorted(docs,key=lambda d:d.get('guardado_en',''),reverse=True)}
-            from services.planeacion_compartida import etiqueta
+            from services.planeacion_recuperacion import ordenar,etiqueta,actividades_redactadas
+            porid={d['id']:d for d in ordenar(docs)}
+            if actividades_redactadas(next(iter(porid.values()))):
+                st.caption('Primero aparecen los documentos con actividades escritas. Una plantilla nueva no sustituye el avance anterior; todos los borradores se conservan.')
             did=st.selectbox('Mis planeaciones · escuela, grado, grupo, trimestre y fecha/hora',list(porid),format_func=lambda i:etiqueta(porid[i]),key=base+'_viva_guardadas')
             if st.button('Abrir mi formato',key=base+'_viva_abrir'):
                 try:_abrir(base,porid[did]);st.rerun()
@@ -99,13 +103,20 @@ def _entrada(base,actor):
     elif tipo=='individual' and len(ids)>1 and actor['area']=='Aprendizaje':
         st.caption('El Plan de intervención anual se elabora por alumno y conserva su IEPP; esta selección abre la planeación trimestral.')
     st.caption(f'Curso {ciclo}–{ciclo+1} · Trimestre {trimestre}. Se reúnen los antecedentes propios de los alumnos seleccionados.')
+    nuevo_independiente=False
+    if ids and tipo=='individual':
+        from services.planeacion_recuperacion import equivalentes
+        existentes=equivalentes(docs,actor,fmt,ids,school['ID_Escuela'],ciclo,trimestre,tipo)
+        if existentes:
+            st.info('Ya tienes una planeación para estos alumnos y periodo. Al abrir el formato continuarás el documento guardado, sin crear otra plantilla.')
+            nuevo_independiente=st.checkbox('Necesito crear otro borrador independiente; conservar el anterior',key=base+'_viva_otro_borrador')
     if presentacion=='guia':st.caption('Un único documento por escuela, grado, grupo y trimestre. Si ya existe, se continúa el mismo; no se crea otra copia.')
     if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear'):
         try:
             elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
             if presentacion=='guia' and len(elegidos[['Grado','Grupo']].drop_duplicates())!=1:
                 raise ValueError('Elige un grado y grupo concreto para el Anexo XIX compartido. Así se conectarán automáticamente sus altas nuevas.')
-            crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True);st.rerun()
+            crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente);st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
     with st.expander('Actualizar matrícula, recuperar un respaldo o consultar las guías'):
         if st.button('Actualizar matrícula disponible',key=base+'_viva_refresh'):s.refrescar_matricula();st.rerun()
