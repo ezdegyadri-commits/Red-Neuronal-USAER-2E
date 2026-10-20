@@ -103,7 +103,11 @@ def documentos(versiones):
         if not k or d['metadatos'].get('borrador_eliminado'):salida.append(deepcopy(d));continue
         grupos.setdefault(k,[]).append(d)
     for docs in grupos.values():
-        docs.sort(key=lambda d:(creados[d['id']],d['id']))
+        # Una hoja ya consolidada es la raíz incluso si el llamador entrega
+        # solamente las versiones más recientes (su fecha cambió al guardar).
+        # No reactivar una copia antigua por tener una fecha de guardado anterior.
+        ids={d['id'] for d in docs}
+        docs.sort(key=lambda d:(-len(ids & set(d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{}))),creados[d['id']],d['id']))
         salida.append(conciliar(docs[0],docs[1:]) if len(docs)>1 else deepcopy(docs[0]))
     return salida
 

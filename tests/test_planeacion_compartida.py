@@ -66,7 +66,8 @@ class ProyeccionTests(unittest.TestCase):
         a.pop('Situacion_Alumno');self.assertEqual(situacion_inicial(a,[]),'')
         with patch.object(s,'autorizar',return_value=ACTOR):
             spec=papel.hoja(d);self.assertFalse(next(c for c in spec['cells'].values() if c['label']=='Situación final')['editable'])
-        self.assertIn('Alumno ficticio',etiqueta(d))
+        self.assertIn('1 alumno(s)',etiqueta(d))
+        self.assertNotIn('Alumno ficticio',etiqueta(d))
 
     def test_escala_por_destinatario_editable_eliminacion_no_reaparece(self):
         d=documento();d['metadatos']['modalidad_planeacion']='individual'

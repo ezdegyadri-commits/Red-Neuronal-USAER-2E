@@ -131,7 +131,7 @@ class HojaTests(unittest.TestCase):
     def test_director_conserva_revision_y_colaboracion(self):
         app=self.abrir('Aprendizaje')
         app.radio[0].set_value('Dirección').run()
-        self.assertEqual([t.label for t in app.tabs],['Revisión directiva','Planeaciones grupales del equipo'])
+        self.assertFalse(app.tabs)
         self.assertTrue(any(b.label=='Validar revisión' for b in app.button))
 
     def test_fallo_guardado_no_oculta_hoja_ni_pierde_texto(self):

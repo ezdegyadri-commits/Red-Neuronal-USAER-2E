@@ -31,4 +31,6 @@ def guardar(doc,filas,obs):
     st.session_state['f_docs']=[nuevo]
     return deepcopy(nuevo)
 s.guardar_aportacion=guardar
+from ui import planeacion as u
+st.session_state.setdefault(u._prefix()+'_submodulo','equipo')
 ui.pagina()

@@ -18,14 +18,14 @@ def etiqueta(doc):
         doc['datos']['Curso escolar'],'T'+str(doc['datos']['Trimestre']),
         doc.get('guardado_en') or doc['datos'].get('Fecha de elaboración',''),
         doc['datos']['Función'],doc['metadatos'].get('modalidad_planeacion','Por confirmar'),
-        ', '.join(a['Nombre del alumno'] for a in doc['datos']['Alumnos']),doc['id'][:8]])
+        str(len(doc['datos']['Alumnos']))+' alumno(s)'])
 
 
 def etiqueta_selector(doc):
     """La etiqueta de navegación no cambia cuando otra persona guarda."""
     grupos=sorted({grado_canonico(a.get('Grado'))+' '+grupo_canonico(a.get('Grupo')) for a in doc['datos']['Alumnos']})
     return ' · '.join([doc['datos']['Escuela regular'],', '.join(grupos),
-        doc['datos']['Curso escolar'],'T'+str(doc['datos']['Trimestre']),doc['id']])
+        'Trimestre '+str(doc['datos']['Trimestre']),doc['datos']['Curso escolar']])
 
 
 def actualizar_lectura(doc,reciente,area):
