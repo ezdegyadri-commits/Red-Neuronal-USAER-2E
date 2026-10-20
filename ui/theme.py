@@ -173,69 +173,28 @@ html, body {
 }
 
 /* ========================================================================== */
-/* SIDEBAR DASHBOARD ELEGANTE (DARK GLASS SAAS)                               */
+/* VISTA MINIMALISTA: SUPRESIÓN COMPLETA DE SIDEBAR                           */
 /* ========================================================================== */
-[data-testid="stSidebar"] {
-  background: linear-gradient(180deg, #0F2D3C 0%, #091E28 100%) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.12);
+[data-testid="stSidebar"],
+section[data-testid="stSidebar"],
+[data-testid="collapsedControl"],
+button[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarNav"] {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  max-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] h5,
-[data-testid="stSidebar"] h6 {
-  color: #FFFFFF !important;
-  -webkit-text-fill-color: #FFFFFF !important;
-  font-weight: 700 !important;
-}
-
-[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {
-  color: #FBBF24 !important;
-  -webkit-text-fill-color: #FBBF24 !important;
-  font-size: 0.88rem !important;
-  font-weight: 750 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  margin-top: 1.25rem !important;
-  margin-bottom: 0.5rem !important;
-}
-
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] span:not(.badge):not(.status-dot),
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:not([data-testid="stExpander"] *) {
-  color: #E2EFF2 !important;
-  -webkit-text-fill-color: #E2EFF2 !important;
-}
-
-[data-testid="stSidebar"] hr,
-[data-testid="stSidebar"] [data-testid="stDivider"] {
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  margin: 1.15rem 0 !important;
-}
-
-/* Pill de Sesión Activa en Sidebar */
-.sidebar-user-pill {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--radius-md);
-  margin-bottom: 1.25rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(8px);
-  transition: all 0.22s var(--ease-spring);
-}
-
-.sidebar-user-pill:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.22);
-  transform: translateY(-1px);
+[data-testid="stAppViewContainer"] > .main {
+  margin-left: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .sidebar-user-info {
