@@ -18,7 +18,7 @@ def preparar_descarga(doc):
     import streamlit as st
     copia=deepcopy(doc)
     cache=getattr(st,'session_state',{}).setdefault('_pdf_spec_cache',{}) if hasattr(st,'session_state') else {}
-    cache_key=(doc.get('id',''),doc.get('revision',''))
+    cache_key=('visibilidad-2026-10-20',doc.get('id',''),doc.get('revision',''))
     spec=cache.get(cache_key)
     if spec is None:
         spec=hoja(copia,para_impresion=True)
@@ -70,10 +70,12 @@ def _generar_pdf(doc,spec):
     if spec['grupal']:
         from services.planeacion_modelo import FORMATOS
         for nombre,headers in FORMATOS[doc['formato']]['tablas'].items():
+            if any(t['id']==nombre for t in spec['tables']):continue
             rows=doc['tablas'][nombre]
             if any(any(str(r.get(h,'') or '').strip() for h in headers if h!='Contextos') for r in rows):
                 story.extend([Spacer(1,10),p('Detalle conectado · '+nombre,title),tabla([[p(h) for h in headers]]+[[p(r.get(h,'')) for h in headers] for r in rows],[ancho/len(headers)]*len(headers))])
         for campo,value in doc['textos'].items():
+            if any(c['label']==campo for c in spec['textos']):continue
             if value:story.extend([Spacer(1,10),p(campo,title),p(value)])
     SimpleDocTemplate(output,pagesize=landscape(letter),leftMargin=26,rightMargin=26,topMargin=26,bottomMargin=26).build(story)
     return output.getvalue()

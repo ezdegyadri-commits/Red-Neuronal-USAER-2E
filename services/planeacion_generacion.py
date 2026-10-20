@@ -253,7 +253,11 @@ def ensamblar(doc,respuesta,solicitud):
         relevantes=[u for u in unidades if alias in u['destinatarios']]
         if relevantes and not r.get('Actividades'):r['Actividades']='\n'.join(dict.fromkeys(u['objetivo']+' · '+u['actividad'] for u in relevantes))
         fuentes=[f for f in fuentes_pertinentes(doc) if r['ID_Alumno'] in str(f.get('alumno','')).split(',') and f['tipo'] not in {'PLAN','MATERIAL'}]
-        if fuentes and not r.get('Situación inicial'):r['Situación inicial']='\n'.join(f.get('referencia','')+' · '+f.get('fecha','')+': '+f['texto'][:900] for f in fuentes[:3])
+        if not r.get('Situación inicial'):
+            from services.planeacion_compartida import situacion_inicial
+            alumno=next((a for a in doc['datos']['Alumnos'] if a['ID_Alumno']==r['ID_Alumno']),{})
+            contexto=doc['metadatos'].get('contexto_padron_grupo',{}).get(r['ID_Alumno'],{})
+            r['Situación inicial']=situacion_inicial({**alumno,**{k:v for k,v in contexto.items() if v}},fuentes)
     meta=result['metadatos']
     meta['generacion_completa']={'huella':solicitud['huella'],'alcance':solicitud['alcance'],'ajustes':deepcopy(solicitud['ajustes']),
        'resultado':deepcopy(respuesta),'configuracion_original':deepcopy(solicitud['configuracion_original']),'filas_generadas':deepcopy(generadas),'evaluacion_generada':valor,'pendientes':respuesta['faltantes'],

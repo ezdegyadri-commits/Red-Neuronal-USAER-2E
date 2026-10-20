@@ -165,7 +165,7 @@ class PapelUITests(unittest.TestCase):
                 spec=papel.hoja(doc)
                 headers={'Aprendizaje':['Nombre alumno','Discapacidad o condición','Fecha derivación','Aprendizaje','Psicología','Comunicación','Trabajo Social','Situación inicial','Situación final'],
                          'Trabajo Social':['Nombre del alumno','Grado','Grupo'],
-                         'Psicología':['Necesidades educativas específicas','Competencias emocionales','Descriptor de logro'],
+                         'Psicología':['Necesidades educativas específicas','Competencias emocionales','Descriptor de logro','Actividad prevista'],
                          'Comunicación':['Necesidades educativas específicas','Aprendizaje y/u objetivo','Descriptor de logro']}
                 self.assertEqual(spec['tables'][0]['headers'],headers[area])
 

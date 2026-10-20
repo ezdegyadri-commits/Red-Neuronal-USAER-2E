@@ -48,32 +48,33 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
             'rows':[[celda(a.get(c,''),label=c) for c in ('Nombre del alumno','Grado','Grupo')] for a in alumnos],
             'add':False,'delete':False,'widths':[70,15,15]})
     if datos['Función']=='Psicología' and organizacion.get('competencias'):
-        campos=('Necesidad documentada','Competencia','Descriptor de logro')
-        tables.append({'id':'competencias','title':'','headers':['Necesidades educativas específicas','Competencias emocionales','Descriptor de logro'],
+        campos=('Necesidad documentada','Competencia','Descriptor de logro','Actividad prevista')
+        tables.append({'id':'competencias','title':'','headers':['Necesidades educativas específicas','Competencias emocionales','Descriptor de logro','Actividad prevista'],
             'rows':[[celda(row.get(c,''),None if c=='Competencia' else ('competencia',i,c),c) for c in campos] for i,row in enumerate(organizacion['competencias'])],
-            'add':False,'delete':False,'widths':[34,33,33]})
+            'add':False,'delete':False,'widths':[25,20,25,30]})
     for table,headers in FORMATOS[doc['formato']]['tablas'].items():
-        # La guía horizontal es el documento grupal principal; el detalle sigue
-        # conectado y disponible sin convertir la hoja en tarjetas de edición.
-        if grupal:continue
+        # El detalle existente se muestra en la misma hoja, sin copiarlo a otras
+        # celdas ni exigir buscarlo en herramientas secundarias.
+        if grupal and not any(tiene_contenido(doc,table,r) for r in doc['tablas'][table]):continue
         if table=='aprendizajes' and organizacion.get('competencias') and not doc['tablas'][table]:continue
         labelheaders=list(headers)
         if table=='aprendizajes' and datos['Función']=='Aprendizaje':labelheaders[1]='PDA: nacionales, nacionales contextualizados y/o locales (complementarios)'
         rows=[]
         indices=[]
         for i,row in enumerate(doc['tablas'][table]):
-            if not tiene_contenido(doc,table,row) and (para_impresion or not row.get('_fila_manual')):continue
+            if not tiene_contenido(doc,table,row) and (grupal or para_impresion or not row.get('_fila_manual')):continue
             indices.append(i)
             sid=row.get('_sesion_equipo')
             linked=equipo.sesion_vinculada(doc,sid) if sid else None
-            locked=bool(row.get('_aporte') or sid and linked is None)
+            locked=bool(colaborativa or row.get('_aporte') or sid and linked is None)
             cells_row=[celda(row.get(c,''),None if locked else ('sesion',sid,c) if sid else ('tabla',table,i,c),c,
                 curricular if table=='aprendizajes' and c=='Aprendizaje y/u objetivo' else '') for c in headers]
             if table=='aprendizajes' and row.get('_nee_origen'):
                 cells_row[0]['nota']='NEE propuesta para valoración: puedes mantenerla, cambiarla o eliminarla.' if row['_nee_origen'].get('propuesta') else 'NEE tomada de '+row['_nee_origen']['origen']+'.'
             rows.append(cells_row)
-        tables.append({'id':table,'title':{'aprendizajes':'','dosificacion':'Organización de las actividades de aprendizaje'}.get(table,f.TITULOS.get(table,table)),
-            'headers':labelheaders,'rows':rows,'indices':indices,'add':True,'delete':True,
+        titulo={'aprendizajes':'Aprendizajes registrados' if grupal else '','dosificacion':'Organización de las actividades de aprendizaje'}.get(table,f.TITULOS.get(table,table))
+        tables.append({'id':table,'title':('Detalle ya capturado · ' if grupal else '')+titulo,
+            'headers':labelheaders,'rows':rows,'indices':indices,'add':not grupal,'delete':not grupal,
             'collapsed':'Otros aprendizajes y objetivos registrados · editables' if table=='aprendizajes' and organizacion.get('competencias') else '',
             'protected':[i for i,r in enumerate(doc['tablas'][table]) if r.get('_aporte') or r.get('_sesion_equipo') and equipo.sesion_vinculada(doc,r['_sesion_equipo']) is None],
             'widths':[18,52,15,15] if table=='dosificacion' else [26,47,27] if table=='aprendizajes' else []})
@@ -85,7 +86,7 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
             'add':True,'delete':True,'widths':[17,30,25,13,15],'collapsed':'Evaluación al cierre del trimestre',
             'alumnos':[{'id':a['ID_Alumno'],'nombre':a['Nombre del alumno']} for a in alumnos]})
         for row in tables[-1]['rows']:row[3]['opciones']=list(evaluacion.ESCALA)
-    textos=[celda(v,('texto',k),k) for k,v in doc['textos'].items() if not para_impresion or str(v or '').strip()] if not grupal else []
+    textos=[celda(v,None if colaborativa else ('texto',k),k) for k,v in doc['textos'].items() if str(v or '').strip() or not (para_impresion or grupal)]
     if colaborativa:
         aporte=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
         textos.append(celda(aporte.get('observaciones',''),None if bloqueada else ('aporte_obs',),'Observaciones de mi área'))
