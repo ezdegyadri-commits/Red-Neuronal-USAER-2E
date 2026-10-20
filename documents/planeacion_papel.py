@@ -15,7 +15,14 @@ def preparar_descarga(doc):
     # Streamlit ejecuta la descarga diferida fuera del hilo de la pantalla.
     # Autorizar ahora y capturar una instantánea evita leer session_state allí.
     from copy import deepcopy
-    copia=deepcopy(doc);spec=hoja(copia,para_impresion=True)
+    import streamlit as st
+    copia=deepcopy(doc)
+    cache=getattr(st,'session_state',{}).setdefault('_pdf_spec_cache',{}) if hasattr(st,'session_state') else {}
+    cache_key=(doc.get('id',''),doc.get('revision',''))
+    spec=cache.get(cache_key)
+    if spec is None:
+        spec=hoja(copia,para_impresion=True)
+        cache[cache_key]=spec
     return lambda:_generar_pdf(copia,spec)
 
 

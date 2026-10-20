@@ -66,25 +66,13 @@ CSS = """
 /* KEYFRAME ANIMATIONS (SaaS Polish & Micro-Interactions)                     */
 /* ========================================================================== */
 @keyframes saasFadeInUp {
-  0% {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  0% { transform: translateY(4px); }
+  100% { transform: translateY(0); }
 }
 
 @keyframes saasFadeInScale {
-  0% {
-    opacity: 0;
-    transform: scale(0.98) translateY(6px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+  0% { transform: scale(0.99); }
+  100% { transform: scale(1); }
 }
 
 @keyframes saasPulseDot {
@@ -141,7 +129,6 @@ html, body {
   padding-bottom: 4rem;
   padding-left: 2rem;
   padding-right: 2rem;
-  animation: saasFadeInUp 0.32s var(--ease-spring);
 }
 
 .stApp p, .stApp label, .stApp li, [data-testid="stMarkdownContainer"] {
@@ -553,7 +540,6 @@ div[class*="st-key-"][class*="danger"] button:hover {
   overflow: hidden !important;
   background: #FFFFFF !important;
   transition: box-shadow 0.25s var(--ease-spring) !important;
-  animation: saasFadeInScale 0.3s var(--ease-spring);
 }
 
 [data-testid="stDataFrame"]:hover,
@@ -603,7 +589,6 @@ div[class*="st-key-"][class*="danger"] button:hover {
   background: #FFFFFF;
   overflow: hidden;
   margin: 1.25rem 0;
-  animation: saasFadeInScale 0.3s var(--ease-spring);
 }
 
 .saas-data-table {
@@ -648,7 +633,6 @@ div[class*="st-key-"][class*="danger"] button:hover {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   transition: all 0.25s var(--ease-spring);
-  animation: saasFadeInScale 0.32s var(--ease-spring);
 }
 
 .card {
@@ -700,7 +684,6 @@ div[class*="st-key-"][class*="danger"] button:hover {
   margin: 0 0 1.6rem;
   position: relative;
   overflow: hidden;
-  animation: saasFadeInScale 0.35s var(--ease-spring);
 }
 
 .hero .eyebrow {
@@ -763,7 +746,6 @@ div[role="dialog"] {
   box-shadow: var(--shadow-xl) !important;
   border: 1px solid rgba(226, 232, 240, 0.9) !important;
   background: #FFFFFF !important;
-  animation: saasFadeInScale 0.28s var(--ease-spring) !important;
 }
 
 /* Pestañas (Tabs) Estilo SaaS */
