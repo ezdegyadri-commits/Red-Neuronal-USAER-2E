@@ -446,12 +446,22 @@ def _abrir(base,prefix,doc):
     st.session_state[base+'_paso_pendiente']=PASOS[2] if doc.get('metadatos',{}).get('generacion_completa') or doc.get('metadatos',{}).get('preparacion_local') else PASOS[1]
 
 
-def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None,proponer_apartados=False):
+def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None,proponer_apartados=False,nuevo_independiente=False):
     """Las dos vistas comparten creación, protección de pendientes y contexto."""
     from ui import planeacion as u
     for key in list(st.session_state):
         if key.startswith(base+'_') and key.endswith('_doc') and st.session_state.get(key[:-4]+'_pending'):
             if not u._guardar_edicion_pendiente(key[:-4]):raise RuntimeError('Primero confirma el guardado de tu edición pendiente.')
+    if tipo in ('individual','especialista') and not nuevo_independiente:
+        from services.planeacion_recuperacion import equivalentes
+        frame=s.padron_autorizado()
+        elegidos=frame.loc[frame['ID_Alumno'].astype(str).isin(set(map(str,ids)))]
+        if len(elegidos)!=len(set(map(str,ids))) or elegidos['ID_Escuela'].nunique()!=1:
+            raise PermissionError('Selecciona alumnos autorizados de una misma escuela.')
+        existentes=equivalentes(s.listar(),s.identidad(),fmt,ids,elegidos.iloc[0]['ID_Escuela'],ciclo,trimestre,tipo)
+        if existentes:
+            # Abrir el avance confirmado, no guardar una copia de la plantilla.
+            prefix=base+'_'+tipo;_abrir(base,prefix,existentes[0]);return prefix
     with st.spinner('Reuniendo la información que ya registró el equipo…'):
         solicitud='especialista' if tipo=='grupal' and s.identidad()['area'] in ('Comunicación','Psicología','Trabajo Social') else tipo
         doc=s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=solicitud,incluir_individuales=incluir,vista_formato=presentacion)
