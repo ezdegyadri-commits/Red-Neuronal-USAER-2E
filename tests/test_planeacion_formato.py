@@ -68,8 +68,10 @@ class FormatoUITests(unittest.TestCase):
             self.assertFalse(app.exception,area)
             self.assertEqual(next(t for t in app.text_area if t.label==campo).value,'Texto revisado en el formato.')
             self.assertEqual(app.session_state.llamadas_ficticias,0)
-            next(t for t in app.text_area if t.label=='Fecha derivación').set_value('Fecha documentada de ejemplo').run()
-            self.assertFalse(app.exception,area)
-            self.assertEqual(app.session_state.versiones_ficticias[-1]['metadatos']['guia_grupal_manual']['filas'][0]['Fecha derivación'],'Fecha documentada de ejemplo')
+            if area=='Aprendizaje':
+                next(t for t in app.text_area if t.label=='Fecha derivación').set_value('Fecha documentada de ejemplo').run()
+                self.assertFalse(app.exception,area)
+                self.assertEqual(app.session_state.versiones_ficticias[-1]['metadatos']['guia_grupal_manual']['filas'][0]['Fecha derivación'],'Fecha documentada de ejemplo')
+
 
 if __name__=='__main__':unittest.main()

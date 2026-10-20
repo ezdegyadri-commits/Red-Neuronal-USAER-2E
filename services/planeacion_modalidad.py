@@ -14,8 +14,9 @@ def filtrar(frame, seleccion, incluir_individuales=False):
         return frame.copy()
     admitidas={seleccion}
     if seleccion=='grupal' and incluir_individuales:admitidas.add('individual')
-    mask = frame.apply(lambda row: modalidad(row.to_dict()) in admitidas, axis=1)
-    return frame.loc[mask].copy()
+    records = frame.to_dict('records')
+    mask = [modalidad(r) in admitidas for r in records]
+    return frame.iloc[[i for i, m in enumerate(mask) if m]].copy()
 
 def comprobar(frame, ids, seleccion, incluir_individuales=False):
     elegibles = frame if seleccion=='especialista' else filtrar(frame, seleccion, incluir_individuales)

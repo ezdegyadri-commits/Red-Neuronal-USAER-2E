@@ -63,6 +63,10 @@ def identidad():
 
 def padron_autorizado():
     actor = identidad()
+    cache_key = f"_padron_autorizado_{actor['cuenta']}_{st.session_state.get('escuelas_permitidas','')}"
+    cached = getattr(st, 'session_state', {}).get(cache_key)
+    if cached is not None:
+        return cached.copy()
     # Diego usa su identidad canónica aunque Usuarios haya abreviado la función.
     rol = 'TRABAJO SOCIAL' if actor['area']=='Trabajo Social' else actor['rol']
     frame = preparar_matricula(alumnos_visibles(rol, st.session_state.get('escuelas_permitidas',''), actor['nombre']))
@@ -71,7 +75,9 @@ def padron_autorizado():
     if actor['perfil'] and not actor['director'] and not frame.empty:
         permitidas = {normalizar_texto(e) for e in actor['perfil']['escuelas']}
         frame = frame.loc[frame['Nombre_Escuela'].map(normalizar_texto).isin(permitidas)].copy()
-    return frame
+    if hasattr(st, 'session_state'):
+        st.session_state[cache_key] = frame
+    return frame.copy()
 
 
 def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individuales=False,vista_formato=None):
@@ -114,18 +120,19 @@ def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individ
     return preparar(doc)
 
 
-def autorizar(doc, escribir=False, incluir_bajas=False):
+def autorizar(doc, escribir=False, incluir_bajas=False, frame=None):
     actor = identidad()
     if doc.get('formato') not in FORMATOS or doc.get('estado') not in ESTADOS:
         raise ValueError('Documento no válido.')
     ids = [texto(r.get('ID_Alumno')) for r in doc['datos']['Alumnos']]
     if not ids or len(set(ids))!=len(ids):
         raise ValueError('Selección de alumnos no válida.')
-    if incluir_bajas:
-        if escribir:raise PermissionError('La consulta histórica de bajas es solo de lectura.')
-        from services.padron_movimientos import visibles
-        frame=visibles()
-    else:frame = padron_autorizado()
+    if frame is None:
+        if incluir_bajas:
+            if escribir:raise PermissionError('La consulta histórica de bajas es solo de lectura.')
+            from services.padron_movimientos import visibles
+            frame=visibles()
+        else:frame = padron_autorizado()
     faltantes=set(ids)-(set(frame['ID_Alumno'].astype(str)) if 'ID_Alumno' in frame else set())
     actuales = frame.loc[frame['ID_Alumno'].astype(str).isin(ids)]
     ajenos={str(r['ID_Alumno']) for r in actuales.to_dict('records') if clave_escuela(r['ID_Escuela'])!=clave_escuela(doc['datos']['ID_Escuela'])}
@@ -218,15 +225,16 @@ def listar(todas_versiones=False):
     actor=identidad(); resultado=[]
     from services.planeacion_grupo_unico import documentos
     versiones=versiones_actuales()
+    padron = padron_autorizado()
     for doc in versiones if todas_versiones else documentos(versiones):
         if not actor['director'] and doc.get('cuenta')!=actor['cuenta']:
             continue
         if not todas_versiones:
             from services.planeacion_compartida import proyectar_retiros
-            doc=proyectar_retiros(doc,padron_autorizado())
+            doc=proyectar_retiros(doc,padron)
             if not doc['datos']['Alumnos']:continue
         try:
-            autorizar(doc)
+            autorizar(doc, frame=padron)
         except PermissionError:
             continue
         resultado.append(deepcopy(doc))
@@ -253,6 +261,9 @@ def restaurar_borrador(doc):
 
 def refrescar():
     identidad(); _versiones.clear()
+    for k in list(st.session_state.keys() if hasattr(st, 'session_state') else []):
+        if k.startswith('_padron_autorizado_'):
+            st.session_state.pop(k, None)
 
 
 def refrescar_matricula():
@@ -260,6 +271,9 @@ def refrescar_matricula():
     from data.google import clear_cache
     identidad()
     clear_cache('Alumnos')
+    for k in list(st.session_state.keys() if hasattr(st, 'session_state') else []):
+        if k.startswith('_padron_autorizado_'):
+            st.session_state.pop(k, None)
 
 
 def refrescar_evidencias():
