@@ -39,6 +39,7 @@ def panel(prefix):
     st.caption('Son propuestas para revisar, no diagnósticos. Puedes quitar o cambiar cualquier selección.')
     selecciones={}
     selecciones['prioridades']=st.multiselect('Qué vamos a trabajar',estado['permitidas'],default=defaults['prioridades'],format_func=lambda p:rapido.PRIORIDADES[p][0],key=widgets+'_prioridades')
+    selecciones['tematica']=st.text_input('Otra temática importante (opcional)',value=defaults['tematica'],max_chars=300,placeholder='Interés, situación o tema pertinente para este alumno',key=widgets+'_tematica')
     selecciones['apoyos']=st.multiselect('Apoyos para participar y responder',list(rapido.APOYOS),default=defaults['apoyos'],format_func=lambda p:rapido.APOYOS[p][0],key=widgets+'_apoyos')
     selecciones['metodo']=st.selectbox('Cómo lo trabajaremos',list(rapido.METODOS),index=list(rapido.METODOS).index(defaults['metodo']),format_func=lambda p:rapido.METODOS[p],key=widgets+'_metodo')
     with st.expander('Ajustar tiempos, contextos o acuerdos',expanded=False):

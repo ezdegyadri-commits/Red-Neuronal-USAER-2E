@@ -12,7 +12,9 @@ from services.cronogramas import perfil_especialista
 
 def eventos_mes(mes):
     try:
-        return cargar_eventos(mes)
+        eventos=cargar_eventos(mes)
+        if st.session_state.get('_epp_calendario_error'):st.caption('La programación privada de EPP no está disponible ahora; sus registros no se han borrado. Se muestran las demás actividades confirmadas.')
+        return eventos
     except Exception:
         # Las actividades oficiales siguen disponibles si falla la base central.
         st.caption("Los eventos nuevos de Dirección no están disponibles por ahora.")

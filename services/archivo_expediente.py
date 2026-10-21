@@ -91,7 +91,8 @@ def listar():
     _actor();frame=visibles();salida={}
     for row in _rows():
         if row.get('Estado')=='VIGENTE' and _autorizado(row,frame):salida[row['ID_Documento']]=row
-    return list(salida.values())
+    from services.expediente_automatico import orden_cronologico,seccion
+    return orden_cronologico([{**r,'Seccion':seccion(r['Tipo'])} for r in salida.values()])
 
 
 def validar_binario(data):

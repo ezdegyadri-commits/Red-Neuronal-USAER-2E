@@ -1,0 +1,23 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync(new URL('../ui/sesion_component.js',import.meta.url),'utf8');
+const {default:mount}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const values=new Map(),events=[];
+globalThis.sessionStorage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
+const host={},component={parentElement:host,data:{token:'cifrado',cuenta:'hash',borrador:'draft-cifrado',tiene_borrador:true},setStateValue:(k,v)=>events.push(v)};
+mount(component);
+assert.equal(values.get('usaer:acceso:v1'),'cifrado');
+assert.equal(values.get('usaer:borrador:hash'),'draft-cifrado');
+mount({...component,parentElement:{},data:{}});
+assert.equal(events.at(-1).accion,'recuperar');
+assert.equal(events.at(-1).borrador,'draft-cifrado');
+mount({...component,data:{borrar:true}});
+assert.equal(values.has('usaer:acceso:v1'),false);
+assert.equal(values.get('usaer:borrador:hash'),'draft-cifrado');
+mount({...component,parentElement:{},data:{token:'nuevo',cuenta:'hash',tiene_borrador:false}});
+assert.equal(events.at(-1).accion,'borrador');
+const anteriores=events.length;
+mount({...component,parentElement:{},data:{token:'otro',cuenta:'otra-cuenta',tiene_borrador:false}});
+assert.equal(events.length,anteriores); // la otra cuenta no recupera el borrador anterior
+assert.equal(values.get('usaer:cuenta:v1'),'otra-cuenta');
+console.log('OK: recarga, revocación local, borrador por cuenta y separación entre cuentas.');

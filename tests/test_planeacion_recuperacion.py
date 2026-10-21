@@ -37,7 +37,7 @@ class RecuperacionTests(TestCase):
     def test_reabrir_equivalente_no_crea_ni_guarda_otro_documento(self):
         from ui import planeacion_simple as ui,planeacion as u
         doc=ejemplo();frame=pd.DataFrame([{'ID_Alumno':'A1','ID_Escuela':doc['datos']['ID_Escuela']}])
-        with patch.object(ui.st,'session_state',{}),patch.object(ui.s,'padron_autorizado',return_value=frame),patch.object(ui.s,'identidad',return_value=ACTOR),patch.object(ui.s,'listar',return_value=[doc]),patch.object(ui,'_abrir') as abrir,patch.object(ui.s,'nueva') as nueva,patch.object(u,'_persist') as guardar:
+        with patch.object(ui.st,'session_state',{}),patch.object(ui.s,'padron_autorizado',return_value=frame),patch.object(ui.s,'identidad',return_value=ACTOR),patch.object(ui.s,'listar',return_value=[doc]),patch.object(ui,'_abrir',return_value='p_individual') as abrir,patch.object(ui.s,'nueva') as nueva,patch.object(u,'_persist') as guardar:
             self.assertEqual(ui.crear_borrador('p','XXIII',['A1'],2026,1,'individual'),'p_individual')
             abrir.assert_called_once_with('p','p_individual',doc);nueva.assert_not_called();guardar.assert_not_called()
 

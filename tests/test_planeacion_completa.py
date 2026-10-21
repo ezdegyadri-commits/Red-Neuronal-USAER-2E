@@ -20,9 +20,17 @@ def documento(area='Aprendizaje',dos=False):
 
 def resultado(req,area):
     unidades=[];n=6 if area=='Psicología' else 2
+    actividades=[
+        'Inicio: observar tarjetas. Desarrollo: elegir un apoyo y explicar su uso. Cierre: compartir la elección.',
+        'Inicio: escuchar una historia breve. Desarrollo: representar con títeres una alternativa de participación. Cierre: expresar un acuerdo.',
+        'Inicio: reconocer una señal corporal. Desarrollo: ensayar una pausa y respiración con modelado. Cierre: elegir cuándo usarla.',
+        'Inicio: explorar una meta cotidiana. Desarrollo: organizar un plan visual de pasos para intentarla. Cierre: revisar el plan.',
+        'Inicio: recordar turnos de conversación. Desarrollo: practicar peticiones en parejas con apoyos. Cierre: dar retroalimentación respetuosa.',
+        'Inicio: identificar un reto del aula. Desarrollo: construir en equipo alternativas para resolverlo. Cierre: acordar una prueba posterior.'
+    ]
     for i in range(n):
         unidades.append({'necesidad':'Necesidad educativa documentada para participar.','objetivo':'El alumno identifica apoyos para participar.','descriptor':'El alumno elige un apoyo y explica su elección.',
-            'actividad':'Inicio: observar tarjetas. Desarrollo: elegir y explicar. Cierre: compartir una respuesta.','contexto':'Aula regular' if area=='Psicología' and i==5 else 'Familia' if area=='Trabajo Social' else 'Aula de apoyo',
+            'actividad':actividades[i],'contexto':'Aula regular' if area=='Psicología' and i==5 else 'Familia' if area=='Trabajo Social' else 'Aula de apoyo',
             'apoyos':'Tarjetas y tiempo de respuesta.','recursos':'Tarjetas disponibles','evaluacion':'Lista de cotejo: observar la elección durante la actividad; revisar al cierre.','fundamento':'La propuesta responde al registro y al referente seleccionado.',
             'evidencias':list(req['evidencias']),'fuentes':['SEGEY-USAER'],'referentes':[r['id'] for r in req['contexto'].get('referentes_por_grado',[])][:1],
             'destinatarios':list(req['aliases']),'competencias':[COMPETENCIAS[i]] if area=='Psicología' and i<5 else []})

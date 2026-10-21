@@ -1,6 +1,7 @@
 """Generación visible, editable y recuperable, sin IA durante cada edición."""
 from copy import deepcopy
 import streamlit as st
+from ui.planeacion_pendientes import raiz
 from services import planeacion_generacion as g
 from ai.planeacion_completa import generar_completa
 from ai.planeacion import modelo_configurado, configuracion_modelo
@@ -36,7 +37,7 @@ def _prioridades(prefix,key,campo,persist):
 def _revision(prefix,compact):
     if compact:
         from ui.planeacion_simple import PASOS
-        st.session_state[prefix.rsplit('_',1)[0]+'_paso_pendiente']=PASOS[2]
+        st.session_state[raiz(prefix)+'_paso_pendiente']=PASOS[2]
 
 
 def panel_generacion(prefix,persist,abrir,compact=False):
@@ -135,7 +136,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
             solicitud=g.preparar_solicitud(actual,ajustes_solicitud)
             if coincide:respuesta=previo['resultado']
             else:
-                with st.spinner('Analizando la información documentada y preparando el formato…'):
+                with st.spinner('Analizando la información documentada y preparando el formato…',show_time=True):
                     respuesta=generar_completa(solicitud['resumen'],actual['formato'],actual['datos']['Función'],solicitud['contexto'],solicitud['ajustes'],solicitud['aliases'],solicitud['evidencias'])
             if not respuesta['unidades']:
                 st.info(respuesta['observaciones'] or 'Falta información para sostener actividades.')

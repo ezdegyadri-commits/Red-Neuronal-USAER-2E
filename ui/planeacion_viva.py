@@ -6,6 +6,7 @@ import streamlit as st
 from services import planeacion as s, planeacion_viva as viva
 from services.planeacion_modelo import FORMATOS
 from services.planeacion_modalidad import GUIA_XIX, guia_grupal
+from ui.planeacion_pendientes import raiz
 
 
 def _abrir(base,doc):
@@ -13,11 +14,8 @@ def _abrir(base,doc):
     from ui.planeacion_simple import _abrir as abrir
     from services.planeacion_modalidad import modalidad_documento
     prefix=base+'_'+modalidad_documento(doc,s.padron_autorizado())
-    for key,value in list(st.session_state.items()):
-        if key.startswith(base+'_') and key.endswith('_doc') and isinstance(value,dict) and st.session_state.get(key[:-4]+'_pending'):
-            if not u._guardar_edicion_pendiente(key[:-4]):raise RuntimeError('El autoguardado aún no se confirmó; tu edición sigue abierta. Reintenta cuando vuelva la conexión.')
-            if value.get('id')==doc.get('id'):doc=deepcopy(st.session_state[key])
-    abrir(base,prefix,doc)
+    prefix=abrir(base,prefix,doc)
+    if st.session_state.get(prefix+'_pending'):return prefix
     for suffix in ('_papel_panel','_papel_nonce','_papel_aceptado','_papel_legacy','_papel_rechazado','_papel_error'):
         st.session_state.pop(prefix+suffix,None)
     return prefix
@@ -274,7 +272,7 @@ def _acciones(prefix,pdf_provider=None,acciones_hoja=False):
                     disabled=bool(st.session_state.get(prefix+'_pending')))
             except Exception:st.warning('No se pudo preparar la vista. El borrador se conserva.')
     from ui.planeacion_borradores import controles,cerrar_editor
-    controles(prefix+'_borrador',doc,pdf_provider or u.generar_pdf,lambda:cerrar_editor(prefix.rsplit('_',1)[0],prefix))
+    controles(prefix+'_borrador',doc,pdf_provider or u.generar_pdf,lambda:cerrar_editor(raiz(prefix),prefix))
     with st.expander('Más opciones · alumnos, versiones, respaldo y herramientas'):
         from ui.planeacion_edicion import panel
         panel(prefix)
@@ -282,8 +280,7 @@ def _acciones(prefix,pdf_provider=None,acciones_hoja=False):
         if st.toggle('Abrir herramientas complementarias',key=prefix+'_viva_tools'):_herramientas(prefix,s.identidad())
         st.download_button('Descargar respaldo editable',json.dumps(doc,ensure_ascii=False,indent=2),file_name='planeacion-'+doc['id']+'.json',mime='application/json',key=prefix+'_viva_respaldo')
         if st.button('Elegir otro formato o alumnos',key=prefix+'_viva_otro'):
-            if st.session_state.get(prefix+'_pending') and not u._guardar_edicion_pendiente(prefix):st.warning('Primero confirma el guardado o descarga tu respaldo.')
-            else:st.session_state[prefix.rsplit('_',1)[0]+'_viva_entrada']=True;st.rerun()
+            st.session_state[raiz(prefix)+'_viva_entrada']=True;st.rerun()
 
 
 def hoja(prefix):
@@ -350,6 +347,8 @@ def hoja(prefix):
 def pagina(render_hoja=None):
     from ui import planeacion as u
     actor=s.identidad();base=u._prefix()
+    from ui.planeacion_pendientes import panel as envios_pendientes
+    envios_pendientes(base)
     if st.session_state.get(base+'_viva_anterior'):
         if st.button('Volver al formato vivo',key=base+'_viva_volver'):st.session_state[base+'_viva_anterior']=False;st.rerun()
         from ui.planeacion_simple import pagina as anterior
@@ -380,7 +379,6 @@ def pagina(render_hoja=None):
     if activo and activo+'_doc' in st.session_state and not st.session_state.get(base+'_viva_entrada'):
         c_ret,_=st.columns([1,4])
         if c_ret.button('← Volver a mis planeaciones',key=base+'_viva_volver_hub'):
-            u._guardar_edicion_pendiente(activo)
             st.session_state[base+'_viva_entrada']=True;st.rerun()
         (render_hoja or hoja)(activo)
     else:

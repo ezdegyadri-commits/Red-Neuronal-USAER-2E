@@ -98,6 +98,13 @@ def estadisticas_page(df):
     if not mostrar_bajas and 'Estatus' in muestra:
         muestra=muestra.loc[~muestra['Estatus'].fillna('').map(normalizar_texto).isin({'BAJA','INACTIVO','RETIRADO','ELIMINADO'})].copy()
     total = len(muestra)
+    from services.padron_catalogos import ordenar
+    orden_col,direccion_col=st.columns([3,1])
+    orden=orden_col.selectbox('Ordenar listado nominal por',['Grado','Apellido','Edad'],key='nominal_orden')
+    descendente=direccion_col.toggle('Descendente',key='nominal_descendente')
+    muestra=ordenar(muestra,orden,descendente)
+    muestra.attrs['orden_nominal']=orden
+    muestra.attrs['orden_descendente']=descendente
     if not total:
         st.info("No hay alumnos en el ámbito seleccionado.")
         return
@@ -209,6 +216,8 @@ def estadisticas_page(df):
             actual = fila_por_id[id_edicion]
             campos = [
                 ("Nombre_Completo", "Nombre completo"),
+                ("Fecha_Derivacion", "Fecha de derivación"),
+                ("Fecha_Nacimiento", "Fecha de nacimiento"),
                 ("CURP", "CURP"),
                 ("Edad_1_Septiembre", "Edad al 1 de septiembre de 2026"),
                 ("Sexo", "Sexo"),
@@ -232,7 +241,8 @@ def estadisticas_page(df):
                     valor = actual.get(campo, "")
                     valor = "" if pd.isna(valor) else str(valor)
                     with columnas[indice % 2]:
-                        valores[campo] = st.text_input(etiqueta, value=valor, key=f"edicion_{id_edicion}_{campo}")
+                        from ui.padron_campos import capturar
+                        valores[campo] = capturar(campo,etiqueta,valor,f"edicion_{id_edicion}_{campo}")
                         if campo == "Grupo" and valor.strip():
                             quitar_grupo = st.checkbox(
                                 "Quitar el grupo registrado",

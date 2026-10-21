@@ -19,6 +19,7 @@ BASE_HEADERS={
 'Docentes_Regulares':['ID_Registro','Fecha_Registro','Ciclo_Escolar','ID_Escuela','Nombre_Escuela','Turno','Grado','Grupo','Nombre_Docente','Telefono','Email','Observaciones']}
 # Columna aditiva: ensure_headers conserva columnas y filas anteriores.
 BASE_HEADERS['Alumnos'].append('Fecha_Nacimiento')
+BASE_HEADERS['Alumnos'].append('Fecha_Derivacion')
 INTEGRATED_HEADERS={
 'Expedientes':['ID_Expediente','ID_Alumno','Estatus','Fecha_Apertura','Ultima_Actualizacion'],
 'Relaciones_Expediente':['ID_Relacion','ID_Expediente','ID_Alumno','Tipo_Registro','ID_Registro','Fecha','Estado'],
@@ -70,12 +71,18 @@ def update_alumno(id_alumno, cambios, allowed_ids):
   'Situacion_Alumno', 'Nivel_Educativo', 'Grado', 'Grupo',
   'Condicion_Discapacidad', 'Estatus', 'Tipo_Atencion',
   'Lengua_Indigena_Mayahablante', 'Afrodescendiente', 'Migrante',
-  'Condiciones_Adicionales',
+  'Condiciones_Adicionales','Fecha_Derivacion','Fecha_Nacimiento',
  }
  id_alumno = str(id_alumno).strip()
  if not id_alumno or id_alumno not in {str(value).strip() for value in allowed_ids}:
   raise PermissionError('El alumno no está dentro del ámbito autorizado para edición.')
  cambios = {campo: valor for campo, valor in dict(cambios).items() if campo in campos_editables}
+ for campo in ('Fecha_Derivacion','Fecha_Nacimiento'):
+  if campo in cambios:
+   from services.padron_catalogos import fecha_documental
+   fecha=fecha_documental(cambios[campo])
+   if not fecha:raise ValueError('Elige una fecha válida; no se vaciará la fecha guardada.')
+   cambios[campo]=fecha.isoformat()
  if 'Grado' in cambios:
   from utils.escolar import grado_canonico
   cambios['Grado']=grado_canonico(cambios['Grado'])
@@ -83,6 +90,8 @@ def update_alumno(id_alumno, cambios, allowed_ids):
   raise ValueError('No hay campos válidos para actualizar.')
 
  ws = worksheet('Alumnos')
+ if 'Fecha_Derivacion' in cambios or 'Fecha_Nacimiento' in cambios:
+  ws=ensure_headers('Alumnos',BASE_HEADERS['Alumnos'])
  headers = retry_google(lambda: ws.row_values(1))
  if 'ID_Alumno' not in headers:
   raise ValueError('La hoja Alumnos no contiene la columna ID_Alumno.')
@@ -249,8 +258,13 @@ def eventos_alumno(
  # no alcanzaron a registrar su vínculo secundario en Relaciones_Expediente.
  directos = eventos.iloc[0:0].copy()
  if "ID_Alumno" in eventos.columns:
+  from services.expediente_contexto import clave_grupo
+  grupo_objetivo=clave_grupo(id_alumno)
+  coincidencia=eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq(str(id_alumno).strip())
+  if grupo_objetivo:
+   coincidencia |= eventos["ID_Alumno"].fillna("").astype(str).map(clave_grupo).map(lambda k:k==grupo_objetivo)
   directos = eventos.loc[
-   eventos["ID_Alumno"].fillna("").astype(str).str.strip().eq(str(id_alumno).strip())
+   coincidencia
   ].copy()
  vinculados = eventos.loc[ids_evento.isin(ligados)].copy() if ligados else eventos.iloc[0:0].copy()
  precisos = pd.concat([directos, vinculados], ignore_index=False)

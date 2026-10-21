@@ -9,6 +9,7 @@ import streamlit as st
 import streamlit.components.v2 as components
 from streamlit.components.v2.get_bidi_component_manager import get_bidi_component_manager as _registro_componentes
 from services import planeacion_papel as papel
+from ui.planeacion_pendientes import raiz
 
 
 def _definicion_editor():
@@ -124,7 +125,7 @@ def hoja(prefix,volver=None):
             st.info('Este grupo ya no tiene alumnos activos. Sus versiones y aportaciones anteriores se conservan en el expediente; vuelve al inicio para trabajar otro grupo.')
             if st.button('Regresar al inicio',key=prefix+'_grupo_cerrado'):
                 if volver:volver()
-                else:st.session_state[prefix.rsplit('_',1)[0]+'_viva_entrada']=True
+                else:st.session_state[raiz(prefix)+'_viva_entrada']=True
                 st.rerun(scope='app')
             return
         if altas>0:ampliado=u.servicio.preparar_contexto(ampliado)
@@ -167,11 +168,9 @@ def hoja(prefix,volver=None):
                     if reciente:u._open(prefix,reciente)
                 else:st.session_state[prefix+'_papel_aviso']='Tu texto se conserva. Se actualizarán los aportes cuando se confirme el guardado.'
             if action=='inicio':
-                if st.session_state.get(prefix+'_pending') and not u._persist(prefix):
-                    st.session_state[prefix+'_papel_aviso']='Tu edición sigue abierta: no se confirmó aún el guardado. Se reintentará automáticamente.'
-                elif volver:volver()
-                else:st.session_state[prefix.rsplit('_',1)[0]+'_viva_entrada']=True
-                if not st.session_state.get(prefix+'_pending'):st.rerun(scope='app')
+                if volver:volver()
+                else:st.session_state[raiz(prefix)+'_viva_entrada']=True
+                st.rerun(scope='app')
             if action=='apartados' and nuevo==doc:st.session_state[prefix+'_papel_aviso']='No hay nuevos vacíos vinculados con datos suficientes para proponer. Tu redacción se conserva; puedes conectar antecedentes o elegir referentes sin redactar de nuevo.'
             if not st.session_state.get(prefix+'_pending'):
                 st.session_state[prefix+'_papel_aceptado']=event['nonce']

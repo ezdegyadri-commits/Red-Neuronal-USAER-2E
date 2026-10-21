@@ -126,8 +126,8 @@ class ProyeccionTests(unittest.TestCase):
         def abrir(p,doc):state[p+'_doc']=deepcopy(doc)
         with patch.object(ui.st,'session_state',state),patch.object(base_ui.st,'session_state',state),patch.object(s,'padron_autorizado',return_value=pd.DataFrame()),patch.object(base_ui,'_guardar_edicion_pendiente',side_effect=guardar),patch.object(base_ui,'_open',side_effect=abrir):
             ui._abrir(base,d)
-        self.assertEqual(state[prefix+'_doc']['revision'],'nueva')
-        self.assertEqual(state[prefix+'_doc']['textos']['Observaciones'],'Última edición de la maestra')
+        self.assertEqual(state[prefix+'_doc'],d)
+        self.assertTrue(state[prefix+'_pending'])
         self.assertFalse(state[base+'_viva_entrada'])
 
 

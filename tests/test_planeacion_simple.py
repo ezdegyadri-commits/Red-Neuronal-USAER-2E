@@ -16,14 +16,16 @@ class SeleccionTests(unittest.TestCase):
         with patch.object(u.st,'session_state',state),patch.object(c,'_guardar',side_effect=guardar) as acotado,patch.object(u,'_persist') as completo:
             self.assertTrue(u._guardar_edicion_pendiente('p'))
         acotado.assert_called_once_with('p');completo.assert_not_called()
-    def test_no_reemplaza_edicion_pendiente_entre_modalidades(self):
+    def test_otra_modalidad_no_reemplaza_ni_bloquea_edicion_pendiente(self):
         from ui import planeacion_simple as simple
         base='planeacion_prueba';anterior={'id':'previo','revision':'r1'}
         state={base+'_individual_doc':deepcopy(anterior),base+'_individual_pending':True}
-        with patch.object(simple.st,'session_state',state):
-            with self.assertRaises(RuntimeError):simple._abrir(base,base+'_grupal',{'id':'otro','revision':'r2'})
+        from ui import planeacion as u
+        with patch.object(simple.st,'session_state',state),patch.object(u,'_open') as abrir:
+            simple._abrir(base,base+'_grupal',{'id':'otro','revision':'r2','metadatos':{}})
+        abrir.assert_called_once()
         self.assertEqual(state[base+'_individual_doc'],anterior)
-        self.assertNotIn(base+'_grupal_doc',state)
+        self.assertTrue(state[base+'_individual_pending'])
 
     def test_guardar_y_cerrar_no_sale_si_falla(self):
         from ui import auth,planeacion as u

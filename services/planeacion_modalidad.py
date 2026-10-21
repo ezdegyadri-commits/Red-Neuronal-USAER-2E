@@ -46,6 +46,11 @@ def guia_grupal(doc):
         row={'ID_Alumno':a['ID_Alumno'],**{h:'' for h in GUIA_XIX}}
         row.update(existentes.get(a['ID_Alumno'],{}))
         row['Nombre alumno']=a['Nombre del alumno'];row['Discapacidad o condición']=a['Condición']
+        central=doc['metadatos'].get('contexto_padron_grupo',{}).get(a['ID_Alumno'],{}).get('Fecha_Derivacion') or a.get('Fecha_Derivacion','')
+        if central and not row['Fecha derivación']:
+            from services.padron_catalogos import fecha_documental
+            try:row['Fecha derivación']=fecha_documental(central).strftime('%d/%m/%Y')
+            except ValueError:pass
         z=zona.get(a['ID_Alumno'],{})
         for key in ['Fecha derivación','Situación inicial','Situación final']:
             if not row[key]:row[key]=z.get(key,'')

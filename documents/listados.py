@@ -12,6 +12,7 @@ from documents.anexos import _fpdf_text, header_b64
 
 
 def _datos_listado(frame):
+    orden_solicitado=bool(frame.attrs.get('orden_nominal'))
     datos = pd.DataFrame(index=frame.index)
     datos["Nombre"] = frame.get("Nombre_Completo", pd.Series("", index=frame.index)).fillna("").astype(str).str.strip()
     datos["Edad"] = frame.get("Edad_1_Septiembre", pd.Series("", index=frame.index)).fillna("").astype(str).str.strip()
@@ -36,7 +37,7 @@ def _datos_listado(frame):
         datos["ID_Alumno"] = frame["ID_Alumno"].fillna("").astype(str).str.strip()
         datos = datos.drop_duplicates(subset=["ID_Alumno"], keep="first")
     datos = datos.loc[datos["Nombre"].ne("")].copy()
-    datos = datos.sort_values(["Escuela", "Grado y grupo", "Nombre"], kind="stable")
+    if not orden_solicitado:datos = datos.sort_values(["Escuela", "Grado y grupo", "Nombre"], kind="stable")
     return datos.reset_index(drop=True)
 
 

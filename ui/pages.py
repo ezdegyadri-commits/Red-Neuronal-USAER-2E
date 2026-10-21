@@ -1431,6 +1431,8 @@ def eventos_page(df):
         for palabra in ("PSICOLOG", "COMUNICACI", "TRABAJO")
     )
 
+    from ui.eventos_continuidad import recuperar as recuperar_eventos
+    recuperar_eventos(df)
     modo = st.radio(
         "¿Dónde ocurrió el evento?",
         ["Alumno individual", "Grupo / contexto áulico"],
@@ -1502,6 +1504,8 @@ def eventos_page(df):
             "Nombre_Escuela": escuela,
         }
 
+    from services.eventos_continuidad import cambiar_contexto
+    cambiar_contexto(st.session_state,id_alumno)
     eventos_registrados = repo.eventos_alumno(
         id_alumno,
         objetivo,
@@ -1770,6 +1774,8 @@ def eventos_page(df):
         "Evento guardado en su hoja Anexo V y vinculado al expediente concentrador."
     )
     st.session_state.pop("evento_descripcion", None)
+    from services.eventos_continuidad import cambiar_contexto
+    cambiar_contexto(st.session_state,id_alumno)
     st.download_button(
         "Descargar Anexo V en PDF carta",
         anexo5_pdf(datos, documento_actualizado),

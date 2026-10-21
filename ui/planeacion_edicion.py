@@ -4,6 +4,7 @@ from services import planeacion as s,planeacion_edicion as e
 from services.planeacion_modalidad import modalidad_documento
 from services.planeacion_matricula import clave_escuela
 from services.planeacion_modelo import FORMATOS
+from ui.planeacion_pendientes import raiz
 
 
 def _guardar(prefix,doc):
@@ -21,12 +22,11 @@ def _confirmar_pendiente(prefix):
 
 def abrir_guardada(base,doc):
     from ui.planeacion_simple import _abrir,PASOS
-    # Incluso al volver a abrir el mismo ID, no sustituir una edición pendiente
-    # por la versión más antigua de la lista de documentos.
-    for prefix in (base+'_individual',base+'_grupal'):
-        if st.session_state.get(prefix+'_pending'):
-            actual=_confirmar_pendiente(prefix)
-            if actual['id']==doc['id']:doc=actual
+    # El abridor común recupera cualquier edición pendiente de ese ID y
+    # conserva por separado otro documento, sin bloquear la navegación.
+    from ui.planeacion_pendientes import pendientes
+    local=next((p for p in pendientes(base) if st.session_state[p+'_doc'].get('id')==doc.get('id')),None)
+    if local:doc=st.session_state[local+'_doc']
     _abrir(base,base+'_'+modalidad_documento(doc,s.padron_autorizado()),e.borrador(doc))
     st.session_state[base+'_paso_pendiente']=PASOS[2]
 
@@ -38,7 +38,7 @@ def _abrir_copia(prefix,doc):
         raise RuntimeError('No se confirmó el guardado del documento original. Tu edición se conserva.')
     # Reutilizar el mismo ID ante un fallo ambiguo; nunca crear otra copia a ciegas.
     saved=next((d for d in s.listar() if d['id']==doc['id']),None) or s.guardar(doc)
-    base=prefix.rsplit('_',1)[0]
+    base=raiz(prefix)
     destino=base+'_'+doc['metadatos']['modalidad_planeacion']
     _abrir(base,destino,saved)
     st.session_state[base+'_paso_pendiente']=PASOS[2]

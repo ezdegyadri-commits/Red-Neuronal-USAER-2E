@@ -34,6 +34,12 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
     cells={};tables=[]
     def celda(value,target=None,label='',readonly='',destinatario=''):
         key='c'+str(len(cells));cell={'id':key,'value':str(value or ''),'label':label,'editable':target is not None,'referente':readonly}
+        if label=='Fecha derivación' and target is not None:
+            from services.padron_catalogos import fecha_documental
+            try:
+                fecha=fecha_documental(value)
+                cell.update(tipo='fecha',fecha_iso=fecha.isoformat() if fecha else '')
+            except ValueError:pass  # Conservar fechas narrativas históricas, sin vaciarlas.
         if destinatario:cell['destinatario']=str(destinatario)
         cells[key]={'target':target,**cell};return cell
     grupal=doc['metadatos'].get('modalidad_planeacion')=='grupal' and doc['datos']['Función']=='Aprendizaje' and doc['metadatos'].get('vista_formato')!='trimestral'
@@ -143,6 +149,9 @@ def aplicar(doc,event):
         if not cell or not cell['editable']:raise PermissionError('Esta celda procede del padrón o de otra aportación.')
         if not isinstance(value,str) or len(value)>20000:raise ValueError('Revisa la extensión del texto de la celda.')
         target=cell['target']
+        if cell.get('tipo')=='fecha' and value.strip():
+            from services.padron_catalogos import fecha_documental
+            value=fecha_documental(value).strftime('%d/%m/%Y')
         if target[0]=='tabla':
             if target[2]==len(result['tablas'][target[1]]):result=f.nueva_fila(result,target[1])
             result=f.editar_celda(result,*target[1:],value)

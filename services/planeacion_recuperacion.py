@@ -18,7 +18,8 @@ def etiqueta(doc):
     if doc.get('metadatos',{}).get('modalidad_planeacion')=='individual':
         texto+=' · '+', '.join(a['Nombre del alumno'] for a in doc['datos']['Alumnos'])
     n=actividades_redactadas(doc)
-    return texto+(' · '+str(n)+' actividad(es) redactada(s)' if n else ' · Sin actividades redactadas')
+    estado={'BORRADOR':'Borrador editable','ENVIADA':'Enviada','VALIDADA':'Validada'}.get(doc.get('estado'),doc.get('estado',''))
+    return texto+' · '+estado+(' · '+str(n)+' actividad(es) redactada(s)' if n else ' · Sin actividades redactadas')
 
 
 def equivalentes(docs,actor,formato,ids,escuela,ciclo,trimestre,modalidad):

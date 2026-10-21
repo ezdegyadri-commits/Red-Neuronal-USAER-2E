@@ -6,21 +6,8 @@ from services import archivo_expediente as archivo
 
 def ids_contexto(frame,identificador):
     """Resuelve un contexto explícito por IDs, nunca por nombre del archivo."""
-    from config.settings import ESCUELAS_USAER
-    from utils.escolar import grado_canonico,grupo_canonico
-    identificador=str(identificador)
-    if not identificador.startswith('GRUPO-'):
-        return [identificador] if identificador in set(frame.get('ID_Alumno',[])) else []
-    for codigo in ESCUELAS_USAER.values():
-        prefijo='GRUPO-'+str(codigo)+'-'
-        if not identificador.startswith(prefijo):continue
-        tokens=identificador[len(prefijo):].rsplit('-',1)
-        if len(tokens)!=2:return []
-        return [str(r['ID_Alumno']) for r in frame.fillna('').to_dict('records')
-            if str(r.get('ID_Escuela',''))==str(codigo)
-            and grado_canonico(r.get('Grado'))==grado_canonico(tokens[0])
-            and grupo_canonico(r.get('Grupo'))==grupo_canonico(tokens[1])]
-    return []
+    from services.expediente_contexto import ids_contexto as resolver
+    return resolver(frame,identificador)
 
 
 def boton(ids,tipo,contenido,nombre,key,fuente='',ciclo=SCHOOL_YEAR,etapa='',disabled=False):
@@ -43,6 +30,11 @@ def panel(ids,prefix,grupal=False):
     st.caption('Archivo privado y conectado · Manual USAER, Anexos VI y IX. Los requisitos varían según la etapa y el caso; no se exige llenar documentos que no correspondan.')
     try:
         disponibles=archivo.listar()
+        from services import epp
+        from services.expediente_automatico import organizar_archivados
+        if any(r.get('Ambito')=='grupal' and r.get('Tipo') in archivo.CONTEXTUAL for r in disponibles):
+            try:disponibles=organizar_archivados(disponibles,{d['alumno'] for d in epp.listar(incluir_bajas=True)})
+            except Exception:st.caption('La etapa EPP no pudo actualizarse ahora. Se conserva la clasificación original y todos los archivos disponibles.')
         contexto_ids=set(map(str,ids))
         import json
         if grupal:
@@ -65,6 +57,24 @@ def panel(ids,prefix,grupal=False):
     else:st.info('Todavía no hay copias archivadas aquí. Los instrumentos conectados que ya existían no se borran ni se sustituyen.')
     with st.expander('Planeaciones e informes que ya existen en la plataforma'):
         _conectados(ids,prefix,grupal)
+    with st.expander('Índice automático y cronológico de documentos generados'):
+        if st.checkbox('Consultar índice conectado',key=prefix+'_indice_vivo'):
+            try:
+                from services.expediente_automatico import documentos_vivos,orden_cronologico
+                vivos=documentos_vivos(ids,grupal)
+                cronologia=orden_cronologico(docs+vivos)
+                if cronologia:
+                    import pandas as pd
+                    vista=pd.DataFrame(cronologia)
+                    st.dataframe(vista[[c for c in ('Fecha_Documento','Fecha','Seccion','Tipo','Nombre','Estado','Origen_Vivo') if c in vista]],hide_index=True,width='stretch')
+                    fuentes=sorted({r['Origen_Vivo'] for r in vivos})
+                    if fuentes:
+                        origen=st.selectbox('Abrir módulo de origen',fuentes,key=prefix+'_origen_vivo')
+                        if st.button('Ir al documento de origen',key=prefix+'_ir_origen'):
+                            st.session_state['navegacion_principal']=origen;st.rerun()
+                else:st.info('No hay documentos vinculados por identificador para este expediente.')
+                st.caption('Los registros se integran por ID y fecha, sin borrar las fuentes. Los borradores no equivalen a informes concluidos. Las fechas no disponibles quedan al final, sin inventarlas.')
+            except Exception:st.warning('La lectura del índice está incompleta. Se conservan los archivos y versiones anteriores; vuelve a intentar.')
     with st.expander('Qué integra este expediente según el manual'):
         tipos=archivo.GRUPAL+archivo.CONTEXTUAL if grupal else archivo.INDIVIDUAL+archivo.CONTEXTUAL
         presentes={r['Tipo'] for r in docs}
@@ -89,7 +99,14 @@ def panel(ids,prefix,grupal=False):
             frame=archivo.visibles();nombres={str(r['ID_Alumno']):r.get('Nombre_Completo',r['ID_Alumno']) for r in frame.fillna('').to_dict('records')}
             destinatarios=st.multiselect('Alumno(s) a quienes corresponde este documento individual',ids,format_func=lambda k:nombres.get(k,k),key=prefix+'_destinatarios_'+carga)
         ciclo=st.text_input('Ciclo del documento',value=SCHOOL_YEAR,key=prefix+'_ciclo')
-        if subida and tipo:boton(destinatarios,tipo,subida.getvalue,subida.name,prefix+'_anexar','Escaneado',ciclo,etapa)
+        if subida and tipo:
+            try:
+                destino=archivo.contexto(destinatarios,tipo,ciclo,etapa)
+                archivo.guardar(destinatarios,tipo,ciclo,subida.name,subida.getvalue(),'Escaneado',etapa)
+                st.success('Escaneo integrado automáticamente al expediente '+destino['Ambito']+'. La misma copia no se duplica.')
+            except Exception as exc:
+                st.warning('El archivo todavía no está confirmado: '+str(exc)+' El original se conserva.')
+                boton(destinatarios,tipo,subida.getvalue,subida.name,prefix+'_anexar','Escaneado',ciclo,etapa)
 
 
 def _conectados(ids,prefix,grupal=False):

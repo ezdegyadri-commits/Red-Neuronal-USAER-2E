@@ -1,6 +1,7 @@
 """Una captura, sobre la hoja tradicional, y un solo envío explícito al final."""
 import json
 import streamlit as st
+from ui.planeacion_pendientes import raiz
 from services import planeacion as s, planeacion_papel as papel
 from services import planeacion_cero_friccion as flujo
 from services.planeacion_modelo import FORMATOS
@@ -17,6 +18,10 @@ def _celda(c, key):
         opciones = c['opciones']
         value = c['value'] if c['value'] in opciones else opciones[0]
         return st.selectbox(c['label'], opciones, index=opciones.index(value), key=key)
+    if c.get('tipo')=='fecha':
+        from datetime import date
+        valor=st.date_input(c['label'],value=date.fromisoformat(c['fecha_iso']) if c['fecha_iso'] else None,format='DD/MM/YYYY',key=key)
+        return valor.strftime('%d/%m/%Y') if valor else c['value']
     if c.get('nota'):
         st.caption('💡 ' + c['nota'])
     label_lower = c['label'].lower()
@@ -94,8 +99,9 @@ def _asistencia(doc, accion, config, preview, consent):
         return doc, solicitud, 'Tu edición se guardará. Revisa el resumen de IA y confirma su envío con el mismo botón Guardar Planeación.'
     from ai.planeacion_completa import generar_completa
     from ai.planeacion import modelo_configurado
-    respuesta = generar_completa(solicitud['resumen'], doc['formato'], doc['datos']['Función'],
-        solicitud['contexto'], solicitud['ajustes'], solicitud['aliases'], solicitud['evidencias'])
+    with st.spinner('Preparando actividades con los antecedentes del alumno… Tu redacción se conserva.',show_time=True):
+        respuesta = generar_completa(solicitud['resumen'], doc['formato'], doc['datos']['Función'],
+            solicitud['contexto'], solicitud['ajustes'], solicitud['aliases'], solicitud['evidencias'])
     if not respuesta['unidades']:
         return doc, None, 'La IA no produjo actividades sustentadas. Tu edición se conserva y puedes continuar sin IA.'
     result = g.ensamblar(doc, respuesta, solicitud)
@@ -396,9 +402,9 @@ def hoja(prefix, volver=None):
                 boton([a['ID_Alumno'] for a in snapshot['datos']['Alumnos']], 'Plan de intervención' if doc['formato'] == 'XXI' else 'Planeación del servicio', pdf, 'planeacion-'+doc['id']+'.pdf', prefix+'_captura_archivo', doc['id'], doc['datos']['Curso escolar'], disabled=bool(st.session_state.get(prefix+'_pending')))
             except Exception:
                 st.caption('La descarga PDF no está disponible ahora. Tu captura se conserva.')
-        if st.button('Regresar al inicio del módulo', key=prefix+'_captura_volver', use_container_width=True, disabled=bool(st.session_state.get(prefix+'_pending'))):
+        if st.button('Regresar al inicio del módulo', key=prefix+'_captura_volver', use_container_width=True):
             if volver:
                 volver()
             else:
-                st.session_state[prefix.rsplit('_', 1)[0]+'_viva_entrada'] = True
+                st.session_state[raiz(prefix)+'_viva_entrada'] = True
             st.rerun()
