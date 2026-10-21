@@ -76,7 +76,7 @@ class GradosTests(TestCase):
         from tests.test_planeacion_panel import ACTOR
         original=pd.DataFrame([{'ID_Alumno':'A1','ID_Escuela':'E1','Grado':'1ero','Grupo':'a'}])
         before=original.copy(deep=True)
-        estado={'_padron_autorizado_grados_v2_prueba_':original}
+        estado={'_padron_autorizado_identidad_v3_prueba_':original}
         with patch.object(s,'identidad',return_value=ACTOR),patch.object(s.st,'session_state',estado),patch.object(s,'alumnos_visibles') as leer:
             result=s.padron_autorizado();leer.assert_not_called()
         self.assertEqual(result['Grado'].tolist(),['1°']);pd.testing.assert_frame_equal(original,before)

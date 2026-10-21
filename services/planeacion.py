@@ -63,7 +63,8 @@ def identidad():
 
 def padron_autorizado():
     actor = identidad()
-    cache_key = f"_padron_autorizado_grados_v2_{actor['cuenta']}_{st.session_state.get('escuelas_permitidas','')}"
+    # No reutilizar subconjuntos calculados por la antigua comparación por apellido.
+    cache_key = f"_padron_autorizado_identidad_v3_{actor['cuenta']}_{st.session_state.get('escuelas_permitidas','')}"
     cached = getattr(st, 'session_state', {}).get(cache_key)
     if cached is not None:
         return preparar_matricula(cached)
