@@ -74,7 +74,8 @@ def logout(key="cerrar_sesion"):
         if st.button('Guardar cambios y cerrar sesión',key=key+'_guardar',use_container_width=True):
             from ui.planeacion import _guardar_edicion_pendiente
             claves=[k[:-8] for k,v in list(st.session_state.items()) if k.startswith(prefix) and k.endswith('_pending') and v]
-            if not all(_guardar_edicion_pendiente(p) for p in claves):
+            resultados=[_guardar_edicion_pendiente(p) for p in claves]
+            if not all(resultados):
                 st.warning('No se confirmó el guardado. La sesión sigue abierta y tu edición se conserva.');return
             _cerrar();return
     if st.button("Cerrar sesión", key=key, use_container_width=True,disabled=pendientes and not salir):

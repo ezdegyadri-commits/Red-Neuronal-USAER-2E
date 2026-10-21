@@ -1,6 +1,7 @@
 """Una captura, sobre la hoja tradicional, y un solo envío explícito al final."""
 import json
 import streamlit as st
+from ui.planeacion_pendientes import raiz
 from services import planeacion as s, planeacion_papel as papel
 from services import planeacion_cero_friccion as flujo
 from services.planeacion_modelo import FORMATOS
@@ -396,9 +397,9 @@ def hoja(prefix, volver=None):
                 boton([a['ID_Alumno'] for a in snapshot['datos']['Alumnos']], 'Plan de intervención' if doc['formato'] == 'XXI' else 'Planeación del servicio', pdf, 'planeacion-'+doc['id']+'.pdf', prefix+'_captura_archivo', doc['id'], doc['datos']['Curso escolar'], disabled=bool(st.session_state.get(prefix+'_pending')))
             except Exception:
                 st.caption('La descarga PDF no está disponible ahora. Tu captura se conserva.')
-        if st.button('Regresar al inicio del módulo', key=prefix+'_captura_volver', use_container_width=True, disabled=bool(st.session_state.get(prefix+'_pending'))):
+        if st.button('Regresar al inicio del módulo', key=prefix+'_captura_volver', use_container_width=True):
             if volver:
                 volver()
             else:
-                st.session_state[prefix.rsplit('_', 1)[0]+'_viva_entrada'] = True
+                st.session_state[raiz(prefix)+'_viva_entrada'] = True
             st.rerun()

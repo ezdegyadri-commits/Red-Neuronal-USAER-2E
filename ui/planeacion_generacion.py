@@ -1,6 +1,7 @@
 """Generación visible, editable y recuperable, sin IA durante cada edición."""
 from copy import deepcopy
 import streamlit as st
+from ui.planeacion_pendientes import raiz
 from services import planeacion_generacion as g
 from ai.planeacion_completa import generar_completa
 from ai.planeacion import modelo_configurado, configuracion_modelo
@@ -36,7 +37,7 @@ def _prioridades(prefix,key,campo,persist):
 def _revision(prefix,compact):
     if compact:
         from ui.planeacion_simple import PASOS
-        st.session_state[prefix.rsplit('_',1)[0]+'_paso_pendiente']=PASOS[2]
+        st.session_state[raiz(prefix)+'_paso_pendiente']=PASOS[2]
 
 
 def panel_generacion(prefix,persist,abrir,compact=False):

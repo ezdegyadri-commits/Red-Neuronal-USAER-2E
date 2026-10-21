@@ -185,8 +185,10 @@ def _prefix():
     return 'planeacion_'+hashlib.sha256(servicio.identidad()['cuenta'].encode()).hexdigest()[:12]
 
 
-def _persist(prefix,estado='BORRADOR',automatic=False):
+def _persist(prefix,estado=None,automatic=False):
     doc=st.session_state[prefix+'_doc']
+    estado=estado or st.session_state.get(prefix+'_estado_pendiente') or doc.get('estado','BORRADOR')
+    st.session_state[prefix+'_estado_pendiente']=estado
     st.session_state[prefix+'_pending']=True
     from services.planeacion_compartida import es_guia
     intervalo=(15 if es_guia(st.session_state[prefix+'_doc']) else 60)+int(hashlib.sha256(prefix.encode()).hexdigest()[:2],16)%15
@@ -199,6 +201,7 @@ def _persist(prefix,estado='BORRADOR',automatic=False):
         st.session_state.pop(prefix+'_error',None)
         st.session_state.pop(prefix+'_pdf',None)
         st.session_state[prefix+'_pending']=False
+        st.session_state.pop(prefix+'_estado_pendiente',None)
         if st.session_state.get(prefix+'_papel_nonce'):
             st.session_state[prefix+'_papel_aceptado']=st.session_state[prefix+'_papel_nonce']
         st.session_state.pop(prefix+'_retry_at',None)
@@ -208,16 +211,22 @@ def _persist(prefix,estado='BORRADOR',automatic=False):
         st.session_state[prefix+'_error']=str(exc)
         return False
     except Exception as exc:
+        status=getattr(getattr(exc,'response',None),'status_code',None)
+        logging.getLogger(__name__).warning('planeacion_guardado_fallido tipo=%s estado_http=%s',type(exc).__name__,status)
+        if status in (429,500,502,503,504) or isinstance(exc,(TimeoutError,ConnectionError)):
+            st.session_state[prefix+'_retry_at']=time.monotonic()+(60 if status==429 else 20)
         st.session_state[prefix+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó el guardado. Conserva el respaldo y vuelve a intentar.'
         return False
 
 
-def _guardar_edicion_pendiente(prefix):
+def _guardar_edicion_pendiente(prefix,automatic=False):
     """Una aportación conserva su guardado acotado, nunca el del autor del PI."""
     if prefix+'_filas' in st.session_state:
         from ui.planeacion_colaboracion import _guardar
-        _guardar(prefix)
+        if automatic:_guardar(prefix,automatic=True)
+        else:_guardar(prefix)
         return not st.session_state.get(prefix+'_pending',True)
+    if automatic:return _persist(prefix,automatic=True)
     return _persist(prefix)
 
 
@@ -267,6 +276,13 @@ def _open(prefix,doc):
     previo=st.session_state.get(prefix+'_doc')
     if previo and st.session_state.get(prefix+'_pending') and (previo.get('id')!=doc.get('id') or previo.get('revision')!=doc.get('revision')):
         raise RuntimeError('Hay cambios pendientes en el documento abierto. Guarda o descarga su respaldo antes de abrir otro; tu edición no fue reemplazada.')
+    if previo and previo.get('id')!=doc.get('id'):
+        # Los acuses, aportes y reintentos pertenecen a un documento, no al grupo
+        # seleccionado después. La cola ya conserva la edición anterior.
+        for suffix in ('_estado_pendiente','_retry_at','_last_attempt','_filas','_obs',
+                       '_intento','_intervalo','_papel_nonce','_papel_aceptado',
+                       '_papel_rechazado','_papel_error','_papel_legacy'):
+            st.session_state.pop(prefix+suffix,None)
     from services.planeacion_generacion import prellenar
     from services.planeacion_limpieza import normalizar
     limpio=normalizar(doc)

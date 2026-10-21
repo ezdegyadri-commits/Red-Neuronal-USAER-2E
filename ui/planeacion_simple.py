@@ -8,6 +8,7 @@ import streamlit as st
 from services import planeacion as s, planeacion_equipo as equipo
 from services.planeacion_modalidad import modalidad, GUIA_XIX, GUIA_XX, guia_grupal
 from utils.escolar import grado_canonico
+from ui.planeacion_pendientes import raiz
 from services.planeacion_modelo import FORMATOS
 
 PASOS=('1. ¿A quién planeo?', '2. Preparar con IA', '3. Revisar y enviar')
@@ -433,25 +434,31 @@ def seleccion(frame,ids,incluir=False):
 
 def _abrir(base,prefix,doc):
     from ui import planeacion as u
-    # No cambiar de modalidad permite saltarse el resguardo de otra edición.
-    for key,value in list(st.session_state.items()):
-        if key.startswith(base+'_') and key.endswith('_doc') and isinstance(value,dict):
-            previo=key[:-4]
-            if st.session_state.get(previo+'_pending') and (value.get('id')!=doc.get('id') or value.get('revision')!=doc.get('revision')):
-                raise RuntimeError('Guarda la edición pendiente antes de abrir otra planeación. Tu trabajo se conserva.')
+    from ui.planeacion_pendientes import pendientes
+    local=next((p for p in pendientes(base) if st.session_state[p+'_doc'].get('id')==doc.get('id')),None)
+    if local:
+        st.session_state[base+'_activa']=local
+        st.session_state[base+'_viva_entrada']=False
+        return local
+    previo=st.session_state.get(prefix+'_doc')
+    if previo and st.session_state.get(prefix+'_pending'):
+        if previo.get('id')==doc.get('id'):
+            st.session_state[base+'_activa']=prefix
+            st.session_state[base+'_viva_entrada']=False
+            return prefix
+        from ui.planeacion_pendientes import conservar
+        conservar(prefix,base)
     u._open(prefix,doc)
     st.session_state[prefix+'_mostrar_pdf']=False
     st.session_state[base+'_activa']=prefix
     st.session_state[base+'_viva_entrada']=False
     st.session_state[base+'_paso_pendiente']=PASOS[2] if doc.get('metadatos',{}).get('generacion_completa') or doc.get('metadatos',{}).get('preparacion_local') else PASOS[1]
+    return prefix
 
 
 def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None,proponer_apartados=False,nuevo_independiente=False):
     """Las dos vistas comparten creación, protección de pendientes y contexto."""
     from ui import planeacion as u
-    for key in list(st.session_state):
-        if key.startswith(base+'_') and key.endswith('_doc') and st.session_state.get(key[:-4]+'_pending'):
-            if not u._guardar_edicion_pendiente(key[:-4]):raise RuntimeError('Primero confirma el guardado de tu edición pendiente.')
     if tipo in ('individual','especialista') and not nuevo_independiente:
         from services.planeacion_recuperacion import equivalentes
         frame=s.padron_autorizado()
@@ -461,7 +468,7 @@ def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=
         existentes=equivalentes(s.listar(),s.identidad(),fmt,ids,elegidos.iloc[0]['ID_Escuela'],ciclo,trimestre,tipo)
         if existentes:
             # Abrir el avance confirmado, no guardar una copia de la plantilla.
-            prefix=base+'_'+tipo;_abrir(base,prefix,existentes[0]);return prefix
+            return _abrir(base,base+'_'+tipo,existentes[0])
     with st.spinner('Reuniendo la información que ya registró el equipo…'):
         solicitud='especialista' if tipo=='grupal' and s.identidad()['area'] in ('Comunicación','Psicología','Trabajo Social') else tipo
         doc=s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=solicitud,incluir_individuales=incluir,vista_formato=presentacion)
@@ -476,7 +483,7 @@ def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=
         from services.planeacion_apartados import proponer
         doc=proponer(doc)
     if presentacion in ('guia','trimestral'):doc['metadatos']['vista_formato']=presentacion
-    prefix=base+'_'+tipo;_abrir(base,prefix,doc);u._persist(prefix)
+    prefix=_abrir(base,base+'_'+tipo,doc);u._persist(prefix)
     return prefix
 
 
@@ -582,7 +589,7 @@ def _herramientas(prefix,actor):
 def _respaldo(prefix,doc):
     from ui import planeacion as u
     st.download_button('Descargar respaldo editable',json.dumps(doc,ensure_ascii=False,indent=2),file_name='planeacion-'+doc['id']+'.json',mime='application/json',key=prefix+'_simple_backup')
-    base=prefix.rsplit('_',1)[0]
+    base=raiz(prefix)
     if st.session_state.get(prefix+'_pending'):
         st.warning('Descarga el respaldo antes de conciliar una edición pendiente con otra versión.')
         confirmar=st.checkbox('Ya respaldé mi edición y quiero conservarla para conciliar',key=prefix+'_simple_resguardar_confirm')
@@ -796,7 +803,7 @@ def _editor(prefix,actor,paso):
     if paso==PASOS[1]:
         st.subheader(PASOS[1]);st.caption('El expediente alimenta el borrador. La IA propone; tú decides y puedes editar todo.')
         from ui.planeacion_respaldo import acceso
-        acceso(prefix, prefix.rsplit('_',1)[0], PASOS[2])
+        acceso(prefix, raiz(prefix), PASOS[2])
         from ui.planeacion_local import panel as actividades_locales
         actividades_locales(prefix)
         fuentes=doc['metadatos'].get('fuentes',[])
@@ -901,11 +908,11 @@ def _editor(prefix,actor,paso):
             u._text(prefix,'metadatos','necesidades_confirmadas','Necesidades y apoyos documentados (incluye la referencia de origen)')
         st.markdown('---')
         if st.button('Continuar a mi formato para revisar y entregar ➡️', type='primary', key=prefix+'_ir_paso3', use_container_width=True):
-            st.session_state[prefix.rsplit('_',1)[0]+'_paso']=PASOS[2];st.rerun()
+            st.session_state[raiz(prefix)+'_paso']=PASOS[2];st.rerun()
     else:
         st.subheader(PASOS[2]);st.caption('Edita directamente en tu formato. Los resultados finales se registran después de trabajar con el alumno.')
         from ui.planeacion_respaldo import informacion
-        informacion(prefix, prefix.rsplit('_',1)[0], PASOS[1])
+        informacion(prefix, raiz(prefix), PASOS[1])
         _lienzo_encabezado_oficial(doc)
         with st.expander('Datos generales del formato'):
             st.write(doc['datos'])
@@ -971,6 +978,8 @@ def pagina():
     from ui import planeacion as u
     _inyectar_estilos_planeacion()
     actor=s.identidad();base=u._prefix()
+    from ui.planeacion_pendientes import panel as envios_pendientes
+    envios_pendientes(base)
     st.title('Mi planeación · '+actor['area'])
     st.caption('Elige alumnos, prepara tu propuesta y revisa el formato. Captura una vez; reutiliza lo que el equipo ya conoce.')
     labels=['Mi planeación','Trabajo colaborativo']+(['Revisión directiva'] if actor['director'] else [])
