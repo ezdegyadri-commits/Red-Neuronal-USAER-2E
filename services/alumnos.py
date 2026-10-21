@@ -13,12 +13,15 @@ DOCENTES_ICHC_AANZIHO = {
 
 
 def _canonizar_docente_apoyo(valor):
+    """Alias completos conocidos; un apellido compartido no acredita identidad."""
     docente = _nombre_docente(valor)
-    if "CECILIA" in docente:
-        return "MARIA CECILIA SOLIS VAZQUEZ"
-    if "MARYCRUZ" in docente or "CAAMAL" in docente:
-        return "MARYCRUZ CAAMAL CORAL"
-    return docente
+    alias = {
+        "CECILIA SOLIS": "MARIA CECILIA SOLIS VAZQUEZ",
+        "CECILIA SOLIS VAZQUEZ": "MARIA CECILIA SOLIS VAZQUEZ",
+        "MARIA CECILIA SOLIS": "MARIA CECILIA SOLIS VAZQUEZ",
+        "MARYCRUZ CAAMAL": "MARYCRUZ CAAMAL CORAL",
+    }
+    return alias.get(docente, docente)
 
 
 def _nombre_docente(valor):
