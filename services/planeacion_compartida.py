@@ -19,10 +19,10 @@ def _fecha_corta(fecha_iso):
         val = str(fecha_iso)
         if 'T' in val:
             f, h = val.split('T', 1)
-            h_corta = h[:5]
+            h_corta = h[:8]
             partes = f.split('-')
             if len(partes) == 3:
-                return f"{partes[2]}/{partes[1]} {h_corta}"
+                return f"{partes[2]}/{partes[1]}/{partes[0]} {h_corta}"
         return val[:16]
     except Exception:
         return str(fecha_iso)[:16]
@@ -69,6 +69,7 @@ def alumno_padron(r):
         'Maestro de apoyo':str(r.get('Maestra de Apoyo','') or ''),
         'ID_Maestro_Regular':str(r.get('ID_Maestro_Regular','') or ''),
         'Situacion_Alumno':str(r.get('Situacion_Alumno','') or ''),
+        'Fecha_Derivacion':str(r.get('Fecha_Derivacion','') or ''),
         'NEE registrada':nee_padron(r),
         'Edad de referencia del padrón':str(r.get('Edad_1_Septiembre','') or '')}
 
@@ -93,6 +94,7 @@ def ampliar_matricula(doc,frame):
         if str(r.get('ID_Alumno','')) in presentes and clave_escuela(r.get('ID_Escuela'))==clave_escuela(doc['datos']['ID_Escuela']):
             from services.planeacion_nee import nee_padron
             contexto[str(r['ID_Alumno'])]={'Situacion_Alumno':str(r.get('Situacion_Alumno','') or ''),
+                'Fecha_Derivacion':str(r.get('Fecha_Derivacion','') or ''),
                 'NEE registrada':nee_padron(r),'ID_Maestro_Regular':str(r.get('ID_Maestro_Regular','') or '')}
     result['metadatos']['contexto_padron_grupo']=contexto
     manual=result['metadatos'].setdefault('guia_grupal_manual',{})

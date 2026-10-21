@@ -148,6 +148,20 @@ def preparar_solicitud(doc,ajustes):
     if contexto.get('contextualizacion_docente'):
         # Visible en el resumen que la persona revisa, y parte de la huella/caché.
         resumen=resumen[:7800]+'\n\n'+contexto['contextualizacion_docente']
+    previo=doc['metadatos'].get('generacion_completa',{})
+    base_igual=previo.get('configuracion_original')==ajustes
+    generadas=previo.get('filas_generadas',{}).get('dosificacion',[]) if base_igual else []
+    sesiones={r['id']:r for r in previo.get('sesiones_generadas',[])} if base_igual else {}
+    actuales={r['id']:r for r in doc['metadatos'].get('equipo',{}).get('sesiones',[])}
+    def salida_sin_editar(r):
+        if any(all(r.get(k,'')==v for k,v in base.items() if not k.startswith('_')) for base in generadas):return True
+        sid=r.get('_sesion_equipo')
+        return bool(sid in sesiones and actuales.get(sid)==sesiones[sid])
+    previas=[str(r.get('Actividades','')) for r in doc['tablas'].get('dosificacion',[]) if str(r.get('Actividades','')).strip() and not salida_sin_editar(r)]
+    # El mismo anonimizado que el resumen; nunca enviar la tabla nominal.
+    contexto['actividades_previas']=[resumen_previo(doc,[{'referencia':'ACTIVIDAD-PREVIA','alcance':'propuesta registrada, no logro','texto':t}]).split('\n\n',1)[-1][:1800] for t in previas[-8:]]
+    if contexto['actividades_previas']:
+        resumen=resumen[:7000]+'\n\nActividades previas para evitar repetición:\n'+'\n'.join(contexto['actividades_previas'])[:4500]
     firma=huella_completa(resumen,doc['formato'],doc['datos']['Función'],contexto,safe,aliases,evidencias)
     alcance=hashlib.sha256(json.dumps({'documento':doc.get('id',''),'cuenta':doc.get('cuenta',''),'alumnos':sorted(aliases.values()),'escuela':doc['datos']['ID_Escuela'],'formato':doc['formato']},sort_keys=True).encode()).hexdigest()
     return {'resumen':resumen,'contexto':contexto,'ajustes':safe,'configuracion_original':deepcopy(ajustes),'aliases':aliases,'evidencias':evidencias,'huella':firma,'alcance':alcance}
@@ -164,6 +178,11 @@ def _quitar_generado_sin_borrar_ediciones(rows,previas):
 def ensamblar(doc,respuesta,solicitud):
     actual=preparar_solicitud(doc,solicitud['configuracion_original'])
     if actual['alcance']!=solicitud['alcance'] or actual['huella']!=solicitud['huella']:raise ValueError('El expediente o los ajustes cambiaron. Revisa la información antes de aplicar la generación.')
+    anterior=doc.get('metadatos',{}).get('generacion_completa',{})
+    if respuesta==anterior.get('resultado'):
+        # Reenviar el mismo resultado ya aplicado es un no-op, no una nueva
+        # actividad. Conserva incluso las correcciones docentes posteriores.
+        return deepcopy(doc)
     respuesta=validar_completa(respuesta,doc['formato'],doc['datos']['Función'],solicitud['contexto'],solicitud['aliases'],solicitud['evidencias'])
     if not respuesta['unidades']:return deepcopy(doc)
     result=prellenar(sugerir_curriculo(doc,solicitud['configuracion_original']));meta=result['metadatos'];anterior=meta.get('generacion_completa',{})

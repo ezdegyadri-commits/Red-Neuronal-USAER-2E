@@ -37,6 +37,9 @@ if st.query_params.get("p") in ("docentes", "docentes_primaria", "maestros_regul
     formulario_publico_docentes()
     st.stop()
 
+from ui.sesiones_recuperables import recuperar as recuperar_sesion
+recuperar_sesion()
+
 if not st.session_state.get("autenticado"):
     login()
     st.stop()

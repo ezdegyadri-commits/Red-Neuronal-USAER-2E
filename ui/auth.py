@@ -20,6 +20,8 @@ def start_session(match):
     st.session_state.update({"autenticado": True, "usuario": str(match.get("Usuario", "")),
         "nombre": nombre, "rol": rol, "escuelas_permitidas": escuelas})
     st.session_state.pop("passkey_pending", None)
+    st.session_state['_sesion_emitir'] = True
+    st.session_state.pop('_sesion_borrar', None)
 
 
 def login():
@@ -83,6 +85,21 @@ def logout(key="cerrar_sesion"):
 
 
 def _cerrar():
+    token = st.session_state.get('_sesion_token')
+    if token:
+        try:
+            from services.sesiones_recuperables import servicio
+            servicio().cerrar(token, st.session_state.get('usuario', ''))
+        except Exception:
+            st.warning('No se confirmó la revocación del acceso. Intenta cerrar otra vez; no se descartó tu trabajo.')
+            return
+    st.session_state['_sesion_borrar'] = True
+    st.session_state.pop('_sesion_token', None)
+    st.session_state.pop('_sesion_emitir', None)
+    st.session_state.pop('_sesion_conservar_borrador', None)
+    from services.sesiones_recuperables import CAMPOS
+    for campo in CAMPOS:
+        st.session_state.pop(campo, None)
     for k in [
             "autenticado",
             "nombre",

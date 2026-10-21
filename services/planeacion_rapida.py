@@ -83,7 +83,7 @@ def estado(doc):
     defaults={'prioridades':list(dict.fromkeys(candidatas))[:2] or [permitidas[0]],
        'apoyos':['pasos','respuesta'] if area!='Trabajo Social' else ['respuesta'],
        'metodo':'secuencia','contextos':['Escuela' if area=='Trabajo Social' else 'Aula regular'],
-       'duracion':30,'frecuencia':FRECUENCIAS[0],'acuerdos':[],'completar':False}
+       'duracion':30,'frecuencia':FRECUENCIAS[0],'acuerdos':[],'completar':False,'tematica':''}
     for key in defaults:
         if key in guardado and type(guardado[key]) is type(defaults[key]):defaults[key]=deepcopy(guardado[key])
     if defaults['metodo'] not in METODOS:defaults['metodo']='secuencia'
@@ -109,13 +109,14 @@ def validar(doc,selecciones):
     if type(selecciones.get('duracion')) is not int or selecciones['duracion'] not in [15,20,30,45,60]:errors.append('Elige una duración disponible.')
     if selecciones.get('frecuencia') not in FRECUENCIAS:errors.append('Elige la frecuencia de trabajo.')
     if type(selecciones.get('completar',False)) is not bool:errors.append('Revisa la opción de autollenado.')
+    if not isinstance(selecciones.get('tematica',''),str) or len(selecciones.get('tematica',''))>300:errors.append('Resume la temática en un máximo de 300 caracteres.')
     return errors
 
 
 def orientaciones(doc,selecciones):
     errors=validar(doc,selecciones)
     if errors:raise ValueError(' '.join(errors))
-    return {'enfoque':'Prioridades propuestas: '+', '.join(PRIORIDADES[p][0] for p in selecciones['prioridades'])+'. Metodología: '+METODOS[selecciones['metodo']]+'.',
+    return {'enfoque':'Prioridades propuestas: '+', '.join(PRIORIDADES[p][0] for p in selecciones['prioridades'])+'. Metodología: '+METODOS[selecciones['metodo']]+'. '+('Temática propuesta por la docente (no evidencia diagnóstica): '+selecciones['tematica'].strip()+'.' if selecciones.get('tematica','').strip() else ''),
        'apoyos':' '.join(APOYOS[p][1] for p in selecciones['apoyos'])+' Contextos: '+', '.join(selecciones['contextos'])+'. Temporalidad propuesta: '+selecciones['frecuencia']+', '+str(selecciones['duracion'])+' minutos. '+
            ' '.join('Acuerdo CTE registrado ('+acuerdos(doc)[k]['fuente']+'): '+acuerdos(doc)[k]['texto'] for k in selecciones['acuerdos'])}
 
@@ -148,6 +149,7 @@ def ensamblar(doc,selecciones):
                 if selecciones['metodo']=='taller':texto+='\nOrganización del taller: modelado, práctica acompañada y puesta en común.'
                 if selecciones['metodo']=='proyecto':texto+='\nProducto propuesto: una muestra o registro de lo realizado, que el alumno pueda compartir por un medio accesible.'
                 texto+='\nApoyos propuestos: '+' '.join(APOYOS[p][1] for p in selecciones['apoyos'])
+                if selecciones.get('tematica','').strip():texto+='\nTemática propuesta por la docente: '+selecciones['tematica'].strip()+'. Adaptar la secuencia a esta temática antes de aplicarla.'
                 texto+='\nIndicador para valorar después de la actividad: '+descriptor
                 for key in selecciones['acuerdos']:texto+='\nVinculación con acuerdo CTE registrado ('+cte[key]['fuente']+'): '+cte[key]['texto']
                 result['tablas']['dosificacion'].append({'Contextos':contexto,'Actividades':texto,

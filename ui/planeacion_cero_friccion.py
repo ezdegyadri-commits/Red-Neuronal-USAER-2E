@@ -18,6 +18,10 @@ def _celda(c, key):
         opciones = c['opciones']
         value = c['value'] if c['value'] in opciones else opciones[0]
         return st.selectbox(c['label'], opciones, index=opciones.index(value), key=key)
+    if c.get('tipo')=='fecha':
+        from datetime import date
+        valor=st.date_input(c['label'],value=date.fromisoformat(c['fecha_iso']) if c['fecha_iso'] else None,format='DD/MM/YYYY',key=key)
+        return valor.strftime('%d/%m/%Y') if valor else c['value']
     if c.get('nota'):
         st.caption('💡 ' + c['nota'])
     label_lower = c['label'].lower()
@@ -95,8 +99,9 @@ def _asistencia(doc, accion, config, preview, consent):
         return doc, solicitud, 'Tu edición se guardará. Revisa el resumen de IA y confirma su envío con el mismo botón Guardar Planeación.'
     from ai.planeacion_completa import generar_completa
     from ai.planeacion import modelo_configurado
-    respuesta = generar_completa(solicitud['resumen'], doc['formato'], doc['datos']['Función'],
-        solicitud['contexto'], solicitud['ajustes'], solicitud['aliases'], solicitud['evidencias'])
+    with st.spinner('Preparando actividades con los antecedentes del alumno… Tu redacción se conserva.',show_time=True):
+        respuesta = generar_completa(solicitud['resumen'], doc['formato'], doc['datos']['Función'],
+            solicitud['contexto'], solicitud['ajustes'], solicitud['aliases'], solicitud['evidencias'])
     if not respuesta['unidades']:
         return doc, None, 'La IA no produjo actividades sustentadas. Tu edición se conserva y puedes continuar sin IA.'
     result = g.ensamblar(doc, respuesta, solicitud)

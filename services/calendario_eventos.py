@@ -51,7 +51,14 @@ def eventos_vigentes(registros):
 
 def cargar_eventos(mes):
     date.fromisoformat(mes + "-01")
-    return [e for e in eventos_vigentes(_eventos_guardados()) if e["Fecha"].startswith(mes + "-")]
+    eventos=[e for e in eventos_vigentes(_eventos_guardados()) if e["Fecha"].startswith(mes + "-")]
+    from services.epp_programacion import eventos_calendario
+    try:
+        programados=eventos_calendario(mes)
+        st.session_state.pop('_epp_calendario_error',None)
+    except Exception:
+        programados=[];st.session_state['_epp_calendario_error']=True
+    return sorted(eventos+programados,key=lambda e:(e['Fecha'],e['Titulo']))
 
 
 def desplazar_mes(mes, pasos):

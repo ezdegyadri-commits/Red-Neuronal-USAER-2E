@@ -6,7 +6,7 @@ from ai.planeacion_prompt import INSTRUCCIONES
 from services.planeacion_modelo import FORMATOS
 from services.planeacion_equipo import COMPETENCIAS
 
-VERSION='planeacion-completa-2026-10-20-v4'
+VERSION='planeacion-completa-2026-10-21-v5'
 CAMPOS=('necesidad','objetivo','descriptor','actividad','contexto','apoyos','recursos','evaluacion','fundamento')
 LISTAS=('evidencias','fuentes','referentes','destinatarios','competencias')
 
@@ -31,6 +31,7 @@ def solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
        'campo':contexto.get('campo',contexto.get('campos',{})),'ejes':contexto.get('ejes',{}),
        'guia_local':contexto.get('guia_local',''),'fuentes':fuentes,'evidencias':evidencias,
        'contextualizacion_docente':contexto.get('contextualizacion_docente',''),
+       'actividades_previas_para_no_repetir':contexto.get('actividades_previas',[]),
        'configuracion':{k:ajustes[k] for k in ('duracion','sesiones','dias','enfoque','apoyos') if k in ajustes},
        'contextos_admitidos':FORMATOS[formato]['contextos']}
     reglas='''Prepara el borrador completo de planeación trimestral, no solo ideas sueltas.
@@ -60,7 +61,13 @@ CRITERIOS PEDAGÓGICOS FUNDAMENTALES (ZONA DE DESARROLLO PRÓXIMO):
 4. DESCRIPTOR DE LOGRO ('descriptor'):
    Redacta con verbos observables en presente (señala, clasifica, asocia, comunica, resuelve con apoyo).
    Evita verbos teóricos o abstractos como 'comprenderá' o 'conocerá'.
-5. CONTINUIDAD PEDAGÓGICA:
+5. CONTINUIDAD PEDAGÓGICA Y VARIEDAD:
+   No copies ni reformules superficialmente las actividades previas suministradas.
+   Cada unidad nueva debe cambiar la tarea observable, la dinámica o el producto,
+   manteniendo los apoyos y objetivos que requieran continuidad según la evidencia.
+   No basta cambiar nombres, materiales o verbos. No repitas unidades dentro de la respuesta.
+   Si no hay datos para justificar una progresión, propón una exploración diferente,
+   declárala propuesta y solicita confirmación; nunca inventes logros ni intereses.
    Aprovecha los antecedentes y actividades previas registradas para dar seguimiento a los objetivos
    iniciados; no repitas mecánicamente lo ya superado ni des saltos curriculares descontextualizados.
 
@@ -116,6 +123,9 @@ def validar_completa(data,formato,area,contexto,aliases,evidencias):
             documentados={a for ref in u['evidencias'] for a in evidencias.get(ref,[])}
             if not set(u['destinatarios'])<=documentados:raise RespuestaInvalida('La evidencia de otro alumno no sustenta esta actividad.','EvidenciaAjena')
         if area!='Psicología' and u['competencias']:raise RespuestaInvalida('Se trasladaron competencias exclusivas de Psicología a otra función.','FuncionInvalida')
+        from services.planeacion_variedad import repetida
+        previas=contexto.get('actividades_previas',[])+[r['actividad'] for r in resultado]
+        if repetida(u['actividad'],previas):raise RespuestaInvalida('La IA repitió una actividad. Se conserva tu planeación; solicita una alternativa.','ActividadRepetida')
         resultado.append({**{k:u[k].strip() for k in CAMPOS},**{k:list(dict.fromkeys(u[k])) for k in LISTAS}})
     faltantes=data.get('faltantes',[])
     if not isinstance(faltantes,list):raise ValueError('Preguntas de confirmación no válidas.')

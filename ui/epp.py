@@ -119,6 +119,8 @@ def epp_page():
     st.caption('Un alumno, un informe. Cada profesional aporta y revisa sus hallazgos; la maestra de apoyo coordina la integración. Anexos XVII y XVIII del Manual USAER.')
     st.info('La IA ayuda a redactar a partir de hallazgos documentados. No aplica ni califica pruebas, ni emite diagnósticos clínicos. La conclusión educativa, NEE y apoyos requieren acuerdo del equipo.')
     prefix='epp_'+hashlib.sha256(a['cuenta'].encode()).hexdigest()[:12]
+    from ui.epp_programacion import panel as control_programacion
+    control_programacion(prefix)
     try:docs=s.listar(True)
     except Exception:
         st.error('No fue posible consultar las EPP. No se modificó ningún documento.');return
