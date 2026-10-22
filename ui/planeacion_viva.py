@@ -123,23 +123,8 @@ def _entrada(base,actor):
         if st.button('Actualizar mis planeaciones guardadas',key=base+'_viva_actualizar_documentos'):
             s.refrescar();st.rerun()
         if docs:
-            from services.planeacion_recuperacion import ordenar,etiqueta,actividades_redactadas
-            docs_ordenados=ordenar(docs)
-            porid={d['id']:d for d in docs_ordenados}
-            if actividades_redactadas(next(iter(porid.values()))):
-                st.caption('Mostrando las planeaciones más recientes y editadas. Selecciona una para continuar redactando o eliminar borradores que ya no ocupes.')
-            did=st.selectbox('Mis planeaciones recientes',list(porid),format_func=lambda i:etiqueta(porid[i]),key=base+'_viva_guardadas')
-            col_abrir,_=st.columns([2,1])
-            with col_abrir:
-                if st.button('Abrir mi formato',type='primary',key=base+'_viva_abrir',use_container_width=True):
-                    try:
-                        _abrir(base,porid[did])
-                        st.rerun()
-                    except (ValueError,PermissionError,RuntimeError) as exc:
-                        st.warning(str(exc))
-            from ui.planeacion_borradores import controles
-            from documents.planeacion_papel import generar_pdf
-            controles(base+'_lista_'+did,porid[did],generar_pdf,lambda:None)
+            from ui.planeacion_repositorio import panel as repositorio
+            repositorio(base,docs,_abrir)
         else:
             st.info('Aún no tienes planeaciones guardadas en tu cuenta. Usa la pestaña «➕ Nueva planeación» para comenzar una.')
 

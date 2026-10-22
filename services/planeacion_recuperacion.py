@@ -6,10 +6,45 @@ def actividades_redactadas(doc):
     return sum(bool(str(r.get('Actividades','') or '').strip()) for r in doc.get('tablas',{}).get('dosificacion',[]))
 
 
+def tiene_trabajo(doc):
+    if actividades_redactadas(doc):return True
+    meta=doc.get('metadatos',{})
+    if meta.get('modalidad_planeacion')!='grupal':return False
+    from services.planeacion_modalidad import guia_grupal
+    return any(str(r.get(area,'') or '').strip() for r in guia_grupal(doc)['filas']
+               for area in ('Aprendizaje','Psicología','Comunicación','Trabajo Social'))
+
+
 def ordenar(docs):
     # Una plantilla recién creada no desplaza al documento donde se escribió.
     # No se compara longitud como si más texto significara mejor planeación.
-    return sorted(docs,key=lambda d:(bool(actividades_redactadas(d)),d.get('guardado_en','')),reverse=True)
+    return sorted(docs,key=lambda d:(tiene_trabajo(d),d.get('guardado_en','')),reverse=True)
+
+
+def repositorios(docs):
+    """Clasificación visual, no copias ni escrituras ni inferencias por alumno."""
+    grupos={'Individuales':[],'Grupales':[]}
+    for doc in ordenar(docs):
+        tipo=doc.get('metadatos',{}).get('modalidad_planeacion')
+        nombre={'individual':'Individuales','grupal':'Grupales','especialista':'Mi intervención'}.get(tipo,'Otros formatos guardados')
+        grupos.setdefault(nombre,[]).append(doc)
+    return grupos
+
+
+def titulo_tarjeta(doc):
+    from services.planeacion_ambito import etiqueta as grupo
+    if doc.get('metadatos',{}).get('modalidad_planeacion')=='individual':
+        return ' · '.join(a['Nombre del alumno'] for a in doc['datos']['Alumnos']) or 'Planeación individual'
+    return grupo(doc) or 'Planeación guardada'
+
+
+def detalle_tarjeta(doc):
+    from services.planeacion_compartida import _fecha_corta
+    datos=doc['datos'];n=actividades_redactadas(doc)
+    estado={'BORRADOR':'Borrador editable','ENVIADO':'Enviado a Dirección','VALIDADO':'Validado','CON_OBSERVACIONES':'Con observaciones'}.get(doc.get('estado'),doc.get('estado',''))
+    return ' · '.join(filter(None,[datos.get('Escuela regular'),datos.get('Curso escolar'),
+        'Trimestre '+str(datos.get('Trimestre','')), _fecha_corta(doc.get('guardado_en')),
+        datos.get('Función'),estado,str(n)+' actividades redactadas' if n else 'Con trabajo redactado' if tiene_trabajo(doc) else 'Sin actividades redactadas']))
 
 
 def etiqueta(doc):

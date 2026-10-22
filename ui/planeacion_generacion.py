@@ -136,8 +136,8 @@ def panel_generacion(prefix,persist,abrir,compact=False):
             solicitud=g.preparar_solicitud(actual,ajustes_solicitud)
             if coincide:respuesta=previo['resultado']
             else:
-                with st.spinner('Analizando la información documentada y preparando el formato…',show_time=True):
-                    respuesta=generar_completa(solicitud['resumen'],actual['formato'],actual['datos']['Función'],solicitud['contexto'],solicitud['ajustes'],solicitud['aliases'],solicitud['evidencias'])
+                from ui.planeacion_progreso import generar
+                respuesta=generar(solicitud,actual,generador=generar_completa)
             if not respuesta['unidades']:
                 st.info(respuesta['observaciones'] or 'Falta información para sostener actividades.')
                 for pregunta in respuesta['faltantes']:st.caption(pregunta)

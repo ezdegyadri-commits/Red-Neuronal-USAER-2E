@@ -146,6 +146,26 @@ def generar_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias):
     for campo,values in permitidos.items():
         if values:unidad[campo]['items']['enum']=values
         else:unidad[campo]['maxItems']=0
-    return proponer(resumen,formato,area,curriculo=contexto,_prompt=prompt,_schema=schema,
-        _max_tokens=6000,_validador=lambda data:validar_completa(data,formato,area,contexto,aliases,evidencias))
+    validar=lambda data:validar_completa(data,formato,area,contexto,aliases,evidencias)
+    try:
+        return proponer(resumen,formato,area,curriculo=contexto,_prompt=prompt,_schema=schema,
+            _max_tokens=6000,_validador=validar)
+    except RuntimeError:
+        from ai.planeacion import st,notificar_progreso
+        diagnostico=st.session_state.get('planeacion_ia_diagnostico',{})
+        motivo=diagnostico.get('motivo')
+        corregibles={'JSONInvalido','SalidaCortada','CamposIncompletos','EstructuraInvalida',
+                     'ReferenciasInvalidas','ActividadRepetida','Vinculo_evidencias','Vinculo_fuentes',
+                     'Vinculo_referentes','Vinculo_destinatarios','EvidenciaAjena','ContextoInvalido'}
+        if diagnostico.get('tipo')!='RespuestaNoVerificable' or motivo not in corregibles:raise
+        # Una sola corrección sobre los mismos datos consentidos; nunca enviar
+        # texto de error del proveedor ni una respuesta no validada como contexto.
+        compacto=deepcopy(schema);compacto['properties']['unidades']['maxItems']=3
+        reparacion=prompt+'\nREINTENTO DE FORMATO: '+motivo+'. Devuelve como máximo tres unidades completas y concisas; '
+        reparacion+='verifica cada ID contra los datos suministrados y la evidencia de cada destinatario. '
+        reparacion+='Mantén actividades distintas de las previas y competencias pertinentes. No omitas campos ni inventes referencias. '
+        reparacion+='En Psicología puedes abordar varias competencias justificadas en una misma unidad.\n'
+        notificar_progreso('corrigiendo')
+        return proponer(resumen,formato,area,curriculo=contexto,_prompt=reparacion,_schema=compacto,
+            _max_tokens=6000,_validador=validar)
 
