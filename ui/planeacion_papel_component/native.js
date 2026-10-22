@@ -22,9 +22,9 @@ export default function mount(component) {
     return typeof value === 'function' ? value.bind(target) : value;
   }});
   const window = new Proxy(nativeWindow, { get(target, key) {
-    if (key === 'addEventListener') return (type, callback) => {
+    if (key === 'addEventListener') return (type, callback, options) => {
       if (type === 'message') { state.receive = callback; return; }
-      target.addEventListener(type, callback); listeners.push([type, callback]);
+      target.addEventListener(type, callback, options); listeners.push([type, callback, options]);
     };
     const value = Reflect.get(target, key, target);
     return typeof value === 'function' ? value.bind(target) : value;
@@ -60,7 +60,7 @@ export default function mount(component) {
     for (const id of timeouts) globalThis.clearTimeout(id);
     for (const id of intervals) globalThis.clearInterval(id);
     for (const observer of observers) observer.disconnect();
-    for (const [type, callback] of listeners) nativeWindow.removeEventListener(type, callback);
+    for (const [type, callback, options] of listeners) nativeWindow.removeEventListener(type, callback, options);
     if (host.__usaerEditor === state) delete host.__usaerEditor;
   };
   /* USAER_RENDERER */

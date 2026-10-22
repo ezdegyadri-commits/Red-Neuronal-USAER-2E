@@ -19,8 +19,8 @@ def pendientes(base):
 def conservar(prefix,base):
     """Protege la edición antes de reutilizar su espacio para otro documento."""
     payload={s:deepcopy(st.session_state[prefix+s]) for s in
-             ('_doc','_filas','_obs','_pending','_error','_retry_at','_last_attempt','_estado_pendiente',
-              '_intento','_intervalo','_papel_nonce','_papel_aceptado')
+             ('_doc','_filas','_filas_retiradas','_obs','_pending','_error','_retry_at','_last_attempt','_estado_pendiente',
+              '_intento','_intervalo','_papel_nonce','_papel_aceptado','_guardado_diagnostico')
              if prefix+s in st.session_state}
     firma=hashlib.sha256(json.dumps(payload,ensure_ascii=False,sort_keys=True,default=str).encode()).hexdigest()[:24]
     destino=base+'_envio_'+firma
@@ -31,6 +31,47 @@ def conservar(prefix,base):
     # No es un acuse: sigue pendiente en destino, sin tocar el documento central.
     st.session_state[prefix+'_pending']=False
     return destino
+
+
+def controles_guardado(prefix,key):
+    """Diagnóstico y recuperación visibles tanto en el módulo como al salir."""
+    doc=st.session_state.get(prefix+'_doc')
+    if not doc:return
+    detalle=st.session_state.get(prefix+'_guardado_diagnostico')
+    if detalle:
+        st.warning(detalle['causa'])
+        st.caption(detalle['accion'])
+    elif st.session_state.get(prefix+'_error'):
+        st.warning(st.session_state[prefix+'_error'])
+        st.caption('Descarga el respaldo antes de cerrar. Puedes reintentar sin crear otra planeación.')
+    else:st.caption('Hay una edición pendiente de confirmación central; esto no equivale a un guardado confirmado.')
+    respaldo=doc if prefix+'_filas' not in st.session_state else {
+        'documento':doc,'filas':st.session_state[prefix+'_filas'],'observaciones':st.session_state.get(prefix+'_obs',''),
+        'filas_retiradas':st.session_state.get(prefix+'_filas_retiradas',[]),'cuenta_aporte':st.session_state.get('usuario','')}
+    if prefix+'_filas' in st.session_state:
+        try:
+            from services.planeacion import identidad
+            respaldo['area_aporte']=identidad()['area']
+        except PermissionError:respaldo['area_aporte']=''
+    st.download_button('Descargar respaldo pendiente',json.dumps(respaldo,ensure_ascii=False,indent=2),
+        file_name='planeacion-pendiente-'+doc['id']+'.json',mime='application/json',key=key+'_respaldo')
+    if detalle and detalle.get('tipo')=='archivado' and st.button('Restaurar este borrador y reintentar',key=key+'_restaurar'):
+        from services import planeacion as s
+        from ui.planeacion import _guardar_edicion_pendiente
+        try:
+            versiones=[d for d in s.versiones_actuales() if d['id']==doc['id']]
+            if not versiones:raise ValueError('No se encontró la versión central; conserva el respaldo y vuelve a intentar.')
+            if versiones[-1]['metadatos'].get('borrador_eliminado'):s.restaurar_borrador(versiones[-1])
+            # Mantener la revisión base local: el guardado normal debe conciliar,
+            # no reemplazar a ciegas el documento restaurado.
+            if _guardar_edicion_pendiente(prefix):st.success('Borrador restaurado y edición guardada en la base central.')
+        except Exception as exc:
+            from services.planeacion_guardado_estado import diagnostico
+            st.session_state[prefix+'_guardado_diagnostico']=diagnostico(exc)
+            st.error(st.session_state[prefix+'_guardado_diagnostico']['causa'])
+    if st.button('Reintentar guardado',key=key+'_reintentar'):
+        from ui.planeacion import _guardar_edicion_pendiente
+        if _guardar_edicion_pendiente(prefix):st.success('Guardado confirmado. La edición ya está en la base central.')
 
 
 def reintentar(base):
@@ -54,7 +95,7 @@ def panel(base):
             doc=st.session_state[prefix+'_doc'];datos=doc.get('datos',{})
             grados=', '.join(sorted({str(a.get('Grado',''))+' '+str(a.get('Grupo','')) for a in datos.get('Alumnos',[])}))
             st.write(' · '.join(filter(None,[datos.get('Escuela regular'),grados,datos.get('Periodo') or doc.get('formato')])))
-            st.caption(st.session_state.get(prefix+'_error','Pendiente de confirmación del servidor.'))
+            controles_guardado(prefix,prefix+'_cola_diagnostico')
             respaldo=doc if prefix+'_filas' not in st.session_state else {'documento':doc,'filas':st.session_state[prefix+'_filas'],'observaciones':st.session_state.get(prefix+'_obs','')}
             st.download_button('Descargar respaldo de esta edición',json.dumps(respaldo,ensure_ascii=False,indent=2),
                 file_name='planeacion-pendiente-'+doc['id']+'.json',mime='application/json',key=prefix+'_cola_respaldo')

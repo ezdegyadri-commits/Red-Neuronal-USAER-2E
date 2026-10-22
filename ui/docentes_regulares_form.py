@@ -2,11 +2,13 @@
 import streamlit as st
 import pandas as pd
 from services.docentes_regulares import (
-    ESCUELAS_PRIMARIAS,
     GRADOS,
     GRUPOS,
-    registrar_docente_regular,
     listar_docentes_regulares,
+    escuelas_del_actor,
+    guardar_docente_asignado,
+    editar_docente_regular,
+    TURNOS,
 )
 
 URL_PUBLICA = "https://red-neuronal-usaer-2e.streamlit.app/?p=docentes"
@@ -14,6 +16,12 @@ URL_PUBLICA = "https://red-neuronal-usaer-2e.streamlit.app/?p=docentes"
 
 def formulario_publico_docentes():
     """Formulario directo y minimalista: Escuela -> Grado -> Grupo -> Nombre."""
+    actor={'autenticado':st.session_state.get('autenticado',False),
+           'cuenta':st.session_state.get('usuario',''),'nombre':st.session_state.get('nombre',''),
+           'rol':st.session_state.get('rol',''),'escuelas_permitidas':st.session_state.get('escuelas_permitidas','')}
+    try:permitidas=escuelas_del_actor(actor)
+    except PermissionError as exc:st.info(str(exc));return
+    if not permitidas:st.warning('Tu cuenta no tiene una escuela primaria asignada. Consulta con Dirección.');return
     st.markdown("""
     <style>
     .simple-card {
@@ -60,15 +68,14 @@ def formulario_publico_docentes():
     if aviso := st.session_state.pop("docente_guardado_aviso", None):
         st.success(aviso)
 
-    # Formulario minimalista de 4 campos
-    with st.form("form_simple_docente", clear_on_submit=True):
-        escuela = st.selectbox(
-            "Escuela Primaria",
-            ESCUELAS_PRIMARIAS,
-            index=0,
-            key="escuela_simple",
-        )
-
+    if len(permitidas)==1:
+        escuela=permitidas[0]
+        st.info('Escuela asignada: '+escuela)
+    else:
+        if st.session_state.get('escuela_simple') not in permitidas:st.session_state['escuela_simple']=permitidas[0]
+        escuela=st.selectbox('Escuela Primaria',permitidas,key='escuela_simple')
+    # La escuela se fija fuera del formulario y se valida otra vez en servidor.
+    with st.form("form_simple_docente", clear_on_submit=False):
         col_g1, col_g2 = st.columns(2)
         with col_g1:
             grado = st.selectbox("Grado", GRADOS, index=0, key="grado_simple")
@@ -88,16 +95,17 @@ def formulario_publico_docentes():
             st.error("Escribe el nombre del maestro(a).")
         else:
             try:
-                registrar_docente_regular(
+                registro=guardar_docente_asignado(
+                    actor,
                     escuela=escuela,
                     grado=grado,
                     grupo=grupo,
                     nombre_docente=nombre.strip(),
                 )
-                st.session_state["docente_guardado_aviso"] = (
-                    f"✅ Guardado: {nombre.strip()} ({grado} {grupo} · {escuela})"
-                )
-                st.rerun()
+                if registro['_guardado_central']:
+                    st.session_state["docente_guardado_aviso"] = f"Guardado: {nombre.strip()} ({grado} {grupo} · {escuela})"
+                    st.rerun()
+                else:st.warning('El registro tiene respaldo local, pero no se confirmó en la base central. No cierres esta sesión; vuelve a intentar cuando se restablezca la conexión.')
             except Exception as e:
                 st.error(f"Error al guardar: {e}")
 
@@ -106,39 +114,32 @@ def formulario_publico_docentes():
     registrados = listar_docentes_regulares(escuela=escuela)
     if registrados:
         st.markdown(f"**Maestros registrados en {escuela}:**")
-        df = pd.DataFrame(registrados)[["Grado", "Grupo", "Nombre_Docente"]].copy()
-        df.columns = ["Grado", "Grupo", "Maestro(a)"]
+        df = pd.DataFrame(registrados)[['Ciclo_Escolar',"Grado", "Grupo", "Nombre_Docente"]].copy()
+        df.columns = ['Ciclo',"Grado", "Grupo", "Maestro(a)"]
         st.dataframe(df, hide_index=True, use_container_width=True)
+        st.download_button('Descargar listado (CSV)',df.to_csv(index=False).encode('utf-8'),file_name='maestros-primaria.csv',mime='text/csv',key='descargar_docentes_asignados')
+        with st.expander('Corregir un maestro registrado',expanded=False):
+            porid={r['ID_Registro']:r for r in registrados}
+            rid=st.selectbox('Maestro que deseas corregir',list(porid),format_func=lambda i:porid[i]['Grado']+' '+porid[i]['Grupo']+' · '+porid[i]['Nombre_Docente']+' · '+porid[i]['Ciclo_Escolar'],key='docente_corregir_'+escuela)
+            r=porid[rid]
+            with st.form('editar_docente_'+rid,clear_on_submit=False):
+                nom=st.text_input('Nombre correcto',value=r['Nombre_Docente'])
+                c1,c2,c3=st.columns(3)
+                grd=c1.selectbox('Grado correcto',GRADOS,index=GRADOS.index(r['Grado']) if r['Grado'] in GRADOS else 0)
+                grp=c2.selectbox('Grupo correcto',GRUPOS,index=GRUPOS.index(r['Grupo']) if r['Grupo'] in GRUPOS else 0)
+                turno=c3.selectbox('Turno',TURNOS,index=TURNOS.index(r.get('Turno')) if r.get('Turno') in TURNOS else 0)
+                corregir=st.form_submit_button('Guardar corrección',type='primary')
+            if corregir:
+                try:
+                    guardado=editar_docente_regular(rid,{'Nombre_Docente':nom,'Grado':grd,'Grupo':grp,'Turno':turno},actor)
+                    if guardado['_guardado_central']:
+                        st.session_state['docente_guardado_aviso']='Corrección guardada. El registro anterior se conserva en el historial.'
+                        st.rerun()
+                    else:st.warning('Corrección respaldada localmente; falta confirmar su guardado central.')
+                except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
 
 
 def vista_docentes_regulares_admin():
     """Vista para consultar el directorio desde Dirección / USAER."""
-    st.subheader("Directorio de Maestros de Grupo (7 Primarias)")
-    
-    st.markdown(f"**Enlace para compartir:** `{URL_PUBLICA}`")
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        st.code(URL_PUBLICA, language=None)
-    with c2:
-        st.link_button("🌐 Abrir Formulario", URL_PUBLICA, use_container_width=True)
-
-    st.markdown("---")
-    escuela_sel = st.selectbox("Selecciona Escuela Primaria", ["Todas"] + ESCUELAS_PRIMARIAS)
-    filtro = None if escuela_sel == "Todas" else escuela_sel
-    docentes = listar_docentes_regulares(escuela=filtro)
-
-    if not docentes:
-        st.info("Aún no hay maestros registrados.")
-    else:
-        df = pd.DataFrame(docentes)[["Nombre_Escuela", "Grado", "Grupo", "Nombre_Docente", "Fecha_Registro"]].copy()
-        df.columns = ["Escuela", "Grado", "Grupo", "Maestro(a)", "Fecha de Captura"]
-        st.dataframe(df, hide_index=True, use_container_width=True)
-        
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "📥 Descargar en Excel (CSV)",
-            csv,
-            file_name=f"maestros_primaria_{filtro or 'todas'}.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
+    st.subheader('Maestros regulares · captura y correcciones')
+    formulario_publico_docentes()

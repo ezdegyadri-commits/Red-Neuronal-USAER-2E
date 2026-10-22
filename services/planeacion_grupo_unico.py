@@ -9,15 +9,14 @@ import hashlib
 import json
 from services.planeacion_compartida import es_guia
 from services.planeacion_matricula import clave_escuela
-from utils.escolar import grado_canonico,grupo_canonico
 
 
 def clave(doc):
     if not es_guia(doc) or not doc['datos']['Alumnos']:return None
-    grupos={(grado_canonico(a.get('Grado')),grupo_canonico(a.get('Grupo'))) for a in doc['datos']['Alumnos']}
-    if len(grupos)!=1:return None
-    grado,grupo=next(iter(grupos))
-    if not grado:return None
+    from services.planeacion_ambito import ambito
+    scope=ambito(doc)
+    if not scope:return None
+    grado,grupo=scope
     # Sin letra significa planeación de ese grado; no se equipara a A/B/etc.
     return (clave_escuela(doc['datos']['ID_Escuela']),str(doc['datos']['Curso escolar']).replace('–','-'),
             str(doc['datos']['Trimestre']),grado,grupo)
@@ -102,12 +101,18 @@ def documentos(versiones):
         k=clave(d)
         if not k or d['metadatos'].get('borrador_eliminado'):salida.append(deepcopy(d));continue
         grupos.setdefault(k,[]).append(d)
+    # Solo un alcance Todos expresamente guardado reúne las secciones previas.
+    # No convierte documentos históricos sin letra en documentos de todo el grado.
+    for k in list(grupos):
+        if k[-1]!='*':continue
+        for parcial in list(grupos):
+            if parcial!=k and parcial[:4]==k[:4]:grupos[k].extend(grupos.pop(parcial))
     for docs in grupos.values():
         # Una hoja ya consolidada es la raíz incluso si el llamador entrega
         # solamente las versiones más recientes (su fecha cambió al guardar).
         # No reactivar una copia antigua por tener una fecha de guardado anterior.
         ids={d['id'] for d in docs}
-        docs.sort(key=lambda d:(-len(ids & set(d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{}))),creados[d['id']],d['id']))
+        docs.sort(key=lambda d:(clave(d)[-1]!='*',-len(ids & set(d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{}))),creados[d['id']],d['id']))
         salida.append(conciliar(docs[0],docs[1:]) if len(docs)>1 else deepcopy(docs[0]))
     return salida
 
@@ -115,4 +120,15 @@ def documentos(versiones):
 def vigente(doc,versiones):
     k=clave(doc)
     if not k:return None
-    return next((d for d in documentos(versiones) if clave(d)==k and not d['metadatos'].get('borrador_eliminado')),None)
+    docs=[d for d in documentos(versiones) if clave(d) and not d['metadatos'].get('borrador_eliminado')]
+    # Si existe la hoja de todo el grado, cualquier acceso A/B abre esa misma hoja.
+    total=next((d for d in docs if clave(d)[:4]==k[:4] and clave(d)[-1]=='*'),None)
+    if total:return total
+    if k[-1]!='*':return next((d for d in docs if clave(d)==k),None)
+    candidatos=[d for d in docs if clave(d)[:4]==k[:4]]
+    if not candidatos:return None
+    # Ampliación solicitada por apoyo: reutiliza una raíz anterior, no otra copia.
+    candidatos.sort(key=lambda d:(d.get('guardado_en',''),d['id']))
+    raiz=deepcopy(candidatos[0])
+    raiz['metadatos']['alcance_grupal']=deepcopy(doc['metadatos']['alcance_grupal'])
+    return conciliar(raiz,candidatos[1:])

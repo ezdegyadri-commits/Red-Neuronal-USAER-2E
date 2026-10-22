@@ -71,16 +71,30 @@ def logout(key="cerrar_sesion"):
     pendientes=any(k.startswith(prefix) and k.endswith('_pending') and v for k,v in st.session_state.items())
     salir=False
     if pendientes:
-        st.info('El autoguardado está en proceso. Puedes continuar trabajando. Para salir ahora, usa «Guardar cambios y cerrar sesión». Si no hay conexión, tu sesión permanecerá abierta para proteger el trabajo.')
-        salir=st.checkbox('Quiero cerrar sin guardar los cambios pendientes',key=key+'_confirmar_pendientes')
+        st.info('Hay cambios sin confirmación de guardado. Puedes seguir trabajando o abrir otra planeación. Antes de cerrar, confirma el guardado o descarga un respaldo.')
+        from ui.planeacion_pendientes import pendientes as ediciones,controles_guardado
+        for p in ediciones(prefix):
+            doc=st.session_state[p+'_doc']
+            st.caption(doc.get('datos',{}).get('Escuela regular','Planeación')+' · '+doc.get('formato',''))
+            controles_guardado(p,key+'_'+p)
+        salir=st.checkbox('Ya descargué mi respaldo; cerrar sin confirmación central',key=key+'_confirmar_pendientes')
         if st.button('Guardar cambios y cerrar sesión',key=key+'_guardar',use_container_width=True):
             from ui.planeacion import _guardar_edicion_pendiente
-            claves=[k[:-8] for k,v in list(st.session_state.items()) if k.startswith(prefix) and k.endswith('_pending') and v]
-            resultados=[_guardar_edicion_pendiente(p) for p in claves]
+            claves=ediciones(prefix)
+            if not claves:
+                st.warning('Hay una edición pendiente que no se pudo identificar. Vuelve al formato abierto para recuperar el texto antes de cerrar.');return
+            resultados=[]
+            for p in claves:
+                try:resultados.append(_guardar_edicion_pendiente(p))
+                except Exception as exc:
+                    from services.planeacion_guardado_estado import diagnostico
+                    st.session_state[p+'_guardado_diagnostico']=diagnostico(exc)
+                    resultados.append(False)
             if not all(resultados):
-                st.warning('No se confirmó el guardado. La sesión sigue abierta y tu edición se conserva.');return
+                st.warning('No se cerró la sesión: hay guardados sin confirmar. Consulta la causa y descarga cada respaldo antes de salir.');return
             _cerrar();return
-    if st.button("Cerrar sesión", key=key, use_container_width=True,disabled=pendientes and not salir):
+    etiqueta='Cerrar sesión con respaldo descargado' if pendientes and salir else 'Cerrar sesión'
+    if st.button(etiqueta, key=key, use_container_width=True,disabled=pendientes and not salir):
         _cerrar()
 
 

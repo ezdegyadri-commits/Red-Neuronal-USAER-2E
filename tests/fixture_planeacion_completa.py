@@ -12,6 +12,7 @@ actor={'cuenta':'demo-'+area,'nombre':'Autor ficticio','area':area,'director':ar
 st.session_state.update(autenticado=True,usuario=actor['cuenta'],nombre=actor['nombre'],rol=actor['rol'])
 alumnos=[{'ID_Alumno':'A1','Nombre_Completo':'Alumno ficticio Uno','ID_Escuela':'E1','Nombre_Escuela':'Escuela ficticia','CCT_Escuela':'TEST','Grado':'5','Grupo':'A','Tipo_Atencion':'Grupal'}]
 s.identidad=lambda:actor;s.padron_autorizado=lambda:pd.DataFrame(alumnos)
+s.precargar_docentes_regulares=lambda doc:doc
 s.repo.escuelas=lambda:pd.DataFrame([{'ID_Escuela':'E1','Nombre_Escuela':'Escuela ficticia','CCT':'TEST'}])
 def evidencias(doc):
     return ([{'tipo':'ACTA','alumno':'A1','referencia':'E1','fecha':'2026-10-02','registro':'Registro ficticio','texto':'Participa en lectura con tarjetas. Necesita apoyos para expresar emociones y tomar turnos.','alcance':'individual','vinculo_verificado':True}],[])

@@ -10,21 +10,18 @@ COLUMNAS=['ID_Alumno','Necesidad o barrera documentada','Objetivo / qué trabaja
 
 def clave_guia(doc):
     if doc['formato']=='XXI' or not compartible(doc):return None
-    a=doc['datos']['Alumnos'][0]
-    from utils.escolar import grado_canonico,grupo_canonico
-    # Una letra pendiente no impide colaborar, pero nunca identifica un grupo
-    # para enlazar automáticamente otra planeación o incorporar altas.
-    if not grado_canonico(a.get('Grado')) or not grupo_canonico(a.get('Grupo')):return None
-    return (doc['datos']['ID_Escuela'],doc['datos']['Curso escolar'],grado_canonico(a['Grado']),grupo_canonico(a['Grupo']))
+    from services.planeacion_ambito import ambito
+    scope=ambito(doc)
+    if not scope or not scope[1]:return None
+    return (doc['datos']['ID_Escuela'],doc['datos']['Curso escolar'],*scope)
 
 
 def compartible(doc):
     if doc['metadatos'].get('borrador_eliminado'):return False
     if doc['formato']=='XXI':return True
     if doc['datos']['Función']!='Aprendizaje' or doc['metadatos'].get('modalidad_planeacion')!='grupal':return False
-    from utils.escolar import grado_canonico,grupo_canonico
-    grupos={(grado_canonico(a.get('Grado','')),grupo_canonico(a.get('Grupo',''))) for a in doc['datos']['Alumnos']}
-    return len(grupos)==1 and all(g for g,h in grupos)
+    from services.planeacion_ambito import ambito
+    return ambito(doc) is not None
 
 
 def aportar(doc,actor,filas,observaciones):

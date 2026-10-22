@@ -55,7 +55,7 @@ class ReciboTests(unittest.TestCase):
         import hashlib
         from ui import auth,planeacion as u
         base='planeacion_'+hashlib.sha256(b'ficticio').hexdigest()[:12]+'_individual'
-        state={'usuario':'ficticio','autenticado':True,base+'_pending':True}
+        state={'usuario':'ficticio','autenticado':True,base+'_pending':True,base+'_doc':{'id':'doc','datos':{}}}
         def boton(label,**kw):return label=='Guardar cambios y cerrar sesión'
         with patch.object(auth.st,'session_state',state),patch.object(auth.st,'info'),patch.object(auth.st,'warning'),patch.object(auth.st,'checkbox',return_value=False),patch.object(auth.st,'button',side_effect=boton),patch.object(auth,'_cerrar') as cerrar:
             with patch.object(u,'_guardar_edicion_pendiente',return_value=False):auth.logout()

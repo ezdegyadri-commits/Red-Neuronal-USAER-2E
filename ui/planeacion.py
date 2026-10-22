@@ -199,6 +199,7 @@ def _persist(prefix,estado=None,automatic=False):
         saved=servicio.guardar(doc,estado)
         st.session_state[prefix+'_doc']=saved
         st.session_state.pop(prefix+'_error',None)
+        st.session_state.pop(prefix+'_guardado_diagnostico',None)
         st.session_state.pop(prefix+'_pdf',None)
         st.session_state[prefix+'_pending']=False
         st.session_state.pop(prefix+'_estado_pendiente',None)
@@ -207,10 +208,14 @@ def _persist(prefix,estado=None,automatic=False):
         st.session_state.pop(prefix+'_retry_at',None)
         return True
     except GuardadoPendiente as exc:
+        from services.planeacion_guardado_estado import diagnostico
+        st.session_state[prefix+'_guardado_diagnostico']=diagnostico(exc)
         st.session_state[prefix+'_retry_at']=time.monotonic()+exc.espera
         st.session_state[prefix+'_error']=str(exc)
         return False
     except Exception as exc:
+        from services.planeacion_guardado_estado import diagnostico
+        st.session_state[prefix+'_guardado_diagnostico']=diagnostico(exc)
         status=getattr(getattr(exc,'response',None),'status_code',None)
         logging.getLogger(__name__).warning('planeacion_guardado_fallido tipo=%s estado_http=%s',type(exc).__name__,status)
         if status in (429,500,502,503,504) or isinstance(exc,(TimeoutError,ConnectionError)):
@@ -279,7 +284,8 @@ def _open(prefix,doc):
     if previo and previo.get('id')!=doc.get('id'):
         # Los acuses, aportes y reintentos pertenecen a un documento, no al grupo
         # seleccionado después. La cola ya conserva la edición anterior.
-        for suffix in ('_estado_pendiente','_retry_at','_last_attempt','_filas','_obs',
+        for suffix in ('_estado_pendiente','_retry_at','_last_attempt','_filas','_filas_retiradas','_obs',
+                       '_guardado_diagnostico',
                        '_intento','_intervalo','_papel_nonce','_papel_aceptado',
                        '_papel_rechazado','_papel_error','_papel_legacy'):
             st.session_state.pop(prefix+suffix,None)

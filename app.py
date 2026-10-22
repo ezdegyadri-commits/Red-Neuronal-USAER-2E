@@ -31,14 +31,17 @@ inject()
 # Instaladores móviles 1.0.0 disponibles en ingreso.
 install_metadata()
 
-# Acceso público directo para maestros y directores de primarias regulares
+from ui.sesiones_recuperables import recuperar as recuperar_sesion
+recuperar_sesion()
+
+# El acceso directo también identifica la cuenta antes de ofrecer escuelas.
 if st.query_params.get("p") in ("docentes", "docentes_primaria", "maestros_regulares") or st.query_params.get("form") in ("docentes", "docentes_primaria"):
+    if not st.session_state.get('autenticado'):
+        login()
+        st.stop()
     from ui.docentes_regulares_form import formulario_publico_docentes
     formulario_publico_docentes()
     st.stop()
-
-from ui.sesiones_recuperables import recuperar as recuperar_sesion
-recuperar_sesion()
 
 if not st.session_state.get("autenticado"):
     login()

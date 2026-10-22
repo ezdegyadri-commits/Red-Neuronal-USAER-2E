@@ -146,6 +146,34 @@ class ProyeccionTests(unittest.TestCase):
         latest['textos']['Observaciones']='Otra maestra'
         with self.assertRaises(RuntimeError):conciliar_autor(doc,base,latest)
 
+    def test_conciliacion_campos_y_filas_independientes_por_id(self):
+        base=grupal()
+        base['metadatos']['guia_grupal_manual']={'filas':[
+            {'ID_Alumno':'A1','Aprendizaje':'Base 1'},
+            {'ID_Alumno':'A2','Aprendizaje':'Base 2'}]}
+        local=deepcopy(base);remoto=deepcopy(base);remoto['revision']='reciente'
+        local['metadatos']['guia_grupal_manual']['filas'][0]['Aprendizaje']='Local'
+        remoto['metadatos']['guia_grupal_manual']['filas'][1]['Aprendizaje']='Remoto'
+        remoto['metadatos']['guia_grupal_manual']['filas'].reverse()
+        remoto['textos']['Observaciones']='Otro campo'
+        copia=deepcopy((base,local,remoto))
+        nuevo=conciliar_autor(local,base,remoto)
+        filas={r['ID_Alumno']:r for r in nuevo['metadatos']['guia_grupal_manual']['filas']}
+        self.assertEqual(filas['A1']['Aprendizaje'],'Local')
+        self.assertEqual(filas['A2']['Aprendizaje'],'Remoto')
+        self.assertEqual(nuevo['textos']['Observaciones'],'Otro campo')
+        self.assertEqual((base,local,remoto),copia)
+
+    def test_conciliacion_borrado_no_revive_ni_pisa_celda_remota(self):
+        base=grupal();base['textos']['Observaciones']='Original'
+        local=deepcopy(base);remoto=deepcopy(base)
+        local['textos']['Observaciones']=''
+        self.assertEqual(conciliar_autor(local,base,remoto)['textos']['Observaciones'],'')
+        remoto['textos']['Observaciones']='Cambio remoto'
+        with self.assertRaises(RuntimeError):conciliar_autor(local,base,remoto)
+        remoto=deepcopy(base);remoto['estado']='VALIDADO'
+        with self.assertRaises(RuntimeError):conciliar_autor(local,base,remoto)
+
     def test_abrir_no_recupera_revision_vieja_despues_del_autoguardado(self):
         from ui import planeacion_viva as ui,planeacion as base_ui
         base='planeacion_ficticia';prefix=base+'_grupal';d=grupal()

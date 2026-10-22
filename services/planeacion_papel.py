@@ -107,10 +107,11 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
         header=[['Servicio de apoyo: '+datos['Servicio de apoyo'],'Zona: '+str(datos['Zona'])],
                 ['Periodo: '+datos['Periodo'],'Escuela Regular: '+datos['Escuela regular']]]
     elif grupal:
+        from services.planeacion_ambito import etiqueta as etiqueta_grupo
         maestro=guia_grupal(doc)['maestro_grupo']
         campo_maestro=celda(maestro,('maestro_grupo',),'Maestro/a de grupo regular') if not colaborativa else 'Maestro de grupo: '+maestro
         header=[['Curso escolar: '+datos['Curso escolar'],campo_maestro],
-                ['Escuela: '+datos['Escuela regular'],'Grado y grupo: '+', '.join(sorted({str(a['Grado'])+' '+str(a['Grupo']) for a in alumnos}))]]
+                ['Escuela: '+datos['Escuela regular'],'Grado y grupo: '+etiqueta_grupo(doc)]]
     else:
         header=[header[0],[header[1][0]+'\n'+header[2][0]+'\n'+header[3][0],
             header[1][1]+'\n'+header[2][1],header[3][1]+'\n'+header[4][0]+'\n'+header[4][1]]]
@@ -160,7 +161,9 @@ def aplicar(doc,event):
         elif target[0]=='sesion':result=equipo.editar_en_formato(result,*target[1:],value)
         elif target[0]=='competencia':result['metadatos']['equipo']['competencias'][target[1]][target[2]]=value
         elif target[0]=='equipo':result['metadatos']['equipo'][target[1]]=value
-        elif target[0]=='maestro_grupo':result['metadatos'].setdefault('guia_grupal_manual',{})['maestro_grupo']=value
+        elif target[0]=='maestro_grupo':
+            result['metadatos'].setdefault('guia_grupal_manual',{})['maestro_grupo']=value
+            result['metadatos']['maestro_regular_edicion_manual']=True
         elif target[0]=='escala':
             from services.planeacion_evaluacion import editar
             result=editar(result,*target[1:],value)

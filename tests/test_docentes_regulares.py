@@ -3,6 +3,7 @@ import tempfile
 import os
 from unittest import TestCase
 from unittest.mock import patch
+import pandas as pd
 from streamlit.testing.v1 import AppTest
 from services import docentes_regulares
 from services.docentes_regulares import (
@@ -23,8 +24,13 @@ class DocentesRegularesTests(TestCase):
         self.tmp.close()
         self.patcher = patch.object(docentes_regulares, "_LOCAL_BACKUP_PATH", self.tmp.name)
         self.patcher.start()
+        # Esta batería nunca consulta ni escribe la base institucional.
+        self.google_patches=[patch('data.google.ensure_headers'),patch('data.google.append_dict'),
+                             patch('data.google.df_sheet',return_value=pd.DataFrame()),patch('data.google.clear_cache')]
+        for p in self.google_patches:p.start()
 
     def tearDown(self):
+        for p in reversed(self.google_patches):p.stop()
         self.patcher.stop()
         if os.path.exists(self.tmp.name):
             os.remove(self.tmp.name)
@@ -88,13 +94,13 @@ class DocentesRegularesTests(TestCase):
 
 
 class AppPublicaTests(TestCase):
-    def test_formulario_publico_sin_login(self):
+    def test_acceso_directo_requiere_identificar_cuenta_antes_de_elegir_escuela(self):
         from pathlib import Path
         app_path = str(Path(__file__).parents[1] / "app.py")
         app = AppTest.from_file(app_path, default_timeout=30)
         app.query_params["p"] = "docentes"
         app.run()
         self.assertFalse(app.exception)
-        self.assertTrue(any("Maestros de Grupo de Primaria" in str(m.value) for m in app.markdown))
-        botones = [b for b in app.button if "Guardar" in b.label]
-        self.assertTrue(len(botones) >= 1)
+        self.assertTrue(any(t.label=='Usuario' for t in app.text_input))
+        self.assertFalse(any(s.label=='Escuela Primaria' for s in app.selectbox))
+        self.assertFalse(any('Guardar Maestro' in b.label for b in app.button))
