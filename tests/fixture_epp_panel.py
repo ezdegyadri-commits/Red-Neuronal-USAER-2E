@@ -34,6 +34,8 @@ s.df_sheet=lambda name:pd.DataFrame(st.session_state['qa_epp_rows'],columns=s.HE
 s.clear_cache=lambda *args:None
 s.hoja=lambda:Sheet()
 s.retry_google=lambda f:f()
+from services import planeacion_estabilidad as estabilidad
+estabilidad.reservar_escritura=lambda:None
 s.recientes=lambda:{}
 if not st.session_state['qa_epp_rows']:
     previous=who
@@ -47,4 +49,4 @@ def fake_generate(summary,target):
 ui.generar=fake_generate
 s.contexto=lambda d:{'ficticio':True}
 s.resumen=lambda *args:'EV1: Hallazgos educativos ficticios y sin identificadores.'
-ui.epp_page()
+ui._pagina_guiada()

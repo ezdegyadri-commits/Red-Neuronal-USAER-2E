@@ -60,8 +60,10 @@ def _save(prefix):
         doc['partes'][area]=saved
         st.session_state[prefix+'_value']=deepcopy(saved['contenido'])
         st.session_state.pop(prefix+'_error',None)
+        st.session_state[prefix+'_pending']=False
         st.session_state[prefix+'_saved']=saved['fecha']
     except Exception as exc:
+        st.session_state[prefix+'_pending']=True
         st.session_state[prefix+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó el guardado. Tu texto sigue en esta sesión: descarga el respaldo y vuelve a intentar.'
 
 def _field(prefix,key,section,field):
@@ -114,6 +116,16 @@ def _abrir(prefix,doc,area):
         if filled!=original:_save(prefix)
 
 def epp_page():
+    """Nuevas aperturas en el formato vivo; conservar sesiones guiadas en curso."""
+    a=s.actor();prefix='epp_'+hashlib.sha256(a['cuenta'].encode()).hexdigest()[:12]
+    if any(k.startswith(prefix+'_edit_') and k.endswith('_value') for k in st.session_state):
+        st.caption('Se conserva tu edición guiada en curso. Las nuevas sesiones abrirán el formato vivo.')
+        return _pagina_guiada()
+    from ui.epp_viva import page
+    return page()
+
+
+def _pagina_guiada():
     a=s.actor()
     st.title('Evaluación psicopedagógica · Trabajo en equipo')
     st.caption('Un alumno, un informe. Cada profesional aporta y revisa sus hallazgos; la maestra de apoyo coordina la integración. Anexos XVII y XVIII del Manual USAER.')
@@ -137,8 +149,7 @@ def epp_page():
     if st.button('Actualizar aportaciones del equipo',key=prefix+'_refresh'):
         from data.google import clear_cache
         clear_cache(s.HOJA)
-        for k in list(st.session_state):
-            if k.startswith(prefix+'_edit_'):del st.session_state[k]
+        # No borrar el editor ni capturas sin confirmación al pedir información.
         st.rerun()
     frame=s.planes.padron_autorizado()
     names={str(r['ID_Alumno']):str(r['Nombre_Completo'])+' · '+str(r.get('Nombre_Escuela','')) for r in frame.to_dict('records')}

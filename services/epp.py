@@ -1,7 +1,7 @@
 """EPP colaborativa privada: eventos por área; nunca sobrescribe otras aportaciones."""
 from copy import deepcopy
 from datetime import datetime
-from uuid import uuid4
+import hashlib
 from zoneinfo import ZoneInfo
 import json
 import threading
@@ -81,24 +81,34 @@ def autorizar(doc, parte=None):
             raise PermissionError('Solo puedes editar los apartados de tu función.')
     return a
 
-def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR'):
+def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR',actual_confirmado=None):
     a = actor()
     content = json.dumps(value, ensure_ascii=False, sort_keys=True)
     if len(content) > 36000: raise ValueError('Contenido demasiado extenso para el respaldo.')
     with control():
         ws = hoja()
-        clear_cache(HOJA)
-        current = _actual(id_alumno,ciclo)
+        if actual_confirmado is None:clear_cache(HOJA)
+        current = actual_confirmado if actual_confirmado is not None else _actual(id_alumno,ciclo)
         latest = current['partes'].get(parte) if current else None
+        if latest and ((latest['contenido']==value and latest['estado']==estado) or parte=='META' and not revision):
+            return deepcopy(latest)
         if (latest['revision'] if latest else '') != revision:
             raise RuntimeError('Otra sesión actualizó este apartado. Tu texto se conserva: descarga el respaldo y recupera la versión reciente antes de guardar.')
         if parte=='Conclusión' and value.get('validada'):
             if value.get('revisiones_areas') != {area:current['partes'].get(area,{}).get('revision','') for area in AREAS}:
                 raise RuntimeError('El equipo actualizó hallazgos. Recupera las aportaciones actuales antes de validar la conclusión.')
-        rev = uuid4().hex
+        rev = hashlib.sha256(json.dumps([str(id_alumno),ciclo,parte,revision,estado,content],ensure_ascii=False).encode()).hexdigest()
         now = datetime.now(ZoneInfo('America/Mexico_City')).isoformat(timespec='microseconds')
         row = [str(id_alumno),ciclo,parte,rev,revision,now,a['cuenta'],a['nombre'],estado,content]
-        retry_google(lambda: ws.append_rows([row],value_input_option='RAW'))
+        # La siguiente invocación reconcilia el envío incierto con el diario.
+        # No dormir manteniendo el candado ni duplicar llamadas de escritura.
+        from services.planeacion_estabilidad import reservar_escritura
+        reservar_escritura()
+        ws.append_rows([row],value_input_option='RAW')
+        clear_cache(HOJA)
+        registros=df_sheet(HOJA).fillna('').to_dict('records')
+        if not any(str(r.get('Revision'))==rev and r.get('Contenido')==content for r in registros):
+            raise ConnectionError('La revisión enviada aún no tiene confirmación de lectura.')
         recientes()[rev]=dict(zip(HEADERS,row))
         if len(recientes())>1000:
             clear_cache(HOJA);recientes().clear()
@@ -110,14 +120,46 @@ def crear(id_alumno, ciclo):
     if not puede_crear(): raise PermissionError('Solo las maestras de apoyo pueden iniciar una EPP.')
     alumno_autorizado(id_alumno)
     current = _actual(id_alumno,ciclo)
-    if current: raise ValueError('Ya existe una EPP para este alumno y ciclo. Ábrela o recupera la retirada.')
+    if current:
+        if current['partes']['META']['estado']=='ELIMINADO':raise ValueError('La EPP está retirada; recupera el mismo informe, no crees otra copia.')
+        return current
     a = actor()
     meta = {'coordinadora':a['nombre'],'creada_por':a['cuenta'],'fuente':'Manual USAER, Anexos XVII y XVIII, pp. 141-151'}
     doc = {'id':clave(id_alumno,ciclo),'alumno':str(id_alumno),'ciclo':ciclo,'partes':{}}
     doc['partes']['META'] = _append(id_alumno,ciclo,'META',meta)
     return doc
 
-def guardar(doc, parte, value, revision):
+
+def combinar(base, local, remoto):
+    """Fusión de tres vías: solo cambios propios, conflicto visible en el mismo dato."""
+    if local==base:return deepcopy(remoto)
+    if remoto==base or remoto==local:return deepcopy(local)
+    if all(isinstance(v,dict) for v in (base,local,remoto)):
+        missing=object();result={}
+        for k in base.keys()|local.keys()|remoto.keys():
+            b,l,r=base.get(k,missing),local.get(k,missing),remoto.get(k,missing)
+            if l==b:v=r
+            elif r==b or l==r:v=l
+            elif all(isinstance(x,dict) for x in (b,l,r)):v=combinar(b,l,r)
+            else:raise RuntimeError('Otra sesión cambió el mismo dato de tu área. Se conservan ambas versiones: respalda tu texto y revisa el dato en conflicto.')
+            if v is not missing:result[k]=deepcopy(v)
+        return result
+    raise RuntimeError('Otra sesión cambió la misma tabla. Tu captura permanece pendiente; respáldala y revisa la versión reciente.')
+
+
+def guardar_cambios(doc, parte, base, value, revision):
+    """Reintentos de una misma área no bloquean aportaciones independientes."""
+    autorizar(doc,parte)
+    with control():
+        clear_cache(HOJA)
+        actual=_actual(doc['alumno'],doc['ciclo'])
+        latest=actual['partes'].get(parte,{})
+        remoto=latest.get('contenido',vacia(parte))
+        combinado=combinar(base,value,remoto) if latest.get('revision','')!=revision else deepcopy(value)
+        if combinado!=remoto:combinado['validada']=False
+        return guardar(actual,parte,combinado,latest.get('revision',''),_actual_confirmado=actual)
+
+def guardar(doc, parte, value, revision, _actual_confirmado=None):
     autorizar(doc,parte)
     clean = validar_parte(parte,value)
     # Una propuesta de IA jamás valida un área ni una conclusión.
@@ -127,7 +169,7 @@ def guardar(doc, parte, value, revision):
         candidate['partes'][parte] = {'contenido':clean}
         if pendientes(candidate): raise ValueError('El equipo debe revisar sus áreas y completar la conclusión antes de validarla.')
     return _append(doc['alumno'],doc['ciclo'],parte,clean,revision,
-                   'REVISADO' if clean.get('validada') else 'BORRADOR')
+                   'REVISADO' if clean.get('validada') else 'BORRADOR',actual_confirmado=_actual_confirmado)
 
 def retirar(doc, recuperar=False):
     a = autorizar(doc)
