@@ -32,7 +32,12 @@ def aplicar(doc,registros):
     texto='; '.join(dict.fromkeys(nombres))
     meta=result['metadatos'];manual=meta.setdefault('guia_grupal_manual',{})
     actual=manual.get('maestro_grupo','');anterior=meta.get('maestro_regular_autocompletado','')
-    if not meta.get('maestro_regular_edicion_manual') and (not actual or actual==anterior):
+    from services.planeacion_compartida import docente_grupo
+    # Las hojas antiguas concatenaban nombres del padrón sin guardar procedencia.
+    # Sólo reconocer ese valor literal como precarga: no equiparar docentes por
+    # nombre parcial ni tocar una corrección explícita de la maestra.
+    precarga_antigua=actual==docente_grupo(doc)
+    if not meta.get('maestro_regular_edicion_manual') and (not actual or actual==anterior or precarga_antigua):
         manual['maestro_grupo']=texto
         meta['maestro_regular_autocompletado']=texto
         meta['docentes_regulares_vinculados']=[{'registro':r.get('ID_Registro',''),'grupo':g,'nombre':r['Nombre_Docente']} for g,r in sorted(porgrupo.items())]
