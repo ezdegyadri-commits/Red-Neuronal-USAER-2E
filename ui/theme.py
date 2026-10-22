@@ -1394,6 +1394,60 @@ div[class*="st-key-hub_card_"]:hover .hub-chip {
   color: var(--bs-teal-dark);
 }
 
+/* ========================================================================== */
+/* PESTAÑAS / BOTONES HERO DE PLANEACIÓN: GRANDES, CLAROS Y DESTACADOS        */
+/* ========================================================================== */
+div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  gap: 1rem !important;
+  background: transparent !important;
+  border-bottom: none !important;
+  padding: 0.5rem 0 1.25rem 0 !important;
+  width: 100% !important;
+  display: flex !important;
+}
+
+div[data-testid="stTabs"] button[data-baseweb="tab"] {
+  flex: 1 1 0% !important;
+  min-height: 68px !important;
+  padding: 0.85rem 1.5rem !important;
+  border-radius: var(--radius-lg) !important;
+  font-size: 1.18rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.01em !important;
+  border: 2px solid var(--bs-border-color) !important;
+  background: #FFFFFF !important;
+  color: var(--bs-primary-dark) !important;
+  box-shadow: 0 4px 14px rgba(15, 58, 74, 0.07) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
+  border-color: var(--bs-teal) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 22px rgba(13, 148, 136, 0.18) !important;
+  color: var(--bs-teal-dark) !important;
+}
+
+div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+  background: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-teal) 100%) !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  border-color: transparent !important;
+  box-shadow: 0 8px 24px rgba(13, 148, 136, 0.35) !important;
+  transform: translateY(-2px) !important;
+}
+
+div[data-testid="stTabs"] [data-baseweb="tab-border"] {
+  display: none !important;
+}
+div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+  display: none !important;
+}
+
 /* Breadcrumb y Barra de Retorno en Módulos */
 .module-breadcrumb {
   display: inline-flex;
