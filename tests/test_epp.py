@@ -28,6 +28,7 @@ class EPPTests(unittest.TestCase):
             patch.object(s.planes,'padron_autorizado',return_value=pd.DataFrame([ALUMNO])),
             patch.object(s,'df_sheet',side_effect=self.sheet.frame),patch.object(s,'clear_cache'),
             patch.object(s,'hoja',return_value=self.sheet),patch.object(s,'retry_google',side_effect=lambda f:f())]
+        self.mocks.append(patch('services.planeacion_estabilidad.reservar_escritura'))
         for m in self.mocks:m.start()
     def tearDown(self):
         for m in reversed(self.mocks):m.stop()
@@ -36,7 +37,8 @@ class EPPTests(unittest.TestCase):
     def test_una_epp_por_alumno_ciclo(self):
         d=self.doc()
         self.assertEqual(len(s.listar()),1)
-        with self.assertRaises(ValueError):self.doc()
+        self.assertEqual(self.doc()['id'],d['id'])
+        self.assertEqual(len(self.sheet.rows),1)
         self.assertEqual(d['id'],clave(ALUMNO['ID_Alumno'],'2026-2027'))
     def test_especialista_no_crea(self):
         for area in ('Psicología','Comunicación','Trabajo Social'):
@@ -63,7 +65,8 @@ class EPPTests(unittest.TestCase):
         self.assertEqual(result['partes']['Psicología']['contenido'],p)
     def test_version_obsoleta_no_se_guarda(self):
         d=self.doc();v=vacia('Aprendizaje');s.guardar(d,'Aprendizaje',v,'')
-        with self.assertRaises(RuntimeError):s.guardar(d,'Aprendizaje',v,'')
+        cambiado=deepcopy(v);cambiado['campos']['5.1. Competencia curricular']='Otro texto desde una sesión obsoleta.'
+        with self.assertRaises(RuntimeError):s.guardar(d,'Aprendizaje',cambiado,'')
         self.assertEqual(len(self.sheet.rows),2)
     def test_falsificar_coordinadora_no_da_permiso(self):
         d=self.doc();d['partes']['META']['cuenta']='otra'

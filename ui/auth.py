@@ -67,6 +67,9 @@ def _login_content():
 
 def logout(key="cerrar_sesion"):
     """Muestra un cierre de sesión en el contenedor actual."""
+    if any(k.startswith('epp_') and k.endswith('_pending') and v for k,v in st.session_state.items()):
+        from ui.epp_viva import proteger_salida
+        if not proteger_salida(key):return
     if any(k.startswith('metas_') and k.endswith('_pending') and v for k,v in st.session_state.items()):
         from ui.metas_personales import proteger_salida
         if not proteger_salida(key):return
@@ -117,7 +120,7 @@ def _cerrar():
     from services.sesiones_recuperables import CAMPOS
     for campo in CAMPOS:
         st.session_state.pop(campo, None)
-    for campo in [k for k in st.session_state if k.startswith('metas_')]:
+    for campo in [k for k in st.session_state if k.startswith(('metas_','epp_'))]:
         st.session_state.pop(campo,None)
     for k in [
             "autenticado",

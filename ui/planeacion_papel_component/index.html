@@ -19,6 +19,7 @@ function emit(accion='guardar',extra={}){if(!args)return;if(flight){if(accion!==
 function drain(){if(flight||blocked)return;if(queued&&!busy){const next=queued;queued=null;queueMicrotask(()=>emit(next.accion,next.extra))}else if(Object.keys(dirty).length){clearTimeout(timer);timer=setTimeout(()=>emit('autoguardar'),4000)}}
 function calendarValue(value){return /^\d{2}\/\d{2}\/\d{4}$/.test(value)?value.split('/').reverse().join('-'):value}
 function cell(c){const wrap=document.createElement('div');if(c.tipo==='fecha'){wrap.className='date-cell';const input=document.createElement('input');input.type='date';input.id='celda-'+c.id;input.dataset.cell=c.id;input.disabled=!c.editable;input.setAttribute('aria-label',c.label);input.value=c.fecha_iso||'';input.addEventListener('change',()=>{dirty[c.id]=input.value;guardarLocal();clearTimeout(timer);timer=setTimeout(()=>emit('autoguardar'),1000)});wrap.append(input);return wrap}if(c.opciones){const select=document.createElement('select');select.id='celda-'+c.id;select.dataset.cell=c.id;select.disabled=!c.editable;select.setAttribute('aria-label',c.label+' · '+c.id);for(const v of c.opciones){const o=text('option',v);o.value=v;select.append(o)}select.value=c.value;select.addEventListener('change',()=>{dirty[c.id]=select.value;guardarLocal();clearTimeout(timer);timer=setTimeout(()=>emit('autoguardar'),1000)});wrap.append(select);return wrap}const e=text('div',c.value,'cell');e.id='celda-'+c.id;e.setAttribute('role','textbox');e.setAttribute('aria-label',c.label+' · '+c.id);e.contentEditable=String(c.editable);e.dataset.cell=c.id;
+if(c.target===null)e.setAttribute('role','note');else e.setAttribute('aria-readonly',String(!c.editable));
 e.addEventListener('input',()=>{blocked=false;dirty[c.id]=e.innerText;status.textContent='Cambios en esta hoja: se transmitirán tras una pausa al escribir.';clearTimeout(timer);timer=setTimeout(()=>emit('autoguardar'),4000);resize()});
 e.addEventListener('paste',ev=>{ev.preventDefault();const value=(ev.clipboardData||window.clipboardData).getData('text/plain');document.execCommand('insertText',false,value)});wrap.append(e);if(c.nota)wrap.append(text('p',c.nota,'hint'));return wrap}
 function button(label,action){const b=text('button',label);b.type='button';b.addEventListener('click',action);return b}
@@ -34,12 +35,19 @@ function patchCells(next){for(const [id,c] of Object.entries(next.cells)){const 
 function respaldo(){let anterior=null;try{anterior=sessionStorage.getItem(cacheKey())}catch(_){}const blob=new Blob([JSON.stringify({...datosRespaldo(),respaldo_anterior:anterior},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='texto-pendiente-planeacion.json';a.click();URL.revokeObjectURL(a.href)}
 function render(next,acknowledged=false){const focused=document.activeElement?.dataset.cell;clearTimeout(timer);args=next;busy=false;dirty={};status.textContent=acknowledged?'Cambios aplicados al borrador. Puedes continuar editando.':'Escribe directamente en el formato. Puedes borrar el texto de una celda; los datos de identidad se cambian mediante la selección de alumnos.';root.replaceChildren();document.getElementById('tools').replaceChildren();
 const toolbar=document.getElementById('tools');
+if(args.tipo_documento==='epp'){
+if(args.puede_editar){const help=button('Antecedentes y evaluaciones',()=>emit('antecedentes'));help.className='primary';toolbar.append(help);toolbar.append(button('Guardar EPP',()=>emit('guardar')))}
+if(args.puede_editar)toolbar.append(button('Ir a mis apartados',()=>{const c=Object.values(args.cells).find(c=>c.editable);const e=c&&document.getElementById('celda-'+c.id);if(e){e.scrollIntoView({behavior:'smooth',block:'center'});e.focus({preventScroll:true})}}));
+toolbar.append(button('Descargar informe',()=>emit('pdf')));
+}else{
 if(!args.colaborativa){const help=button('Ayúdame a planear',()=>emit('ia'));help.className='primary';toolbar.append(help)}
 toolbar.append(button('Guardar planeación',()=>emit('guardar')));
 if(!args.colaborativa)toolbar.append(button('Descargar',()=>emit('pdf')));
+}
 const volver=button('Regresar al inicio del módulo',()=>emit('inicio'));volver.className='navigation';volver.style.border='0';volver.style.background='transparent';volver.style.textDecoration='underline';toolbar.append(volver);
 const mas=document.createElement('details');mas.append(text('summary','Más opciones'));
 mas.append(button('Respaldar texto sin conexión',respaldo));
+if(args.tipo_documento==='epp')mas.append(button('Actualizar aportes del equipo',()=>emit('equipo')));
 if(args.grupal&&!args.colaborativa)mas.append(button('Actualizar aportes del equipo',()=>emit('equipo')));
 if(!args.colaborativa){
 for(const [label,action] of [['Consultar expediente y NEE','antecedentes'],['Elegir contenidos y PDA','referentes'],['Apoyos DUA','dua'],['Completar solo los apartados vacíos','apartados']])mas.append(button(label,()=>emit(action)));

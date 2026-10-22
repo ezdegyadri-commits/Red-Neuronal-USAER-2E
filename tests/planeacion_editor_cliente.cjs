@@ -237,4 +237,17 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   assert.equal(f.events()[0].cambios.c0,'2026-10-24');
   assert.match(html,/\.date-cell input\[type=date\][^{]*\{[^}]*min-width:0/);
 }
-console.log('Editor: escritura no bloqueante, sincronización por área, respaldo, fecha y navegación protegida aprobados.');
+// La EPP reutiliza el transporte estable, no acciones de planeación ni otro documento.
+{
+  const f=fixture(undefined,undefined,true),h=hoja();h.tipo_documento='epp';h.colaborativa=true;h.puede_editar=true;
+  h.cache_id='epp-cuenta-alumno';f.render(h);
+  assert.ok(f.tools.children.some(b=>b.textContent==='Guardar EPP'));
+  assert.ok(f.tools.children.some(b=>b.textContent==='Antecedentes y evaluaciones'));
+  assert.ok(!f.tools.children.some(b=>b.textContent==='Ayúdame a planear'));
+  f.input('Hallazgo EPP mientras guarda');f.tick(4000);const e=f.events()[0];
+  assert.ok(f.cache.has('usaer-hoja:epp-cuenta-alumno'));
+  const nodo=f.nodes.get('celda-c0');f.render(h);
+  assert.equal(f.nodes.get('celda-c0'),nodo);assert.equal(nodo.innerText,'Hallazgo EPP mientras guarda');
+  f.render(hoja('Hallazgo EPP mientras guarda','revision-epp'),{aceptado_nonce:e.nonce,guardado:'confirmado'});
+}
+console.log('Editor: escritura no bloqueante, sincronización por área, respaldo, fecha, EPP y navegación protegida aprobados.');
