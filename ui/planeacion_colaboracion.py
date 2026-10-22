@@ -131,18 +131,58 @@ def panel(prefix):
     if doc['metadatos'].get('unificacion_grupal',{}).get('fuentes'):
         st.caption('Documento único del grupo: reúne el trabajo previo sin borrar sus documentos de origen. Todos los integrantes abren esta misma hoja.')
     st.caption('Último guardado: '+doc.get('guardado_en','por confirmar'))
-    if es_guia(doc) and not actor['director']:
-        c_op1,c_op2=st.columns([1,1])
-        if c_op1.button('Abrir Anexo XIX compartido',key=prefix+'_abrir'):
-            st.session_state[prefix+'_abierto']=did;st.rerun()
-        c_op2.caption('O edita tus aportaciones directamente en la tabla ágil de abajo:')
+    if es_guia(doc):
+        from services.planeacion_modalidad import guia_grupal, GUIA_XIX
+        guia = guia_grupal(doc)
+        filas = guia.get('filas', [])
+        st.markdown('### Guía de Planeación Grupal · Anexo XIX')
+        c_m1, c_m2, c_m3 = st.columns(3)
+        c_m1.markdown(f"**Maestro(a) de grupo:** {guia.get('maestro_grupo') or 'Por confirmar'}")
+        c_m2.markdown(f"**Escuela:** {doc['datos'].get('Escuela regular','')}")
+        c_m3.markdown(f"**Grado y grupo:** {grupos(doc)}")
+        if filas:
+            df_g = pd.DataFrame(filas)
+            cols = [c for c in GUIA_XIX if c in df_g.columns]
+            st.dataframe(df_g[cols], hide_index=True, use_container_width=True)
+            st.caption('ℹ️ Esta tabla refleja lo capturado por la Maestra de Apoyo (columna Aprendizaje, situación inicial, derivación) y las aportaciones de cada especialista.')
+        with st.expander('👥 Gestión de alumnos en esta planeación grupal (individuales / grupales)'):
+            st.caption('Si en este grado hay alumnos que se atenderán de forma individual (con diferentes necesidades y descriptores), puedes excluirlos de la planeación grupal de las áreas.')
+            alumnos_actuales = doc['datos']['Alumnos']
+            if alumnos_actuales:
+                c_ex1, c_ex2 = st.columns([2, 1])
+                nom_dict = {str(a['ID_Alumno']): f"{a['Nombre del alumno']} ({a.get('Condición','')})" for a in alumnos_actuales}
+                sel_excluir = c_ex1.selectbox('Alumno para trabajar individualmente', list(nom_dict), format_func=nom_dict.get, key=prefix+'_sel_excluir')
+                if c_ex2.button('Quitar del Anexo XIX grupal', key=prefix+'_btn_excluir'):
+                    from services.planeacion_compartida import excluir_alumno_grupal
+                    doc_mod = excluir_alumno_grupal(doc, sel_excluir)
+                    s.guardar(doc_mod, doc_mod.get('estado', 'BORRADOR'))
+                    st.success(f'Alumno {nom_dict.get(sel_excluir)} retirado de la planeación grupal. Se conserva para su planeación individual.')
+                    s.refrescar()
+                    st.rerun()
+            excluidos_ids = doc.get('metadatos', {}).get('alumnos_excluidos_grupal', [])
+            if excluidos_ids:
+                st.write(f'**Alumnos actualmente excluidos del Anexo XIX grupal ({len(excluidos_ids)}):**')
+                c_res1, c_res2 = st.columns([2, 1])
+                sel_restaurar = c_res1.selectbox('Alumno para reintegrar al grupo', excluidos_ids, key=prefix+'_sel_restaurar')
+                if c_res2.button('Reintegrar a planeación grupal', key=prefix+'_btn_restaurar'):
+                    from services.planeacion_compartida import restaurar_alumno_grupal
+                    doc_mod = restaurar_alumno_grupal(doc, sel_restaurar)
+                    s.guardar(doc_mod, doc_mod.get('estado', 'BORRADOR'))
+                    st.success('Alumno reintegrado a la planeación grupal.')
+                    s.refrescar()
+                    st.rerun()
+        if not actor['director']:
+            c_op1,c_op2=st.columns([1,1])
+            if c_op1.button('Abrir Anexo XIX compartido en hoja completa',key=prefix+'_abrir'):
+                st.session_state[prefix+'_abierto']=did;st.rerun()
+            c_op2.caption('O edita tus aportaciones directamente en la tabla ágil de abajo:')
     for area,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items():
         with st.expander(area+' · '+aporte['autor']):
             st.dataframe(pd.DataFrame(aporte['filas']),hide_index=True)
             st.write(aporte['observaciones']);st.caption('Aportación por revisar · '+aporte['fecha'][:19])
     if actor['director']:st.caption('Dirección conserva la revisión del documento integrado.');return
     base=prefix+'_'+did+'_'+actor['area']
-    if base+'_doc' not in st.session_state:
+    if base+'_doc' not in st.session_state or (not st.session_state.get(base+'_pending') and doc.get('revision')!=st.session_state.get(base+'_doc',{}).get('revision')):
         aporte=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
         rows=aporte.get('filas',[])
         for a in doc['datos']['Alumnos']:

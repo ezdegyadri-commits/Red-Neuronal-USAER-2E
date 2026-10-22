@@ -1656,11 +1656,23 @@ def eventos_page(df):
     longitud_evento = len(st.session_state.get("evento_descripcion", ""))
     st.caption(f"📝 Caracteres: {longitud_evento:,} / {MAX_CHARS_EVENTO:,} permitidos · El texto se conserva automáticamente mientras redactas.")
 
+    imagen_evento = st.file_uploader(
+        "📷 Evidencia fotográfica / imagen del evento (opcional)",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"evento_imagen_upload_{id_alumno}",
+    )
+    if imagen_evento:
+        st.image(imagen_evento, caption=f"Evidencia: {imagen_evento.name}", width=260)
+
     especialista = st.text_input(
         "Quien registra el evento",
         nombre_usuario,
         key="evento_especialista",
     )
+
+    texto_evento = evento.strip()
+    if imagen_evento and texto_evento and f"[Evidencia: {imagen_evento.name}]" not in texto_evento:
+        texto_evento = f"{texto_evento}\n[Evidencia fotográfica adjunta: {imagen_evento.name}]"
 
     borrador = {
         "Fecha": str(fecha),
@@ -1670,7 +1682,7 @@ def eventos_page(df):
         "Nombre_Alumno": objetivo,
         "Grado_Grupo": grado_grupo,
         "Especialista": especialista.strip() or nombre_usuario,
-        "Evento": evento.strip(),
+        "Evento": texto_evento,
     }
     vista_eventos = eventos_registrados.copy()
     if borrador["Evento"]:
@@ -1679,13 +1691,42 @@ def eventos_page(df):
             ignore_index=True,
         )
 
-    st.markdown("### Vista previa del Anexo V")
+    # Filtro por mes para impresión / descarga
+    meses_espanol = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+    meses_disponibles = []
+    if not vista_eventos.empty and "Fecha" in vista_eventos.columns:
+        fechas_dt = pd.to_datetime(vista_eventos["Fecha"], errors="coerce", dayfirst=True)
+        periodos = fechas_dt.dropna().map(lambda d: f"{meses_espanol.get(d.month, '')} {d.year}").unique()
+        meses_disponibles = sorted(list(periodos), reverse=True)
+
+    c_prev, c_filtro = st.columns([1.5, 1])
+    with c_prev:
+        st.markdown("### Vista previa del Anexo V")
+    with c_filtro:
+        opciones_mes = ["Todos los meses"] + [m for m in meses_disponibles if m]
+        mes_filtro = st.selectbox(
+            "📅 Filtrar por mes para imprimir/descargar",
+            opciones_mes,
+            key=f"filtro_mes_evento_{id_alumno}",
+        )
+
+    vista_filtrada = vista_eventos.copy()
+    sufijo_archivo = ""
+    if mes_filtro != "Todos los meses" and not vista_filtrada.empty and "Fecha" in vista_filtrada.columns:
+        fechas_filtro = pd.to_datetime(vista_filtrada["Fecha"], errors="coerce", dayfirst=True)
+        mask = fechas_filtro.map(lambda d: f"{meses_espanol.get(d.month, '')} {d.year}") == mes_filtro
+        vista_filtrada = vista_filtrada.loc[mask].copy()
+        sufijo_archivo = f"_{mes_filtro.replace(' ', '_')}"
+
     st.caption(
-        "La anotación actual aparece en esta vista antes de guardarla. "
-        "Las anotaciones previas permanecen ordenadas cronológicamente."
+        f"Mostrando {len(vista_filtrada)} evento(s) ({mes_filtro}). "
+        "Las anotaciones permanecen ordenadas cronológicamente."
     )
     components.html(
-        anexo5_html(datos, vista_eventos),
+        anexo5_html(datos, vista_filtrada),
         height=690,
         scrolling=True,
     )
@@ -1693,24 +1734,24 @@ def eventos_page(df):
     descargas = st.columns(2)
     with descargas[0]:
         st.download_button(
-            "Descargar vista actual en PDF",
-            anexo5_pdf(datos, vista_eventos),
-            f"Anexo_V_{id_alumno}.pdf",
+            f"Descargar Anexo V en PDF ({mes_filtro})",
+            anexo5_pdf(datos, vista_filtrada),
+            f"Anexo_V_{id_alumno}{sufijo_archivo}.pdf",
             "application/pdf",
             width="stretch",
-            key=f"vista_previa_anexo5_pdf_{id_alumno}",
+            key=f"vista_previa_anexo5_pdf_{id_alumno}_{sufijo_archivo}",
         )
         from ui.archivo_expediente import boton,ids_contexto
-        boton(ids_contexto(df,id_alumno),'Eventos significativos',lambda:anexo5_pdf(datos,eventos_registrados),
-            f'Anexo_V_{id_alumno}.pdf',f'archivo_eventos_{id_alumno}',fuente='Anexo V guardado',disabled=eventos_registrados.empty or bool(borrador['Evento']))
+        boton(ids_contexto(df,id_alumno),'Eventos significativos',lambda:anexo5_pdf(datos,vista_filtrada),
+            f'Anexo_V_{id_alumno}{sufijo_archivo}.pdf',f'archivo_eventos_{id_alumno}{sufijo_archivo}',fuente='Anexo V guardado',disabled=vista_filtrada.empty)
     with descargas[1]:
         st.download_button(
-            "Descargar vista actual imprimible",
-            anexo5_html(datos, vista_eventos),
-            f"Anexo_V_{id_alumno}.html",
+            f"Descargar vista imprimible HTML ({mes_filtro})",
+            anexo5_html(datos, vista_filtrada),
+            f"Anexo_V_{id_alumno}{sufijo_archivo}.html",
             "text/html",
             width="stretch",
-            key=f"vista_previa_anexo5_html_{id_alumno}",
+            key=f"vista_previa_anexo5_html_{id_alumno}_{sufijo_archivo}",
         )
 
     guardar = st.button(
@@ -1762,6 +1803,22 @@ def eventos_page(df):
             borrador["Evento"],
             borrador["Especialista"],
         )
+        if imagen_evento:
+            try:
+                from services import archivo_expediente
+                from config.settings import SCHOOL_YEAR
+                from ui.archivo_expediente import ids_contexto
+                ctx_ids = ids_contexto(df, id_alumno)
+                archivo_expediente.guardar(
+                    ctx_ids,
+                    'Eventos significativos',
+                    SCHOOL_YEAR,
+                    f"Evidencia_{fecha}_{imagen_evento.name}",
+                    imagen_evento.getvalue(),
+                    fuente=f"Anexo V · {id_evento}"
+                )
+            except Exception:
+                pass
     except Exception as ex:
         st.error(f"No fue posible guardar el evento: {ex}")
         return

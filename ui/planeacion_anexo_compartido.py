@@ -38,7 +38,7 @@ def panel(prefix,doc):
     from ui.planeacion_papel import editor,refrescar_editor,lectura_equipo
     from ui.planeacion_colaboracion import _guardar
     actor=s.identidad();base=prefix+'_'+doc['id']+'_'+actor['area']
-    if base+'_doc' not in st.session_state:
+    if base+'_doc' not in st.session_state or (not st.session_state.get(base+'_pending') and doc.get('revision')!=st.session_state.get(base+'_doc',{}).get('revision')):
         previo=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
         st.session_state[base+'_doc']=deepcopy(doc)
         st.session_state[base+'_filas']=deepcopy(previo.get('filas',[]))
@@ -112,12 +112,17 @@ def panel(prefix,doc):
     st.download_button('Respaldo de mi aportación',json.dumps({'documento':doc['id'],'area':actor['area'],
         'filas':st.session_state[base+'_filas'],'filas_retiradas':st.session_state.get(base+'_filas_retiradas',[]),'observaciones':st.session_state[base+'_obs']},ensure_ascii=False),
         file_name='aporte-'+doc['id']+'.json',mime='application/json',key=base+'_backup')
-    if st.button('Actualizar aportaciones del equipo',key=base+'_refresh'):
-        if st.session_state.get(base+'_pending'):_guardar(base)
-        if not st.session_state.get(base+'_pending'):
-            s.refrescar()
-            reciente=next((d for d in s.compartidos() if d['id']==doc['id']),None)
-            if reciente:st.session_state[base+'_doc']=reciente;refrescar_editor()
+    c_b1, c_b2 = st.columns(2)
+    with c_b1:
+        if st.button('Actualizar aportaciones del equipo',key=base+'_refresh'):
+            if st.session_state.get(base+'_pending'):_guardar(base)
+            if not st.session_state.get(base+'_pending'):
+                s.refrescar()
+                reciente=next((d for d in s.compartidos() if d['id']==doc['id']),None)
+                if reciente:st.session_state[base+'_doc']=reciente;refrescar_editor()
+    with c_b2:
+        if st.button('Volver a los grupos compartidos',key=base+'_volver_lista'):
+            st.session_state.pop(prefix+'_abierto',None);st.rerun(scope='app')
     with st.expander('Reutilizar actividades de mi formato de especialista'):
         if st.button('Consultar actividades de mi área',key=base+'_consultar_origen'):
             st.session_state[base+'_candidatos']=[d for d in s.listar() if d['datos']['ID_Escuela']==doc['datos']['ID_Escuela'] and d['datos']['Función']==actor['area']]

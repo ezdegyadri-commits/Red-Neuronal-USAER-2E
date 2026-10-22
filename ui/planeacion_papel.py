@@ -137,6 +137,31 @@ def hoja(prefix,volver=None):
         if altas>0:st.info('Se añadieron las altas grupales nuevas del mismo grado y grupo. Las filas y aportes anteriores se conservan.')
         elif altas<0:st.info('La matrícula activa refleja las bajas y traslados confirmados. Las filas y aportes anteriores se conservan en el historial.')
     u.servicio.autorizar(doc,True)
+    with st.expander('📷 Herramientas: imágenes a la planeación y gestión de alumnos', expanded=False):
+        c_tool1, c_tool2 = st.columns(2)
+        with c_tool1:
+            if st.toggle('Subir imágenes o evidencias a mi planeación', key=prefix+'_toggle_img'):
+                u._materiales(prefix, doc)
+        from services.planeacion_compartida import es_guia
+        if es_guia(doc):
+            with c_tool2:
+                st.caption('Alumnos individuales en grupo (ej. Francisco, Emmanuel, Erick):')
+                alumnos_g = doc['datos']['Alumnos']
+                nom_map = {str(a['ID_Alumno']): f"{a['Nombre del alumno']} ({a.get('Condición','')})" for a in alumnos_g}
+                if nom_map:
+                    sel_exc = st.selectbox('Excluir de planeación grupal', list(nom_map), format_func=nom_map.get, key=prefix+'_sel_exc_papel')
+                    if st.button('Quitar del grupo para atender individual', key=prefix+'_btn_exc_papel'):
+                        from services.planeacion_compartida import excluir_alumno_grupal
+                        doc_mod = excluir_alumno_grupal(doc, sel_exc, u.servicio.padron_autorizado())
+                        u._open(prefix, doc_mod); u._persist(prefix); refrescar_editor()
+                excluidos_ids = doc.get('metadatos', {}).get('alumnos_excluidos_grupal', [])
+                if excluidos_ids:
+                    st.caption(f'Alumnos excluidos actualmente: {len(excluidos_ids)}')
+                    sel_res = st.selectbox('Reincorporar al grupo', excluidos_ids, key=prefix+'_sel_res_papel')
+                    if st.button('Reintegrar al grupo', key=prefix+'_btn_res_papel'):
+                        from services.planeacion_compartida import restaurar_alumno_grupal
+                        doc_mod = restaurar_alumno_grupal(doc, sel_res, u.servicio.padron_autorizado())
+                        u._open(prefix, doc_mod); u._persist(prefix); refrescar_editor()
     # Guardado y lectura remota viven en el mismo fragmento que la hoja:
     # ninguna pausa de escritura desmonta el módulo completo.
     if st.session_state.get(prefix+'_pending'):u._persist(prefix,automatic=True)
@@ -178,7 +203,7 @@ def hoja(prefix,volver=None):
             if not st.session_state.get(prefix+'_pending'):
                 st.session_state[prefix+'_papel_aceptado']=event['nonce']
                 st.session_state[prefix+'_papel_legacy']=True
-            if action in ('pdf','antecedentes','referentes','dua','ia','alumnos','detalle','opciones','corregir'):
+            if action in ('pdf','antecedentes','referentes','dua','ia','alumnos','materiales','detalle','opciones','corregir'):
                 st.rerun(scope='app')
             refrescar_editor()
         except (ValueError,PermissionError,RuntimeError) as exc:
@@ -233,6 +258,8 @@ def _contenido_conexiones(prefix):
                 from ui.planeacion_edicion import panel
                 st.caption('Añade o retira destinatarios mediante una copia adaptada. Se conserva el documento previo y no se elimina ningún registro del padrón.')
                 panel(prefix)
+            elif action=='materiales':
+                u._materiales(prefix,current)
             elif action=='detalle':
                 if current['formato']=='XXI':
                     u._text(prefix,'metadatos','fuente_iepp','Referencia del IEPP: fecha, folio o ubicación del informe')

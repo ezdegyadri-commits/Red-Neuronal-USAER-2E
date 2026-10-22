@@ -41,9 +41,10 @@ def guia_grupal(doc):
     prev=doc['metadatos'].get('guia_grupal_manual',{})
     existentes={r['ID_Alumno']:r for r in prev.get('filas',[])}
     zona={r['ID_Alumno']:r for r in doc['metadatos'].get('grupal_zona',doc['metadatos'].get('equipo',{}).get('grupal',[]))}
+    excluidos=set(map(str,doc.get('metadatos',{}).get('alumnos_excluidos_grupal',[])))
     filas=[]
     for a in doc['datos']['Alumnos']:
-        if modalidad(a)=='individual':continue
+        if modalidad(a)=='individual' or str(a['ID_Alumno']) in excluidos:continue
         row={'ID_Alumno':a['ID_Alumno'],**{h:'' for h in GUIA_XIX}}
         row.update(existentes.get(a['ID_Alumno'],{}))
         row['Nombre alumno']=a['Nombre del alumno'];row['Discapacidad o condición']=a['Condición']
@@ -80,7 +81,7 @@ def guia_grupal(doc):
         # Una propuesta local ya revisada conserva su destinatario por ID. La guía
         # y el PDF la leen del mismo origen; nunca se asocia texto por nombre.
         if area in GUIA_XIX and not row[area]:
-            actividades=[r.get('Actividades','') for r in doc['tablas'].get('dosificacion',[])
+            actividades=[r.get('Actividades','') for r in doc.get('tablas',{}).get('dosificacion',[])
                          if a['ID_Alumno'] in r.get('_alumnos_locales',[]) and r.get('_actividad_local')]
             row[area]='\n\n'.join(v for v in actividades if v)
         filas.append(row)
