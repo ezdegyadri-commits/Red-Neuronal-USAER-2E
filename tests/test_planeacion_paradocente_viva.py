@@ -4,7 +4,17 @@ from io import BytesIO
 import json
 import unittest
 from unittest.mock import patch
-from pypdf import PdfReader
+try:
+    from pypdf import PdfReader
+except ImportError:
+    import pymupdf
+    class PdfReader:
+        def __init__(self, stream):
+            doc = pymupdf.open(stream=stream.getvalue() if hasattr(stream, 'getvalue') else stream, filetype="pdf")
+            class _P:
+                def __init__(self, p): self.p = p
+                def extract_text(self): return self.p.get_text()
+            self.pages = [_P(p) for p in doc]
 from services import planeacion as s,planeacion_equipo as equipo,planeacion_papel as papel
 from services import planeacion_social as social,planeacion_local as local,planeacion_edicion as ed
 from tests.test_planeacion_completa import documento

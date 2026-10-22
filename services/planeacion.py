@@ -544,7 +544,8 @@ def revisar(doc):
                 faltas.append('completar las celdas requeridas de '+key);break
     if doc['formato']!='XXI' and not any(texto(r.get('Actividades')) and texto(r.get('Recursos')) and texto(r.get('Temporalidad',r.get('Fecha'))) for r in tablas['dosificacion']):
         faltas.append('describir actividades, tiempos y recursos')
-    if doc['formato']=='XXIII' and not texto(doc['textos'].get('Evaluación')):
+    evaluacion_ok = bool(texto(doc['textos'].get('Evaluación')) or any(str(r.get('Contextos','')).strip().lower() in ('evaluación','evaluacion') and texto(r.get('Actividades')) for r in tablas.get('dosificacion',[])))
+    if doc['formato']=='XXIII' and not evaluacion_ok:
         faltas.append('describir la evaluación formativa')
     from services.planeacion_equipo import revisar as revisar_equipo
     return faltas+revisar_equipo(doc)

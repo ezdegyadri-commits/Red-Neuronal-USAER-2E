@@ -20,6 +20,41 @@ def aplica(doc):
     return doc['datos'].get('Función') in AREAS and doc['formato'] in ('XXIII','XXV')
 
 
+def _asegurar_formato_psicologia(result):
+    if result['datos'].get('Función') != 'Psicología':return
+    e=result['metadatos']['equipo']
+    if [r.get('Competencia') for r in e.get('competencias',[])]!=list(COMPETENCIAS):
+        existentes={r.get('Competencia'):r for r in e.get('competencias',[])}
+        e['competencias']=[{'Competencia':c,
+            'Necesidad documentada':existentes.get(c,{}).get('Necesidad documentada',''),
+            'Descriptor de logro':existentes.get(c,{}).get('Descriptor de logro',''),
+            'Actividad prevista':existentes.get(c,{}).get('Actividad prevista','')} for c in COMPETENCIAS]
+    dosi=result['tablas'].setdefault('dosificacion',[])
+    ctx_map={'aula de apoyo':'Aula de Apoyo','aula regular':'Aula Regular','escuela':'Escuela','familia':'Familia','evaluación':'Evaluación','evaluacion':'Evaluación'}
+    for r in dosi:
+        c_low=str(r.get('Contextos','')).strip().lower()
+        if c_low in ctx_map:r['Contextos']=ctx_map[c_low]
+    presentes={str(r.get('Contextos','')).strip().lower() for r in dosi}
+    defaults=[
+        ('Aula de Apoyo','PLANEAR AL MENOS 5 SESIONES PARA UN TRIMESTRE.\nActividades en subgrupo','Semana 1',''),
+        ('Aula Regular','PLANIFICAR AL MENOS 1 ACTIVIDAD EN EL AULA REGULAR PARA FAVORECER LAS COMPETENCIAS EMOCIONALES.\nEntregar la sugerencia al maestro de grupo.','',''),
+        ('Escuela','','',''),
+        ('Familia',e.get('sugerencia_familia') or 'Se citará al padre de familia y se le entregará sugerencias (empleando la hoja de sugerencia) para favorecer las habilidades del alumno.','','Hoja de sugerencias.'),
+        ('Evaluación',result['textos'].get('Evaluación') or 'Emplear una lista de cotejo.','',''),
+    ]
+    for ctx,act,temp,rec in defaults:
+        if ctx.lower() not in presentes:
+            dosi.append({'Contextos':ctx,'Actividades':act,'Temporalidad':temp,'Recursos':rec})
+        else:
+            fila=next((r for r in dosi if str(r.get('Contextos','')).strip().lower()==ctx.lower()),None)
+            if fila and not str(fila.get('Actividades','')).strip() and act:
+                fila['Actividades']=act
+                if rec and not fila.get('Recursos'):fila['Recursos']=rec
+                if temp and not fila.get('Temporalidad'):fila['Temporalidad']=temp
+    if not result['textos'].get('Evaluación'):
+        result['textos']['Evaluación']='Emplear una lista de cotejo.'
+
+
 def preparar(doc):
     result=deepcopy(doc)
     if not aplica(doc):return result
@@ -28,6 +63,8 @@ def preparar(doc):
             'competencias':[{'Competencia':c,'Necesidad documentada':'','Descriptor de logro':'','Actividad prevista':''} for c in COMPETENCIAS] if doc['datos']['Función']=='Psicología' else [],
             'grupal':[{'ID_Alumno':a['ID_Alumno'],'Fecha derivación':'','Actividades':'','Situación inicial':'','Situación final':''} for a in doc['datos']['Alumnos']],
             'sugerencia_familia':'','edicion_sesion':{}}
+    if doc['datos'].get('Función')=='Psicología':
+        _asegurar_formato_psicologia(result)
     return result
 
 
@@ -70,11 +107,15 @@ def validar(doc):
         except ValueError:raise ValueError('Revisa la fecha de la sesión.') from None
         if not desde<=fecha<=hasta:raise ValueError('La sesión debe quedar dentro del trimestre.')
         if s.get('subgrupo') not in nombres:raise ValueError('Elige un subgrupo registrado.')
-        if s.get('contexto') not in contextos(doc):raise ValueError('Contexto no válido para esta función.')
+        ctx = str(s.get('contexto', '')).strip()
+        permitidos = [c.lower() for c in contextos(doc)] + ['aula de apoyo', 'aula regular']
+        if ctx.lower() not in permitidos:raise ValueError('Contexto no válido para esta función.')
         if not set(s.get('competencias',[])).issubset(COMPETENCIAS):raise ValueError('Competencia no reconocida.')
 
 
 def contextos(doc):
+    if doc['datos'].get('Función') == 'Psicología':
+        return ['Aula de Apoyo', 'Aula Regular', 'Escuela', 'Familia', 'Evaluación']
     from services.planeacion_modelo import FORMATOS
     return FORMATOS[doc['formato']]['contextos']
 
@@ -161,7 +202,8 @@ def revisar(doc):
     if not e['subgrupos'] and not manuales:faltas.append('organizar los alumnos en subgrupos de trabajo')
     if not e['sesiones'] and not manuales:faltas.append('calendarizar las sesiones y acciones del trimestre')
     if doc['datos']['Función']=='Psicología':
-        if len([s for s in e['sesiones'] if s['contexto']=='Aula de apoyo'])+len([r for r in manuales if r['Contextos']=='Aula de apoyo'])<5:
+        apoyo_cnt = len([s for s in e['sesiones'] if str(s.get('contexto','')).lower() in ('aula de apoyo',)]) + len([r for r in manuales if str(r.get('Contextos','')).lower() in ('aula de apoyo',)])
+        if apoyo_cnt < 5:
             faltas.append('calendarizar al menos cinco sesiones de trabajo en subgrupo durante el trimestre')
         cubiertas={c for s in e['sesiones'] for c in s['competencias']}
         cubiertas.update(c for c in COMPETENCIAS if any(c.casefold() in r['Actividades'].casefold() for r in manuales))
@@ -169,8 +211,12 @@ def revisar(doc):
             c=row.get('Competencia')
             if c not in cubiertas or not all(str(row.get(k,'')).strip() for k in ('Necesidad documentada','Descriptor de logro')):
                 faltas.append('completar y vincular actividades para '+str(c))
-        if not any(s['contexto']=='Aula regular' for s in e['sesiones']) and not any(r['Contextos']=='Aula regular' for r in manuales):faltas.append('prever al menos una sesión en aula regular')
-        if not e.get('sugerencia_familia','').strip():faltas.append('prever una sugerencia a la familia mediante la hoja de sugerencias')
+        regular_ok = any(str(s.get('contexto','')).lower() in ('aula regular',) for s in e['sesiones']) or any(str(r.get('Contextos','')).lower() in ('aula regular',) for r in manuales)
+        if not regular_ok:
+            faltas.append('prever al menos una sesión en aula regular')
+        familia_ok = bool(e.get('sugerencia_familia','').strip() or any(str(r.get('Contextos','')).lower() == 'familia' and str(r.get('Actividades','')).strip() for r in doc['tablas']['dosificacion']))
+        if not familia_ok:
+            faltas.append('prever una sugerencia a la familia mediante la hoja de sugerencias')
     return faltas
 
 
