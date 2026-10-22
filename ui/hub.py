@@ -68,6 +68,16 @@ MODULOS_INFO = {
         "desc": "Diseño de planeaciones colaborativas, ajustes razonables y seguimiento formativo.",
         "tags": ["ZDP e IA", "Colaboración", "Anexos XIX y XXIII"],
     },
+    "Metas personales": {
+        "titulo": "Metas personales",
+        "categoria": "ADMINISTRACIÓN",
+        "icono": "📝",
+        "badge": "Junta académica",
+        "color": "#0D9488",
+        "color_bg": "#F0FDFA",
+        "desc": "Registra por alumno tus metas de apoyos y ajustes y los recursos necesarios.",
+        "tags": ["Metas", "Apoyos", "Ajustes razonables"],
+    },
     "EPP": {
         "titulo": "Evaluación Psicopedagógica",
         "categoria": "ADMINISTRACIÓN",
@@ -303,7 +313,7 @@ def pagina_central_hub(df_alumnos, menu_permitido, rol, nombre_usuario):
     categorias_map = {
         "📁 Alumnado": {"Expedientes", "Alta de alumnos"},
         "🛡️ Anexos Oficiales": {"Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos", "Anexo VII Derivación"},
-        "🎯 Planeación y EPP": {"Planeación e intervención", "EPP"},
+        "🎯 Planeación y EPP": {"Planeación e intervención", "EPP", "Metas personales"},
         "📊 Gestión y Tiempos": {"Estadística", "Documentos", "Calendario de actividades", "Trámites", "Cronograma mensual", "Horarios de apoyo", "Panel de Dirección", "Maestros de primaria", "Novedades de supervisión", "Constancias de visita", "Oficios de comisión"},
     }
 
