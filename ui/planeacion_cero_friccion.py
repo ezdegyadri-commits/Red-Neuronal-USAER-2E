@@ -97,11 +97,9 @@ def _asistencia(doc, accion, config, preview, consent):
     solicitud = g.preparar_solicitud(doc, config)
     if not consent or not preview or preview['huella'] != solicitud['huella']:
         return doc, solicitud, 'Tu edición se guardará. Revisa el resumen de IA y confirma su envío con el mismo botón Guardar Planeación.'
-    from ai.planeacion_completa import generar_completa
     from ai.planeacion import modelo_configurado
-    with st.spinner('Preparando actividades con los antecedentes del alumno… Tu redacción se conserva.',show_time=True):
-        respuesta = generar_completa(solicitud['resumen'], doc['formato'], doc['datos']['Función'],
-            solicitud['contexto'], solicitud['ajustes'], solicitud['aliases'], solicitud['evidencias'])
+    from ui.planeacion_progreso import generar
+    respuesta = generar(solicitud,doc)
     if not respuesta['unidades']:
         return doc, None, 'La IA no produjo actividades sustentadas. Tu edición se conserva y puedes continuar sin IA.'
     result = g.ensamblar(doc, respuesta, solicitud)
@@ -371,8 +369,8 @@ def hoja(prefix, volver=None):
                     aviso_fuentes = 'No se confirmó la actualización del expediente. Se conservaron los antecedentes anteriores. '
             try:
                 current, preview_next, notice = _asistencia(current, accion, config, preview, consent)
-            except Exception:
-                notice = 'No se pudo completar la ayuda opcional. Tu edición se conserva; puedes continuar sin IA.'
+            except Exception as exc:
+                notice = str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se pudo completar la ayuda opcional. Tu edición se conserva; puedes continuar sin IA.'
             st.session_state[prefix+'_doc'] = current
             estado = 'ENVIADO' if accion == 'Guardar y enviar a Dirección' else 'BORRADOR'
             if u._persist(prefix, estado):

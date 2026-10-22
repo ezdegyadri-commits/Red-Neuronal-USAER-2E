@@ -84,8 +84,9 @@ def panel(prefix):
                 else:
                     candidate['metadatos']['preparacion_rapida']={'selecciones':solicitud['selecciones'],'requiere_revision':True,'motor':'IA'}
                     st.session_state[key+'_propuesta']={'base':huella(doc),'documento':conservar_redaccion(doc,candidate)}
-            except Exception:
-                st.warning('No se completó la propuesta con IA. Tu hoja sigue editable; puedes preparar actividades con tus datos, sin IA.')
+            except Exception as exc:
+                from ui.planeacion_progreso import mostrar_error
+                mostrar_error(exc)
     propuesta=st.session_state.get(key+'_propuesta')
     if not propuesta:return
     st.markdown('**Revisa la propuesta**')

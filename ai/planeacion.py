@@ -5,6 +5,8 @@ import os
 import re
 import time
 import random
+from contextvars import ContextVar
+from contextlib import contextmanager
 import streamlit as st
 from ai.planeacion_prompt import solicitud, validar_respuesta
 
@@ -15,6 +17,19 @@ MODEL = os.environ.get('PLANEACION_GEMINI_MODEL', DEFAULT_MODEL)
 MODELOS_HEREDADOS = {'gemini-2.5-flash','gemini-2.5-flash-preview-09-2025',
                     'gemini-3.1-flash-lite-preview'}
 logger = logging.getLogger(__name__)
+_progreso = ContextVar('planeacion_ia_progreso', default=None)
+
+
+@contextmanager
+def progreso_generacion(callback):
+    token=_progreso.set(callback)
+    try:yield
+    finally:_progreso.reset(token)
+
+
+def notificar_progreso(etapa):
+    callback=_progreso.get()
+    if callback:callback(etapa)
 
 
 def configuracion_modelo():
@@ -92,6 +107,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
         # permisos, configuración o saldo. El SDK no añade reintentos ocultos.
         for intento in range(2):
             try:
+                notificar_progreso('solicitando' if not intento else 'reintento')
                 response = cli.models.generate_content(model=modelo, contents=prompt, config=config)
                 break
             except Exception as exc:
@@ -105,6 +121,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
     except Exception as exc:
         raise RuntimeError(_fallo(exc, modelo)) from None
     try:
+        notificar_progreso('validando')
         raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', (response.text or '').strip())
         result = _validador(json.loads(raw)) if _validador else validar_respuesta(json.loads(raw), curriculo)
     except (ValueError, TypeError, AttributeError) as exc:
@@ -122,6 +139,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
             'EvidenciaAjena':'una evidencia individual no correspondía a los alumnos destinatarios. No se integró ninguna propuesta. Revisa que cada alumno tenga evidencia propia; puedes proponer una actividad por alumno o continuar sin IA con «Preparar actividades con mis datos · sin IA» y después «Incorporar actividades locales a mi formato»',
             'ContextoInvalido':'una actividad usó un contexto distinto al admitido por el formato',
             'FuncionInvalida':'se mezclaron indicaciones de otra función profesional',
+            'ActividadRepetida':'la propuesta repitió una actividad ya registrada; necesitamos una tarea diferente',
             'ContenidoNoVerificable':'la respuesta no superó la revisión de contenido y referencias'}
         motivo=getattr(exc,'motivo','JSONInvalido' if isinstance(exc,json.JSONDecodeError) else 'ContenidoNoVerificable')
         candidatos=getattr(response,'candidates',None) or []

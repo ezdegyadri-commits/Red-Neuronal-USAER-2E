@@ -104,7 +104,7 @@ class HojaTests(unittest.TestCase):
         doc=app.session_state.versiones_ficticias[-1]
         self.assertIn('Lectura con imágenes',guia_grupal(doc)['filas'][0]['Aprendizaje'])
         next(b for b in app.button if b.label=='Elegir otro formato o alumnos').click().run()
-        next(b for b in app.button if b.label=='Abrir mi formato').click().run()
+        next(b for b in app.button if b.label=='Continuar esta planeación').click().run()
         self.assertIn('Lectura con imágenes',next(t for t in app.text_area if t.label=='Aprendizaje').value)
 
     def test_individual_y_pi_conservan_tablas_y_modalidad(self):
