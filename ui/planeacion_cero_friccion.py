@@ -370,7 +370,8 @@ def hoja(prefix, volver=None):
             try:
                 current, preview_next, notice = _asistencia(current, accion, config, preview, consent)
             except Exception as exc:
-                notice = str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se pudo completar la ayuda opcional. Tu edición se conserva; puedes continuar sin IA.'
+                from ui.planeacion_progreso import mensaje_error
+                notice = mensaje_error(exc)
             st.session_state[prefix+'_doc'] = current
             estado = 'ENVIADO' if accion == 'Guardar y enviar a Dirección' else 'BORRADOR'
             if u._persist(prefix, estado):

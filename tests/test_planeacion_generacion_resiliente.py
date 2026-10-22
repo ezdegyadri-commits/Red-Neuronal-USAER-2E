@@ -6,6 +6,10 @@ from ui import planeacion_progreso as ui
 
 
 class ResilienciaTests(TestCase):
+    def test_error_desconocido_no_expone_texto_del_proveedor(self):
+        self.assertNotIn('PRIVADO',ui.mensaje_error(RuntimeError('TOKEN PRIVADO')))
+        self.assertIn('límite de IA',ui.mensaje_error(RuntimeError('Se alcanzó el límite de IA. Conservamos tu borrador; vuelve a intentar más tarde.')))
+
     def llamada(self,errores,motivo='SalidaCortada',tipo='RespuestaNoVerificable'):
         state={};calls=[]
         def proponer(*a,**kw):

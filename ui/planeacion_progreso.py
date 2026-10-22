@@ -28,9 +28,16 @@ def generar(solicitud,doc,generador=None):
         raise
 
 
+def mensaje_error(exc):
+    seguros=('La cuenta de IA','Se alcanzó el límite de IA','La conexión de IA',
+             'Google no encontró el modelo','El servicio de IA','La IA ',
+             'No se completó la propuesta. Dirección','Espera unos 30 segundos',
+             'IA no disponible','Tu hoja cambió.','Los antecedentes cambiaron.')
+    if isinstance(exc,(ValueError,PermissionError)) or isinstance(exc,RuntimeError) and str(exc).startswith(seguros):return str(exc)
+    return 'La generación no se completó por un problema del servicio. Tu hoja y el resumen se conservan; puedes reintentar o preparar actividades sin IA.'
+
+
 def mostrar_error(exc):
     logging.getLogger(__name__).warning('planeacion_ayuda_fallida tipo=%s',type(exc).__name__)
-    if isinstance(exc,(ValueError,PermissionError,RuntimeError)):
-        st.warning(str(exc))
-    else:st.warning('La generación no se completó por un problema del servicio. Tu hoja y el resumen se conservan; puedes reintentar o preparar actividades sin IA.')
+    st.warning(mensaje_error(exc))
     st.caption('No crees otro borrador: puedes continuar desde esta misma hoja. No se incorporó una respuesta sin verificar.')
