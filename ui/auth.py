@@ -67,6 +67,9 @@ def _login_content():
 
 def logout(key="cerrar_sesion"):
     """Muestra un cierre de sesión en el contenedor actual."""
+    if any(k.startswith('metas_') and k.endswith('_pending') and v for k,v in st.session_state.items()):
+        from ui.metas_personales import proteger_salida
+        if not proteger_salida(key):return
     prefix='planeacion_'+hashlib.sha256(str(st.session_state.get('usuario','')).encode()).hexdigest()[:12]
     pendientes=any(k.startswith(prefix) and k.endswith('_pending') and v for k,v in st.session_state.items())
     salir=False
@@ -114,6 +117,8 @@ def _cerrar():
     from services.sesiones_recuperables import CAMPOS
     for campo in CAMPOS:
         st.session_state.pop(campo, None)
+    for campo in [k for k in st.session_state if k.startswith('metas_')]:
+        st.session_state.pop(campo,None)
     for k in [
             "autenticado",
             "nombre",
