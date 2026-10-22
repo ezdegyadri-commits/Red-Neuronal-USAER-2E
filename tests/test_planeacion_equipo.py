@@ -80,5 +80,58 @@ class EquipoTests(unittest.TestCase):
     def test_no_expone_enlaces_privados_de_drive(self):
         import json
         self.assertNotIn('drive.google.com',json.dumps(e.FUENTES))
+    def test_formato_oficial_psicologia_modelo_exacto(self):
+        from unittest.mock import patch
+        from services import planeacion_papel as papel, planeacion as s
+        from documents.planeacion_papel import generar_pdf
+        from io import BytesIO
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            import pymupdf
+            class PdfReader:
+                def __init__(self, stream):
+                    doc = pymupdf.open(stream=stream.getvalue() if hasattr(stream, 'getvalue') else stream, filetype="pdf")
+                    class _P:
+                        def __init__(self, p): self.p = p
+                        def extract_text(self): return self.p.get_text()
+                    self.pages = [_P(p) for p in doc]
+
+        d = documento('Psicología')
+        d['id'] = 'doc-test-psicologia'
+        with patch.object(s, 'autorizar', return_value={'cuenta':'psicologia@usaer.com','area':'Psicología','director':False}):
+            spec = papel.hoja(d)
+            
+            # Verificar encabezado institucional de 4 filas
+            self.assertEqual(len(spec['header']), 4)
+            self.assertEqual(len(spec['header'][0]), 2)  # Zona, Servicio de Apoyo
+            self.assertEqual(len(spec['header'][1]), 5)  # Escuela Regular, Fase, Grado, Grupo, Trimestre
+            self.assertEqual(len(spec['header'][2]), 1)  # Nombre de los alumnos individuales
+            self.assertEqual(len(spec['header'][3]), 2)  # Especialista, Función
+            
+            # Verificar Tabla 1: Competencias (3 columnas)
+            t_comp = next(t for t in spec['tables'] if t['id'] == 'competencias')
+            self.assertEqual(t_comp['headers'], ['Necesidades Educativas Específicas', 'Competencias emocionales', 'Descriptor de logro'])
+            self.assertEqual(len(t_comp['rows']), 5)
+            for row in t_comp['rows']:
+                self.assertEqual(len(row), 3)
+                
+            # Verificar Tabla 2: Dosificación con los 5 contextos oficiales
+            t_dosi = next(t for t in spec['tables'] if t['id'] == 'dosificacion')
+            self.assertEqual(t_dosi['headers'], ['Contextos', 'Actividades', 'Temporalidad', 'Recursos'])
+            ctxs = [row[0]['value'] for row in t_dosi['rows']]
+            self.assertEqual(ctxs, ['Aula de Apoyo', 'Aula Regular', 'Escuela', 'Familia', 'Evaluación'])
+            
+            # Generar PDF y comprobar que son exactamente 2 páginas
+            pdf_bytes = generar_pdf(d)
+            reader = PdfReader(BytesIO(pdf_bytes))
+            self.assertEqual(len(reader.pages), 2)
+            p1_text = reader.pages[0].extract_text()
+            p2_text = reader.pages[1].extract_text()
+            self.assertIn('Planeación del Servicio de Apoyo de Educación Especial', p1_text)
+            self.assertIn('Organización de las actividades de aprendizaje', p1_text)
+            self.assertIn('Observaciones', p2_text)
+            self.assertIn('Nombre y firma del Especialista', p2_text)
+            self.assertIn('Director del Servicio de Apoyo', p2_text)
 
 if __name__=='__main__':unittest.main()

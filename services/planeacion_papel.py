@@ -54,10 +54,13 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
             'rows':[[celda(a.get(c,''),label=c) for c in ('Nombre del alumno','Grado','Grupo')] for a in alumnos],
             'add':False,'delete':False,'widths':[70,15,15]})
     if datos['Función']=='Psicología' and organizacion.get('competencias'):
-        campos=('Necesidad documentada','Competencia','Descriptor de logro','Actividad prevista')
-        tables.append({'id':'competencias','title':'','headers':['Necesidades educativas específicas','Competencias emocionales','Descriptor de logro','Actividad prevista'],
+        campos=('Necesidad documentada','Competencia','Descriptor de logro')
+        tables.append({'id':'competencias','title':'','headers':['Necesidades Educativas Específicas','Competencias emocionales','Descriptor de logro'],
             'rows':[[celda(row.get(c,''),None if c=='Competencia' else ('competencia',i,c),c) for c in campos] for i,row in enumerate(organizacion['competencias'])],
-            'add':False,'delete':False,'widths':[25,20,25,30]})
+            'add':False,'delete':False,'widths':[35,30,35]})
+        for i,row in enumerate(organizacion['competencias']):
+            if row.get('Actividad prevista'):
+                celda(row.get('Actividad prevista',''),('competencia',i,'Actividad prevista'),'Actividad prevista')
     for table,headers in FORMATOS[doc['formato']]['tablas'].items():
         # El detalle existente se muestra en la misma hoja, sin copiarlo a otras
         # celdas ni exigir buscarlo en herramientas secundarias.
@@ -68,7 +71,7 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
         rows=[]
         indices=[]
         for i,row in enumerate(doc['tablas'][table]):
-            if not tiene_contenido(doc,table,row) and (grupal or para_impresion or not row.get('_fila_manual')):continue
+            if not tiene_contenido(doc,table,row) and (grupal or para_impresion or not row.get('_fila_manual')) and not (datos.get('Función')=='Psicología' and table=='dosificacion'):continue
             indices.append(i)
             sid=row.get('_sesion_equipo')
             linked=equipo.sesion_vinculada(doc,sid) if sid else None
@@ -92,12 +95,17 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
             'add':True,'delete':True,'widths':[17,30,25,13,15],'collapsed':'Evaluación al cierre del trimestre',
             'alumnos':[{'id':a['ID_Alumno'],'nombre':a['Nombre del alumno']} for a in alumnos]})
         for row in tables[-1]['rows']:row[3]['opciones']=list(evaluacion.ESCALA)
-    textos=[celda(v,None if colaborativa else ('texto',k),k) for k,v in doc['textos'].items() if str(v or '').strip() or not (para_impresion or grupal)]
-    if colaborativa:
-        aporte=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
-        textos.append(celda(aporte.get('observaciones',''),None if bloqueada else ('aporte_obs',),'Observaciones de mi área'))
-    if datos['Función']=='Psicología' and organizacion and (not para_impresion or str(organizacion.get('sugerencia_familia','')).strip()):
-        textos.append(celda(organizacion.get('sugerencia_familia',''),('equipo','sugerencia_familia'),'Sugerencia prevista para la familia y referencia de su hoja'))
+    if datos['Función'] == 'Psicología':
+        textos = [celda(doc['textos'].get('Observaciones', ''), ('texto', 'Observaciones'), 'Observaciones')]
+        if not para_impresion and organizacion:
+            textos.append(celda(organizacion.get('sugerencia_familia', ''), ('equipo', 'sugerencia_familia'), 'Sugerencia prevista para la familia y referencia de su hoja'))
+    else:
+        textos=[celda(v,None if colaborativa else ('texto',k),k) for k,v in doc['textos'].items() if str(v or '').strip() or not (para_impresion or grupal)]
+        if colaborativa:
+            aporte=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
+            textos.append(celda(aporte.get('observaciones',''),None if bloqueada else ('aporte_obs',),'Observaciones de mi área'))
+        if datos['Función']=='Psicología' and organizacion and (not para_impresion or str(organizacion.get('sugerencia_familia','')).strip()):
+            textos.append(celda(organizacion.get('sugerencia_familia',''),('equipo','sugerencia_familia'),'Sugerencia prevista para la familia y referencia de su hoja'))
     header=[['Zona: '+str(datos['Zona']),'Servicio de Apoyo: '+datos['Servicio de apoyo']],
             ['Escuela Regular: '+datos['Escuela regular'],'Fase: '+', '.join(sorted({str(a.get('Fase de inscripción') or '') for a in alumnos}))],
             ['Nombre del alumno/a: '+', '.join(a['Nombre del alumno'] for a in alumnos),'Grado: '+', '.join(sorted({str(a['Grado'])+' '+str(a['Grupo']) for a in alumnos}))],
@@ -112,6 +120,16 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
         campo_maestro=celda(maestro,('maestro_grupo',),'Maestro/a de grupo regular') if not colaborativa else 'Maestro de grupo: '+maestro
         header=[['Curso escolar: '+datos['Curso escolar'],campo_maestro],
                 ['Escuela: '+datos['Escuela regular'],'Grado y grupo: '+etiqueta_grupo(doc)]]
+    elif datos.get('Función') == 'Psicología':
+        fases = ', '.join(sorted({str(a.get('Fase de inscripción') or '') for a in alumnos if a.get('Fase de inscripción')})) or '-'
+        grados = ', '.join(sorted({str(a.get('Grado') or '') for a in alumnos if a.get('Grado')})) or '-'
+        grupos = ', '.join(sorted({str(a.get('Grupo') or '') for a in alumnos if a.get('Grupo')})) or '-'
+        header = [
+            ['Zona: ' + str(datos.get('Zona', '')), 'Servicio de Apoyo: ' + str(datos.get('Servicio de apoyo', ''))],
+            ['Escuela Regular: ' + str(datos.get('Escuela regular', '')), 'Fase: ' + fases, 'Grado: ' + grados, 'Grupo: ' + grupos, 'Trimestre: ' + str(datos.get('Trimestre', ''))],
+            ['Nombre de los alumnos individuales:\n' + ', '.join(a.get('Nombre del alumno', '') for a in alumnos)],
+            ['Nombre del especialista: ' + str(datos.get('Nombre del especialista', '')), 'Función: ' + str(datos.get('Función', ''))]
+        ]
     else:
         header=[header[0],[header[1][0]+'\n'+header[2][0]+'\n'+header[3][0],
             header[1][1]+'\n'+header[2][1],header[3][1]+'\n'+header[4][0]+'\n'+header[4][1]]]
@@ -156,11 +174,29 @@ def aplicar(doc,event):
         if target[0]=='tabla':
             if target[2]==len(result['tablas'][target[1]]):result=f.nueva_fila(result,target[1])
             result=f.editar_celda(result,*target[1:],value)
-        elif target[0]=='texto':result['textos'][target[1]]=value
+            if doc['datos'].get('Función') == 'Psicología' and target[1] == 'dosificacion':
+                fila = result['tablas']['dosificacion'][target[2]]
+                ctx = str(fila.get('Contextos', '')).strip().lower()
+                if ctx == 'familia' and target[3] == 'Actividades':
+                    result['metadatos'].setdefault('equipo', {})['sugerencia_familia'] = value
+                elif ctx in ('evaluación', 'evaluacion') and target[3] == 'Actividades':
+                    result['textos']['Evaluación'] = value
+        elif target[0]=='texto':
+            result['textos'][target[1]]=value
+            if doc['datos'].get('Función') == 'Psicología' and target[1] == 'Evaluación':
+                for r in result['tablas'].get('dosificacion', []):
+                    if str(r.get('Contextos', '')).strip().lower() in ('evaluación', 'evaluacion') and not r.get('_sesion_equipo'):
+                        r['Actividades'] = value
         elif target[0]=='guia':patch.setdefault(target[1],{})[target[2]]=value
         elif target[0]=='sesion':result=equipo.editar_en_formato(result,*target[1:],value)
         elif target[0]=='competencia':result['metadatos']['equipo']['competencias'][target[1]][target[2]]=value
-        elif target[0]=='equipo':result['metadatos']['equipo'][target[1]]=value
+        elif target[0]=='equipo':
+            result['metadatos']['equipo'][target[1]]=value
+            if target[1] == 'sugerencia_familia':
+                for r in result['tablas'].get('dosificacion', []):
+                    if str(r.get('Contextos', '')).strip().lower() == 'familia' and not r.get('_sesion_equipo'):
+                        r['Actividades'] = value
+                        if not r.get('Recursos'): r['Recursos'] = 'Hoja de sugerencias.'
         elif target[0]=='maestro_grupo':
             result['metadatos'].setdefault('guia_grupal_manual',{})['maestro_grupo']=value
             result['metadatos']['maestro_regular_edicion_manual']=True

@@ -3,7 +3,17 @@ from copy import deepcopy
 from io import BytesIO
 from unittest import TestCase
 from unittest.mock import patch
-from pypdf import PdfReader
+try:
+    from pypdf import PdfReader
+except ImportError:
+    import pymupdf
+    class PdfReader:
+        def __init__(self, stream):
+            doc = pymupdf.open(stream=stream.getvalue() if hasattr(stream, 'getvalue') else stream, filetype="pdf")
+            class _P:
+                def __init__(self, p): self.p = p
+                def extract_text(self): return self.p.get_text()
+            self.pages = [_P(p) for p in doc]
 from services import planeacion_papel as papel,planeacion_equipo as equipo
 from services.planeacion_compartida import situacion_inicial
 from services.planeacion_modalidad import guia_grupal

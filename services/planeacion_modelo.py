@@ -120,9 +120,24 @@ def crear_plantilla(formato, ids, alumnos_autorizados, *, autor, funcion,
     }
     if formato == 'XXI':
         doc['datos'].update({'Necesidades educativas específicas asociadas a':'','Maestro de grupo':'','Vigencia en cursos escolares':None})
-    for contexto in spec['contextos']:
+    contextos_lista = ['Aula de Apoyo', 'Aula Regular', 'Escuela', 'Familia', 'Evaluación'] if funcion == 'Psicología' else spec['contextos']
+    for contexto in contextos_lista:
         if 'dosificacion' in doc['tablas']:
-            doc['tablas']['dosificacion'].append({c:contexto if c=='Contextos' else '' for c in spec['tablas']['dosificacion']})
+            fila = {c:contexto if c=='Contextos' else '' for c in spec['tablas']['dosificacion']}
+            if funcion == 'Psicología':
+                if contexto == 'Aula de Apoyo':
+                    fila['Actividades'] = 'PLANEAR AL MENOS 5 SESIONES PARA UN TRIMESTRE.\nActividades en subgrupo'
+                    fila['Temporalidad'] = 'Semana 1'
+                elif contexto == 'Aula Regular':
+                    fila['Actividades'] = 'PLANIFICAR AL MENOS 1 ACTIVIDAD EN EL AULA REGULAR PARA FAVORECER LAS COMPETENCIAS EMOCIONALES.\nEntregar la sugerencia al maestro de grupo.'
+                elif contexto == 'Familia':
+                    fila['Actividades'] = 'Se citará al padre de familia y se le entregará sugerencias (empleando la hoja de sugerencia) para favorecer las habilidades del alumno.'
+                    fila['Recursos'] = 'Hoja de sugerencias.'
+                elif contexto == 'Evaluación':
+                    fila['Actividades'] = 'Emplear una lista de cotejo.'
+            doc['tablas']['dosificacion'].append(fila)
+    if funcion == 'Psicología':
+        doc['textos']['Evaluación'] = 'Emplear una lista de cotejo.'
     if not next(iter(ccts),''):
         doc['metadatos']['pendientes'].append('CCT no registrado')
     doc['metadatos']['pendientes'].append('Confirmar las NEE y su fuente; una condición del padrón no equivale a NEE')
