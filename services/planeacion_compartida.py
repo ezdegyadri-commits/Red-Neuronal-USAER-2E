@@ -81,7 +81,9 @@ def ampliar_matricula(doc,frame):
     result=proyectar_retiros(doc,frame)
     if not es_guia(doc):return result
     grupos={(grado_canonico(a.get('Grado')),grupo_canonico(a.get('Grupo'))) for a in doc['datos']['Alumnos']}
-    if len(grupos)!=1 or not all(next(iter(grupos))):return result
+    # Una letra vacía identifica el grado sin sección, igual que clave().
+    # No se equipara a A/B: el filtro inferior mantiene la coincidencia exacta.
+    if len(grupos)!=1 or not next(iter(grupos))[0]:return result
     presentes={a['ID_Alumno'] for a in result['datos']['Alumnos']}
     contexto={}
     for r in frame.to_dict('records'):

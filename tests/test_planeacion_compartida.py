@@ -59,6 +59,36 @@ class ProyeccionTests(unittest.TestCase):
         self.assertEqual(ampliar_matricula(nuevo,frame),nuevo)
         self.assertEqual(guia_grupal(d)['maestro_grupo'],'Docente ficticio')
 
+    def test_grado_sin_letra_completa_matricula_sin_duplicar_ni_perder_aportes(self):
+        from services.planeacion_grupo_unico import clave
+        for grado, iniciales in [('2',3),('4',1)]:
+            with self.subTest(grado=grado):
+                d=grupal()
+                base=d['datos']['Alumnos'][0]
+                d['datos']['Alumnos']=[{**base,'ID_Alumno':f'A{i}','Grado':grado+'o.','Grupo':''} for i in range(iniciales)]
+                d['metadatos']['guia_grupal_manual']={'filas':[{'ID_Alumno':'A0','Aprendizaje':'Texto docente','Situación final':'Resultado conservado'}]}
+                d['metadatos']['aportaciones_equipo']={'Comunicación':{'filas':[{'ID_Alumno':'A0','Texto en formato':'Aporte especialista'}]}}
+                antes=deepcopy(d)
+                row={**ALUMNO,'Grado':grado+'°','Grupo':'','Tipo_Atencion':'Grupal','Estatus':'Activo'}
+                rows=[{**row,'ID_Alumno':f'A{i}'} for i in range(5)]
+                rows += [{**row,'ID_Alumno':'otra_seccion','Grupo':'A'},
+                         {**row,'ID_Alumno':'otra_escuela','ID_Escuela':'OTRA'},
+                         {**row,'ID_Alumno':'otro_grado','Grado':'6°'},
+                         {**row,'ID_Alumno':'individual','Tipo_Atencion':'Individual'},
+                         {**row,'ID_Alumno':'baja','Estatus':'Baja'}]
+                frame=pd.DataFrame(rows)
+                nuevo=ampliar_matricula(d,frame)
+                self.assertEqual([a['ID_Alumno'] for a in nuevo['datos']['Alumnos']],[f'A{i}' for i in range(5)])
+                self.assertEqual(nuevo['id'],d['id']);self.assertEqual(clave(nuevo),clave(d))
+                self.assertEqual(nuevo['metadatos']['aportaciones_equipo'],d['metadatos']['aportaciones_equipo'])
+                filas=guia_grupal(nuevo)['filas']
+                self.assertEqual(len(filas),5)
+                self.assertEqual(filas[0]['Aprendizaje'],'Texto docente')
+                self.assertEqual(filas[0]['Comunicación'],'Aporte especialista')
+                self.assertEqual(filas[0]['Situación final'],'Resultado conservado')
+                self.assertEqual(ampliar_matricula(nuevo,frame),nuevo)
+                self.assertEqual(d,antes)
+
     def test_situacion_sin_inventar_nee_y_final_protegida(self):
         d=grupal();a=d['datos']['Alumnos'][0]
         self.assertTrue(situacion_inicial(a,[{'tipo':'III','texto':'BAP_Fisicas: JSON'}]).startswith('RI'))
