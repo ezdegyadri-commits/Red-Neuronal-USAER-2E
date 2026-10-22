@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import threading
+import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -66,8 +67,11 @@ def padron_autorizado():
     # No reutilizar subconjuntos calculados por la antigua comparación por apellido.
     cache_key = f"_padron_autorizado_identidad_v3_{actor['cuenta']}_{st.session_state.get('escuelas_permitidas','')}"
     cached = getattr(st, 'session_state', {}).get(cache_key)
-    if cached is not None:
-        return preparar_matricula(cached)
+    ahora=time.monotonic()
+    leido=st.session_state.get(cache_key+'_leido_en')
+    if cached is not None and (leido is None or ahora-leido<60):
+        st.session_state[cache_key+'_leido_en']=leido if leido is not None else ahora
+        return preparar_matricula(cached).copy()
     # Diego usa su identidad canónica aunque Usuarios haya abreviado la función.
     rol = 'TRABAJO SOCIAL' if actor['area']=='Trabajo Social' else actor['rol']
     frame = preparar_matricula(alumnos_visibles(rol, st.session_state.get('escuelas_permitidas',''), actor['nombre']))
@@ -78,11 +82,14 @@ def padron_autorizado():
         frame = frame.loc[frame['Nombre_Escuela'].map(normalizar_texto).isin(permitidas)].copy()
     if hasattr(st, 'session_state'):
         st.session_state[cache_key] = frame
+        st.session_state[cache_key+'_leido_en']=ahora
     return frame.copy()
 
 
-def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individuales=False,vista_formato=None):
+def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individuales=False,vista_formato=None,todos_grupos=False):
     actor = identidad()
+    if modalidad=='grupal' and actor['area']=='Aprendizaje' and vista_formato!='trimestral':
+        incluir_individuales=False
     if modalidad=='grupal' and actor['area']!='Aprendizaje':
         raise PermissionError('El Anexo XIX lo inicia la maestra de apoyo. Continúa el documento existente en Planeaciones del equipo; tu intervención propia conserva el formato de especialista.')
     if modalidad is not None:
@@ -110,13 +117,29 @@ def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individ
     if vista_formato:doc['metadatos']['vista_formato']=vista_formato
     from services.planeacion_compartida import es_guia
     if es_guia(doc):
+        if todos_grupos:
+            from utils.escolar import grado_canonico
+            grados={grado_canonico(a.get('Grado')) for a in doc['datos']['Alumnos']}
+            if len(grados)!=1 or not next(iter(grados)):raise ValueError('Elige un grado para reunir todos sus grupos en el Anexo XIX.')
+            doc['metadatos']['alcance_grupal']={'grado':next(iter(grados)),'grupo':'*'}
         from services.planeacion_grupo_unico import clave,identificador,vigente
         if not clave(doc):raise ValueError('Elige un solo grado y grupo para el Anexo XIX compartido.')
         existente=vigente(doc,versiones_actuales())
         if existente:
             autorizar(existente,True)
-            return existente
+            existente=deepcopy(existente)
+            # La inclusión expresa permite las altas individuales sin cambiar
+            # su modalidad en el padrón ni retirar filas ya redactadas.
+            existente['metadatos']['individuales_en_sesion_grupal']=False
+            from services.planeacion_compartida import ampliar_matricula
+            ampliado=ampliar_matricula(existente,padron_autorizado())
+            if ampliado['datos']['Alumnos']!=existente['datos']['Alumnos']:
+                ampliado['metadatos']['contexto_matricula_pendiente']=True
+            return ampliado
         doc['id']=identificador(doc)
+        if todos_grupos:
+            from services.planeacion_compartida import ampliar_matricula
+            doc=ampliar_matricula(doc,padron_autorizado())
     from services.planeacion_equipo import preparar
     return preparar(doc)
 
@@ -244,8 +267,8 @@ def listar(todas_versiones=False):
         if not actor['director'] and doc.get('cuenta')!=actor['cuenta']:
             continue
         if not todas_versiones:
-            from services.planeacion_compartida import proyectar_retiros
-            doc=proyectar_retiros(doc,padron)
+            from services.planeacion_compartida import ampliar_matricula
+            doc=ampliar_matricula(doc,padron)
             if not doc['datos']['Alumnos']:continue
         try:
             autorizar(doc, frame=padron)
@@ -288,6 +311,15 @@ def refrescar_matricula():
     for k in list(st.session_state.keys() if hasattr(st, 'session_state') else []):
         if k.startswith('_padron_autorizado_'):
             st.session_state.pop(k, None)
+
+
+def precargar_docentes_regulares(doc):
+    from services.planeacion_compartida import es_guia
+    if not es_guia(doc):return doc
+    autorizar(doc)
+    from services.docentes_regulares import listar_docentes_regulares
+    from services.planeacion_docentes import aplicar
+    return aplicar(doc,listar_docentes_regulares(escuela=doc['datos']['ID_Escuela']))
 
 
 def refrescar_evidencias():
@@ -408,6 +440,13 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
                     from services.planeacion_grupo_unico import conciliar
                     fuentes=latest['metadatos'].get('unificacion_grupal',{}).get('fuentes',{})
                     base=conciliar(base,[v for v in instantanea if fuentes.get(v['id'])==v['revision']]) if fuentes else base
+                    # Comparar ambas revisiones con la misma matrícula actual:
+                    # las altas/exclusiones derivadas no son otra edición del autor.
+                    from services.planeacion_compartida import ampliar_matricula
+                    frame=padron_autorizado()
+                    base=ampliar_matricula(base,frame)
+                    latest=ampliar_matricula(latest,frame)
+                    doc=ampliar_matricula(doc,frame)
                 from services.planeacion_compartida import conciliar_autor
                 doc=conciliar_autor(doc,base,latest)
             else:raise RuntimeError('Otra sesión guardó cambios. Tu edición sigue aquí; guarda un respaldo y recupera la versión reciente.')
@@ -416,7 +455,9 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
             identidad_cambia=any(latest['datos'].get(k)!=doc['datos'].get(k) for k in claves if k!='Alumnos')
             if latest['datos']['Alumnos']!=doc['datos']['Alumnos']:
                 from services.planeacion_compartida import ampliar_matricula
-                ampliada=ampliar_matricula(latest,padron_autorizado())
+                base_matricula=deepcopy(latest)
+                base_matricula['metadatos']['individuales_en_sesion_grupal']=bool(doc['metadatos'].get('individuales_en_sesion_grupal'))
+                ampliada=ampliar_matricula(base_matricula,padron_autorizado())
                 if doc['datos']['Alumnos']!=ampliada['datos']['Alumnos']:identidad_cambia=True
             if latest['cuenta']!=doc['cuenta'] or latest['formato']!=doc['formato'] or identidad_cambia:
                 raise PermissionError('No se puede cambiar la identidad de un documento guardado.')
@@ -652,8 +693,8 @@ def compartidos():
     from services.planeacion_grupo_unico import documentos
     resultado=[]
     for doc in documentos(versiones_actuales()):
-        from services.planeacion_compartida import proyectar_retiros
-        doc=proyectar_retiros(doc,padron_autorizado())
+        from services.planeacion_compartida import ampliar_matricula
+        doc=ampliar_matricula(doc,padron_autorizado())
         if not compartible(doc):continue
         try:autorizar(doc)
         except PermissionError:continue

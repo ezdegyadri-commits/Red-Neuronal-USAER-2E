@@ -209,4 +209,20 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   assert.equal(f.nodes.get('celda-c0').innerText,'Actividad de A2');
   assert.equal(f.cache.get('usaer-hoja:ficticio'),respaldo);
 }
+// Cerrar sesión antes de los cuatro segundos transmite el texto y detiene el
+// clic. Sólo el acuse de guardado del servidor permite continuar el cierre.
+{
+  const f=fixture(undefined,undefined,true);f.render(hoja());f.input('Últimas palabras antes de cerrar');
+  let bloqueado=0;
+  const cerrar={textContent:'Cerrar sesión'};
+  const evento=()=>({target:{closest:()=>cerrar},preventDefault:()=>bloqueado++,stopImmediatePropagation:()=>bloqueado++});
+  f.listeners.click(evento());
+  assert.equal(bloqueado,2);
+  assert.equal(f.events()[0].accion,'guardar');assert.equal(f.events()[0].cambios.c0,'Últimas palabras antes de cerrar');
+  const respaldo=JSON.parse(f.cache.get('usaer-hoja:ficticio'));
+  assert.equal(respaldo.tipo,'usaer-texto-pendiente-v2');assert.equal(respaldo.celdas[0].valor,'Últimas palabras antes de cerrar');
+  f.render(hoja('Últimas palabras antes de cerrar','nueva'),{aceptado_nonce:f.events()[0].nonce,guardado:'confirmado'});
+  bloqueado=0;f.listeners.click(evento());assert.equal(bloqueado,0);
+  f.dispose();assert.equal(f.listeners.click,undefined);
+}
 console.log('Editor: escritura no bloqueante, sincronización por área, respaldo y navegación protegida aprobados.');

@@ -43,6 +43,7 @@ def guia_grupal(doc):
     zona={r['ID_Alumno']:r for r in doc['metadatos'].get('grupal_zona',doc['metadatos'].get('equipo',{}).get('grupal',[]))}
     filas=[]
     for a in doc['datos']['Alumnos']:
+        if modalidad(a)=='individual':continue
         row={'ID_Alumno':a['ID_Alumno'],**{h:'' for h in GUIA_XIX}}
         row.update(existentes.get(a['ID_Alumno'],{}))
         row['Nombre alumno']=a['Nombre del alumno'];row['Discapacidad o condición']=a['Condición']

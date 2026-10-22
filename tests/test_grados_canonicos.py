@@ -62,15 +62,13 @@ class GradosTests(TestCase):
             d['datos']['Alumnos'][0]['Grado']=v
             self.assertEqual(clave(d),base)
 
-    def test_primer_grado_individual_aparece_por_defecto_en_entrada_grupal(self):
+    def test_grado_con_solo_atencion_individual_no_aparece_en_xix(self):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
         self.assertFalse(app.exception)
         grado=next(w for w in app.selectbox if w.label=='Grado')
-        self.assertIn('1°',grado.options)
-        grado.set_value('1°').run()
-        self.assertFalse(app.exception)
-        self.assertIn('Alumno ficticio Individual',next(w for w in app.multiselect if w.label=='Alumnos de mi formato').options)
+        self.assertNotIn('1°',grado.options)
+        self.assertNotIn('Alumno ficticio Individual',next(w for w in app.multiselect if w.label=='Alumnos de mi formato').options)
 
     def test_padron_cacheado_tambien_se_normaliza_sin_cambiar_entrada(self):
         from tests.test_planeacion_panel import ACTOR

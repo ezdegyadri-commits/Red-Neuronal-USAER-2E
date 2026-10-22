@@ -29,9 +29,9 @@ def _fecha_corta(fecha_iso):
 
 
 def etiqueta(doc):
-    grupos=sorted({grado_canonico(a.get('Grado'))+' '+grupo_canonico(a.get('Grupo')) for a in doc['datos']['Alumnos']})
+    from services.planeacion_ambito import etiqueta as etiqueta_grupo
     fecha = _fecha_corta(doc.get('guardado_en') or doc['datos'].get('Fecha de elaboración',''))
-    return ' · '.join(filter(None, [doc['datos']['Escuela regular'],', '.join(grupos),
+    return ' · '.join(filter(None, [doc['datos']['Escuela regular'],etiqueta_grupo(doc),
         doc['datos']['Curso escolar'],'T'+str(doc['datos']['Trimestre']),
         fecha,
         doc['datos']['Función'],doc['metadatos'].get('modalidad_planeacion','Por confirmar'),
@@ -40,8 +40,8 @@ def etiqueta(doc):
 
 def etiqueta_selector(doc):
     """La etiqueta de navegación no cambia cuando otra persona guarda."""
-    grupos=sorted({grado_canonico(a.get('Grado'))+' '+grupo_canonico(a.get('Grupo')) for a in doc['datos']['Alumnos']})
-    return ' · '.join([doc['datos']['Escuela regular'],', '.join(grupos),
+    from services.planeacion_ambito import etiqueta as etiqueta_grupo
+    return ' · '.join([doc['datos']['Escuela regular'],etiqueta_grupo(doc),
         'Trimestre '+str(doc['datos']['Trimestre']),doc['datos']['Curso escolar']])
 
 
@@ -65,6 +65,7 @@ def alumno_padron(r):
     from services.planeacion_nee import nee_padron
     return {'ID_Alumno':str(r['ID_Alumno']), 'Nombre del alumno':str(r.get('Nombre_Completo','')),
         'Grado':grado_canonico(r.get('Grado')), 'Grupo':grupo_canonico(r.get('Grupo')),
+        'Tipo_Atencion':str(r.get('Tipo_Atencion','') or ''),
         'Condición':str(r.get('Condicion_Discapacidad','') or ''),
         'Maestro de apoyo':str(r.get('Maestra de Apoyo','') or ''),
         'ID_Maestro_Regular':str(r.get('ID_Maestro_Regular','') or ''),
@@ -80,16 +81,18 @@ def ampliar_matricula(doc,frame):
     from services.planeacion_matricula import clave_escuela
     result=proyectar_retiros(doc,frame)
     if not es_guia(doc):return result
-    grupos={(grado_canonico(a.get('Grado')),grupo_canonico(a.get('Grupo'))) for a in doc['datos']['Alumnos']}
-    # Una letra vacía identifica el grado sin sección, igual que clave().
-    # No se equipara a A/B: el filtro inferior mantiene la coincidencia exacta.
-    if len(grupos)!=1 or not next(iter(grupos))[0]:return result
+    from services.planeacion_ambito import ambito
+    scope=ambito(doc)
+    if not scope:return result
+    grado,grupo=scope
+    modalidades={'grupal'}
     presentes={a['ID_Alumno'] for a in result['datos']['Alumnos']}
     contexto={}
     for r in frame.to_dict('records'):
-        if (str(r.get('ID_Alumno','')) in presentes or modalidad(r)!='grupal'
+        if (str(r.get('ID_Alumno','')) in presentes or modalidad(r) not in modalidades
             or clave_escuela(r.get('ID_Escuela'))!=clave_escuela(doc['datos']['ID_Escuela'])
-            or (grado_canonico(r.get('Grado')),grupo_canonico(r.get('Grupo'))) not in grupos
+            or grado_canonico(r.get('Grado'))!=grado
+            or (grupo!='*' and grupo_canonico(r.get('Grupo'))!=grupo)
             or normalizar_texto(r.get('Estatus','')) in {'BAJA','INACTIVO','RETIRADO','ELIMINADO'}):continue
         result['datos']['Alumnos'].append(alumno_padron(r));presentes.add(str(r['ID_Alumno']))
     for r in frame.to_dict('records'):
@@ -102,7 +105,9 @@ def ampliar_matricula(doc,frame):
     manual=result['metadatos'].setdefault('guia_grupal_manual',{})
     if not manual.get('maestro_grupo'):
         nombres=list(dict.fromkeys(r['ID_Maestro_Regular'] for r in contexto.values() if r['ID_Maestro_Regular']))
-        if nombres:manual['maestro_grupo']=', '.join(nombres)
+        if nombres:
+            manual['maestro_grupo']=', '.join(nombres)
+            result['metadatos']['maestro_regular_autocompletado']=manual['maestro_grupo']
     if result['datos']['Alumnos']!=doc['datos']['Alumnos']:
         from services.planeacion_modalidad import guia_grupal
         result['metadatos']['guia_grupal_manual']=guia_grupal(result)
@@ -133,7 +138,7 @@ def proyectar_retiros(doc,frame):
     auditado. Los datos se conservan en metadatos y en las versiones anteriores.
     Un alumno ausente sin prueba nunca se retira por inferencia.
     """
-    result=deepcopy(doc)
+    result=proyectar_individuales(doc,frame)
     if not es_guia(doc):return result
     vigentes=set(frame.get('ID_Alumno',[]).astype(str)) if 'ID_Alumno' in frame else set()
     pendientes={str(a['ID_Alumno']) for a in doc['datos']['Alumnos']}-vigentes
@@ -164,6 +169,34 @@ def proyectar_retiros(doc,frame):
                 'aportaciones':{area:[deepcopy(r) for r in aporte.get('filas',[]) if str(r.get('ID_Alumno'))==aid]
                     for area,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items()}}
     result['datos']['Alumnos']=[a for a in result['datos']['Alumnos'] if str(a['ID_Alumno']) not in retiros]
+    return result
+
+
+def proyectar_individuales(doc,frame):
+    """Excluye de la vista XIX, no del historial, la atención individual."""
+    result=deepcopy(doc)
+    if not es_guia(doc):return result
+    from services.planeacion_modalidad import modalidad
+    from services.planeacion_matricula import clave_escuela
+    actuales={str(r['ID_Alumno']):r for r in frame.to_dict('records')
+              if clave_escuela(r.get('ID_Escuela'))==clave_escuela(doc['datos']['ID_Escuela'])}
+    excluidos={str(a['ID_Alumno']) for a in doc['datos']['Alumnos']
+               if modalidad(actuales.get(str(a['ID_Alumno']),a))=='individual'}
+    if not excluidos:return result
+    meta=result['metadatos'];historia=meta.setdefault('alumnos_atencion_individual_archivados',{})
+    filas={str(r['ID_Alumno']):r for r in meta.get('guia_grupal_manual',{}).get('filas',[])}
+    for a in doc['datos']['Alumnos']:
+        aid=str(a['ID_Alumno'])
+        if aid not in excluidos:continue
+        historia[aid]={'alumno':deepcopy(a),'fila':deepcopy(filas.get(aid,{})),
+            'aportaciones':{area:[deepcopy(r) for r in aporte.get('filas',[]) if str(r.get('ID_Alumno'))==aid]
+                           for area,aporte in meta.get('aportaciones_equipo',{}).items()}}
+    result['datos']['Alumnos']=[a for a in doc['datos']['Alumnos'] if str(a['ID_Alumno']) not in excluidos]
+    if 'guia_grupal_manual' in meta:meta['guia_grupal_manual']['filas']=[r for r in meta['guia_grupal_manual'].get('filas',[]) if str(r['ID_Alumno']) not in excluidos]
+    if 'grupal_zona' in meta:
+        for r in meta['grupal_zona']:
+            if str(r['ID_Alumno']) in excluidos:historia[str(r['ID_Alumno'])]['grupal_zona']=deepcopy(r)
+        meta['grupal_zona']=[r for r in meta['grupal_zona'] if str(r['ID_Alumno']) not in excluidos]
     return result
 
 
@@ -232,10 +265,38 @@ def sin_aportes(doc):
     return d
 
 
+def _tres_vias(base,local,remoto):
+    """Une cambios independientes; nunca elige un ganador para la misma celda."""
+    if local==base:return deepcopy(remoto)
+    if remoto==base or local==remoto:return deepcopy(local)
+    if all(isinstance(v,dict) for v in (base,local,remoto)):
+        ausente=object();salida={}
+        for k in dict.fromkeys([*remoto,*local,*base]):
+            b,l,r=(v.get(k,ausente) for v in (base,local,remoto))
+            if l is ausente or r is ausente:
+                if l==b:elegido=r
+                elif r==b or l==r:elegido=l
+                else:raise RuntimeError('Dos sesiones cambiaron el mismo campo. Tu texto se conserva; descarga el respaldo antes de recuperar la versión reciente.')
+                if elegido is not ausente:salida[k]=deepcopy(elegido)
+            elif b is ausente:
+                if l!=r:raise RuntimeError('Dos sesiones añadieron valores distintos al mismo campo. Tu texto se conserva; descarga el respaldo para conciliarlos.')
+                salida[k]=deepcopy(l)
+            else:salida[k]=_tres_vias(b,l,r)
+        return salida
+    if all(isinstance(v,list) for v in (base,local,remoto)) and all(
+        isinstance(r,dict) and r.get('ID_Alumno') for v in (base,local,remoto) for r in v):
+        if all(len({r['ID_Alumno'] for r in v})==len(v) for v in (base,local,remoto)):
+            unidos=_tres_vias(*({r['ID_Alumno']:r for r in v} for v in (base,local,remoto)))
+            return list(unidos.values())
+    raise RuntimeError('Dos sesiones modificaron el mismo campo. Tu edición se conserva; descarga el respaldo antes de recuperar la versión reciente.')
+
+
 def conciliar_autor(doc,base,latest):
-    if not es_guia(doc) or sin_aportes(base)!=sin_aportes(latest):
+    if not es_guia(doc):
         raise RuntimeError('Otra sesión modificó la planeación. Tu edición se conserva; recupera la versión reciente antes de conciliar.')
-    result=deepcopy(doc)
+    if any(base.get(k)!=latest.get(k) for k in ('id','cuenta','formato','estado')):
+        raise RuntimeError('Cambió el estado de revisión o la identidad del documento. Conserva tu respaldo y abre la versión reciente antes de continuar.')
+    result=_tres_vias(sin_aportes(base),sin_aportes(doc),sin_aportes(latest))
     for k in ('aportaciones_equipo','aportaciones_integradas','guia_aportes_integrados'):
         result['metadatos'][k]=deepcopy(latest['metadatos'].get(k,{}))
     # Las columnas ajenas siempre proceden de la versión reciente, no del editor del autor.

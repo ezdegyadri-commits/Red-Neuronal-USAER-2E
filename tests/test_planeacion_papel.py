@@ -191,17 +191,18 @@ class PapelUITests(unittest.TestCase):
         self.assertTrue(any(r['Actividades']=='Cambio dentro del documento' for r in app.session_state.versiones_ficticias[-1]['tablas']['dosificacion']))
         app.run();self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
 
-    def test_por_grado_incluye_individuales_sin_cambiar_su_modalidad(self):
+    def test_por_grado_excluye_individuales_del_xix_sin_alterar_su_modalidad(self):
         from streamlit.testing.v1 import AppTest
         from pathlib import Path
         app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
         next(w for w in app.button_group if w.label=='Modalidad de planeación').set_value('Por grado').run()
-        next(w for w in app.selectbox if w.label=='Grado').set_value('1°').run()
+        self.assertNotIn('1°',next(w for w in app.selectbox if w.label=='Grado').options)
+        next(w for w in app.selectbox if w.label=='Grado').set_value('5°').run()
         selector=next(w for w in app.multiselect if w.label=='Alumnos de mi formato')
-        self.assertEqual(len(selector.options),1)
-        selector.set_value(['I1']).run()
+        self.assertEqual(len(selector.options),2)
+        selector.set_value(['A1']).run()
         next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()
         self.assertFalse(app.exception)
         doc=app.session_state.versiones_ficticias[-1]
-        self.assertEqual([a['ID_Alumno'] for a in doc['datos']['Alumnos']],['I1'])
-        self.assertTrue(doc['metadatos']['individuales_en_sesion_grupal'])
+        self.assertEqual([a['ID_Alumno'] for a in doc['datos']['Alumnos']],['A1','A2'])
+        self.assertFalse(doc['metadatos']['individuales_en_sesion_grupal'])

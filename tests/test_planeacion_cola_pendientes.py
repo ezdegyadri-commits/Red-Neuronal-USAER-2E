@@ -14,6 +14,15 @@ def doc(identidad):
 
 
 class ColaTests(unittest.TestCase):
+    def test_cola_conserva_aportes_de_filas_excluidas_al_cambiar_de_documento(self):
+        p='planeacion_qa_grupal';base='planeacion_qa'
+        filas=[{'ID_Alumno':'I1','Texto en formato':'Texto pendiente anterior a la exclusión'}]
+        state={p+'_doc':doc('a'),p+'_pending':True,p+'_filas_retiradas':deepcopy(filas)}
+        with patch.object(cola.st,'session_state',state):
+            reserva=cola.conservar(p,base)
+        self.assertEqual(state[reserva+'_filas_retiradas'],filas)
+        self.assertTrue(state[reserva+'_pending'])
+
     def test_otro_grupo_abre_y_retiene_edicion_completa_que_no_se_guardo(self):
         base='planeacion_qa';p=base+'_grupal';anterior=doc('grupo-a');nuevo=doc('grupo-b')
         state={p+'_doc':deepcopy(anterior),p+'_pending':True,p+'_error':'Sin conexión'}
@@ -157,7 +166,7 @@ st.session_state['cola_ids_prueba']=cola.pendientes(base)
         from ui import auth
         import hashlib
         base='planeacion_'+hashlib.sha256(b'qa').hexdigest()[:12]
-        state={'usuario':'qa',base+'_a_pending':True,base+'_b_pending':True}
-        with patch.object(u.st,'session_state',state),patch.object(auth.st,'info'),patch.object(auth.st,'warning'),patch.object(auth.st,'checkbox',return_value=False),patch.object(auth.st,'button',return_value=True),patch.object(u,'_guardar_edicion_pendiente',side_effect=[False,True]) as guardar,patch.object(auth,'_cerrar') as cerrar:
+        state={'usuario':'qa',base+'_a_pending':True,base+'_b_pending':True,base+'_a_doc':doc('a'),base+'_b_doc':doc('b')}
+        with patch.object(u.st,'session_state',state),patch.object(auth.st,'info'),patch.object(auth.st,'warning'),patch.object(auth.st,'checkbox',return_value=False),patch.object(auth.st,'button',side_effect=lambda label,**k:label=='Guardar cambios y cerrar sesión'),patch.object(u,'_guardar_edicion_pendiente',side_effect=[False,True]) as guardar,patch.object(auth,'_cerrar') as cerrar:
             auth.logout()
         self.assertEqual(guardar.call_count,2);cerrar.assert_not_called()

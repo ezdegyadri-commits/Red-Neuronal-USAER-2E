@@ -456,7 +456,7 @@ def _abrir(base,prefix,doc):
     return prefix
 
 
-def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None,proponer_apartados=False,nuevo_independiente=False):
+def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None,proponer_apartados=False,nuevo_independiente=False,todos_grupos=False):
     """Las dos vistas comparten creación, protección de pendientes y contexto."""
     from ui import planeacion as u
     if tipo in ('individual','especialista') and not nuevo_independiente:
@@ -471,9 +471,9 @@ def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=
             return _abrir(base,base+'_'+tipo,existentes[0])
     with st.spinner('Reuniendo la información que ya registró el equipo…'):
         solicitud='especialista' if tipo=='grupal' and s.identidad()['area'] in ('Comunicación','Psicología','Trabajo Social') else tipo
-        doc=s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=solicitud,incluir_individuales=incluir,vista_formato=presentacion)
+        doc=s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=solicitud,incluir_individuales=incluir,vista_formato=presentacion,todos_grupos=todos_grupos)
         existente=bool(doc.get('revision'))
-        if not existente:doc=s.preparar_contexto(doc)
+        if not existente or doc['metadatos'].pop('contexto_matricula_pendiente',False):doc=s.preparar_contexto(doc)
         if equipo.aplica(doc) and not doc['metadatos'].get('equipo',{}).get('subgrupos'):
             doc=equipo.guardar_subgrupo(equipo.preparar(doc),'Subgrupo 1',ids)
         if fmt=='XXI' and any(v['tipo']=='EPP' for v in doc['metadatos'].get('vinculos_documentales',[])):
@@ -483,7 +483,8 @@ def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=
         from services.planeacion_apartados import proponer
         doc=proponer(doc)
     if presentacion in ('guia','trimestral'):doc['metadatos']['vista_formato']=presentacion
-    prefix=_abrir(base,base+'_'+tipo,doc);u._persist(prefix)
+    modalidad_actual=doc['metadatos'].get('modalidad_planeacion') or tipo
+    prefix=_abrir(base,base+'_'+modalidad_actual,doc);u._persist(prefix)
     return prefix
 
 
@@ -608,13 +609,59 @@ def _respaldo(prefix,doc):
 def _recuperar(base):
     from ui import planeacion as u
     archivo=st.file_uploader('Recuperar un respaldo editable (.json)',type=['json'],key=base+'_simple_import')
-    if archivo and st.button('Recuperar este respaldo',key=base+'_simple_restore'):
+    payload=None
+    if archivo:
         try:
             if archivo.size>500000:raise ValueError('El respaldo es demasiado extenso.')
-            recovered=json.loads(archivo.getvalue());s.autorizar(recovered,True)
+            payload=json.loads(archivo.getvalue())
+            if not isinstance(payload,dict):raise ValueError('El respaldo debe contener un documento o texto pendiente válido.')
+            if payload.get('respaldo_anterior'):
+                anterior=json.loads(payload['respaldo_anterior'])
+                if not isinstance(anterior,dict):raise ValueError('El respaldo anterior no tiene un formato válido.')
+                if anterior.get('tipo')=='usaer-texto-pendiente-v2':
+                    opcion=st.selectbox('Texto que deseas recuperar',['Texto de esta revisión','Respaldo anterior conservado'],index=0 if payload.get('celdas') else 1,key=base+'_respaldo_origen')
+                    if opcion.startswith('Respaldo anterior'):payload=anterior
+        except (ValueError,TypeError) as exc:st.warning(str(exc));return
+    if payload and st.button('Recuperar este respaldo',key=base+'_simple_restore'):
+        try:
+            if isinstance(payload.get('documento'),dict) and isinstance(payload.get('filas'),list):
+                actor=s.identidad();original=payload['documento']
+                if payload.get('cuenta_aporte')!=actor['cuenta'] or payload.get('area_aporte')!=actor['area']:
+                    raise PermissionError('Recupera esta aportación con la misma cuenta y área que descargó el respaldo.')
+                actual=next((d for d in s.compartidos() if d['id']==original.get('id')),None)
+                if not actual:raise PermissionError('No se encontró la hoja compartida dentro de tu escuela asignada.')
+                if original['metadatos'].get('aportaciones_equipo',{}).get(actor['area'])!=actual['metadatos'].get('aportaciones_equipo',{}).get(actor['area']):
+                    raise RuntimeError('Tu área cambió después de descargar el respaldo. Conserva ambas versiones antes de conciliar; no se reemplazó nada.')
+                panel=base+'_colaboracion';prefix=panel+'_'+actual['id']+'_'+actor['area']
+                st.session_state.update({prefix+'_doc':actual,prefix+'_filas':payload['filas'],prefix+'_obs':payload.get('observaciones',''),
+                                         prefix+'_filas_retiradas':payload.get('filas_retiradas',[]),prefix+'_pending':True,
+                                         panel+'_abierto':actual['id'],base+'_submodulo':'equipo'})
+                from ui.planeacion_colaboracion import _guardar
+                _guardar(prefix);st.rerun();return
+            if payload.get('tipo')=='usaer-texto-pendiente-v2':
+                from services.planeacion_texto_local import recuperar
+                colaborativa=bool(payload.get('colaborativa'))
+                actual=next((d for d in (s.compartidos() if colaborativa else s.listar()) if d['id']==payload['documento']),None)
+                if not actual:raise PermissionError('Abre el respaldo con la cuenta y escuela del documento original.')
+                recuperado=recuperar(actual,payload,colaborativa)
+                if colaborativa:
+                    actor=s.identidad();panel=base+'_colaboracion';prefix=panel+'_'+actual['id']+'_'+actor['area']
+                    filas,obs=recuperado
+                    st.session_state.update({prefix+'_doc':actual,prefix+'_filas':filas,prefix+'_obs':obs,prefix+'_pending':True,
+                                             panel+'_abierto':actual['id'],base+'_submodulo':'equipo'})
+                    from ui.planeacion_colaboracion import _guardar
+                    _guardar(prefix)
+                else:
+                    from services.planeacion_modalidad import modalidad_documento
+                    prefix=base+'_'+modalidad_documento(recuperado,s.padron_autorizado())
+                    _abrir(base,prefix,recuperado);u._persist(prefix)
+                st.rerun();return
+            recovered=payload;s.autorizar(recovered,True)
             if recovered['cuenta']!=s.identidad()['cuenta']:raise PermissionError('El respaldo corresponde a otra cuenta.')
             actual=next((d for d in s.listar() if d['id']==recovered['id']),None)
-            recovered['revision']=actual['revision'] if actual else ''
+            # Mantener la revisión original: el guardado detectará cambios de
+            # otra sesión en lugar de apropiarse de su revisión y sobrescribirla.
+            if not actual and not recovered.get('revision'):recovered['revision']=''
             from services.planeacion_modalidad import modalidad_documento
             prefix=base+'_'+modalidad_documento(recovered,s.padron_autorizado())
             _abrir(base,prefix,recovered);u._persist(prefix);st.rerun()

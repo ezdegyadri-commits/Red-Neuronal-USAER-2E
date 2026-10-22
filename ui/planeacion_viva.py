@@ -55,6 +55,10 @@ def _entrada(base,actor):
         modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
         modo=c_modo.segmented_control('Modalidad de planeación',modos,default='Mi intervención' if especialista else 'Grupal',key=base+'_viva_modalidad_v3') or modos[0]
         tipo='individual' if modo=='Individual' else 'grupal'
+        presentacion=None
+        if tipo=='grupal' and actor['area']=='Aprendizaje':
+            elegido=st.selectbox('Formato para trabajar',['Guía grupal horizontal por alumno y área · Anexo XIX','Planeación trimestral para el subgrupo · Anexo XXIII'],key=base+'_papel_formato_v2')
+            presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
         ciclo,trimestre=periodo_actual()
         incluir=(modo=='Por grado' or not especialista)
 
@@ -62,8 +66,11 @@ def _entrada(base,actor):
             c_c,c_t=st.columns(2)
             ciclo=c_c.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
             trimestre=c_t.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
-            if tipo=='grupal' and modo!='Por grado':
+            if tipo=='grupal' and modo!='Por grado' and presentacion!='guia':
                 incluir=st.checkbox('Reunir alumnos de atención grupal e individual en este formato',value=not especialista,key=base+'_viva_incluir_v2')
+        if presentacion=='guia':
+            incluir=False
+            st.caption('El Anexo XIX reúne sólo atención grupal. Los alumnos individuales continúan en su planeación individual; sus versiones anteriores se conservan.')
 
         rows=frame.loc[frame['ID_Escuela']==school['ID_Escuela']].copy() if especialista and modo=='Mi intervención' else viva.opciones_padron(frame,school['ID_Escuela'],tipo,incluir=incluir)
         if rows.empty:st.info('No hay alumnos con esta modalidad registrada en esta escuela.');return
@@ -71,9 +78,9 @@ def _entrada(base,actor):
         grado=grupo=''
         if tipo=='grupal':
             left,right=st.columns(2)
-            grado=left.selectbox('Grado',['Todos']+sorted(set(rows['Grado'].astype(str))),key=base+'_viva_grado')
+            grado=left.selectbox('Grado',['Todos']+sorted(set(rows['Grado'].astype(str))),key=base+'_viva_grado_'+school['ID_Escuela'])
             grados=rows if grado=='Todos' else rows.loc[rows['Grado'].astype(str)==grado]
-            grupo=right.selectbox('Grupo',['Todos']+sorted(set(grados['Grupo'].astype(str))),key=base+'_viva_grupo_'+grado)
+            grupo=right.selectbox('Grupo',['Todos']+sorted(set(grados['Grupo'].astype(str))),format_func=lambda g:'Todos los grupos del grado' if g=='Todos' else g or 'Sin letra registrada',key=base+'_viva_grupo_'+school['ID_Escuela']+'_'+grado)
             if especialista:
                 rows=grados if grupo=='Todos' else grados.loc[grados['Grupo'].astype(str)==grupo]
             else:rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
@@ -89,10 +96,6 @@ def _entrada(base,actor):
         if tipo=='individual':st.caption('Se reúnen los antecedentes propios de cada alumno seleccionado.')
 
         fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
-        presentacion=None
-        if tipo=='grupal' and actor['area']=='Aprendizaje':
-            elegido=st.selectbox('Formato para trabajar',['Guía grupal horizontal por alumno y área · Anexo XIX','Planeación trimestral para el subgrupo · Anexo XXIII'],key=base+'_papel_formato_v2')
-            presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
         if tipo=='individual' and len(ids)<=1 and actor['area']=='Aprendizaje' and not actor['director']:
             opcion=st.selectbox('Formato',['Planeación trimestral','Plan de intervención anual'],key=base+'_viva_tipo')
             if opcion=='Plan de intervención anual':fmt='XXI'
@@ -106,14 +109,14 @@ def _entrada(base,actor):
             if existentes:
                 st.info('Ya tienes una planeación para estos alumnos y periodo. Al abrir el formato continuarás el documento guardado, sin crear otra plantilla.')
                 nuevo_independiente=st.checkbox('Necesito crear otro borrador independiente; conservar el anterior',key=base+'_viva_otro_borrador')
-        if presentacion=='guia':st.caption('Un único documento por escuela, grado, grupo y trimestre. Si ya existe, se continúa el mismo; no se crea otra copia.')
+        if presentacion=='guia':st.caption('Un único documento por escuela, grado y alcance elegido. «Todos» reúne A, B y alumnos sin letra en la misma hoja; si ya existe, se continúa sin crear otra copia.')
 
         if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear',use_container_width=True):
             try:
                 elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
-                if presentacion=='guia' and len(elegidos[['Grado','Grupo']].drop_duplicates())!=1:
-                    raise ValueError('Elige un grado y grupo concreto para el Anexo XIX compartido. Así se conectarán automáticamente sus altas nuevas.')
-                crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente);st.rerun()
+                if presentacion=='guia' and elegidos['Grado'].nunique()!=1:
+                    raise ValueError('Elige un grado para el Anexo XIX. En Grupo puedes dejar «Todos» para reunir a sus alumnos en una sola hoja.')
+                crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente,todos_grupos=presentacion=='guia' and grupo=='Todos');st.rerun()
             except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
 
     with tab_continuar:

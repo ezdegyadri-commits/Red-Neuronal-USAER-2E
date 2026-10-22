@@ -119,6 +119,9 @@ def hoja(prefix,volver=None):
     doc=st.session_state[prefix+'_doc']
     from services.planeacion_compartida import ampliar_matricula
     ampliado=ampliar_matricula(doc,u.servicio.padron_autorizado())
+    try:ampliado=u.servicio.precargar_docentes_regulares(ampliado)
+    except Exception:
+        st.caption('No se pudo actualizar el catálogo de docentes regulares. Los nombres y aportes guardados se conservan.')
     if ampliado!=doc:
         altas=len(ampliado['datos']['Alumnos'])-len(doc['datos']['Alumnos'])
         if not ampliado['datos']['Alumnos']:
@@ -184,7 +187,9 @@ def hoja(prefix,volver=None):
             st.session_state[prefix+'_papel_error']=str(exc)
             refrescar_editor()
     if st.session_state.get(prefix+'_papel_aviso'):st.info(st.session_state.pop(prefix+'_papel_aviso'))
-    if st.session_state.get(prefix+'_error'):st.warning(st.session_state[prefix+'_error'])
+    if st.session_state.get(prefix+'_error'):
+        from ui.planeacion_pendientes import controles_guardado
+        controles_guardado(prefix,prefix+'_hoja_error')
     elif st.session_state.get(prefix+'_pending'):st.caption('Guardado pendiente. Tu texto permanece protegido en esta pestaña.')
     if doc['metadatos'].get('propuestas_apartados'):st.caption(doc['metadatos']['propuestas_apartados']['aviso'])
 

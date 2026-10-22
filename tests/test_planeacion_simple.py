@@ -31,8 +31,8 @@ class SeleccionTests(unittest.TestCase):
         from ui import auth,planeacion as u
         import hashlib
         base='planeacion_'+hashlib.sha256(b'prueba').hexdigest()[:12]
-        state={'usuario':'prueba','autenticado':True,base+'_individual_pending':True}
-        with patch.object(auth.st,'session_state',state),patch.object(auth.st,'warning'),patch.object(auth.st,'checkbox',return_value=False),patch.object(auth.st,'button',return_value=True),patch.object(u,'_persist',return_value=False) as guardar,patch.object(auth.st,'rerun') as rerun:
+        state={'usuario':'prueba','autenticado':True,base+'_individual_pending':True,base+'_individual_doc':{'id':'doc','datos':{}}}
+        with patch.object(auth.st,'session_state',state),patch.object(auth.st,'warning'),patch.object(auth.st,'checkbox',return_value=False),patch.object(auth.st,'button',side_effect=lambda label,**k:label=='Guardar cambios y cerrar sesión'),patch.object(u,'_persist',return_value=False) as guardar,patch.object(auth.st,'rerun') as rerun:
             auth.logout()
         guardar.assert_called_once_with(base+'_individual');rerun.assert_not_called()
         self.assertTrue(state['autenticado'])
@@ -41,8 +41,8 @@ class SeleccionTests(unittest.TestCase):
         from ui import auth,planeacion as u
         import hashlib
         base='planeacion_'+hashlib.sha256(b'prueba').hexdigest()[:12]
-        state={'usuario':'prueba','autenticado':True,base+'_grupal_pending':True}
-        with patch.object(auth.st,'session_state',state),patch.object(auth.st,'warning'),patch.object(auth.st,'checkbox',return_value=False),patch.object(auth.st,'button',return_value=True),patch.object(u,'_persist',return_value=True) as guardar,patch.object(auth.st,'rerun') as rerun:
+        state={'usuario':'prueba','autenticado':True,base+'_grupal_pending':True,base+'_grupal_doc':{'id':'doc','datos':{}}}
+        with patch.object(auth.st,'session_state',state),patch.object(auth.st,'warning'),patch.object(auth.st,'checkbox',return_value=False),patch.object(auth.st,'button',side_effect=lambda label,**k:label=='Guardar cambios y cerrar sesión'),patch.object(u,'_persist',return_value=True) as guardar,patch.object(auth.st,'rerun') as rerun:
             auth.logout()
         guardar.assert_called_once_with(base+'_grupal');rerun.assert_called_once()
         self.assertNotIn('autenticado',state)
@@ -66,7 +66,7 @@ class RecorridoTests(unittest.TestCase):
     def setUp(self):
         from services import planeacion as s
         from ui import planeacion_generacion as g
-        self.saved={k:getattr(s,k) for k in ('identidad','padron_autorizado','evidencias','guardar','listar','refrescar','versiones_actuales','guardar_aportacion')}
+        self.saved={k:getattr(s,k) for k in ('identidad','padron_autorizado','evidencias','guardar','listar','refrescar','versiones_actuales','guardar_aportacion','precargar_docentes_regulares')}
         self.escuelas=s.repo.escuelas;self.generar=g.generar_completa
 
     def tearDown(self):

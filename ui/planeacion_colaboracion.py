@@ -21,11 +21,16 @@ def _guardar(base,automatic=False):
         if st.session_state.get(base+'_nonce'):
             st.session_state[base+'_ack']=st.session_state[base+'_nonce']
         st.session_state.pop(base+'_error',None)
+        st.session_state.pop(base+'_guardado_diagnostico',None)
         st.session_state.pop(base+'_retry_at',None)
     except GuardadoPendiente as exc:
+        from services.planeacion_guardado_estado import diagnostico
+        st.session_state[base+'_guardado_diagnostico']=diagnostico(exc)
         st.session_state[base+'_retry_at']=time.monotonic()+exc.espera
         st.session_state[base+'_error']=str(exc)
     except Exception as exc:
+        from services.planeacion_guardado_estado import diagnostico
+        st.session_state[base+'_guardado_diagnostico']=diagnostico(exc)
         st.session_state[base+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó el guardado. Conserva el respaldo y vuelve a intentar.'
 
 
@@ -109,7 +114,7 @@ def panel(prefix):
     if not docs:
         st.info('No hay formatos de este tipo disponibles en esta escuela. Si apoyo acaba de iniciar uno, confirma su guardado y pulsa «Actualizar planeaciones del equipo». No es necesario crear una copia ni enviarlo a Dirección para colaborar.');return
     from utils.escolar import grado_canonico,grupo_canonico
-    grupos=lambda d:', '.join(sorted({grado_canonico(a.get('Grado'))+' '+(grupo_canonico(a.get('Grupo')) or '(grupo por confirmar)') for a in d['datos']['Alumnos']}))
+    from services.planeacion_ambito import etiqueta as grupos
     grados=['Todos']+sorted({grupos(d) for d in docs})
     grupo=st.selectbox('Grado y grupo',grados,key=prefix+'_grado_grupo')
     if grupo!='Todos':docs=[d for d in docs if grupos(d)==grupo]
