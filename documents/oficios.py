@@ -132,18 +132,13 @@ def generar_oficio_comision(registro):
     pdf.set_font("Helvetica", size=11)
 
     fecha_emision = registro.get("Fecha_Emision") or str(date.today())
-    fecha_comision = registro.get("Fecha_Comision", "")
     folio = int(registro.get("Folio", 0) or 0)
     escuela = str(registro.get("Escuela", "")).strip()
     director = str(registro.get("Director_Escuela", "")).strip()
     if not director:
         director = "Dirección de la escuela"
     nivel = str(registro.get("Nivel_Escuela", "primaria")).strip().lower() or "primaria"
-    responsable = nombre_con_tratamiento(registro.get("Maestra_Apoyo", ""))
-    articulo_responsable = "la" if es_mujer(responsable) else "el"
     asunto = str(registro.get("Asunto", "COMISIÓN")).upper()
-    destino = str(registro.get("Destino", "")).strip()
-    horario = str(registro.get("Horario", "")).strip() or "en su horario laboral"
 
     pdf.cell(
         0, 6, f"Mérida, Yucatán, a {_fecha_larga(fecha_emision)}",
@@ -167,14 +162,7 @@ def generar_oficio_comision(registro):
     pdf.ln(8)
 
     pdf.set_font("Helvetica", size=11)
-    texto = (
-        f"Por este medio le comunico que {articulo_responsable} {cargo_apoyo(responsable)} de apoyo {responsable} "
-        f"ha sido comisionada para {destino} el día {_fecha_larga(fecha_comision)}, "
-        f"{horario}. La comisión se realiza para atender actividades propias del "
-        "servicio de apoyo de la USAER 02-E en la escuela a su cargo.\n\n"
-        "Agradezco las facilidades brindadas para el cumplimiento de esta comisión "
-        "y aprovecho la ocasión para enviarle un cordial saludo."
-    )
+    texto = cuerpo_comision(registro)
     lineas_texto = max(1, len(pdf.multi_cell(0, 6, texto, dry_run=True, output=MethodReturnValue.LINES)))
     # Anticipa el cierre con firma para que no se desprenda al final de página.
     if pdf.get_y() + lineas_texto * 6 + 52 > pdf.page_break_trigger:
@@ -205,3 +193,21 @@ def generar_oficio_comision(registro):
         align="C", new_x="LMARGIN", new_y="NEXT",
     )
     return bytes(pdf.output())
+
+
+def cuerpo_comision(registro):
+    """Redacción determinista sin inventar sede ni confundirla con el motivo."""
+    responsable=nombre_con_tratamiento(registro.get('Maestra_Apoyo',''))
+    actividad=' '.join(str(registro.get('Destino','')).split()).rstrip(' .;')
+    if not responsable or not actividad:raise ValueError('Indica el nombre del personal y la actividad o destino de la comisión.')
+    fecha=registro.get('Fecha_Comision','')
+    if not fecha:raise ValueError('Indica la fecha de la comisión.')
+    horario=' '.join(str(registro.get('Horario','') or 'en su horario laboral').split()).rstrip(' .;')
+    if not horario:horario='en su horario laboral'
+    return (
+        f'Por este medio le informo que {responsable}, docente de apoyo de la USAER 02-E, '
+        f'realizará la siguiente comisión de servicio: {actividad}.\n\n'
+        f'La comisión está programada para el día {_fecha_larga(fecha)}, {horario}. '
+        'Agradezco las facilidades que brinde para su cumplimiento.\n\n'
+        'Sin otro particular, reciba un cordial saludo.'
+    )

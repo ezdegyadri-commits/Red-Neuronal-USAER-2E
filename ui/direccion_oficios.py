@@ -50,6 +50,7 @@ def configuracion_oficios_direccion():
         destino_oficio = st.text_input(
             "Destino o actividad de la comisión",
             value=str(configuracion.get("Destino", "")),
+            help="Describe la actividad y, si está confirmada, su sede. Se citará sin inventar un lugar ni agregar «para» al inicio.",
         )
         horario_oficio = st.text_input(
             "Horario o indicación",
@@ -121,7 +122,7 @@ def configuracion_oficios_direccion():
             ["COMISIÓN DE SERVICIO", "JUNTA ACADÉMICA", "REUNIÓN DE TRABAJO", "CAPACITACIÓN"],
             key="dir_oficio_asunto",
         )
-        destino = st.text_input("Destino o actividad", key="dir_oficio_destino")
+        destino = st.text_input("Destino o actividad", key="dir_oficio_destino",help="Describe la actividad; agrega la sede sólo si está confirmada. No es necesario escribir la frase completa del oficio.")
         horario = st.text_input("Horario o indicación", value="en su horario laboral", key="dir_oficio_horario")
         generar = st.form_submit_button(
             "Registrar oficio previo" if folio_manual is not None else "Generar oficio y asignar folio",

@@ -225,4 +225,16 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   bloqueado=0;f.listeners.click(evento());assert.equal(bloqueado,0);
   f.dispose();assert.equal(f.listeners.click,undefined);
 }
-console.log('Editor: escritura no bloqueante, sincronización por área, respaldo y navegación protegida aprobados.');
+// La fecha conserva el calendario y el contrato de autoguardado dentro de su caja.
+{
+  const f=fixture(),h=hoja();
+  const fecha={id:'c0',value:'23/10/2026',fecha_iso:'2026-10-23',tipo:'fecha',label:'Fecha derivación',editable:true};
+  h.tables[0].rows[0][0]=fecha;h.cells.c0={...fecha,target:['guia','A1','Fecha derivación']};
+  f.render(h);
+  const input=f.nodes.get('celda-c0');
+  assert.equal(input.parentElement.className,'date-cell');assert.equal(input.type,'date');
+  assert.equal(input.value,'2026-10-23');input.value='2026-10-24';input.handlers.change();f.tick(1000);
+  assert.equal(f.events()[0].cambios.c0,'2026-10-24');
+  assert.match(html,/\.date-cell input\[type=date\][^{]*\{[^}]*min-width:0/);
+}
+console.log('Editor: escritura no bloqueante, sincronización por área, respaldo, fecha y navegación protegida aprobados.');

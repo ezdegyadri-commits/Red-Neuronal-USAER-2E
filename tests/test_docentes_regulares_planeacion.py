@@ -96,6 +96,22 @@ class PrecargaTests(TestCase):
         d=documento(ids,todos=todos);d['datos']['ID_Escuela']='ESC-001'
         return d
 
+    def test_precarga_antigua_completa_mas_abreviatura_usa_catalogo_exacto(self):
+        d=self.doc(('A1','B1'),todos=True)
+        for a,n in zip(d['datos']['Alumnos'],['Ana Beatriz Pérez López','Beatriz']):
+            a.update(Grupo='A',ID_Maestro_Regular=n)
+        d['metadatos']['guia_grupal_manual']={'maestro_grupo':'Ana Beatriz Pérez López, Beatriz','filas':[]}
+        antes=deepcopy(d)
+        nuevo=aplicar(d,[registro('Ana Beatriz Pérez López')])
+        self.assertEqual(nuevo['metadatos']['guia_grupal_manual']['maestro_grupo'],'Ana Beatriz Pérez López')
+        self.assertEqual(d,antes)
+        d['metadatos']['maestro_regular_edicion_manual']=True
+        self.assertEqual(aplicar(d,[registro('Ana Beatriz Pérez López')])['metadatos']['guia_grupal_manual']['maestro_grupo'],antes['metadatos']['guia_grupal_manual']['maestro_grupo'])
+
+    def test_sin_catalogo_no_equipara_personas_por_nombre_parcial(self):
+        d=self.doc();d['metadatos']['guia_grupal_manual']={'maestro_grupo':'Ana, Ana López'}
+        self.assertEqual(aplicar(d,[]),d)
+
     def test_match_escuela_ciclo_grado_grupo_y_turno_sin_sobrescribir_doc(self):
         d=self.doc();antes=deepcopy(d)
         regs=[registro(),registro('Otra escuela',ID_Escuela='ESC-006'),registro('Otro ciclo',Ciclo_Escolar='2025-2026'),
