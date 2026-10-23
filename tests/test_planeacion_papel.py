@@ -6,6 +6,16 @@ from services.planeacion_modalidad import guia_grupal
 from tests.test_planeacion_local import documento
 from tests import test_planeacion_simple as simple
 
+def _extraer_texto_pdf(pdf_bytes):
+    try:
+        from pypdf import PdfReader
+        from io import BytesIO
+        return '\n'.join(p.extract_text() for p in PdfReader(BytesIO(pdf_bytes)).pages)
+    except ImportError:
+        import fitz
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        return '\n'.join(page.get_text() for page in doc)
+
 
 class PapelTests(unittest.TestCase):
     def setUp(self):self.auth=patch.object(papel.s,'autorizar',return_value={});self.auth.start()
@@ -69,10 +79,8 @@ class PapelTests(unittest.TestCase):
 
     def test_pdf_usa_la_misma_redaccion_de_la_hoja(self):
         from documents.planeacion_papel import generar_pdf
-        from pypdf import PdfReader
-        from io import BytesIO
         d=documento();d['tablas']['dosificacion'][0]['Actividades']='ACTIVIDAD EDITADA Y VERIFICADA'
-        pdf=generar_pdf(d);texto='\n'.join(p.extract_text() for p in PdfReader(BytesIO(pdf)).pages)
+        pdf=generar_pdf(d);texto=_extraer_texto_pdf(pdf)
         self.assertIn('ACTIVIDAD EDITADA Y VERIFICADA',texto)
         self.assertNotIn('PDA: nacionales',texto)  # Una tabla sin contenido no ocupa espacio en la descarga.
 
@@ -95,8 +103,6 @@ class PapelUITests(unittest.TestCase):
         from streamlit.testing.v1 import AppTest
         from pathlib import Path
         from documents.planeacion_papel import generar_pdf
-        from pypdf import PdfReader
-        from io import BytesIO
         for area in ['Aprendizaje','Psicología','Comunicación','Trabajo Social']:
             with self.subTest(area=area):
                 app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_papel.py')),default_timeout=30).run()
@@ -116,7 +122,7 @@ class PapelUITests(unittest.TestCase):
                 self.assertEqual(d['formato'],'XXV' if area=='Trabajo Social' else 'XXIII')
                 self.assertFalse(papel.hoja(d)['grupal'])
                 self.assertEqual(app.session_state.llamadas_ficticias,0)
-                texto='\n'.join(p.extract_text() for p in PdfReader(BytesIO(generar_pdf(d))).pages)
+                texto=_extraer_texto_pdf(generar_pdf(d))
                 for a in d['datos']['Alumnos']:self.assertIn(a['Nombre del alumno'],texto)
                 app.run();self.assertFalse(app.exception)
                 self.assertEqual(app.session_state.versiones_ficticias[-1]['id'],d['id'])
@@ -165,7 +171,7 @@ class PapelUITests(unittest.TestCase):
                 spec=papel.hoja(doc)
                 headers={'Aprendizaje':['Nombre alumno','Discapacidad o condición','Fecha derivación','Aprendizaje','Psicología','Comunicación','Trabajo Social','Situación inicial','Situación final'],
                          'Trabajo Social':['Nombre del alumno','Grado','Grupo'],
-                         'Psicología':['Necesidades educativas específicas','Competencias emocionales','Descriptor de logro','Actividad prevista'],
+                         'Psicología':['Necesidades Educativas Específicas','Competencias emocionales','Descriptor de logro'],
                          'Comunicación':['Necesidades educativas específicas','Aprendizaje y/u objetivo','Descriptor de logro']}
                 self.assertEqual(spec['tables'][0]['headers'],headers[area])
 

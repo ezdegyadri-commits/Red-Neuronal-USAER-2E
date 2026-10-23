@@ -87,9 +87,11 @@ def ampliar_matricula(doc,frame):
     grado,grupo=scope
     modalidades={'grupal'}
     presentes={a['ID_Alumno'] for a in result['datos']['Alumnos']}
+    excluidos_manuales=set(map(str,doc.get('metadatos',{}).get('alumnos_excluidos_grupal',[])))
     contexto={}
     for r in frame.to_dict('records'):
         if (str(r.get('ID_Alumno','')) in presentes or modalidad(r) not in modalidades
+            or str(r.get('ID_Alumno','')) in excluidos_manuales
             or clave_escuela(r.get('ID_Escuela'))!=clave_escuela(doc['datos']['ID_Escuela'])
             or grado_canonico(r.get('Grado'))!=grado
             or (grupo!='*' and grupo_canonico(r.get('Grupo'))!=grupo)
@@ -180,8 +182,9 @@ def proyectar_individuales(doc,frame):
     from services.planeacion_matricula import clave_escuela
     actuales={str(r['ID_Alumno']):r for r in frame.to_dict('records')
               if clave_escuela(r.get('ID_Escuela'))==clave_escuela(doc['datos']['ID_Escuela'])}
+    excluidos_manuales=set(map(str,doc.get('metadatos',{}).get('alumnos_excluidos_grupal',[])))
     excluidos={str(a['ID_Alumno']) for a in doc['datos']['Alumnos']
-               if modalidad(actuales.get(str(a['ID_Alumno']),a))=='individual'}
+               if modalidad(actuales.get(str(a['ID_Alumno']),a))=='individual' or str(a['ID_Alumno']) in excluidos_manuales}
     if not excluidos:return result
     meta=result['metadatos'];historia=meta.setdefault('alumnos_atencion_individual_archivados',{})
     filas={str(r['ID_Alumno']):r for r in meta.get('guia_grupal_manual',{}).get('filas',[])}
@@ -319,3 +322,39 @@ def actualizar_aportes_autor(doc,latest):
         for area in ('Psicología','Comunicación','Trabajo Social'):
             if area in recientes.get(r['ID_Alumno'],{}):r[area]=recientes[r['ID_Alumno']][area]
     return result
+
+
+def excluir_alumno_grupal(doc,aid,frame=None):
+    """Excluye un alumno del Anexo XIX grupal para atenderlo individualmente."""
+    meta=doc.setdefault('metadatos',{})
+    excluidos=meta.setdefault('alumnos_excluidos_grupal',[])
+    aid_str=str(aid)
+    if aid_str not in excluidos:excluidos.append(aid_str)
+    if frame is None:
+        from services import planeacion as s
+        try:frame=s.padron_autorizado()
+        except Exception:pass
+    if frame is not None:
+        doc=proyectar_individuales(doc,frame)
+    else:
+        doc['datos']['Alumnos']=[a for a in doc['datos']['Alumnos'] if str(a['ID_Alumno'])!=aid_str]
+    from services.planeacion_modalidad import guia_grupal
+    meta['guia_grupal_manual']=guia_grupal(doc)
+    return doc
+
+
+def restaurar_alumno_grupal(doc,aid,frame=None):
+    """Reincorpora a la planeación grupal un alumno previamente excluido."""
+    meta=doc.setdefault('metadatos',{})
+    excluidos=meta.get('alumnos_excluidos_grupal',[])
+    aid_str=str(aid)
+    if aid_str in excluidos:excluidos.remove(aid_str)
+    if frame is None:
+        from services import planeacion as s
+        try:frame=s.padron_autorizado()
+        except Exception:pass
+    if frame is not None:
+        doc=ampliar_matricula(doc,frame)
+    from services.planeacion_modalidad import guia_grupal
+    meta['guia_grupal_manual']=guia_grupal(doc)
+    return doc
