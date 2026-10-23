@@ -98,7 +98,8 @@ destinatarios y competencias. competencias queda vacía fuera de Psicología.
 '''
     limite=min(8,int(ajustes['sesiones']),max(6 if area=='Psicología' else 3,len(aliases)))
     reglas+='\nPara esta configuración devuelve como máximo '+str(limite)+' unidades. '
-    reglas+='Sé conciso: actividad hasta 1100 caracteres y los demás textos hasta 300 cada uno. No repitas antecedentes completos ni tablas normativas; usa sus identificadores.\n'
+    reglas+='Sé conciso y directo: actividad entre 300 y 650 caracteres (Inicio 5 min, Desarrollo con mediación/andamiaje, Cierre observable) y los demás textos entre 80 y 250 caracteres cada uno. No repitas antecedentes completos ni tablas normativas; usa sus identificadores.\n'
+    reglas+='REGLAS ESTRICTAS DE DESTINATARIOS Y EVIDENCIAS:\n• Asigna a cada unidad únicamente los destinatarios que cuenten con su propia evidencia citada en esa misma unidad.\n• Si citas solo la evidencia de un alumno, coloca solo a ese alumno en destinatarios.\n'
     return INSTRUCCIONES.split('Devuelve solo JSON')[0]+'\n'+reglas+'\nDATOS DE CONSULTA:\n'+json.dumps(datos,ensure_ascii=False,sort_keys=True)
 
 
@@ -118,10 +119,17 @@ def validar_completa(data,formato,area,contexto,aliases,evidencias):
         if any(not isinstance(u.get(k),list) or any(not isinstance(v,str) for v in u[k]) for k in LISTAS):raise RespuestaInvalida('Referencias de actividad inválidas.','ReferenciasInvalidas')
         for campo,permitidos,obligatorio in [('evidencias',set(evidencias),True),('fuentes',fuentes,True),('referentes',referentes,bool(referentes)),('destinatarios',set(aliases),True),('competencias',set(COMPETENCIAS),False)]:
             if not set(u[campo]).issubset(permitidos) or (obligatorio and not u[campo]):raise RespuestaInvalida('La actividad no tiene un vínculo verificable: '+campo,'Vinculo_'+campo)
-        if u['contexto'] not in FORMATOS[formato]['contextos']:raise RespuestaInvalida('Contexto no permitido para este formato.','ContextoInvalido')
+        if u['contexto'] not in FORMATOS[formato]['contextos']:
+            norm = next((c for c in FORMATOS[formato]['contextos'] if c.lower().strip() == u['contexto'].lower().strip()), None)
+            if norm: u['contexto'] = norm
+            else: raise RespuestaInvalida('Contexto no permitido para este formato.','ContextoInvalido')
         if isinstance(evidencias,dict):
             documentados={a for ref in u['evidencias'] for a in evidencias.get(ref,[])}
-            if not set(u['destinatarios'])<=documentados:raise RespuestaInvalida('La evidencia de otro alumno no sustenta esta actividad.','EvidenciaAjena')
+            dest_validos=[a for a in u['destinatarios'] if a in documentados]
+            if dest_validos and len(dest_validos) < len(u['destinatarios']):
+                u['destinatarios'] = dest_validos
+            elif not set(u['destinatarios'])<=documentados:
+                raise RespuestaInvalida('La evidencia de otro alumno no sustenta esta actividad.','EvidenciaAjena')
         if area!='Psicología' and u['competencias']:raise RespuestaInvalida('Se trasladaron competencias exclusivas de Psicología a otra función.','FuncionInvalida')
         from services.planeacion_variedad import repetida
         previas=contexto.get('actividades_previas',[])+[r['actividad'] for r in resultado]
@@ -160,6 +168,7 @@ def generar_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias):
         if diagnostico.get('tipo')!='RespuestaNoVerificable' or motivo not in corregibles:raise
         # Una sola corrección sobre los mismos datos consentidos; nunca enviar
         # texto de error del proveedor ni una respuesta no validada como contexto.
+        st.session_state.pop('planeacion_ia_reintentar_desde', None)
         compacto=deepcopy(schema);compacto['properties']['unidades']['maxItems']=3
         reparacion=prompt+'\nREINTENTO DE FORMATO: '+motivo+'. Devuelve como máximo tres unidades completas y concisas; '
         reparacion+='verifica cada ID contra los datos suministrados y la evidencia de cada destinatario. '

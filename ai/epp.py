@@ -38,10 +38,9 @@ no rellenes ambas automáticamente con la misma evaluación. No clasifiques VAK 
 No inventes literatura, normas, PDA o citas; no apliques requisitos CAM al servicio USAER.
 La salida es BORRADOR PARA REVISIÓN INTERDISCIPLINARIA, nunca conclusión validada.
 Solo genera tablas NEE/BAP cuando el área sea Conclusión; en las demás devuelve listas vacías.
-Para las áreas, cada campo no vacío debe tener sustento en un instrumento EV1, EV2, etc.
-incluido en el resumen; cita ese código. El expediente complementa, no sustituye los resultados
-del instrumento. No completes un apartado porque normalmente se espere ese resultado.
-Si el instrumento no evaluó ese aspecto, deja el campo vacío y registra lo pendiente.'''
+REGLA OBLIGATORIA DE CITACIÓN: Para las áreas, cada campo redactado no vacío DEBE iniciar estrictamente con el código entre corchetes del instrumento evaluado que lo sustenta (ejemplo: '[EV1] Se observa...', '[EV2] Muestra...'). Usa única y exclusivamente los códigos presentes en el resumen. El expediente complementa, no sustituye los resultados del instrumento. No completes un apartado porque normalmente se espere ese resultado. Si el instrumento no evaluó ese aspecto, deja el campo vacío y registra lo pendiente en faltantes.
+FÓRMULA OFICIAL DE NEE (Manual SEGEY pp. 150-151): Redacta cada NEE con la estructura estricta: [Requiere/Necesita + verbo observable en infinitivo + contenido pedagógico o apoyo específico]. Ejemplo: 'Requiere utilizar mediación visual con tarjetas para consolidar la noción de decena.' NUNCA formules diagnósticos médicos ni frases vagas.
+BAP CONTEXTUALES: Describe barreras del entorno en los contextos Áulico, Escolar, Familiar y Social; NUNCA definas al alumno como barrera.'''
     prompt=instructions+'\nÁREA: '+area+'\nCAMPOS: '+json.dumps(fields,ensure_ascii=False)+'\nDATOS REVISADOS:\n'+resumen
     def validar(r):
         if not isinstance(r,dict) or set(r.get('campos',{}))!=set(fields): raise ValueError('Estructura incorrecta.')
@@ -59,4 +58,12 @@ Si el instrumento no evaluó ese aspecto, deja el campo vacío y registra lo pen
                 if not isinstance(row,dict) or set(row)!=set(cols) or any(not isinstance(t,str) or len(t)>3000 for t in row.values()):raise ValueError('Fila no válida.')
             if area!='Conclusión' and rows:raise ValueError('El área no debe determinar la conclusión.')
         return r
-    return proponer(resumen,'EPP',area,_prompt=prompt,_schema=schema,_validador=validar,_max_tokens=6000)
+    try:
+        return proponer(resumen,'EPP',area,_prompt=prompt,_schema=schema,_validador=validar,_max_tokens=6000)
+    except RuntimeError as exc:
+        msg=str(exc)
+        if 'La IA no completó una propuesta válida' in msg and area!='Conclusión':
+            primary=sorted(list(sources))[0] if sources else 'EV1'
+            reparacion=prompt+f"\nREINTENTO DE FORMATO: Asegúrate de que todo campo con texto comience estrictamente con el código del instrumento entre corchetes (ejemplo: '[{primary}] ...'). Si no evaluaste un campo, déjalo vacío."
+            return proponer(resumen,'EPP',area,_prompt=reparacion,_schema=schema,_validador=validar,_max_tokens=6000)
+        raise

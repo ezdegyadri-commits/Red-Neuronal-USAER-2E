@@ -14,7 +14,7 @@ def secret_or_default(name, default):
     """Lee una variable opcional sin importar Streamlit durante el arranque."""
     return os.environ.get(name, default)
 
-GEMINI_MODEL = secret_or_default("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_MODEL = secret_or_default("GEMINI_MODEL", "gemini-2.5-flash")
 
 ESCUELAS_USAER = {
     "Damián Carmona": "ESC-001",

@@ -26,7 +26,7 @@ def generar_sugerencias(contexto):
               'No inventes diagnósticos ni información. Propón estrategias concretas, observables, viables y vinculadas a las barreras. '
               'Devuelve SOLO JSON válido con las claves area, motivo, sugerencias, seguimiento.\nCONTEXTO:\n' + json.dumps(contexto, ensure_ascii=False, indent=2))
     try:
-        resp = cli.models.generate_content(model=GEMINI_MODEL, contents=prompt, config={'temperature':0.35})
+        resp = cli.models.generate_content(model=GEMINI_MODEL, contents=prompt, config={'temperature':0.35, 'response_mime_type':'application/json'})
         text = re.sub(r'^```(?:json)?\s*|\s*```$', '', (getattr(resp,'text','') or '').strip(), flags=re.I)
         data = json.loads(text)
         return {'area':str(data.get('area') or 'Aprendizaje'),'motivo':str(data.get('motivo') or fallback()['motivo']),'sugerencias':str(data.get('sugerencias') or fallback()['sugerencias']),'seguimiento':str(data.get('seguimiento') or '30 días')}
