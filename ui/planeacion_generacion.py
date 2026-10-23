@@ -115,8 +115,14 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     if ajustes.get('contextos_priorizados'):orientaciones.append('Contextos priorizados: '+', '.join(ajustes['contextos_priorizados']))
     ajustes_solicitud={**ajustes,'enfoque':(enfoque+'\n'+'\n'.join(orientaciones)).strip()}
     solicitud=None
+    falta_evidencia=False
     try:solicitud=g.preparar_solicitud(st.session_state[prefix+'_doc'],ajustes_solicitud)
-    except (ValueError,PermissionError) as exc:st.info(str(exc))
+    except (ValueError,PermissionError) as exc:
+        msg=str(exc)
+        if 'evidencia' in msg.lower():falta_evidencia=True
+        st.info(msg)
+    from ui.planeacion_chat import render_asistente_dialogo
+    render_asistente_dialogo(prefix,persist,expandido=not solicitud or falta_evidencia)
     if solicitud:
         with st.expander('Ver qué se envía' if compact else 'Revisar la información que analizará la IA'):
             st.caption('Este es el resumen educativo, no los archivos originales. Corrige nombres o datos que puedan identificar a alguien. Los referentes oficiales y ajustes revisados se envían por separado; nunca el padrón.')
