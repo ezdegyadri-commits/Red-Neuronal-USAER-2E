@@ -99,7 +99,7 @@ def guardar(escuela,fecha,filas,revision='',periodo=None):
         rev=hashlib.sha256((ident+revision+digest).encode()).hexdigest()
         row={'Documento':ident,'Revision':rev,'Anterior':revision,'Guardado_En':datetime.now(ZoneInfo('America/Mexico_City')).isoformat(),
              'Cuenta':actor['cuenta'],'ID_Escuela':escuela,'Fecha_Sesion':fecha,'SHA256':digest,'Contenido':raw}
-        ws=ensure_headers(HOJA,HEADERS);headers=ws.row_values(1)
+        ws,headers=ensure_headers(HOJA,HEADERS,return_columns=True)
         if len(headers)!=len(set(headers)) or not set(HEADERS)<=set(headers):raise RuntimeError('Los encabezados de metas requieren revisión. No se sobrescribió ninguna captura.')
         ws.append_rows([[row.get(h,'') for h in headers]],value_input_option='RAW')
         clear_cache(HOJA)

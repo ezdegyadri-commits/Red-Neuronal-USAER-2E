@@ -80,7 +80,7 @@ class MetodologiasTests(TestCase):
             def row_values(self,n):return juntas.HEADERS
             def append_rows(self,rows,value_input_option):
                 assert value_input_option=='RAW';outer.rows.extend(dict(zip(juntas.HEADERS,row)) for row in rows)
-        for p in (patch.object(juntas,'identidad',return_value=ACTOR),patch.object(juntas.repo,'read',side_effect=lambda name:pd.DataFrame(deepcopy(self.rows))),patch.object(juntas,'ensure_headers',return_value=Sheet()),patch.object(juntas,'clear_cache')):
+        for p in (patch.object(juntas,'identidad',return_value=ACTOR),patch.object(juntas.repo,'read',side_effect=lambda name:pd.DataFrame(deepcopy(self.rows))),patch.object(juntas,'ensure_headers',return_value=(Sheet(),juntas.HEADERS)),patch.object(juntas,'clear_cache')):
             p.start();self.addCleanup(p.stop)
 
     def test_catalogo_siglas_y_registro_idempotente_con_historial(self):

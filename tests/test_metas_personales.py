@@ -23,7 +23,7 @@ class GuardadoTests(TestCase):
                 outer.options.append(value_input_option)
                 outer.rows.extend(dict(zip(s.HEADERS,row)) for row in rows)
         self.patches=[patch.object(s.planes,'identidad',return_value=ACTOR),patch.object(s.planes,'padron_autorizado',return_value=pd.DataFrame(PADRON)),
-                      patch.object(s.repo,'read',side_effect=lambda name:pd.DataFrame(deepcopy(self.rows))),patch.object(s,'ensure_headers',return_value=Sheet()),patch.object(s,'clear_cache')]
+                      patch.object(s.repo,'read',side_effect=lambda name:pd.DataFrame(deepcopy(self.rows))),patch.object(s,'ensure_headers',return_value=(Sheet(),s.HEADERS)),patch.object(s,'clear_cache')]
         for p in self.patches:p.start()
         self.addCleanup(lambda:[p.stop() for p in reversed(self.patches)])
 

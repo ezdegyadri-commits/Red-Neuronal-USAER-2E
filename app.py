@@ -101,8 +101,15 @@ if "navegacion_principal" not in st.session_state or st.session_state["navegacio
 page = st.session_state["navegacion_principal"]
 
 # No se lee el padrón central en módulos que no lo necesitan.
-if page in {"Inicio", "Expedientes", "Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos", "Estadística", "Documentos", "Alta de alumnos"}:
-    authorized = alumnos_visibles(rol, escuelas, st.session_state.get("nombre", ""))
+if page in {"Expedientes", "Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos", "Estadística", "Documentos", "Alta de alumnos"}:
+    try:
+        authorized = alumnos_visibles(rol, escuelas, st.session_state.get("nombre", ""))
+    except Exception:
+        st.warning('No se pudo completar la consulta del módulo. No se borraron registros. Puedes volver al Centro de Control sin recargar ni cerrar la sesión.')
+        if st.button('Volver al Centro de Control',key='carga_volver_inicio'):
+            st.session_state['navegacion_principal']='Inicio';st.rerun()
+        if st.button('Reintentar consulta',key='carga_reintentar'):st.rerun()
+        st.stop()
 else:
     authorized = None
 

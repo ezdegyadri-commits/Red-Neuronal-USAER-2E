@@ -28,7 +28,9 @@ class Sheet:
         st.session_state.qa_envios+=len(rows)
 
 
-def sheet(name,headers):return Sheet(name,headers)
+def sheet(name,headers,return_columns=False):
+    ws=Sheet(name,headers)
+    return (ws,list(headers)) if return_columns else ws
 def read(name):return pd.DataFrame(deepcopy(st.session_state.qa_rows.get(name,[])))
 
 

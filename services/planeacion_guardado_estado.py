@@ -1,6 +1,10 @@
 """Causas de guardado legibles, sin trazas ni respuestas privadas del proveedor."""
 def diagnostico(exc):
     from services.planeacion_estabilidad import GuardadoPendiente
+    from data.google import GoogleTemporal
+    if isinstance(exc,GoogleTemporal):
+        return {'tipo':'espera' if exc.cuota else 'conexion','causa':str(exc),
+                'accion':'Puedes continuar escribiendo. Se reintentará sin crear otra planeación; descarga el respaldo antes de cerrar.','espera':exc.espera}
     status=getattr(getattr(exc,'response',None),'status_code',None)
     if isinstance(exc,GuardadoPendiente) or status==429:
         espera=getattr(exc,'espera',60)

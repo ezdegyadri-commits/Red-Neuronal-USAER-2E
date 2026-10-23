@@ -74,7 +74,7 @@ def guardar(fecha,capture,revision=''):
         digest=hashlib.sha256(raw.encode()).hexdigest();rev=hashlib.sha256((docid+revision+digest).encode()).hexdigest()
         row={'Documento':docid,'Revision':rev,'Anterior':revision,'Fecha_Sesion':fecha,'Guardado_En':datetime.now(ZoneInfo('America/Mexico_City')).isoformat(),
             'Cuenta':actor['cuenta'],'SHA256':digest,'Contenido':raw}
-        ws=ensure_headers(HOJA,HEADERS);headers=ws.row_values(1)
+        ws,headers=ensure_headers(HOJA,HEADERS,return_columns=True)
         if len(headers)!=len(set(headers)) or not set(HEADERS)<=set(headers):raise RuntimeError('Los encabezados de juntas requieren revisión. No se reemplazaron capturas.')
         ws.append_rows([[row.get(k,'') for k in headers]],value_input_option='RAW');clear_cache(HOJA)
         result=next((d for d in listar(fecha) if d['Revision']==rev),None)
