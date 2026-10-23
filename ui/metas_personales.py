@@ -22,7 +22,8 @@ def _guardar_pendiente(key,manual=False):
         return True
     except Exception as exc:
         st.session_state[key+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'La base central no confirmó el guardado. Puedes reintentar o descargar el respaldo.'
-        st.session_state[key+'_requiere_accion']=isinstance(exc,(ValueError,PermissionError,RuntimeError))
+        from data.google import GoogleTemporal
+        st.session_state[key+'_requiere_accion']=isinstance(exc,(ValueError,PermissionError,RuntimeError)) and not isinstance(exc,GoogleTemporal)
         return False
 
 

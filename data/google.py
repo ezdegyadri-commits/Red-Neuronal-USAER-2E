@@ -1,4 +1,6 @@
 import json, random, time
+import threading
+from requests.exceptions import Timeout
 import gspread
 import streamlit as st
 import pandas as pd
@@ -10,6 +12,23 @@ from config.settings import (
     URL_SPREADSHEET_MAESTRO,
     URL_SPREADSHEET_RESPUESTAS_PERSONAL,
 )
+
+# Por petición: conexión y lectura acotadas. No reintentar escrituras ambiguas.
+SHEETS_TIMEOUT = (5, 12)
+_cuota_lock = threading.RLock()
+_cuota_hasta = 0.0
+
+
+class GoogleTemporal(RuntimeError):
+    """Error operativo sin datos privados y sin descartar el borrador."""
+    def __init__(self,mensaje,espera=20,cuota=False):
+        self.espera=espera;self.cuota=cuota
+        super().__init__(mensaje)
+
+
+def _cliente_acotado(client):
+    client.set_timeout(SHEETS_TIMEOUT)
+    return client
 
 def _secret_dict(name):
     value = st.secrets[name]
@@ -25,7 +44,7 @@ def connections():
     No solicita ni refresca Drive: un token de Drive vencido no puede impedir
     el inicio de sesión ni la lectura de la base central.
     """
-    gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'))
+    gc = _cliente_acotado(gspread.service_account_from_dict(_secret_dict('credenciales_json')))
     sheet = gc.open_by_url(URL_SPREADSHEET_MAESTRO)
     return sheet, None
 
@@ -33,13 +52,13 @@ def connections():
 @st.cache_resource(show_spinner=False)
 def service_account_client():
     """Devuelve el cliente autenticado de Sheets para abrir libros distintos al central."""
-    return gspread.service_account_from_dict(_secret_dict('credenciales_json'))
+    return _cliente_acotado(gspread.service_account_from_dict(_secret_dict('credenciales_json')))
 
 
 @st.cache_resource(show_spinner=False)
 def personal_responses_connection():
     """Abre en solo lectura la hoja vinculada al formulario de personal."""
-    gc = gspread.service_account_from_dict(_secret_dict('credenciales_json'))
+    gc = _cliente_acotado(gspread.service_account_from_dict(_secret_dict('credenciales_json')))
     return gc.open_by_url(URL_SPREADSHEET_RESPUESTAS_PERSONAL)
 
 
@@ -50,7 +69,7 @@ def drive_oauth_google_client():
     creds = Credentials.from_authorized_user_info(token, ['https://www.googleapis.com/auth/drive'])
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
-    return gspread.authorize(creds)
+    return _cliente_acotado(gspread.authorize(creds))
 
 
 def _records_from_values(valores):
@@ -94,9 +113,19 @@ def service_account_drive_service():
     return build('drive', 'v3', credentials=creds)
 
 def retry_google(operation, attempts=3):
-    """Reintenta límites y fallos temporales de Google con espera progresiva."""
+    """Evita esperas de cuota dentro del hilo de edición de cada docente.
+
+    Una cuota agotada abre una pausa compartida de 60 s. Los siguientes
+    intentos fallan rápido sin generar una tormenta de consultas. El llamador
+    conserva su borrador y confirma siempre mediante lectura antes del éxito.
+    """
+    global _cuota_hasta
     last = None
     for attempt in range(attempts):
+        with _cuota_lock:
+            espera_cuota = _cuota_hasta - time.monotonic()
+        if espera_cuota > 0:
+            raise GoogleTemporal('La conexión de Google Sheets está ocupada. Reintenta en '+str(int(espera_cuota)+1)+' segundos; no cierres una captura pendiente.',espera=int(espera_cuota)+1,cuota=True)
         try:
             return operation()
         except Exception as exc:
@@ -112,6 +141,11 @@ def retry_google(operation, attempts=3):
                 or "read requests" in message
             )
             is_temporary_server_error = status in {500, 502, 503, 504}
+            if is_quota:
+                with _cuota_lock:_cuota_hasta=max(_cuota_hasta,time.monotonic()+60)
+                raise GoogleTemporal('Google Sheets alcanzó su límite temporal de consultas. Se pausaron los reintentos durante un minuto para recuperar la conexión. Conserva tu captura y vuelve a intentar.',espera=60,cuota=True) from None
+            if isinstance(exc, Timeout):
+                raise GoogleTemporal('Google Sheets no respondió dentro del tiempo de espera. No se confirmó la operación; conserva la captura y reintenta sin volver a crearla.') from None
             if not (is_quota or is_temporary_server_error) or attempt == attempts - 1:
                 raise
             # No insistir cada segundo contra una cuota que se repone por minuto.
@@ -134,7 +168,7 @@ def read_sheet(name):
 
     def operation():
 
-        ws = connections()[0].worksheet(name)
+        ws = worksheet(name)
 
         valores = ws.get_all_values()
 
@@ -147,7 +181,8 @@ def read_sheet(name):
 def read_personal_responses():
     """Lee respuestas recientes del formulario sin escribir en Google Sheets."""
     def operation():
-        ws = personal_responses_connection().worksheet(HOJA_RESPUESTAS_PERSONAL)
+        book = personal_responses_connection()
+        ws = _worksheet_cached(HOJA_RESPUESTAS_PERSONAL, id(book), book)
         return _records_from_values(ws.get_all_values())
 
     return retry_google(operation)
@@ -168,26 +203,34 @@ def clear_cache(name=None):
     else:
         read_sheet.clear(name)
 
-def worksheet(name): return retry_google(lambda: connections()[0].worksheet(name))
+@st.cache_resource(ttl=300,show_spinner=False)
+def _worksheet_cached(name,book_id,_book):
+    # Solo metadata; jamás se cachean aquí valores ni permisos de un usuario.
+    return retry_google(lambda:_book.worksheet(name))
+
+
+def worksheet(name):
+    book=connections()[0]
+    return _worksheet_cached(name,id(book),book)
 
 def ensure_sheet(name,headers):
     sheet,_=connections()
-    try: return sheet.worksheet(name)
+    try: return worksheet(name)
     except gspread.WorksheetNotFound:
         ws=sheet.add_worksheet(title=name,rows=2000,cols=max(10,len(headers))); ws.append_row(headers,value_input_option='USER_ENTERED'); clear_cache(name); return ws
 
-def ensure_headers(name, headers):
+def ensure_headers(name, headers, *, return_columns=False):
     """Agrega columnas faltantes sin modificar registros existentes."""
     ws = ensure_sheet(name, headers)
     actuales = retry_google(lambda: ws.row_values(1))
     faltantes = [header for header in headers if header not in actuales]
     if not faltantes:
-        return ws
+        return (ws,list(actuales)) if return_columns else ws
     retry_google(lambda: ws.add_cols(len(faltantes)))
     for posicion, header in enumerate(faltantes, start=len(actuales) + 1):
         retry_google(lambda: ws.update_cell(1, posicion, header))
     clear_cache(name)
-    return ws
+    return (ws,list(actuales)+faltantes) if return_columns else ws
 
 def append_dict(sheet_name,data):
     ws=worksheet(sheet_name); headers=retry_google(lambda: ws.row_values(1)); retry_google(lambda: ws.append_row([data.get(h,'') for h in headers],value_input_option='USER_ENTERED')); clear_cache(sheet_name)
