@@ -156,6 +156,16 @@ def herramientas(p):
     with tab2:
         if area=='Conclusión':st.info('La conclusión reúne los resultados de las áreas; no se aplica un instrumento adicional aquí.')
         else:
+            from ui.epp_instrumentos import digital,externo
+            def persistir_aplicacion(value,manual):
+                nuevo=deepcopy(st.session_state[p+'_doc'])
+                nuevo['partes'].setdefault(area,{})['contenido']=deepcopy(value)
+                preparar_cambios(p,nuevo,{area})
+                return guardar(p,manual)
+            with st.expander('Aplicar formatos digitales del manual',expanded=True):
+                digital(doc,area,p+'_digital_'+area,lambda:papel.contenido(st.session_state[p+'_doc'],area),persistir_aplicacion)
+            with st.expander('Foto o escaneo: revisar y ensamblar con el motor'):
+                externo(doc,area,p+'_externo_'+area,lambda:papel.contenido(st.session_state[p+'_doc'],area),persistir_aplicacion)
             with st.form(p+'_instrumento_'+area,clear_on_submit=False):
                 from ui.epp import CATALOGO_INSTRUMENTOS_SEGEY
                 cat=st.selectbox('Instrumento de referencia',['Otro instrumento o técnica']+CATALOGO_INSTRUMENTOS_SEGEY.get(area,[]))
