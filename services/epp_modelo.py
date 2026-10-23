@@ -97,6 +97,13 @@ def validar_parte(area, value):
         raise ValueError('Registra hallazgos o justifica que el área no fue evaluada antes de confirmarla.')
     if not isinstance(result.get('evaluaciones'),list) or len(result['evaluaciones'])>20:
         raise ValueError('Evaluaciones no válidas.')
+    if 'aplicaciones_en_curso' in result:
+        from services.epp_instrumentos import DEFINICIONES,validar
+        apps=result['aplicaciones_en_curso']
+        if not isinstance(apps,dict) or len(apps)>6:raise ValueError('Aplicaciones en curso no válidas.')
+        for code,cap in apps.items():
+            if code not in DEFINICIONES or DEFINICIONES[code]['area']!=area:raise PermissionError('Aplicación de otra función.')
+            apps[code]=validar(code,cap)
     for ev in result['evaluaciones']:
         if not isinstance(ev,dict) or not all(isinstance(ev.get(k),str) for k in ('id','texto','nombre')):
             raise ValueError('Evaluación no válida.')

@@ -32,4 +32,9 @@ if st.query_params.get('editor')=='1':
     base='epp_'+hashlib.sha256(who['cuenta'].encode()).hexdigest()[:12]
     st.session_state.setdefault(base+'_viva_abierta',ui.abrir(s.listar()[0]))
 elif not st.session_state.get('qa_editor_real'):editor.editor=fake_editor
-ui.page()
+if st.query_params.get('principal')=='1':
+    from ui import epp as pagina_epp
+    from unittest.mock import patch
+    with patch('ui.archivo_expediente.boton'):
+        pagina_epp.epp_page()
+else:ui.page()

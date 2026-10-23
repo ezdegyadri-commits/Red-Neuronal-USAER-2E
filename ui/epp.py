@@ -64,21 +64,35 @@ CATALOGO_INSTRUMENTOS_SEGEY = {
     ]
 }
 
+# Formato de observación disponible en el propio manual; no añade baremos.
+CATALOGO_INSTRUMENTOS_SEGEY['Psicología'].append('Guía para la Observación de la Autodirección (Anexo XVI)')
+
+
+def _guardar_aplicacion(prefix,value,manual):
+    st.session_state[prefix+'_value']=deepcopy(value)
+    st.session_state[prefix+'_pending']=True
+    if manual:_save(prefix)
+    return not st.session_state.get(prefix+'_pending')
+
 
 def _save(prefix):
     """Guarda el apartado en curso en el repositorio canónico."""
     try:
-        doc = st.session_state[prefix + '_doc']
-        area = st.session_state[prefix + '_area']
-        value = st.session_state[prefix + '_value']
-        revision = doc['partes'].get(area, {}).get('revision', '')
-        saved = s.guardar(doc, area, value, revision)
-        doc['partes'][area] = saved
-        st.session_state[prefix + '_value'] = deepcopy(saved['contenido'])
-        st.session_state.pop(prefix + '_error', None)
-        st.session_state[prefix + '_saved'] = saved['fecha']
+        doc=st.session_state[prefix+'_doc'];area=st.session_state[prefix+'_area']
+        value=st.session_state[prefix+'_value'];revision=doc['partes'].get(area,{}).get('revision','')
+        if value.get('validada'):
+            saved=s.guardar(doc,area,value,revision)
+        else:
+            base=doc['partes'].get(area,{}).get('contenido',vacia(area))
+            saved=s.guardar_cambios(doc,area,base,value,revision)
+        doc['partes'][area]=saved
+        st.session_state[prefix+'_value']=deepcopy(saved['contenido'])
+        st.session_state.pop(prefix+'_error',None)
+        st.session_state[prefix+'_pending']=False
+        st.session_state[prefix+'_saved']=saved['fecha']
     except Exception as exc:
-        st.session_state[prefix + '_error'] = str(exc) if isinstance(exc, (ValueError, PermissionError, RuntimeError)) else 'No se confirmó el guardado. Tu texto sigue en esta sesión.'
+        st.session_state[prefix+'_pending']=True
+        st.session_state[prefix+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó el guardado. Tu texto sigue en esta sesión: descarga el respaldo y vuelve a intentar.'
 
 
 def _field(prefix, key, section, field):
@@ -215,6 +229,16 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
             st.caption(f"*(Pendiente de aportar por {target_area})*")
 
 
+def _pagina_papel_nativa():
+    """Nuevas aperturas en el formato vivo; conservar sesiones guiadas en curso."""
+    a=s.actor();prefix='epp_'+hashlib.sha256(a['cuenta'].encode()).hexdigest()[:12]
+    if any(k.startswith(prefix+'_edit_') and k.endswith('_value') for k in st.session_state):
+        st.caption('Se conserva tu edición guiada en curso. Las nuevas sesiones abrirán el formato vivo.')
+        return _pagina_guiada()
+    from ui.epp_viva import page
+    return page()
+
+
 def epp_page():
     a = s.actor()
     st.title('Evaluación Psicopedagógica · Formato Vivo')
@@ -281,9 +305,7 @@ def epp_page():
         if st.button('🔄 Sincronizar', key=prefix + '_refresh', help='Recargar aportaciones del equipo'):
             from data.google import clear_cache
             clear_cache(s.HOJA)
-            for k in list(st.session_state):
-                if k.startswith(prefix + '_edit_'):
-                    del st.session_state[k]
+            # Una consulta del equipo no puede descartar aplicaciones o texto pendiente.
             st.rerun()
 
     doc = by_id[selected]
@@ -340,13 +362,13 @@ def epp_page():
         _abrir(edit_active_prefix, doc, user_work_area)
 
     # --- ⚡ CENTRO ÁGIL DE EVALUACIÓN Y PRUEBAS ---
-    if user_work_area:
+    if user_work_area and not a['director']:
         with st.container():
             st.markdown(
                 f"""
                 <div style='background: linear-gradient(135deg, #f0f7ff 0%, #e6f0fa 100%); border-left: 5px solid #2b6cb0; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;'>
                     <h4 style='margin:0; color:#1a365d;'>⚡ Centro Ágil de Evaluación · {user_work_area}</h4>
-                    <span style='font-size:0.85rem; color:#4a5568;'>Sube el escaneo de tu prueba (PDF/Foto) o regístrala aquí. El sistema distribuirá los hallazgos en tu informe vivo y actualizará la propuesta de NEE.</span>
+                    <span style='font-size:0.85rem; color:#4a5568;'>Aplica formatos con reglas verificadas o revisa una evaluación externa. Los resultados se integran a tu área; la conclusión y NEE requieren revisión del equipo.</span>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -355,48 +377,10 @@ def epp_page():
             tab_scan, tab_direct = st.tabs(['📷 Subir escaneo o prueba (PDF / Foto)', '✍️ Aplicar / Registrar prueba directamente'])
 
             with tab_scan:
-                col_u1, col_u2 = st.columns([0.7, 0.3])
-                with col_u1:
-                    upload = st.file_uploader('Documento de prueba aplicada (PDF, PNG, JPG)', type=TIPOS, key=edit_active_prefix + '_upload_scan')
-                with col_u2:
-                    st.write("")
-                    st.caption('Reconocimiento automático de instrumentos SEGEY y llenado de apartados.')
-
-                if upload:
-                    if st.button('⚡ Analizar prueba y auto-llenar Formato Vivo', key=edit_active_prefix + '_btn_scan_fill'):
-                        try:
-                            with st.spinner('Extrayendo texto y analizando hallazgos de la prueba...'):
-                                read = leer_material(upload.name, upload.getvalue())
-                                trans_text = read.get('texto', '').strip()
-                                if not trans_text:
-                                    st.warning('No se pudo extraer texto del archivo subido. Asegúrate de que sea legible.')
-                                else:
-                                    res_inc = incorporar_prueba_a_epp(
-                                        doc,
-                                        user_work_area,
-                                        trans_text,
-                                        auto_actualizar_conclusion=can_edit_concl
-                                    )
-                                    # Sincronizar en session_state y guardar
-                                    st.session_state[edit_active_prefix + '_value'] = deepcopy(doc['partes'][user_work_area]['contenido'])
-                                    _save(edit_active_prefix)
-
-                                    if can_edit_concl and 'Conclusión' in doc['partes']:
-                                        prefix_concl = prefix + '_edit_' + doc['id'] + '_Conclusión'
-                                        if prefix_concl + '_doc' in st.session_state:
-                                            st.session_state[prefix_concl + '_value'] = deepcopy(doc['partes']['Conclusión']['contenido'])
-                                            _save(prefix_concl)
-
-                                    st.success(f"✨ Se detectó: **{res_inc['instrumento']}**. Se completaron los apartados correspondientes en el Formato Vivo.")
-                                    st.rerun()
-                        except Exception as exc:
-                            st.error(f"Error al procesar la prueba: {exc}")
-
-                    # Archivar copia opcional en expediente digital
-                    if len(upload.getvalue()) <= 5 * 1024 * 1024:
-                        from ui.archivo_expediente import boton
-                        tipo_arc = {'Aprendizaje': 'Competencia curricular', 'Psicología': 'Estudio psicológico', 'Comunicación': 'Evaluación de comunicación y lenguaje', 'Trabajo Social': 'Estudio social'}.get(user_work_area, 'Evaluación psicopedagógica')
-                        boton([doc['alumno']], tipo_arc, upload.getvalue, upload.name, edit_active_prefix + '_archivar_scan', doc['id'], doc['ciclo'], 'EPP iniciada')
+                from ui.epp_instrumentos import externo
+                externo(doc,user_work_area,edit_active_prefix+'_scan',
+                    lambda:st.session_state[edit_active_prefix+'_value'],
+                    lambda value,manual:_guardar_aplicacion(edit_active_prefix,value,manual))
 
             with tab_direct:
                 cat_area = CATALOGO_INSTRUMENTOS_SEGEY.get(user_work_area, [])
@@ -408,7 +392,14 @@ def epp_page():
                     else:
                         nombre_inst_directo = inst_sel
                 with col_d2:
-                    fecha_dir = st.text_input('Fecha de aplicación', value='2026-10-22', key=edit_active_prefix + '_fecha_dir')
+                    fecha_dir = st.date_input('Fecha de aplicación', value=None,format='DD/MM/YYYY',key=edit_active_prefix + '_fecha_dir')
+
+                from ui.epp_instrumentos import digital
+                digital(doc,user_work_area,edit_active_prefix+'_aplicar',
+                    lambda:st.session_state[edit_active_prefix+'_value'],
+                    lambda value,manual:_guardar_aplicacion(edit_active_prefix,value,manual),
+                    nombre=nombre_inst_directo or None)
+                st.caption('O registra a continuación resultados previamente obtenidos por el profesional; no se simula la corrección de una prueba externa.')
 
                 obs_directas = st.text_area(
                     'Resultados, observaciones y puntuaciones obtenidas',
@@ -417,14 +408,14 @@ def epp_page():
                     key=edit_active_prefix + '_obs_directas'
                 )
 
-                if st.button('⚡ Incorporar hallazgos al Formato Vivo', disabled=not obs_directas.strip(), key=edit_active_prefix + '_btn_direct_fill'):
+                if st.button('⚡ Incorporar hallazgos al Formato Vivo', disabled=not obs_directas.strip() or not fecha_dir, key=edit_active_prefix + '_btn_direct_fill'):
                     try:
                         res_inc = incorporar_prueba_a_epp(
                             doc,
                             user_work_area,
                             obs_directas,
                             nombre_instrumento=nombre_inst_directo,
-                            fecha_aplicacion=fecha_dir,
+                            fecha_aplicacion=fecha_dir.isoformat(),
                             auto_actualizar_conclusion=can_edit_concl
                         )
                         st.session_state[edit_active_prefix + '_value'] = deepcopy(doc['partes'][user_work_area]['contenido'])
@@ -458,8 +449,9 @@ def epp_page():
         with col_m1:
             _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', 'Motivo de evaluación', section='generales', height=80, prefix=prefix)
         with col_m2:
-            st.markdown(f"**Fecha inicial:** {student.get('Fecha_Ingreso', 'Octubre 2026')}")
-            st.markdown(f"**Fecha final:** Noviembre 2026")
+            generales=doc['partes'].get('Aprendizaje',{}).get('contenido',{}).get('generales',{})
+            st.markdown('**Fecha inicial:** '+str(generales.get('Fecha inicial de evaluación') or 'Por confirmar'))
+            st.markdown('**Fecha final:** '+str(generales.get('Fecha final de evaluación') or 'Por confirmar'))
             st.markdown(f"**Maestra de apoyo:** {doc['partes'].get('Aprendizaje', {}).get('autor', 'Por asignar')}")
 
         if user_work_area == 'Aprendizaje' or a['director']:
@@ -867,6 +859,9 @@ def _pagina_guiada():
             value=st.session_state[edit+'_value']
             st.caption('Los cambios de texto se guardan al salir del campo. Si falla la conexión, se muestra un aviso; conserva un respaldo antes de cerrar.')
             if area!='Conclusión':
+                from ui.epp_instrumentos import digital
+                with st.expander('Aplicar formatos digitales y resumir sus respuestas'):
+                    digital(doc,area,edit+'_digital',lambda:st.session_state[edit+'_value'],lambda value,manual:_guardar_aplicacion(edit,value,manual))
                 _text(edit,'instrumentos')
                 cat_area = CATALOGO_INSTRUMENTOS_SEGEY.get(area, [])
                 if cat_area:
