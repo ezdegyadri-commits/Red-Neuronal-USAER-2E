@@ -77,63 +77,38 @@ class GuardadoTests(TestCase):
 
 
 class InterfazTests(TestCase):
+    def abrir(self,**state):
+        from pathlib import Path
+        app=AppTest.from_file(str(Path(__file__).parent/'fixtures'/'juntas_academicas_app.py'),default_timeout=30)
+        for key,value in state.items():app.session_state[key]=value
+        return app.run()
+
     def test_reabrir_modulo_recupera_borrador_pendiente_no_base_antigua(self):
-        app=AppTest.from_string('''
-import streamlit as st
-import pandas as pd
-from unittest.mock import patch
-from hashlib import sha256
-import json
-from tests.test_metas_personales import ACTOR,PADRON
-from services import metas_personales as s
-from ui.metas_personales import page
-key='metas_'+sha256(json.dumps([ACTOR['cuenta'],'ESC-001','2026-10-23']).encode()).hexdigest()[:20]
-st.session_state[key+'_base_editor']=[{'Alumno':None,'Metas':'','Recursos necesarios':''}]
-st.session_state[key+'_labels']={'A1':'Alumno ficticio · 1° A'}
-st.session_state[key+'_borrador']={'Cuenta':ACTOR['cuenta'],'Filas':[{'ID_Alumno':'A1','Metas':'Avance pendiente','Recursos necesarios':'Tarjetas'}]}
-with patch.object(s.planes,'identidad',return_value=ACTOR),patch.object(s.planes,'padron_autorizado',return_value=pd.DataFrame(PADRON)),patch.object(s,'recuperar',return_value=None),patch.object(s,'guardar',side_effect=ConnectionError()):page()
-''',default_timeout=30).run()
+        from hashlib import sha256
+        key='metas_'+sha256(json.dumps(['cuenta-ficticia','ESC-001','2026-10-23']).encode()).hexdigest()[:20]
+        capture={'Cuenta':'cuenta-ficticia','Docente':'Docente ficticia','Escuela':'Damián Carmona','ID_Escuela':'ESC-001','Fecha_Sesion':'2026-10-23',
+                 'Filas':[{'ID_Alumno':'A1','Metas':'Avance pendiente','Recursos necesarios':'Tarjetas'}]}
+        app=self.abrir(**{key+'_borrador':capture,key+'_pending':True,'qa_fallo':True})
+        next(x for x in app.selectbox if x.label=='Alumno de mi asignación').select('A1').run()
         self.assertFalse(app.exception)
-        self.assertEqual(app.dataframe[0].value.iloc[0]['Metas'],'Avance pendiente')
+        self.assertEqual(next(x for x in app.text_area if x.label=='Metas para este alumno').value,'Avance pendiente')
 
     def test_captura_precargada_se_guarda_y_no_duplica_en_rerun(self):
-        app=AppTest.from_string('''
-import streamlit as st
-import pandas as pd
-from unittest.mock import patch
-from hashlib import sha256
-import json
-from tests.test_metas_personales import ACTOR,PADRON
-from services import metas_personales as s
-from ui.metas_personales import page
-key='metas_'+sha256(json.dumps([ACTOR['cuenta'],'ESC-001','2026-10-23']).encode()).hexdigest()[:20]
-st.session_state.setdefault(key+'_base_editor',[{'Alumno':'Alumno ficticio · 1° A','Metas':'Meta de prueba','Recursos necesarios':'Tarjetas'}])
-st.session_state.setdefault(key+'_labels',{'A1':'Alumno ficticio · 1° A'})
-st.session_state.setdefault('envios',[])
-def guardar(escuela,fecha,filas,revision):
-    st.session_state.envios.append(filas)
-    return {'Revision':'r1','Guardado_En':'confirmado','Filas':[{**r,'Alumno':'Alumno ficticio'} for r in filas]}
-with patch.object(s.planes,'identidad',return_value=ACTOR),patch.object(s.planes,'padron_autorizado',return_value=pd.DataFrame(PADRON)),patch.object(s,'recuperar',return_value=None),patch.object(s,'guardar',side_effect=guardar):page()
-''',default_timeout=30).run()
-        self.assertFalse(app.exception);self.assertEqual(len(app.session_state.envios),1)
-        self.assertEqual(app.session_state.envios[0][0]['ID_Alumno'],'A1')
-        app.run();self.assertFalse(app.exception);self.assertEqual(len(app.session_state.envios),1)
-        self.assertEqual(app.dataframe[0].value.iloc[0]['Metas'],'Meta de prueba')
+        app=self.abrir()
+        next(x for x in app.selectbox if x.label=='Alumno de mi asignación').select('A1').run()
+        next(x for x in app.text_area if x.label=='Metas para este alumno').set_value('Meta de prueba').run()
+        next(x for x in app.button if x.label=='Guardar instrumento').click().run()
+        self.assertFalse(app.exception);self.assertEqual(app.session_state.qa_envios,1)
+        app.run()
+        self.assertEqual(app.session_state.qa_envios,1)
+        self.assertEqual(next(x for x in app.text_area if x.label=='Metas para este alumno').value,'Meta de prueba')
 
     def test_render_precarga_escuela_y_campos_sin_escribir(self):
-        app=AppTest.from_string('''
-from unittest.mock import patch
-import pandas as pd
-from tests.test_metas_personales import ACTOR,PADRON
-from services import metas_personales as s
-from ui.metas_personales import page
-with patch.object(s.planes,'identidad',return_value=ACTOR),patch.object(s.planes,'padron_autorizado',return_value=pd.DataFrame(PADRON)),patch.object(s,'recuperar',return_value=None),patch.object(s,'guardar',side_effect=AssertionError('No escribir al abrir')):
-    page()
-''',default_timeout=30).run()
+        app=self.abrir()
         self.assertFalse(app.exception)
-        self.assertEqual(app.selectbox[0].options,['Damián Carmona'])
-        self.assertEqual(list(app.dataframe[0].value.columns),['Alumno','Metas','Recursos necesarios'])
-        self.assertEqual(len(app.dataframe[0].value),8)
+        self.assertFalse(any(x.label=='Escuela asignada' for x in app.selectbox))
+        self.assertEqual(len(next(x for x in app.selectbox if x.label=='Alumno de mi asignación').options),2)
+        self.assertEqual(app.session_state.qa_envios,0)
 
     def test_error_conserva_borrador_y_cerrar_requiere_guardado_o_respaldo(self):
         captura={'Cuenta':ACTOR['cuenta'],'ID_Escuela':'ESC-001','Fecha_Sesion':'2026-10-23','Filas':[{'ID_Alumno':'A1','Metas':'Texto protegido','Recursos necesarios':'Tarjetas'}]}

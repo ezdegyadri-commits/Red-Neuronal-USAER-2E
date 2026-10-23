@@ -68,14 +68,24 @@ MODULOS_INFO = {
         "desc": "Diseño de planeaciones colaborativas, ajustes razonables y seguimiento formativo.",
         "tags": ["ZDP e IA", "Colaboración", "Anexos XIX y XXIII"],
     },
+    "Juntas académicas": {
+        "titulo": "Juntas académicas",
+        "categoria": "ADMINISTRACIÓN",
+        "icono": "🗂️",
+        "badge": "Materiales por fecha",
+        "color": "#0D9488",
+        "color_bg": "#F0FDFA",
+        "desc": "Metas, instrumento de planeación y cuadro de metodologías vivos por sesión.",
+        "tags": ["Juntas", "Metas", "Metodologías"],
+    },
     "Metas personales": {
-        "titulo": "Metas personales",
+        "titulo": "Metas e instrumento de planeación",
         "categoria": "ADMINISTRACIÓN",
         "icono": "📝",
         "badge": "Junta académica",
         "color": "#0D9488",
         "color_bg": "#F0FDFA",
-        "desc": "Registra por alumno tus metas de apoyos y ajustes y los recursos necesarios.",
+        "desc": "Elige un alumno, registra metas y recursos y valora tu planeación con la rúbrica.",
         "tags": ["Metas", "Apoyos", "Ajustes razonables"],
     },
     "EPP": {
@@ -313,7 +323,7 @@ def pagina_central_hub(df_alumnos, menu_permitido, rol, nombre_usuario):
     categorias_map = {
         "📁 Alumnado": {"Expedientes", "Alta de alumnos"},
         "🛡️ Anexos Oficiales": {"Anexo III BAP", "Anexo IV Hoja de sugerencias", "Anexo V Eventos significativos", "Anexo VII Derivación"},
-        "🎯 Planeación y EPP": {"Planeación e intervención", "EPP", "Metas personales"},
+        "🎯 Planeación y EPP": {"Planeación e intervención", "EPP", "Metas personales", "Juntas académicas"},
         "📊 Gestión y Tiempos": {"Estadística", "Documentos", "Calendario de actividades", "Trámites", "Cronograma mensual", "Horarios de apoyo", "Panel de Dirección", "Maestros de primaria", "Novedades de supervisión", "Constancias de visita", "Oficios de comisión"},
     }
 
