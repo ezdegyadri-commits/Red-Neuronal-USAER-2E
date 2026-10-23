@@ -80,7 +80,7 @@ if gestor_tramites() or puede_solicitar():
     menu += ["Trámites"]
 perfil_cronograma = perfil_especialista(st.session_state.get("nombre", ""), rol)
 if perfil_cronograma or "APOYO" in rol.upper():
-    menu += ["Planeación e intervención", "EPP", "Metas personales"]
+    menu += ["Planeación e intervención", "EPP", "Juntas académicas", "Metas personales"]
 if perfil_cronograma and perfil_cronograma["area"] != "Dirección":
     menu += ["Cronograma mensual"]
 if "DIRECTOR" in rol.upper():
@@ -141,6 +141,9 @@ elif page=="EPP": epp_page()
 elif page=="Metas personales":
     from ui.metas_personales import page as metas_page
     metas_page()
+elif page=="Juntas académicas":
+    from ui.juntas_academicas import page as juntas_page
+    juntas_page()
 elif page=="Novedades de supervisión": novedades_page()
 elif page=="Panel de Dirección":
     direccion_page_rapida(authorized)
