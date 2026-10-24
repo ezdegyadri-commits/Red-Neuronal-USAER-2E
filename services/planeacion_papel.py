@@ -31,6 +31,8 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
     aporte_propio=doc['metadatos'].get('aportaciones_equipo',{}).get(actor.get('area'),{})
     bloqueada=colaborativa and (actor['area'] in doc['metadatos'].get('unificacion_grupal',{}).get('conflictos_area',[]) or bool(aporte_propio and aporte_propio.get('cuenta')!=actor['cuenta']))
     firma=huella(doc);doc=normalizar(doc)
+    from services.planeacion_necesidades import opciones as opciones_nee
+    necesidades_epp=opciones_nee(doc) if not para_impresion else []
     cells={};tables=[]
     def celda(value,target=None,label='',readonly='',destinatario=''):
         key='c'+str(len(cells));cell={'id':key,'value':str(value or ''),'label':label,'editable':target is not None,'referente':readonly}
@@ -41,6 +43,9 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
                 cell.update(tipo='fecha',fecha_iso=fecha.isoformat() if fecha else '')
             except ValueError:pass  # Conservar fechas narrativas históricas, sin vaciarlas.
         if destinatario:cell['destinatario']=str(destinatario)
+        if target is not None and label in ('Necesidades educativas específicas','NEE','Necesidad documentada') and not colaborativa:
+            # Sugerencias, no un catálogo que sustituya la redacción existente.
+            cell['sugerencias_nee']=necesidades_epp
         cells[key]={'target':target,**cell};return cell
     grupal=doc['metadatos'].get('modalidad_planeacion')=='grupal' and doc['datos']['Función']=='Aprendizaje' and doc['metadatos'].get('vista_formato')!='trimestral'
     datos=doc['datos'];alumnos=datos['Alumnos'];cur=contexto_ia(doc)

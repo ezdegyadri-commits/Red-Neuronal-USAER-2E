@@ -27,8 +27,18 @@ def panel(frame):
         if not rows:st.info('No hay alumnos en esta escuela.');return
         aid=st.selectbox('Alumno que gestionarás',list(rows),format_func=lambda k:rows[k].get('Nombre_Completo',k),key='mov_padron_alumno')
         st.caption('Origen: '+str(rows[aid].get('Nombre_Escuela',''))+' · '+str(rows[aid].get('Grado',''))+' '+str(rows[aid].get('Grupo',''))+' · '+str(rows[aid].get('Maestra de Apoyo','')))
-        accion=st.radio('Acción',['Trasladar','Baja recuperable','Reactivar'],horizontal=True,key='mov_padron_accion')
+        acciones=['Trasladar','Baja recuperable','Reactivar']
+        if servicio.permite_cambio_interno(rows[aid]):acciones.insert(1,'Cambiar maestra en la misma escuela')
+        if st.session_state.get('mov_padron_accion') not in acciones:st.session_state['mov_padron_accion']=acciones[0]
+        accion=st.radio('Acción',acciones,horizontal=True,key='mov_padron_accion')
         destino={}
+        if accion=='Cambiar maestra en la misma escuela':
+            from services.alumnos import _canonizar_docente_apoyo
+            actual=_canonizar_docente_apoyo(rows[aid].get('Maestra de Apoyo',''))
+            docentes=[n for n in servicio.docentes_destino('Ichcaanziho') if n!=actual]
+            docente=st.selectbox('Maestra de apoyo que recibirá al alumno',docentes,key='mov_padron_interno_docente')
+            destino=dict(escuela='Ichcaanziho',docente=docente)
+            st.info('Solo cambiará la maestra responsable dentro de Ichcaanziho. Se conservan escuela, grado, grupo, atención, ID y expediente. Los documentos previos mantienen su autoría e historial.')
         if accion=='Trasladar':
             origen=str(rows[aid].get('ID_Escuela',''))
             opciones=[n for n,c in ESCUELAS_USAER.items() if str(c)!=origen]

@@ -49,6 +49,9 @@ def panel(ids,prefix,grupal=False):
         tabla_paginada(pd.DataFrame(docs)[['Tipo','Nombre','Ciclo','Fecha']],prefix+'_tabla')
         porid={r['ID_Documento']:r for r in docs}
         elegido=st.selectbox('Documento para recuperar',list(porid),format_func=lambda k:porid[k]['Tipo']+' · '+porid[k]['Nombre']+' · '+porid[k]['Fecha'][:16],key=prefix+'_doc')
+        with st.expander('Vista previa · síntesis del documento precargado'):
+            from ui.documento_sintesis import archivado
+            archivado(elegido,porid[elegido],lambda:archivo.descargar(elegido)[1],prefix+'_preview')
         if st.button('Preparar descarga privada',key=prefix+'_preparar'):
             try:
                 row,data=archivo.descargar(elegido)
@@ -102,8 +105,10 @@ def panel(ids,prefix,grupal=False):
         if subida and tipo:
             try:
                 destino=archivo.contexto(destinatarios,tipo,ciclo,etapa)
-                archivo.guardar(destinatarios,tipo,ciclo,subida.name,subida.getvalue(),'Escaneado',etapa)
+                did=archivo.guardar(destinatarios,tipo,ciclo,subida.name,subida.getvalue(),'Escaneado',etapa)
                 st.success('Escaneo integrado automáticamente al expediente '+destino['Ambito']+'. La misma copia no se duplica.')
+                from ui.documento_sintesis import archivado
+                archivado(did,{**destino,'Nombre':subida.name},subida.getvalue,prefix+'_subida_preview')
             except Exception as exc:
                 st.warning('El archivo todavía no está confirmado: '+str(exc)+' El original se conserva.')
                 boton(destinatarios,tipo,subida.getvalue,subida.name,prefix+'_anexar','Escaneado',ciclo,etapa)
@@ -139,6 +144,16 @@ def _conectados(ids,prefix,grupal=False):
         if informes:
             porid={d['id']:d for d in informes}
             eid=st.selectbox('EPP vinculada',list(porid),format_func=lambda k:porid[k]['ciclo']+' · '+k[-10:],key=prefix+'_epp')
+            with st.expander('Vista previa sintetizada de la EPP vinculada'):
+                from services.documento_sintesis import sintetizar
+                d=porid[eid]
+                hallazgos='\n'.join(str(v) for p in d['partes'].values() for v in
+                                    [p.get('contenido',{}).get('sintesis',''),*p.get('contenido',{}).get('campos',{}).values()] if str(v).strip())
+                st.write(sintetizar(hallazgos)['resumen'] or 'No hay hallazgos redactados todavía.')
+                nee=d['partes'].get('Conclusión',{}).get('contenido',{}).get('nee',[])
+                for n in nee:
+                    if n.get('NEE'):st.write('• '+n['NEE'])
+                st.caption('Síntesis de los apartados capturados. Solo una conclusión vigente y validada alimenta el selector de NEE de planeación; un borrador no equivale a evaluación concluida.')
             if st.button('Preparar PDF de la EPP vinculada',key=prefix+'_epp_pdf'):
                 from documents.epp import generar_pdf
                 d=porid[eid];pdf=generar_pdf(d,epp.alumno_autorizado(d['alumno'],incluir_bajas=True))

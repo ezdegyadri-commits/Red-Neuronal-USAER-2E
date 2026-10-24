@@ -99,8 +99,8 @@ def externo(doc,area,prefix,get_value,save_value):
     read=st.session_state.get(key+'_lectura')
     if not read:return
     for aviso in read.get('avisos',[]):st.caption(aviso)
-    if len(read.get('texto',''))>12000:st.warning('La lectura supera el resumen permitido. Selecciona los hallazgos pertinentes; se muestra solo el inicio como ayuda y no se interpreta como una lectura completa.')
-    texto=st.text_area('Resultados leídos: revisa y conserva solo los hallazgos de este alumno',value=read.get('texto','')[:12000],max_chars=12000,height=220,key=key+'_texto')
+    from ui.documento_sintesis import vista
+    texto=vista(read.get('texto',''),key)['resumen']
     nombre=st.text_input('Instrumento o informe que emitió el profesional',key=key+'_nombre')
     fecha=st.date_input('Fecha de la evaluación externa',value=None,format='DD/MM/YYYY',key=key+'_fecha')
     reviewed=st.checkbox('Verifiqué alumno, instrumento, fecha y resultados contra el original; no hay información de terceros',key=key+'_revisado')

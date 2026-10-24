@@ -33,9 +33,43 @@ def docentes_destino(escuela):
         if len(escuelas)==1 and escuela in escuelas]
 
 
+def permite_cambio_interno(actual):
+    from services.alumnos import _canonizar_docente_apoyo, DOCENTES_ICHC_AANZIHO
+    from services.planeacion_matricula import clave_escuela
+    return (clave_escuela(actual.get('ID_Escuela','')) == ESCUELAS_USAER['Ichcaanziho']
+            and _canonizar_docente_apoyo(actual.get('Maestra de Apoyo','')) in DOCENTES_ICHC_AANZIHO)
+
+
+def responsable_interno_confirmado(aid,anterior,nuevo):
+    """Prueba una cadena confirmada; no toma una operación PREPARADA como traslado."""
+    from services.alumnos import _canonizar_docente_apoyo as canon
+    try:rows=repo.read(HOJA).fillna('').to_dict('records')
+    except Exception as exc:
+        if type(exc).__name__=='WorksheetNotFound':return False
+        raise
+    responsable=canon(anterior);vistos=set();cambio=False
+    for r in rows:
+        if str(r.get('ID_Alumno'))!=str(aid) or r.get('Accion')!='Cambiar maestra en la misma escuela' or r.get('Estado')!='CONFIRMADO' or r.get('ID_Movimiento') in vistos:continue
+        vistos.add(r.get('ID_Movimiento'))
+        antes=json.loads(r['Antes_JSON']);despues=json.loads(r['Despues_JSON'])
+        if canon(antes.get('Maestra de Apoyo',''))==responsable:
+            responsable=canon(despues.get('Maestra de Apoyo',''));cambio=True
+    return cambio and responsable==canon(nuevo)
+
+
 def preparar(actual,accion,escuela='',docente='',grado='',grupo='',regular=''):
     if accion=='Baja recuperable':return {'Estatus':'Baja'}
     if accion=='Reactivar':return {'Estatus':'Activo'}
+    if accion=='Cambiar maestra en la misma escuela':
+        from services.alumnos import _canonizar_docente_apoyo, DOCENTES_ICHC_AANZIHO
+        destino = _canonizar_docente_apoyo(docente)
+        if not permite_cambio_interno(actual) or destino not in DOCENTES_ICHC_AANZIHO:
+            raise ValueError('Este cambio interno corresponde únicamente a las dos maestras de apoyo de Ichcaanziho.')
+        if destino == _canonizar_docente_apoyo(actual.get('Maestra de Apoyo','')):
+            raise ValueError('Elige a la otra maestra que recibirá al alumno.')
+        if escuela and escuela != 'Ichcaanziho':raise ValueError('El cambio interno no cambia de escuela.')
+        # Solo cambia el responsable; ni grado, modalidad, identidad ni historia.
+        return {'Maestra de Apoyo': destino}
     if accion!='Trasladar':raise ValueError('Movimiento no válido.')
     if escuela not in ESCUELAS_USAER:raise ValueError('Elige una escuela de la USAER.')
     if str(actual.get('ID_Escuela'))==str(ESCUELAS_USAER[escuela]):raise ValueError('El destino debe ser otra escuela.')

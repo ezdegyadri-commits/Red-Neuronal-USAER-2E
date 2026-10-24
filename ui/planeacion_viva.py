@@ -50,6 +50,15 @@ def _entrada(base,actor):
             escuela=list(por_escuela)[0]
             c_esc.markdown(f"**🏫 Escuela:** {por_escuela[escuela]['Nombre_Escuela']}")
         school=por_escuela[escuela]
+        from services.planeacion_modalidad import modalidad
+        escolar=frame.loc[frame['ID_Escuela']==school['ID_Escuela']]
+        conteos=[]
+        for grado_matricula, datos_grado in escolar.groupby('Grado',sort=True):
+            grupales=sum(modalidad(r)=='grupal' for r in datos_grado.to_dict('records'))
+            individuales=sum(modalidad(r)=='individual' for r in datos_grado.to_dict('records'))
+            conteos.append(f'{grado_matricula}: {len(datos_grado)} en matrícula · {grupales} grupales · {individuales} individuales')
+        with st.expander('Mi matrícula completa por grado · sin filtrar por modalidad'):
+            for cuenta_grado in conteos:st.caption(cuenta_grado)
 
         especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
         modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
@@ -84,6 +93,11 @@ def _entrada(base,actor):
             if especialista:
                 rows=grados if grupo=='Todos' else grados.loc[grados['Grupo'].astype(str)==grupo]
             else:rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
+            completa=escolar if grado=='Todos' else escolar.loc[escolar['Grado'].astype(str).eq(grado)]
+            if grupo!='Todos':completa=completa.loc[completa['Grupo'].astype(str).eq(grupo)]
+            if presentacion=='guia':
+                individuales=sum(modalidad(r)=='individual' for r in completa.to_dict('records'))
+                st.info(f'{len(completa)} alumnos en la matrícula de este grado/grupo · {len(rows)} disponibles en la guía grupal · {individuales} de atención individual continúan en «Individual». No fueron eliminados del padrón.')
             if modo=='Por grado' and grado=='Todos':
                 st.info('Elige el grado para reunir a sus alumnos. La modalidad registrada no cambia.');return
 
