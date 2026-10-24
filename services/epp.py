@@ -21,6 +21,23 @@ def puede_crear():
     a = actor()
     return not a['director'] and 'APOYO' in normalizar_texto(a['rol'])
 
+
+def es_coordinadora(doc):
+    """La coordinación puede continuar tras un cambio interno confirmado del alumno.
+
+    META conserva a su creadora; cada nueva versión registra a la autora real.
+    No concede acceso por apellido ni permite editar las áreas de especialistas.
+    """
+    a=actor()
+    if not puede_crear():return False
+    alumno=alumno_autorizado(doc['alumno'])
+    meta=doc['partes'].get('META',{})
+    if meta.get('cuenta')==a['cuenta']:return True
+    from services.alumnos import _canonizar_docente_apoyo as canon
+    from services.padron_movimientos import permite_cambio_interno,responsable_interno_confirmado
+    if not permite_cambio_interno(alumno) or canon(alumno.get('Maestra de Apoyo',''))!=canon(a['nombre']):return False
+    return responsable_interno_confirmado(doc['alumno'],meta.get('contenido',{}).get('coordinadora',''),a['nombre'])
+
 def alumno_autorizado(id_alumno,incluir_bajas=False):
     if incluir_bajas:
         actor()
@@ -75,7 +92,7 @@ def autorizar(doc, parte=None):
     if parte is not None:
         if meta['estado'] == 'ELIMINADO': raise PermissionError('Recupera primero la EPP retirada.')
         if parte == 'Conclusión':
-            if not puede_crear() or a['cuenta'] != meta['cuenta']:
+            if not es_coordinadora(canonical):
                 raise PermissionError('La maestra coordinadora integra la conclusión acordada por el equipo.')
         elif parte != a['area'] or a['director']:
             raise PermissionError('Solo puedes editar los apartados de tu función.')

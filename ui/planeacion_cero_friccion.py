@@ -26,7 +26,12 @@ def _celda(c, key):
         st.caption('💡 ' + c['nota'])
     label_lower = c['label'].lower()
     h = 115 if any(k in label_lower for k in ['actividad', 'aprendizaje', 'apoyo', 'ajuste', 'barrera']) else 85
-    return st.text_area(c['label'], value=c['value'], height=h, key=key)
+    value=st.text_area(c['label'], value=c['value'], height=h, key=key)
+    if c.get('sugerencias_nee'):
+        opciones=c['sugerencias_nee']
+        chosen=st.selectbox('Añadir NEE vinculada a EPP',range(-1,len(opciones)),format_func=lambda i:'No añadir' if i<0 else opciones[i]['texto']+' · '+opciones[i]['referencia'],key=key+'_nee_epp')
+        if chosen>=0 and opciones[chosen]['texto'] not in value.splitlines():value=(value+'\n'+opciones[chosen]['texto']).strip()
+    return value
 
 
 def _conexiones(doc, key):

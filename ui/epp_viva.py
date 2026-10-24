@@ -194,9 +194,10 @@ def herramientas(p):
                         for aviso in r['avisos']:st.caption(aviso)
                     except Exception:st.warning('No se pudo leer. Conserva el original e intenta con un PDF con texto o una imagen más clara.')
                 if p+'_trans_'+area in st.session_state:
-                    texto=st.text_area('Hallazgos transcritos: revisa y corrige',value=st.session_state[p+'_trans_'+area],max_chars=12000,key=p+'_texto_'+area)
+                    from ui.documento_sintesis import vista
+                    texto=vista(st.session_state[p+'_trans_'+area],p+'_texto_'+area)['resumen']
                     check=st.checkbox('Revisé el contenido y no contiene datos de terceros',key=p+'_rev_'+area)
-                    if st.button('Incorporar transcripción revisada',disabled=not check or not texto.strip(),key=p+'_aplicar_'+area):
+                    if st.button('Incorporar síntesis revisada',disabled=not check or not texto.strip(),key=p+'_aplicar_'+area):
                         ev={'id':hashlib.sha256(texto.encode()).hexdigest(),'nombre':'Evaluación cargada de '+area,'texto':texto}
                         if not any(e['id']==ev['id'] for e in v['evaluaciones']):v['evaluaciones'].append(ev)
                         v['validada']=False;_incorporar(p,area,v)
@@ -206,7 +207,10 @@ def herramientas(p):
                     tipo={'Aprendizaje':'Competencia curricular','Psicología':'Estudio psicológico','Comunicación':'Evaluación de comunicación y lenguaje','Trabajo Social':'Estudio social'}[area]
                     boton([doc['alumno']],tipo,upload.getvalue,upload.name,p+'_archivo_'+area,doc['id'],doc['ciclo'],'EPP iniciada',disabled=not check)
             for ev in v.get('evaluaciones',[]):
-                with st.expander(ev.get('nombre','Evaluación')+' · '+ev.get('fecha','Sin fecha')):st.write(ev['texto'])
+                with st.expander(ev.get('nombre','Evaluación')+' · '+ev.get('fecha','Sin fecha')):
+                    from services.documento_sintesis import sintetizar
+                    st.write(sintetizar(ev['texto'])['resumen'])
+                    st.caption('Síntesis de la evaluación conservada; el registro original no cambia.')
     with tab3:
         from services.epp_entrada import huella_instrumentos
         if st.button('Preparar resumen para el análisis',key=p+'_resumen_'+area):

@@ -640,6 +640,11 @@ def evidencias(doc):
                     'alcance':'hallazgos de EPP revisados por el área; no equivale a diagnóstico médico'})
     except Exception as exc:
         if type(exc).__name__!='WorksheetNotFound':fallas.append('EPP')
+    try:
+        from services.documentos_sintesis import fuentes_epp
+        fuentes.extend(fuentes_epp(elegidos, doc['datos']['Curso escolar']))
+    except Exception as exc:
+        if type(exc).__name__!='WorksheetNotFound':fallas.append('EPP_ESCANEADA')
     fuentes=unificar_fuentes(fuentes)
     for i,r in enumerate(fuentes):
         r['referencia']='E'+str(i+1)

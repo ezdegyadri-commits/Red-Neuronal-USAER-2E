@@ -87,5 +87,5 @@ class UITests(unittest.TestCase):
         self.assertFalse(app.exception);self.assertEqual(app.session_state.qa_ai_calls,1)
         self.assertEqual(app.session_state.qa_value['campos']['5.1. Competencia curricular'],'Redacción previa')
         self.assertEqual(app.session_state.qa_value['campos']['5.2. Estilo de aprendizaje'],'EV1: Propuesta ficticia revisable.')
-        next(t for t in app.text_area if t.label.startswith('Resultados leídos')).set_value('Contenido corregido de la lectura').run()
+        next(t for t in app.text_area if t.label.startswith('Síntesis del documento')).set_value('Contenido corregido de la lectura').run()
         self.assertTrue(next(b for b in app.button if b.label.startswith('Analizar resultados')).disabled)

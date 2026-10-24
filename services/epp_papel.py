@@ -20,7 +20,7 @@ def editables(doc):
     a=s.autorizar(doc)
     if a['director'] or a['area'] not in AREAS:return []
     result=[a['area']]
-    if s.puede_crear() and doc['partes']['META']['cuenta']==a['cuenta']:result.append('Conclusión')
+    if s.es_coordinadora(doc):result.append('Conclusión')
     return result if doc['partes']['META']['estado']!='ELIMINADO' else []
 
 

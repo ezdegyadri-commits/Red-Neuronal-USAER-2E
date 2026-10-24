@@ -54,6 +54,14 @@ def _tabla(prefix,tabla,persist,abrir):
 
                 with columnas[j%len(columnas)]:
                     st.text_area(campo,value=str(row.get(campo,'') or ''),height=130,key=key,help=ayuda,on_change=_celda,args=(prefix,key,tabla,i,campo,persist))
+                    if campo in ('Necesidades educativas específicas','NEE'):
+                        from services.planeacion_necesidades import opciones
+                        needs=opciones(doc)
+                        elegido=st.selectbox('NEE vinculada a EPP',range(-1,len(needs)),format_func=lambda n:'Seleccionar una necesidad…' if n<0 else needs[n]['texto']+' · '+needs[n]['referencia'],key=key+'_nee')
+                        if elegido>=0 and st.button('Añadir NEE sin borrar mi texto',key=key+'_nee_add'):
+                            actual=str(row.get(campo,'') or '')
+                            nuevo=actual if needs[elegido]['texto'] in actual.splitlines() else (actual+'\n'+needs[elegido]['texto']).strip()
+                            abrir(prefix,f.editar_celda(doc,tabla,i,campo,nuevo));persist(prefix);st.rerun()
                     if campo == 'Contextos' and FORMATOS.get(doc['formato'],{}).get('contextos'):
                         opts = FORMATOS[doc['formato']]['contextos']
                         curr_ctx = str(row.get(campo,'') or '').strip()

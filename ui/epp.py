@@ -319,7 +319,7 @@ def epp_page():
         return
 
     student = s.alumno_autorizado(doc['alumno'])
-    is_coordinator = s.puede_crear() and doc['partes']['META']['cuenta'] == a['cuenta']
+    is_coordinator = s.es_coordinadora(doc)
     can_edit_concl = is_coordinator or a['director']
 
     # --- ENCABEZADO Y PARTICIPACIÓN DEL EQUIPO ---
@@ -689,7 +689,8 @@ def epp_page():
                 st.markdown(f"**Pruebas registradas en esta área ({len(evals)}):**")
                 for ev in evals:
                     with st.expander(f"📄 {ev.get('nombre', 'Evaluación')} · {ev['id'][:8]}"):
-                        st.write(ev['texto'])
+                        from services.documento_sintesis import sintetizar
+                        st.write(sintetizar(ev['texto'])['resumen'])
                         if st.button('Retirar esta prueba de mi área', key=edit_active_prefix + '_rm_ev_' + ev['id']):
                             val_area['evaluaciones'] = [e for e in val_area['evaluaciones'] if e['id'] != ev['id']]
                             val_area['validada'] = False
@@ -848,7 +849,7 @@ def _pagina_guiada():
         'Estado':'Revisada' if doc['partes'].get(area,{}).get('contenido',{}).get('validada') else 'Borrador / pendiente'} for area in AREAS]
     st.dataframe(pd.DataFrame(status),hide_index=True,use_container_width=True)
     editable=[a['area']] if a['area'] in AREAS and not a['director'] else []
-    if s.puede_crear() and doc['partes']['META']['cuenta']==a['cuenta']:editable.append('Conclusión')
+    if s.es_coordinadora(doc):editable.append('Conclusión')
     work,preview=st.columns([1.1,1],gap='large')
     with work:
         if editable:
@@ -916,7 +917,8 @@ def _pagina_guiada():
                         except Exception as exc:st.warning(str(exc) if isinstance(exc,ValueError) else 'No se pudo transcribir. Usa un documento con texto o una imagen más clara.')
                     if edit+'_transcripcion' in st.session_state:
                         for warning in st.session_state.get(edit+'_avisos',[]):st.caption(warning)
-                        trans=st.text_area('Hallazgos transcritos: revisa y corrige',value=st.session_state[edit+'_transcripcion'],max_chars=12000,height=180,key=edit+'_texto_upload')
+                        from ui.documento_sintesis import vista
+                        trans=vista(st.session_state[edit+'_transcripcion'],edit+'_texto_upload')['resumen']
                         reviewed=st.checkbox('Confirmo que estos hallazgos corresponden exclusivamente al alumno de esta EPP',key=edit+'_review_upload')
                         if st.button('Guardar evaluación revisada',disabled=not reviewed or not trans.strip(),key=edit+'_apply_upload'):
                             digest=hashlib.sha256(trans.encode()).hexdigest()
@@ -926,7 +928,8 @@ def _pagina_guiada():
                                 if edit+'_error' not in st.session_state:st.rerun()
                 for ev in value['evaluaciones']:
                     with st.expander('Evaluación incorporada · '+ev['id'][:8]):
-                        st.write(ev['texto'])
+                        from services.documento_sintesis import sintetizar
+                        st.write(sintetizar(ev['texto'])['resumen'])
                         if st.button('Retirar esta evaluación de mi área',key=edit+'_remove_'+ev['id']):
                             value['evaluaciones']=[e for e in value['evaluaciones'] if e['id']!=ev['id']]
                             value['validada']=False;_save(edit);st.rerun()

@@ -20,6 +20,7 @@ def _canonizar_docente_apoyo(valor):
         "CECILIA SOLIS VAZQUEZ": "MARIA CECILIA SOLIS VAZQUEZ",
         "MARIA CECILIA SOLIS": "MARIA CECILIA SOLIS VAZQUEZ",
         "MARYCRUZ CAAMAL": "MARYCRUZ CAAMAL CORAL",
+        "MARY CRUZ CAAMAL CORAL": "MARYCRUZ CAAMAL CORAL",
     }
     return alias.get(docente, docente)
 
@@ -42,7 +43,8 @@ def filtrar_alumnos_por_docente_compartido(df, nombre):
         return df.iloc[0:0].copy()
     asignaciones = df["Maestra de Apoyo"].fillna("").astype(str).map(_canonizar_docente_apoyo)
     coincidentes = df.loc[asignaciones.eq(docente)].copy()
-    return coincidentes if not coincidentes.empty else df
+    # Una maestra sin alumnos asignados no hereda toda la matrícula de su compañera.
+    return coincidentes
 
 
 def _columnas_identidad_escuela(df):

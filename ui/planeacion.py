@@ -100,7 +100,8 @@ def _materiales(prefix,doc):
             if digest not in presentes:continue
             with st.expander('Revisar lectura · '+material['nombre'],expanded=True):
                 for aviso in material['avisos']:st.caption(aviso)
-                texto=st.text_area('Texto útil para esta planeación: corrige o selecciona lo pertinente',value=material['texto'],max_chars=MAX_TEXTO,height=200,key=prefix+'_material_text_'+digest)
+                from ui.documento_sintesis import vista
+                texto=vista(material['texto'],prefix+'_material_text_'+digest)['resumen']
                 st.caption('El material se vincula solo a esta planeación. Confirma qué información corresponde al alumno o al grupo. Para IA se preparan extractos que revisarás en el resumen educativo.')
                 revisado=st.checkbox('Revisé el texto y su pertinencia',key=prefix+'_material_review_'+digest)
                 nombres={a['ID_Alumno']:a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
@@ -110,7 +111,9 @@ def _materiales(prefix,doc):
                     except (ValueError,PermissionError) as exc:st.info(str(exc))
         for material in doc['metadatos'].get('materiales',[]):
             with st.expander('Material incorporado · '+material['nombre']):
-                texto=st.text_area('Editar material incorporado',value=material['texto'],max_chars=MAX_TEXTO,height=180,key=f"{prefix}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")
+                from ui.documento_sintesis import vista
+                texto=vista(material['texto'],f"{prefix}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")['resumen']
+                st.caption('Guardar esta síntesis reemplaza solo el extracto de trabajo de la planeación; no el original del expediente.')
                 if st.button('Guardar cambios del material',key=prefix+'_material_update_'+material['id']):
                     try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],material,texto))
                     except (ValueError,PermissionError) as exc:st.info(str(exc))
