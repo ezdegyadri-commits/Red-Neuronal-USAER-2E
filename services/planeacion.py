@@ -641,10 +641,10 @@ def evidencias(doc):
     except Exception as exc:
         if type(exc).__name__!='WorksheetNotFound':fallas.append('EPP')
     try:
-        from services.documentos_sintesis import fuentes_epp
-        fuentes.extend(fuentes_epp(elegidos, doc['datos']['Curso escolar']))
+        from services.documentos_sintesis import fuentes_documentales
+        fuentes.extend(fuentes_documentales(elegidos, doc['datos']['Curso escolar']))
     except Exception as exc:
-        if type(exc).__name__!='WorksheetNotFound':fallas.append('EPP_ESCANEADA')
+        if type(exc).__name__!='WorksheetNotFound':fallas.extend(['EPP_ESCANEADA','DOCUMENTO_REVISADO'])
     fuentes=unificar_fuentes(fuentes)
     for i,r in enumerate(fuentes):
         r['referencia']='E'+str(i+1)
@@ -731,7 +731,7 @@ def guardar_aportacion(doc,filas,observaciones):
 def resumen_previo(doc,fuentes):
     """Borrador local de minimización; la persona revisa antes de transmitirlo."""
     autorizar(doc)
-    prioridades={'EPP':0,'III':1,'IV':2,'SEGUIMIENTO':3,'ACTA':4,'V':5,'DOCENTE':6,'PLAN':7,'MATERIAL':8}
+    prioridades={'EPP':0,'EPP_ESCANEADA':0,'III':1,'IV':2,'DOCUMENTO_REVISADO':2,'SEGUIMIENTO':3,'ACTA':4,'V':5,'DOCENTE':6,'PLAN':7,'MATERIAL':8}
     fuentes_ordenadas=sorted(fuentes,key=lambda f:prioridades.get(f.get('tipo',''),9))
     partes=[f"{f['referencia']} ({f['alcance']}): {f['texto']}" for f in fuentes_ordenadas if f.get('texto')]
     grados=set()

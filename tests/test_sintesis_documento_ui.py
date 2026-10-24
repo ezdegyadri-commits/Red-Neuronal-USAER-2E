@@ -23,3 +23,9 @@ class SintesisUITests(TestCase):
         self.assertEqual(len(saved),1)
         self.assertEqual(len(saved[0][1]['necesidades']),1)
         self.assertLessEqual(len(saved[0][1]['resumen']),1200)
+        # Simula volver a entrar sin el OCR en memoria: se recupera del índice.
+        del app.session_state['qa_QA-DOC_lectura']
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any(saved[0][1]['resumen']==m.value for m in app.markdown))
+        self.assertFalse(app.text_area)

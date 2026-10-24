@@ -104,10 +104,9 @@ def externo(doc,area,prefix,get_value,save_value):
     nombre=st.text_input('Instrumento o informe que emitió el profesional',key=key+'_nombre')
     fecha=st.date_input('Fecha de la evaluación externa',value=None,format='DD/MM/YYYY',key=key+'_fecha')
     reviewed=st.checkbox('Verifiqué alumno, instrumento, fecha y resultados contra el original; no hay información de terceros',key=key+'_revisado')
-    if upload.name.rsplit('.',1)[-1].lower() in ('pdf','png','jpg','jpeg') and len(data)<=5*1024*1024:
-        from ui.archivo_expediente import boton
-        tipo={'Aprendizaje':'Competencia curricular','Psicología':'Estudio psicológico','Comunicación':'Evaluación de comunicación y lenguaje','Trabajo Social':'Estudio social'}[area]
-        boton([doc['alumno']],tipo,upload.getvalue,upload.name,key+'_archivar',doc['id'],doc['ciclo'],'EPP iniciada',disabled=not reviewed)
+    archivable=upload.name.rsplit('.',1)[-1].lower() in ('pdf','png','jpg','jpeg') and len(data)<=5*1024*1024
+    st.caption('Al guardar se conservarán el original y su síntesis en el expediente, sin otro botón de archivo.' if archivable else
+        'Se conservarán los resultados revisados en la EPP. Para conservar también el original en el expediente, utiliza PDF, JPG o PNG de hasta 5 MB.')
     fingerprint=hashlib.sha256(json.dumps([texto,nombre,str(fecha)]).encode()).hexdigest()
     if st.button('Guardar evaluación y preparar análisis',disabled=not reviewed or not texto.strip(),key=key+'_preparar'):
         try:
@@ -119,6 +118,13 @@ def externo(doc,area,prefix,get_value,save_value):
             value['evaluaciones']=[e for e in value['evaluaciones'] if e.get('archivo_sha256')!=fid and e['id']!=ev['id']]+[ev]
             value['validada']=False
             if not save_value(value,True):raise ValueError('La evaluación sigue pendiente de confirmación. Reintenta el guardado; no se envió a IA.')
+            if archivable:
+                try:
+                    from services.evaluacion_archivo import guardar as archivar
+                    archivar(doc,area,upload.name,data,texto)
+                    st.success('Original y síntesis confirmados en el expediente; disponibles como antecedentes.')
+                except Exception:
+                    st.warning('Los resultados están guardados en la EPP, pero no se confirmó el archivo o su síntesis. Conserva esta carga y vuelve a pulsar Guardar evaluación; no se duplicará una copia ya confirmada.')
             plan=s.contexto(doc)
             st.session_state[key+'_resumen']=s.resumen(doc,area,value,plan)
             from services.epp_entrada import huella_instrumentos

@@ -23,6 +23,18 @@ def archivado(did, row, data, key):
     from services import documentos_sintesis as servicio
     from services.materiales_planeacion import leer_material
     k=key+'_'+did
+    educativo=row.get('Tipo') in servicio.EDUCATIVOS
+    try:
+        saved=servicio.listar().get(did)
+    except Exception:
+        saved=None
+        st.warning('No se pudo consultar la síntesis guardada. El original y las revisiones anteriores se conservan; reintenta la consulta.')
+    if saved:
+        st.caption('Síntesis conservada en el expediente · '+str(saved.get('Fecha',''))[:16])
+        st.write(saved['resumen'])
+        for necesidad in saved['necesidades']:st.write('• '+necesidad)
+        st.caption('Disponible como antecedente revisado: actualiza los antecedentes en Planeación o EPP. No sustituye la valoración profesional.' if educativo else
+            'Conservada para consulta del expediente; los documentos de identidad o administrativos no se usan como resultados educativos.')
     if st.button('Preparar vista previa sintetizada', key=k+'_leer'):
         try:
             with st.spinner('Preparando síntesis local del documento…'):
@@ -41,6 +53,7 @@ def archivado(did, row, data, key):
                  disabled=not review or not value['resumen'].strip(),key=k+'_guardar'):
         try:
             servicio.guardar(did,value)
-            st.success('Síntesis guardada. Las NEE seleccionadas estarán disponibles al actualizar los antecedentes de la planeación del alumno.' if unica else 'Síntesis guardada sin cambiar el documento original.')
+            st.success('Síntesis guardada y vinculada por alumno. Actualiza los antecedentes en Planeación o EPP para recuperarla; el original no cambió.' if educativo else
+                'Síntesis guardada para consulta del expediente, sin modificar el original ni incorporarla como resultado educativo.')
         except Exception as exc:
             st.warning(str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó la síntesis. El original permanece archivado; vuelve a intentar sin cargarlo otra vez.')
