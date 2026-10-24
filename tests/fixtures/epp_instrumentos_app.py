@@ -13,12 +13,16 @@ if 'qa_value' not in st.session_state:
 doc={'id':'EPP-FICTICIA','alumno':'FICTICIO','ciclo':'2026-2027','partes':{'Aprendizaje':{'contenido':st.session_state.qa_value}}}
 def guardar(v,manual):st.session_state.qa_value=deepcopy(v);return True
 class Archivo:
-    name='informe-ficticio.docx'
+    name='informe-ficticio.'+st.session_state.get('qa_extension','docx')
     def getvalue(self):return b'datos-ficticios-no-documento-real'
 def generar(*args):
     st.session_state.qa_ai_calls+=1
     return {'campos':{f:'EV1: Propuesta ficticia revisable.' for f in campos('Aprendizaje')},'nee':[],'bap':[],'faltantes':[]}
-with patch('services.materiales_planeacion.leer_material',return_value={'texto':'Hallazgos de una evaluación profesional ficticia.','avisos':[]}),patch.object(epp,'contexto',return_value={}),patch.object(epp,'resumen',return_value='EV1: Hallazgo sin identificadores para revisión.'),patch('ai.epp.generar',side_effect=generar):
+def archivar(*args):
+    st.session_state['qa_archivos']=st.session_state.get('qa_archivos',0)+1
+    if st.session_state.get('qa_fallo_archivo'):raise RuntimeError('Fallo ficticio')
+    return 'ARCHIVO-FICTICIO'
+with patch('services.evaluacion_archivo.guardar',side_effect=archivar),patch('services.materiales_planeacion.leer_material',return_value={'texto':'Hallazgos de una evaluación profesional ficticia.','avisos':[]}),patch.object(epp,'contexto',return_value={}),patch.object(epp,'resumen',return_value='EV1: Hallazgo sin identificadores para revisión.'),patch('ai.epp.generar',side_effect=generar):
     if st.session_state.get('qa_modo','digital')=='digital':ui.digital(doc,'Aprendizaje','qa',lambda:st.session_state.qa_value,guardar,nombre=motor.DEFINICIONES['XIV']['nombre'])
     else:
         with patch.object(ui.st,'file_uploader',return_value=Archivo()):ui.externo(doc,'Aprendizaje','qa',lambda:st.session_state.qa_value,guardar)

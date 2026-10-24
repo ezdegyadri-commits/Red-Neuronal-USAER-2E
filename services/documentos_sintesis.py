@@ -80,15 +80,37 @@ def listar():
     return result
 
 
-def fuentes_epp(ids, ciclo):
+EDUCATIVOS = {'EPP', 'Competencia curricular', 'Estudio psicológico',
+    'Evaluación de comunicación y lenguaje', 'Estudio social', 'Entrevista',
+    'Estilo de aprendizaje y motivación', 'Informe pedagógico inicial',
+    'Informe pedagógico final', 'Informe psicológico inicial', 'Informe psicológico final',
+    'Informe de comunicación inicial', 'Informe de comunicación final', 'Derivación',
+    'Sugerencias', 'Eventos significativos', 'Evaluación diagnóstica', 'BAP áulico',
+    'BAP familiar', 'Agote de recursos', 'Otro documento educativo',
+    'Informe médico', 'Reporte de atención médica', 'Canalización'}
+
+
+def fuentes_documentales(ids, ciclo):
+    """Solo síntesis revisadas, sin OCR ni documentos de identificación/contacto.
+
+    Una fuente colectiva exige que todos sus destinatarios estén en la consulta.
+    No se convierte un resultado externo en diagnóstico ni en EPP validada.
+    """
     fuentes = []
     for r in listar().values():
         d = r['documento']; destinatarios = json.loads(d['ID_Alumnos_JSON'])
-        if d['Tipo'] != 'EPP' or d['Ambito'] != 'individual' or len(destinatarios) != 1 or destinatarios[0] not in ids or d['Ciclo'] > ciclo:
+        if d['Tipo'] not in EDUCATIVOS or not destinatarios or not set(destinatarios).issubset(set(ids)) or d['Ciclo'] > ciclo:
             continue
-        if not r['necesidades']: continue
-        fuentes.append({'tipo': 'EPP_ESCANEADA', 'alumno': destinatarios[0], 'registro': d['ID_Documento'],
+        epp = d['Tipo'] == 'EPP' and d['Ambito'] == 'individual' and len(destinatarios) == 1
+        fuentes.append({'tipo': 'EPP_ESCANEADA' if epp else 'DOCUMENTO_REVISADO',
+                        'alumno': ','.join(sorted(destinatarios)), 'registro': d['ID_Documento'],
                         'documento_origen': d['ID_Documento'], 'revision': r['Revision'], 'fecha': d['Fecha'][:10],
-                        'texto': json.dumps({'NEE': [{'NEE': n} for n in r['necesidades']], 'Síntesis': r['resumen']}, ensure_ascii=False),
-                        'alcance': 'NEE explícitas de EPP escaneada, seleccionadas y revisadas contra el original; fecha de archivo, no de evaluación; no diagnóstico automático'})
+                        'texto': json.dumps({'Documento': d['Tipo'], 'Síntesis': r['resumen'],
+                            **({'NEE': [{'NEE': n} for n in r['necesidades']]} if epp else {})}, ensure_ascii=False),
+                        'alcance': 'Síntesis revisada contra el original; '+('individual' if len(destinatarios)==1 else 'colectiva, no atribuible a un solo alumno')+
+                            '; fecha de archivo, no de evaluación; no diagnóstico automático'})
     return fuentes
+
+
+def fuentes_epp(ids, ciclo):
+    return [f for f in fuentes_documentales(ids, ciclo) if f['tipo']=='EPP_ESCANEADA']

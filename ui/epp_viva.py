@@ -187,25 +187,31 @@ def herramientas(p):
             with st.expander('Escanear o cargar una evaluación'):
                 from services.materiales_planeacion import TIPOS,leer_material
                 upload=st.file_uploader('Documento de evaluación de este alumno',type=TIPOS,key=p+'_upload_'+area)
+                scan=p+'_escaneo_'+area+'_'+(hashlib.sha256(upload.getvalue()).hexdigest()[:16] if upload else 'sin_archivo')
                 if upload and st.button('Leer documento sin enviarlo a IA',key=p+'_leer_'+area):
                     try:
                         with st.spinner('Leyendo el documento…'):r=leer_material(upload.name,upload.getvalue())
-                        st.session_state[p+'_trans_'+area]=r['texto'][:12000]
+                        st.session_state[scan+'_trans']=r['texto'][:12000]
                         for aviso in r['avisos']:st.caption(aviso)
                     except Exception:st.warning('No se pudo leer. Conserva el original e intenta con un PDF con texto o una imagen más clara.')
-                if p+'_trans_'+area in st.session_state:
+                if upload and scan+'_trans' in st.session_state:
                     from ui.documento_sintesis import vista
-                    texto=vista(st.session_state[p+'_trans_'+area],p+'_texto_'+area)['resumen']
-                    check=st.checkbox('Revisé el contenido y no contiene datos de terceros',key=p+'_rev_'+area)
-                    if st.button('Incorporar síntesis revisada',disabled=not check or not texto.strip(),key=p+'_aplicar_'+area):
+                    texto=vista(st.session_state[scan+'_trans'],scan+'_texto')['resumen']
+                    check=st.checkbox('Revisé el contenido y no contiene datos de terceros',key=scan+'_rev')
+                    if st.button('Incorporar síntesis revisada',disabled=not check or not texto.strip(),key=scan+'_aplicar'):
                         ev={'id':hashlib.sha256(texto.encode()).hexdigest(),'nombre':'Evaluación cargada de '+area,'texto':texto}
                         if not any(e['id']==ev['id'] for e in v['evaluaciones']):v['evaluaciones'].append(ev)
-                        v['validada']=False;_incorporar(p,area,v)
-                if upload and upload.name.rsplit('.',1)[-1].lower() in ('pdf','png','jpg','jpeg') and len(upload.getvalue())<=5*1024*1024:
-                    from ui.archivo_expediente import boton
-                    check=st.checkbox('El original contiene solo datos de este alumno',key=p+'_archivo_revisado_'+area)
-                    tipo={'Aprendizaje':'Competencia curricular','Psicología':'Estudio psicológico','Comunicación':'Evaluación de comunicación y lenguaje','Trabajo Social':'Estudio social'}[area]
-                    boton([doc['alumno']],tipo,upload.getvalue,upload.name,p+'_archivo_'+area,doc['id'],doc['ciclo'],'EPP iniciada',disabled=not check)
+                        v['validada']=False
+                        if _incorporar(p,area,v):
+                            if upload.name.rsplit('.',1)[-1].lower() in ('pdf','png','jpg','jpeg') and len(upload.getvalue())<=5*1024*1024:
+                                try:
+                                    from services.evaluacion_archivo import guardar as archivar
+                                    archivar(doc,area,upload.name,upload.getvalue(),texto)
+                                    st.success('Original y síntesis confirmados en el expediente y vinculados como antecedentes.')
+                                except Exception:
+                                    st.warning('La evaluación está guardada, pero falta confirmar el archivo o su síntesis. Conserva la carga y reintenta Incorporar síntesis revisada; no se duplicará el original confirmado.')
+                            else:st.info('Resultados conservados en EPP. Para archivar el original utiliza PDF, JPG o PNG de hasta 5 MB.')
+                st.caption('Al incorporar la síntesis revisada se archiva también el original PDF, JPG o PNG de hasta 5 MB. No necesitas cargarlo ni archivarlo por segunda vez.')
             for ev in v.get('evaluaciones',[]):
                 with st.expander(ev.get('nombre','Evaluación')+' · '+ev.get('fecha','Sin fecha')):
                     from services.documento_sintesis import sintetizar
