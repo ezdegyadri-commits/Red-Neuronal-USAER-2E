@@ -19,6 +19,19 @@ def padron_ficticio():
 
 
 class RemigioTests(TestCase):
+    def test_estadistica_sexto_incluye_ambas_modalidades_sin_otra_responsable(self):
+        from streamlit.testing.v1 import AppTest
+        app=AppTest.from_file(str(Path(__file__).parent/'fixtures/estadistica_sexto_compartida_app.py'),default_timeout=30).run()
+        self.assertFalse(app.exception)
+        self.assertEqual(next(m.value for m in app.metric if m.label=='Alumnos'),'9')
+        self.assertTrue(any('9 resultados' in c.value for c in app.caption))
+        next(r for r in app.radio if r.label=='¿Qué deseas consultar?').set_value('Estadísticas').run()
+        self.assertFalse(app.exception)
+        self.assertEqual(next(m.value for m in app.metric if m.label=='Alumnos'),'9')
+        tablas=[d.value for d in app.dataframe]
+        self.assertTrue(any('Categoría' in t and '6°' in t['Categoría'].values
+            and int(t.loc[t['Categoría'].eq('6°'),'Alumnos'].iloc[0])==9 for t in tablas))
+
     def test_apellido_caamal_no_convierte_dianely_en_marycruz(self):
         self.assertEqual(alumnos._canonizar_docente_apoyo(NOMBRE),'DIANELY DE SUGEIDY CAAMAL TAMAY')
         for otro in ('Otra Cecilia Pérez','Otra maestra Caamal','Caamal','Cecilia'):
