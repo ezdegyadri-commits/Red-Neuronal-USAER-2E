@@ -327,7 +327,8 @@ def refrescar_evidencias():
     from data.google import clear_cache
     refrescar()
     for nombre in ('Alumnos','Anexo3_Deteccion','Anexo4_Sugerencias','Anexo5_Eventos',
-                   'Registro_Visitas','Relaciones_Expediente','Linea_Tiempo','EPP_Versiones'):
+                   'Registro_Visitas','Relaciones_Expediente','Linea_Tiempo','EPP_Versiones',
+                   'Sintesis_Documentos','Documentos_Expediente'):
         clear_cache(nombre)
 
 
@@ -668,6 +669,8 @@ def preparar_contexto(doc):
     from services.materiales_planeacion import fuentes_materiales
     fuentes,fallas=evidencias(doc)
     resultado=deepcopy(doc)
+    # Reconstruir el catálogo desde las fuentes recién consultadas, no una copia anterior.
+    resultado['metadatos'].pop('catalogo_nee_actual',None)
     # Una desconexión no borra el contexto previamente recuperado.
     elegidos={texto(a['ID_Alumno']) for a in doc['datos']['Alumnos']}
     previas=[f for f in doc['metadatos'].get('fuentes',[]) if f.get('tipo') in fallas and f.get('vinculo_verificado') and set(texto(f.get('alumno')).split(','))<=elegidos]

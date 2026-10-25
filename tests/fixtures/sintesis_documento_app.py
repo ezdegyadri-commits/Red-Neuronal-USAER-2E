@@ -10,6 +10,14 @@ row={'ID_Documento':'QA-DOC','Nombre':'EPP-prueba.txt','Tipo':'EPP','Ambito':'in
 def guardadas():
     if not st.session_state.qa_guardados:return {}
     did,v=st.session_state.qa_guardados[-1]
-    return {did:{**v,'Fecha':'2026-10-23T12:00:00Z'}}
-with patch('services.materiales_planeacion.leer_material',return_value={'texto':texto,'avisos':[]}),patch.object(ds,'listar',side_effect=guardadas),patch.object(ds,'guardar',side_effect=lambda did,v:st.session_state.qa_guardados.append((did,v))):
+    return {did:{**v,'Revision':'qa-revision','Fecha':'2026-10-23T12:00:00Z'}}
+def guardar(did,v,**kw):
+    value=ds.validar(v);st.session_state.qa_guardados.append((did,value));return 'qa-revision'
+editor_nativo=st.data_editor
+def editor(*args,**kwargs):
+    result=editor_nativo(*args,**kwargs)
+    if st.session_state.get('qa_validar_primera') and not result.empty:
+        result=result.copy();result.loc[result.index[0],'estado']='Validada'
+    return result
+with patch.object(st,'data_editor',side_effect=editor),patch('services.materiales_planeacion.leer_material',return_value={'texto':texto,'avisos':[]}),patch.object(ds,'listar',side_effect=guardadas),patch.object(ds,'guardar',side_effect=guardar):
     archivado('QA-DOC',row,b'archivo-ficticio','qa')
