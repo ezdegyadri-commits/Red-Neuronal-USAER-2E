@@ -295,11 +295,18 @@ def _open(prefix,doc):
     from services.planeacion_generacion import prellenar
     from services.planeacion_limpieza import normalizar
     limpio=normalizar(doc)
+    normalizado_cambio=limpio!=doc
+    if not previo or previo.get('id')!=doc.get('id') or previo.get('revision')!=doc.get('revision'):
+        try:
+            from services.planeacion_necesidades import actualizar_catalogo
+            limpio=actualizar_catalogo(limpio)
+        except Exception:
+            st.warning('No se pudo actualizar el catálogo de NEE ahora. Tu planeación y el texto seleccionado se conservan; puedes trabajar manualmente y reintentar Actualizar antecedentes.')
     st.session_state[prefix+'_doc']=prellenar(limpio)
     st.session_state[prefix+'_generation']=st.session_state.get(prefix+'_generation',0)+1
     for suffix in ('_error','_pdf','_fuentes','_ia'):
         st.session_state.pop(prefix+suffix,None)
-    st.session_state[prefix+'_pending']=limpio!=doc or bool(previo and previo.get('id')==doc.get('id') and st.session_state.get(prefix+'_pending'))
+    st.session_state[prefix+'_pending']=normalizado_cambio or bool(previo and previo.get('id')==doc.get('id') and st.session_state.get(prefix+'_pending'))
 
 
 def _resguardar_pendiente(prefix):
