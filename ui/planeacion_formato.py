@@ -54,14 +54,40 @@ def _tabla(prefix,tabla,persist,abrir):
 
                 with columnas[j%len(columnas)]:
                     st.text_area(campo,value=str(row.get(campo,'') or ''),height=130,key=key,help=ayuda,on_change=_celda,args=(prefix,key,tabla,i,campo,persist))
-                    if campo in ('Necesidades educativas específicas','NEE'):
-                        from services.planeacion_necesidades import opciones
-                        needs=opciones(doc)
-                        elegido=st.selectbox('NEE vinculada a EPP',range(-1,len(needs)),format_func=lambda n:'Seleccionar una necesidad…' if n<0 else needs[n]['texto']+' · '+needs[n]['referencia'],key=key+'_nee')
-                        if elegido>=0 and st.button('Añadir NEE sin borrar mi texto',key=key+'_nee_add'):
-                            actual=str(row.get(campo,'') or '')
-                            nuevo=actual if needs[elegido]['texto'] in actual.splitlines() else (actual+'\n'+needs[elegido]['texto']).strip()
-                            abrir(prefix,f.editar_celda(doc,tabla,i,campo,nuevo));persist(prefix);st.rerun()
+                    if campo in ('Necesidades educativas específicas', 'NEE'):
+                        from services.planeacion_nee import catalogo_nee_validadas
+                        target_alumno = None
+                        if row.get('_alumnos_apartados') and isinstance(row['_alumnos_apartados'], list):
+                            target_alumno = row['_alumnos_apartados'][0]
+                        elif doc.get('datos', {}).get('Alumnos'):
+                            target_alumno = doc['datos']['Alumnos'][0]
+
+                        catalogo = catalogo_nee_validadas(doc, alumno_id=target_alumno)
+                        opciones_nee = [c['texto'] for c in catalogo]
+                        curr_nee = str(row.get(campo, '') or '').strip()
+
+                        if opciones_nee:
+                            n_idx = opciones_nee.index(curr_nee) + 1 if curr_nee in opciones_nee else 0
+                            n_sel = st.selectbox(
+                                '📋 NEE validada de EPP',
+                                ['(Escribir libre / mantener actual)'] + opciones_nee,
+                                index=n_idx,
+                                key=f'{key}_nee_sel',
+                                help='Selecciona una NEE validada en la EPP para incorporarla a este aprendizaje sin recapturar.'
+                            )
+                            append_mode = False
+                            if len(opciones_nee) > 1 and curr_nee:
+                                append_mode = st.checkbox('➕ Añadir a texto actual (sin reemplazar)', key=f'{key}_nee_append', value=False)
+                            if n_sel != '(Escribir libre / mantener actual)':
+                                nuevo_valor = f"{curr_nee}\n{n_sel}".strip() if (append_mode and curr_nee and n_sel not in curr_nee) else n_sel
+                                if nuevo_valor != curr_nee:
+                                    st.session_state[prefix+'_doc'] = f.editar_celda(st.session_state[prefix+'_doc'], tabla, i, campo, nuevo_valor)
+                                    st.session_state.pop(prefix+'_pdf', None)
+                                    persist(prefix, automatic=True)
+                                    st.rerun()
+                        else:
+                            st.caption('ℹ️ Sin NEE validadas en EPP para este alumno (puedes redactar libremente en el campo superior).')
+
                     if campo == 'Contextos' and FORMATOS.get(doc['formato'],{}).get('contextos'):
                         opts = FORMATOS[doc['formato']]['contextos']
                         curr_ctx = str(row.get(campo,'') or '').strip()

@@ -12,6 +12,26 @@ def es_bapse(f):
     return normalizar_texto(f.get('tipo','')) in {'III','ANEXO3','BAPSE'} or bool(re.search(r'BAP_(?:Fisicas|Actitudinales|Pedagogicas|Organizativas)|[\"\'](?:pregunta|frecuencia|orientacion)[\"\']\s*:',str(f.get('texto','')),re.I))
 
 
+def es_diagnostico_puro(texto):
+    """Detecta si un texto es meramente un diagnóstico clínico o etiqueta médica sin formulación pedagógica."""
+    t = normalizar_texto(str(texto or ''))
+    if not t:
+        return False
+    patrones_diagnosticos = [
+        r'^(?:DIAGNOSTICO|DX|TRASTORNO|SINDROME|DISCAPACIDAD)\b',
+        r'^(?:TDAH|TEA|DI|TIG|F84|F90)\b',
+        r'^(?:HIPOACUSIA|CEGUERA|BAJA VISION|PARALISIS CEREBRAL|SINDROME DE DOWN)\b',
+        r'^(?:EPILEPSIA|MUTISMO SELECTIVO|ASPERGER)\b'
+    ]
+    tiene_accion_pedagogica = any(v in t for v in (
+        'FORTALECER', 'DESARROLLAR', 'ADQUIRIR', 'CONSOLIDAR', 'MEJORAR',
+        'COMPRENDER', 'RECONOCER', 'EXPRESAR', 'REGULAR', 'RESOLVER',
+        'COMUNICAR', 'AMPLIAR', 'PARTICIPAR', 'APRENDER', 'APOYO', 'ACCESO'
+    ))
+    es_patron = any(re.search(p, t) for p in patrones_diagnosticos)
+    return es_patron and not tiene_accion_pedagogica
+
+
 def nee_padron(alumno):
     for key,value in alumno.items():
         label=re.sub(r'^\d+[.\- ]*','',normalizar_texto(key).replace('_',' ')).strip()
@@ -99,3 +119,126 @@ def resumir_plan_previo(plan):
     for s in plan.get('metadatos',{}).get('equipo',{}).get('sesiones',[])[:3]:
         if s.get('actividad'):lineas.append('Actividad previa: '+str(s.get('actividad'))[:250])
     return '\n'.join(lineas) if len(lineas)>1 else f"Planeación anterior ({formato}) registrada sin detalle de actividades."
+
+
+def catalogo_nee_validadas(doc, alumno_id=None):
+    """Extrae las NEE estructuradas y validadas de la EPP del alumno para su uso en planeación.
+
+    Garantiza:
+    1. Aislamiento estricto por alumno_id (evita confusión entre homónimos).
+    2. Filtrado de diagnósticos clínicos puros y BAP.
+    3. Normalización pedagógica conforme al manual SEGEY.
+    4. Deduplicación conservando orden y trazabilidad.
+    """
+    alumnos_doc = [str(a.get('ID_Alumno', a) if isinstance(a, dict) else a).strip() for a in doc.get('datos', {}).get('Alumnos', []) if str(a).strip()]
+    if alumno_id:
+        target_ids = {str(alumno_id.get('ID_Alumno', alumno_id) if isinstance(alumno_id, dict) else alumno_id).strip()}
+    else:
+        target_ids = set(alumnos_doc)
+
+    fuentes = doc.get('metadatos', {}).get('fuentes', [])
+    items = []
+    vistos = set()
+
+    for f in fuentes:
+        if f.get('tipo') != 'EPP' or f.get('parte') != 'Conclusión':
+            continue
+        f_alumno = str(f.get('alumno', '')).strip()
+        if target_ids and f_alumno not in target_ids:
+            continue
+        try:
+            data = json.loads(f.get('texto', ''))
+        except (ValueError, TypeError):
+            continue
+
+        rows = data.get('NEE', []) if isinstance(data, dict) else []
+        if not isinstance(rows, list):
+            continue
+
+        for idx, r in enumerate(rows):
+            if not isinstance(r, dict):
+                continue
+            raw_nee = str(r.get('NEE', '')).strip()
+            if not raw_nee or es_bapse({'texto': raw_nee}):
+                continue
+            if es_diagnostico_puro(raw_nee):
+                continue
+
+            texto_nee = redactar_nee(raw_nee)
+            norm = normalizar_texto(texto_nee)
+            if not norm or norm in vistos:
+                continue
+            vistos.add(norm)
+
+            items.append({
+                'id': f"{f.get('registro', 'EPP')}-NEE-{idx+1}",
+                'alumno_id': f_alumno,
+                'texto': texto_nee,
+                'original': raw_nee,
+                'aspectos': str(r.get('Aspectos', '')).strip(),
+                'apoyos': str(r.get('Apoyos', '')).strip(),
+                'ajustes': str(r.get('Ajustes razonables', '')).strip(),
+                'origen': 'EPP validada',
+                'referencia': f.get('referencia', 'EPP'),
+                'documento_origen': f.get('documento_origen', ''),
+                'revision': f.get('revision', ''),
+            })
+
+    try:
+        from services.planeacion_necesidades import opciones as opciones_necesidades
+        doc_opts = opciones_necesidades(doc)
+        for r in doc_opts:
+            aid = str(r.get('alumno', '')).strip()
+            if target_ids and aid not in target_ids:
+                continue
+            raw_nee = str(r.get('texto', '')).strip()
+            if not raw_nee or es_bapse({'texto': raw_nee}) or es_diagnostico_puro(raw_nee):
+                continue
+            texto_nee = redactar_nee(raw_nee)
+            norm = normalizar_texto(texto_nee)
+            if not norm or norm in vistos:
+                continue
+            vistos.add(norm)
+            items.append({
+                'id': str(r.get('id', '')),
+                'alumno_id': aid,
+                'texto': texto_nee,
+                'original': raw_nee,
+                'aspectos': str(r.get('fundamento', '')).strip(),
+                'apoyos': '',
+                'ajustes': '',
+                'origen': 'EPP validada' if r.get('tipo') == 'EPP' else 'EPP escaneada',
+                'referencia': str(r.get('referencia', 'EPP')),
+                'documento_origen': str(r.get('documento', '')),
+                'revision': str(r.get('revision', '')),
+            })
+    except Exception:
+        pass
+
+    # Si no se encontraron en fuentes de EPP, verificar si el padrón docente tiene una NEE registrada
+    if not items and doc.get('datos'):
+        registrada = nee_padron(doc.get('datos', {}))
+        if registrada and not es_diagnostico_puro(registrada):
+            texto_nee = redactar_nee(registrada)
+            norm = normalizar_texto(texto_nee)
+            if norm not in vistos:
+                items.append({
+                    'id': 'PADRON-NEE-1',
+                    'alumno_id': next(iter(target_ids)) if target_ids else '',
+                    'texto': texto_nee,
+                    'original': registrada,
+                    'aspectos': '',
+                    'apoyos': '',
+                    'ajustes': '',
+                    'origen': 'Padrón docente',
+                    'referencia': 'Padrón',
+                    'documento_origen': '',
+                    'revision': '',
+                })
+
+    return items
+
+
+def opciones_nee_validadas(doc, alumno_id=None):
+    """Lista de cadenas con las NEE validadas listas para controles de UI (selectbox/multiselect)."""
+    return [c['texto'] for c in catalogo_nee_validadas(doc, alumno_id=alumno_id)]
