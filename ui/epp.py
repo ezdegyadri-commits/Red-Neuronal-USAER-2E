@@ -197,13 +197,15 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
         current_text = value.get(section, {}).get(field_name, '') if section else value.get(field_name, '')
         key = edit_prefix + '_field_' + (section or '') + field_name
 
-        c_lbl, c_clr = st.columns([0.84, 0.16])
-        with c_lbl:
-            st.markdown(f"**{field_name}**")
-        with c_clr:
-            if current_text and str(current_text).strip():
+        if current_text and str(current_text).strip():
+            c_lbl, c_clr = st.columns([0.84, 0.16])
+            with c_lbl:
+                st.markdown(f"**{field_name}**")
+            with c_clr:
                 if st.button("🗑️ Vaciar", key=f"clr_{key}", help=f"Eliminar texto propuesto de {field_name}"):
                     _clear_field(edit_prefix, field_name, section)
+        else:
+            st.markdown(f"**{field_name}**")
 
         st.text_area(
             label=field_name,
@@ -254,10 +256,13 @@ def epp_page():
         st.error('No fue posible consultar las EPP. No se modificó ningún documento.')
         return
 
+    frame = s.planes.padron_autorizado()
+    names = {str(r['ID_Alumno']): str(r['Nombre_Completo']) + ' · ' + str(r.get('Nombre_Escuela', '')) for r in frame.to_dict('records')}
+    selected_key = prefix + '_selected'
+
     # Iniciar EPP nueva (Maestra de apoyo / Director)
     if s.puede_crear():
         with st.expander('➕ Iniciar una EPP nueva para un alumno'):
-            frame = s.planes.padron_autorizado()
             if not frame.empty:
                 labels = {str(r['ID_Alumno']): str(r['Nombre_Completo']) + ' · ' + str(r.get('Nombre_Escuela', '')) for r in frame.to_dict('records')}
                 id_alumno = st.selectbox('Alumno de mi matrícula', list(labels), format_func=labels.get, key=prefix + '_nuevo_alumno')
@@ -268,11 +273,6 @@ def epp_page():
                         st.rerun()
                     except Exception as exc:
                         st.error(str(exc) if isinstance(exc, (ValueError, PermissionError)) else 'No se confirmó la creación.')
-
-    # Filtro por escuela para especialistas
-    frame = s.planes.padron_autorizado()
-    names = {str(r['ID_Alumno']): str(r['Nombre_Completo']) + ' · ' + str(r.get('Nombre_Escuela', '')) for r in frame.to_dict('records')}
-    selected_key = prefix + '_selected'
 
     if a['area'] in ('Psicología', 'Comunicación', 'Trabajo Social') and not a['director']:
         schools = {str(r['ID_Escuela']): str(r.get('Nombre_Escuela', '')) for r in frame.to_dict('records') if str(r.get('ID_Escuela', '')).strip()}
@@ -435,217 +435,259 @@ def epp_page():
     st.write("")
     st.markdown("---")
 
+    # Barra superior de guardado rápido y estado
+    if user_work_area:
+        is_val = st.session_state[edit_active_prefix + '_value'].get('validada', False)
+        c_status, c_save_top = st.columns([0.72, 0.28])
+        with c_status:
+            if is_val:
+                st.markdown(f"<div style='padding:6px 0;'><span style='color:#2e7d32; font-weight:600;'>✅ Tu área ({user_work_area}) está validada</span></div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div style='padding:6px 0;'><span style='color:#1565c0; font-weight:500;'>✏️ Editando: <strong>{user_work_area}</strong> (borrador activo)</span></div>", unsafe_allow_html=True)
+        with c_save_top:
+            if st.button("💾 Guardar cambios de mi área", key=prefix + '_quick_save_top', use_container_width=True):
+                _save(edit_active_prefix)
+                if can_edit_concl and 'Conclusión' in doc['partes']:
+                    _save(prefix + '_edit_' + doc['id'] + '_Conclusión')
+                st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
+                st.toast("Borrador guardado correctamente.", icon="💾")
+
     # =========================================================================
     # EL FORMATO VIVO: ANEXOS XVII Y XVIII DEL MANUAL USAER
     # =========================================================================
     st.markdown("### 📄 Formato Vivo · Informe de Evaluación Psicopedagógica")
     st.caption("Trabaja directamente sobre cada sección del documento oficial. Los campos con bordes son editables para tu función; los demás reflejan el avance en vivo del equipo.")
 
+    # Selector de modo de trabajo: Agilidad, minimalismo y cero sobrecarga
+    vistas = [f"🎯 Mi área ({user_work_area})", "⚖️ Conclusión y NEE", "👁️ Ver informe completo"] if user_work_area else ["⚖️ Conclusión y NEE", "👁️ Ver informe completo"]
+    vista_activa = st.radio(
+        "Modo de trabajo:",
+        vistas,
+        index=0,
+        horizontal=True,
+        key=prefix + '_vista_modo',
+        help="Elige si deseas enfocarte únicamente en los apartados de tu función o revisar todo el informe."
+    )
+    modo_area = vista_activa.startswith("🎯 Mi área")
+    modo_concl = vista_activa.startswith("⚖️ Conclusión")
+    modo_todo = vista_activa.startswith("👁️ Ver informe")
+
     # -------------------------------------------------------------------------
     # 1. DATOS DE IDENTIFICACIÓN Y MOTIVO
     # -------------------------------------------------------------------------
-    with st.expander("1. Datos de identificación y motivo de evaluación", expanded=True):
-        col_m1, col_m2 = st.columns([0.65, 0.35])
-        with col_m1:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', 'Motivo de evaluación', section='generales', height=80, prefix=prefix)
-        with col_m2:
-            generales=doc['partes'].get('Aprendizaje',{}).get('contenido',{}).get('generales',{})
-            st.markdown('**Fecha inicial:** '+str(generales.get('Fecha inicial de evaluación') or 'Por confirmar'))
-            st.markdown('**Fecha final:** '+str(generales.get('Fecha final de evaluación') or 'Por confirmar'))
-            st.markdown(f"**Maestra de apoyo:** {doc['partes'].get('Aprendizaje', {}).get('autor', 'Por asignar')}")
+    if modo_todo or (modo_area and (user_work_area == 'Aprendizaje' or a['director'])):
+        with st.expander("1. Datos de identificación y motivo de evaluación", expanded=True):
+            col_m1, col_m2 = st.columns([0.65, 0.35])
+            with col_m1:
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', 'Motivo de evaluación', section='generales', height=80, prefix=prefix)
+            with col_m2:
+                generales=doc['partes'].get('Aprendizaje',{}).get('contenido',{}).get('generales',{})
+                st.markdown('**Fecha inicial:** '+str(generales.get('Fecha inicial de evaluación') or 'Por confirmar'))
+                st.markdown('**Fecha final:** '+str(generales.get('Fecha final de evaluación') or 'Por confirmar'))
+                st.markdown(f"**Maestra de apoyo:** {doc['partes'].get('Aprendizaje', {}).get('autor', 'Por asignar')}")
 
-        if user_work_area == 'Aprendizaje' or a['director']:
-            with st.expander("📋 Datos generales complementarios (Domicilio, padres, escolaridad)"):
-                edit_apr = prefix + '_edit_' + doc['id'] + '_Aprendizaje'
-                if edit_apr + '_doc' not in st.session_state:
-                    _abrir(edit_apr, doc, 'Aprendizaje')
-                for f in GENERALES:
-                    if f != 'Motivo de evaluación':
-                        _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', f, section='generales', height=65, prefix=prefix)
+            if user_work_area == 'Aprendizaje' or a['director']:
+                with st.expander("📋 Datos generales complementarios (Domicilio, padres, escolaridad)"):
+                    edit_apr = prefix + '_edit_' + doc['id'] + '_Aprendizaje'
+                    if edit_apr + '_doc' not in st.session_state:
+                        _abrir(edit_apr, doc, 'Aprendizaje')
+                    for f in GENERALES:
+                        if f != 'Motivo de evaluación':
+                            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', f, section='generales', height=65, prefix=prefix)
 
-            with st.expander("🏫 Historia escolar previa"):
-                edit_apr = prefix + '_edit_' + doc['id'] + '_Aprendizaje'
-                if edit_apr + '_doc' not in st.session_state:
-                    _abrir(edit_apr, doc, 'Aprendizaje')
-                _grid(edit_apr, 'historia', HISTORIA)
+                with st.expander("🏫 Historia escolar previa"):
+                    edit_apr = prefix + '_edit_' + doc['id'] + '_Aprendizaje'
+                    if edit_apr + '_doc' not in st.session_state:
+                        _abrir(edit_apr, doc, 'Aprendizaje')
+                    _grid(edit_apr, 'historia', HISTORIA)
 
     # -------------------------------------------------------------------------
     # 2. INFORMACIÓN INICIAL Y DE SALUD
     # -------------------------------------------------------------------------
-    with st.expander("2. Información inicial y de salud (Trabajo Social)", expanded=True):
-        st.caption("Datos perinatales, desarrollo temprano y condiciones de salud actuales.")
-        c2_1, c2_2 = st.columns(2)
-        with c2_1:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '2.1. Embarazo', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '2.2. Parto', prefix=prefix)
-        with c2_2:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '2.3. Apariencia física', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '2.4. Salud', prefix=prefix)
+    if modo_todo or (modo_area and (user_work_area == 'Trabajo Social' or a['director'])):
+        with st.expander("2. Información inicial y de salud (Trabajo Social)", expanded=True):
+            st.caption("Datos perinatales, desarrollo temprano y condiciones de salud actuales.")
+            c2_1, c2_2 = st.columns(2)
+            with c2_1:
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '2.1. Embarazo', prefix=prefix)
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '2.2. Parto', prefix=prefix)
+            with c2_2:
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '2.3. Apariencia física', prefix=prefix)
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '2.4. Salud', prefix=prefix)
 
     # -------------------------------------------------------------------------
     # 3. FUNCIONAMIENTO INTELECTUAL
     # -------------------------------------------------------------------------
-    with st.expander("3. Funcionamiento intelectual (Psicología)", expanded=True):
-        st.caption("Atención, memoria, percepción, razonamiento lógico y cociente intelectual.")
-        c3_1, c3_2 = st.columns(2)
-        with c3_1:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.1. Atención', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.2. Memoria', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.3. Percepción', prefix=prefix)
-        with c3_2:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.4. Razonamiento', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.5. Cociente intelectual', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.6. Etapa de desarrollo', prefix=prefix)
-        _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.7. Creatividad (AS)', prefix=prefix)
+    if modo_todo or (modo_area and (user_work_area == 'Psicología' or a['director'])):
+        with st.expander("3. Funcionamiento intelectual (Psicología)", expanded=True):
+            st.caption("Atención, memoria, percepción, razonamiento lógico y cociente intelectual.")
+            c3_1, c3_2 = st.columns(2)
+            with c3_1:
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.1. Atención', prefix=prefix)
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.2. Memoria', prefix=prefix)
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.3. Percepción', prefix=prefix)
+            with c3_2:
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.4. Razonamiento', prefix=prefix)
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.5. Cociente intelectual', prefix=prefix)
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.6. Etapa de desarrollo', prefix=prefix)
+            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '3.7. Creatividad (AS)', prefix=prefix)
 
     # -------------------------------------------------------------------------
     # 4. CONDUCTA ADAPTATIVA (INTERDISCIPLINARIA)
     # -------------------------------------------------------------------------
-    with st.expander("4. Conducta adaptativa (Comunicación · Aprendizaje · Psicología · Trabajo Social)", expanded=True):
-        st.markdown("#### 🗣️ 4.1. Comunicación y Lenguaje")
-        c4_com1, c4_com2 = st.columns(2)
-        with c4_com1:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Comunicación y lenguaje: intención comunicativa', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Lenguaje oral: fonológico', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Lenguaje oral: morfosintáctico', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Sistema de comunicación alternativo', prefix=prefix)
-        with c4_com2:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Lenguaje oral: semántico', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Lenguaje oral: pragmático', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Comprensión expresiva', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Comprensión receptiva', prefix=prefix)
+    if modo_todo or modo_area:
+        with st.expander("4. Conducta adaptativa (Comunicación · Aprendizaje · Psicología · Trabajo Social)", expanded=True):
+            if modo_todo or (modo_area and (user_work_area in ('Comunicación', 'Aprendizaje') or a['director'])):
+                st.markdown("#### 🗣️ 4.1. Comunicación y Lenguaje")
+                c4_com1, c4_com2 = st.columns(2)
+                with c4_com1:
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Comunicación y lenguaje: intención comunicativa', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Lenguaje oral: fonológico', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Lenguaje oral: morfosintáctico', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Sistema de comunicación alternativo', prefix=prefix)
+                with c4_com2:
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Lenguaje oral: semántico', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Lenguaje oral: pragmático', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Comprensión expresiva', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Comprensión receptiva', prefix=prefix)
 
-        st.markdown("#### 📘 4.1. Habilidades Conceptuales y Académicas Funcionales")
-        c4_apr1, c4_apr2 = st.columns(2)
-        with c4_apr1:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Lectura y escritura funcional', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Matemáticas funcionales', prefix=prefix)
-        with c4_apr2:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Conceptos relativos al dinero', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Orientación temporal', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Orientación espacial', prefix=prefix)
+            if modo_todo or (modo_area and (user_work_area == 'Aprendizaje' or a['director'])):
+                st.markdown("#### 📘 4.1. Habilidades Conceptuales y Académicas Funcionales")
+                c4_apr1, c4_apr2 = st.columns(2)
+                with c4_apr1:
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Lectura y escritura funcional', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Matemáticas funcionales', prefix=prefix)
+                with c4_apr2:
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Conceptos relativos al dinero', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Orientación temporal', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '4.1. Orientación espacial', prefix=prefix)
 
-        st.markdown("#### 🧠 4.2. Habilidades Sociales, Afectivas y de Autorregulación")
-        c4_psi1, c4_psi2 = st.columns(2)
-        with c4_psi1:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.1. Autodirección', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Relaciones interpersonales', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Cumplimiento de normas', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Responsabilidad', prefix=prefix)
-        with c4_psi2:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Autoestima', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Autoconcepto', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Identificación y autorregulación de emociones', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Autodeterminación', prefix=prefix)
+            if modo_todo or (modo_area and (user_work_area == 'Psicología' or a['director'])):
+                st.markdown("#### 🧠 4.2. Habilidades Sociales, Afectivas y de Autorregulación")
+                c4_psi1, c4_psi2 = st.columns(2)
+                with c4_psi1:
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.1. Autodirección', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Relaciones interpersonales', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Cumplimiento de normas', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Responsabilidad', prefix=prefix)
+                with c4_psi2:
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Autoestima', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Autoconcepto', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Identificación y autorregulación de emociones', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Autodeterminación', prefix=prefix)
 
-        st.markdown("#### 🤝 4.3. Habilidades Prácticas, Vida Diaria y Psicomotricidad")
-        c4_pra1, c4_pra2 = st.columns(2)
-        with c4_pra1:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.3. Noción corporal', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.3. Coordinación motriz fina', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.3. Coordinación motriz gruesa', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.3. Movilidad, equilibrio y desplazamiento', prefix=prefix)
-        with c4_pra2:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Autocuidado', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Actividades en la casa', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Utilización de la comunidad', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Salud y seguridad', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Ocio y tiempo libre', prefix=prefix)
+            if modo_todo or (modo_area and (user_work_area in ('Psicología', 'Trabajo Social') or a['director'])):
+                st.markdown("#### 🤝 4.3. Habilidades Prácticas, Vida Diaria y Psicomotricidad")
+                c4_pra1, c4_pra2 = st.columns(2)
+                with c4_pra1:
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.3. Noción corporal', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.3. Coordinación motriz fina', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.3. Coordinación motriz gruesa', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.3. Movilidad, equilibrio y desplazamiento', prefix=prefix)
+                with c4_pra2:
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Autocuidado', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Actividades en la casa', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Utilización de la comunidad', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Salud y seguridad', prefix=prefix)
+                    _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '4.3. Ocio y tiempo libre', prefix=prefix)
 
     # -------------------------------------------------------------------------
     # 5. FUNCIONAMIENTO ACADÉMICO
     # -------------------------------------------------------------------------
-    with st.expander("5. Funcionamiento académico (Aprendizaje)", expanded=True):
-        st.caption("Nivel de logro en los Procesos de Desarrollo de Aprendizaje (PDA) y canales de aprendizaje.")
-        _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '5.1. Competencia curricular', height=110, prefix=prefix)
-        _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '5.2. Estilo de aprendizaje', height=100, prefix=prefix)
+    if modo_todo or (modo_area and (user_work_area == 'Aprendizaje' or a['director'])):
+        with st.expander("5. Funcionamiento académico (Aprendizaje)", expanded=True):
+            st.caption("Nivel de logro en los Procesos de Desarrollo de Aprendizaje (PDA) y canales de aprendizaje.")
+            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '5.1. Competencia curricular', height=110, prefix=prefix)
+            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '5.2. Estilo de aprendizaje', height=100, prefix=prefix)
 
     # -------------------------------------------------------------------------
     # 6. CONTEXTOS DEL ALUMNO
     # -------------------------------------------------------------------------
-    with st.expander("6. Contextos escolar, sociofamiliar y social", expanded=True):
-        st.caption("Interacciones en el aula regular, dinámica del hogar y entorno social.")
-        c6_1, c6_2 = st.columns(2)
-        with c6_1:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '6.1. Contexto escolar', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '6.1. Historia escolar', prefix=prefix)
-        with c6_2:
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '6.2. Contexto familiar', prefix=prefix)
-            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '6.3. Contexto social', prefix=prefix)
+    if modo_todo or (modo_area and (user_work_area in ('Aprendizaje', 'Trabajo Social') or a['director'])):
+        with st.expander("6. Contextos escolar, sociofamiliar y social", expanded=True):
+            st.caption("Interacciones en el aula regular, dinámica del hogar y entorno social.")
+            c6_1, c6_2 = st.columns(2)
+            with c6_1:
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '6.1. Contexto escolar', prefix=prefix)
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', '6.1. Historia escolar', prefix=prefix)
+            with c6_2:
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '6.2. Contexto familiar', prefix=prefix)
+                _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '6.3. Contexto social', prefix=prefix)
 
-        if user_work_area == 'Trabajo Social' or a['director']:
-            with st.expander("👨‍👩‍👧 Composición familiar (permanece privada)"):
-                edit_ts = prefix + '_edit_' + doc['id'] + '_Trabajo Social'
-                if edit_ts + '_doc' not in st.session_state:
-                    _abrir(edit_ts, doc, 'Trabajo Social')
-                _grid(edit_ts, 'familia', FAMILIA)
+            if user_work_area == 'Trabajo Social' or a['director']:
+                with st.expander("👨‍👩‍👧 Composición familiar (permanece privada)"):
+                    edit_ts = prefix + '_edit_' + doc['id'] + '_Trabajo Social'
+                    if edit_ts + '_doc' not in st.session_state:
+                        _abrir(edit_ts, doc, 'Trabajo Social')
+                    _grid(edit_ts, 'familia', FAMILIA)
 
     # -------------------------------------------------------------------------
     # 7. CONCLUSIÓN INTERDISCIPLINARIA, NEE (SEGEY) Y BAP
     # -------------------------------------------------------------------------
-    with st.expander("7. Conclusión interdisciplinaria, determinación de NEE y BAP", expanded=True):
-        st.markdown(
-            """
-            <div style='background-color: #fff9db; border-left: 4px solid #f59f00; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px;'>
-                <strong>Fórmula oficial SEGEY (pp. 150-151):</strong><br>
-                • <strong>NEE:</strong> <code>[Necesita + verbo observable + contenido pedagógico / apoyo]</code>.<br>
-                • <strong>BAP:</strong> Barreras del entorno en contextos Áulico, Escolar, Familiar y Social (no etiquetas del alumno).
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    if modo_todo or modo_concl or can_edit_concl:
+        with st.expander("7. Conclusión interdisciplinaria, determinación de NEE y BAP", expanded=True):
+            st.markdown(
+                """
+                <div style='background-color: #fff9db; border-left: 4px solid #f59f00; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px;'>
+                    <strong>Fórmula oficial SEGEY (pp. 150-151):</strong><br>
+                    • <strong>NEE:</strong> <code>[Necesita + verbo observable + contenido pedagógico / apoyo]</code>.<br>
+                    • <strong>BAP:</strong> Barreras del entorno en contextos Áulico, Escolar, Familiar y Social (no etiquetas del alumno).
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-        edit_concl = prefix + '_edit_' + doc['id'] + '_Conclusión'
-        if can_edit_concl and edit_concl + '_doc' not in st.session_state:
-            _abrir(edit_concl, doc, 'Conclusión')
+            edit_concl = prefix + '_edit_' + doc['id'] + '_Conclusión'
+            if can_edit_concl and edit_concl + '_doc' not in st.session_state:
+                _abrir(edit_concl, doc, 'Conclusión')
 
-        if can_edit_concl:
-            col_b1, col_b2 = st.columns([0.7, 0.3])
-            with col_b1:
-                if st.button("🎯 Generar propuesta de NEE oficial SEGEY y Acuerdos Interdisciplinarios", key=prefix + '_btn_gen_nee_vivo'):
-                    prop = proponer_nee_segey(doc)
-                    val_c = st.session_state[edit_concl + '_value']
-                    for k, v in prop['campos'].items():
-                        if not str(val_c.get('campos', {}).get(k, '')).strip():
-                            val_c.setdefault('campos', {})[k] = v
-                    val_c['nee'] = prop['nee']
-                    val_c['bap'] = prop['bap']
-                    val_c['validada'] = False
-                    _save(edit_concl)
-                    st.success("✨ Propuesta oficial de NEE y BAP ensamblada con base en los hallazgos de las 4 áreas.")
-                    st.rerun()
-            with col_b2:
-                st.caption("Sincroniza y redacta automáticamente según los hallazgos del equipo.")
+            if can_edit_concl:
+                col_b1, col_b2 = st.columns([0.7, 0.3])
+                with col_b1:
+                    if st.button("🎯 Generar propuesta de NEE oficial SEGEY y Acuerdos Interdisciplinarios", key=prefix + '_btn_gen_nee_vivo'):
+                        prop = proponer_nee_segey(doc)
+                        val_c = st.session_state[edit_concl + '_value']
+                        for k, v in prop['campos'].items():
+                            if not str(val_c.get('campos', {}).get(k, '')).strip():
+                                val_c.setdefault('campos', {})[k] = v
+                        val_c['nee'] = prop['nee']
+                        val_c['bap'] = prop['bap']
+                        val_c['validada'] = False
+                        _save(edit_concl)
+                        st.success("✨ Propuesta oficial de NEE y BAP ensamblada con base en los hallazgos de las 4 áreas.")
+                        st.rerun()
+                with col_b2:
+                    st.caption("Sincroniza y redacta automáticamente según los hallazgos del equipo.")
 
-        # Campos de conclusión
-        _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', '7.1. Conclusión', height=100, prefix=prefix)
-        _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', 'Énfasis de atención acordado', height=75, prefix=prefix)
-        _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', 'Asociación educativa sustentada', height=75, prefix=prefix)
-        _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', 'Acuerdos y apoyos del equipo', height=90, prefix=prefix)
+            # Campos de conclusión
+            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', '7.1. Conclusión', height=100, prefix=prefix)
+            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', 'Énfasis de atención acordado', height=75, prefix=prefix)
+            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', 'Asociación educativa sustentada', height=75, prefix=prefix)
+            _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', 'Acuerdos y apoyos del equipo', height=90, prefix=prefix)
 
-        st.markdown("#### 🎯 Necesidades Educativas Específicas (NEE)")
-        if can_edit_concl:
-            st.caption("Puedes editar, añadir o retirar filas directamente en la tabla:")
-            _grid(edit_concl, 'nee', NEE)
-        else:
-            nees = doc['partes'].get('Conclusión', {}).get('contenido', {}).get('nee', [])
-            if any(any(str(r.get(k, '')).strip() for k in NEE) for r in nees):
-                df_nee = pd.DataFrame(nees)[[c for c in NEE if c in pd.DataFrame(nees).columns]].fillna('')
-                st.dataframe(df_nee, hide_index=True, use_container_width=True)
+            st.markdown("#### 🎯 Necesidades Educativas Específicas (NEE)")
+            if can_edit_concl:
+                st.caption("Puedes editar, añadir o retirar filas directamente en la tabla:")
+                _grid(edit_concl, 'nee', NEE)
             else:
-                st.caption("*(La maestra de apoyo integrará las NEE acordadas por el equipo)*")
+                nees = doc['partes'].get('Conclusión', {}).get('contenido', {}).get('nee', [])
+                if any(any(str(r.get(k, '')).strip() for k in NEE) for r in nees):
+                    df_nee = pd.DataFrame(nees)[[c for c in NEE if c in pd.DataFrame(nees).columns]].fillna('')
+                    st.dataframe(df_nee, hide_index=True, use_container_width=True)
+                else:
+                    st.caption("*(La maestra de apoyo integrará las NEE acordadas por el equipo)*")
 
-        st.markdown("#### 🚧 Barreras para el Aprendizaje y la Participación (BAP)")
-        if can_edit_concl:
-            st.caption("Barreras identificadas por contexto:")
-            _grid(edit_concl, 'bap', BAP)
-        else:
-            baps = doc['partes'].get('Conclusión', {}).get('contenido', {}).get('bap', [])
-            if any(any(str(r.get(k, '')).strip() for k in BAP) for r in baps):
-                df_bap = pd.DataFrame(baps)[[c for c in BAP if c in pd.DataFrame(baps).columns]].fillna('')
-                st.dataframe(df_bap, hide_index=True, use_container_width=True)
+            st.markdown("#### 🚧 Barreras para el Aprendizaje y la Participación (BAP)")
+            if can_edit_concl:
+                st.caption("Barreras identificadas por contexto:")
+                _grid(edit_concl, 'bap', BAP)
             else:
-                st.caption("*(BAP pendientes de integración)*")
+                baps = doc['partes'].get('Conclusión', {}).get('contenido', {}).get('bap', [])
+                if any(any(str(r.get(k, '')).strip() for k in BAP) for r in baps):
+                    df_bap = pd.DataFrame(baps)[[c for c in BAP if c in pd.DataFrame(baps).columns]].fillna('')
+                    st.dataframe(df_bap, hide_index=True, use_container_width=True)
+                else:
+                    st.caption("*(BAP pendientes de integración)*")
 
     # -------------------------------------------------------------------------
     # INSTRUMENTOS Y SÍNTESIS DE MI ÁREA
@@ -707,6 +749,7 @@ def epp_page():
             _save(edit_active_prefix)
             if can_edit_concl and 'Conclusión' in doc['partes']:
                 _save(prefix + '_edit_' + doc['id'] + '_Conclusión')
+            st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
             st.success("Borrador guardado exitosamente.")
 
     with act_col2:
@@ -716,35 +759,49 @@ def epp_page():
             if st.button(btn_txt, key=prefix + '_main_validate', use_container_width=True):
                 st.session_state[edit_active_prefix + '_value']['validada'] = True
                 _save(edit_active_prefix)
+                st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
                 st.success(f"Área {user_work_area} confirmada y validada.")
                 st.rerun()
         elif can_edit_concl:
             if st.button("✅ Validar conclusión acordada", key=prefix + '_concl_validate', use_container_width=True):
                 st.session_state[prefix + '_edit_' + doc['id'] + '_Conclusión_value']['validada'] = True
                 _save(prefix + '_edit_' + doc['id'] + '_Conclusión')
+                st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
                 st.success("Conclusión interdisciplinaria validada.")
                 st.rerun()
 
+    pdf_key = prefix + '_pdf_bytes_' + doc['id']
+    pdf_bytes = st.session_state.get(pdf_key)
+
     with act_col3:
-        try:
-            pdf_bytes = generar_pdf(doc, student)
+        if not pdf_bytes:
+            if st.button("📄 Generar PDF oficial", key=prefix + '_btn_prep_pdf', use_container_width=True):
+                try:
+                    with st.spinner("Construyendo PDF oficial..."):
+                        pdf_bytes = generar_pdf(doc, student)
+                        st.session_state[pdf_key] = pdf_bytes
+                        st.rerun()
+                except Exception as exc:
+                    st.error(f"Pendiente de datos: {exc}")
+        else:
             st.download_button(
-                "📄 Descargar PDF oficial",
+                "⬇️ Descargar PDF oficial",
                 pdf_bytes,
                 file_name=f"EPP-{student.get('Nombre_Completo', 'Alumno')[:20].replace(' ', '_')}-{doc['ciclo']}.pdf",
                 mime="application/pdf",
                 key=prefix + '_main_pdf_download',
                 use_container_width=True
             )
-        except Exception:
-            st.button("📄 PDF pendiente de datos", disabled=True, key=prefix + '_pdf_dis', use_container_width=True)
 
     with act_col4:
-        try:
-            from ui.archivo_expediente import boton
-            boton([doc['alumno']], 'EPP', pdf_bytes, f"EPP-{doc['id'][:8]}.pdf", prefix + '_btn_archivar_exp', doc['id'], doc['ciclo'], 'EPP concluida')
-        except Exception:
-            pass
+        if pdf_bytes:
+            try:
+                from ui.archivo_expediente import boton
+                boton([doc['alumno']], 'EPP', pdf_bytes, f"EPP-{doc['id'][:8]}.pdf", prefix + '_btn_archivar_exp', doc['id'], doc['ciclo'], 'EPP concluida')
+            except Exception:
+                pass
+        else:
+            st.caption("Genera el PDF para archivar al expediente.")
 
     # Estado de guardado en pie de página
     if edit_active_prefix + '_error' in st.session_state:
