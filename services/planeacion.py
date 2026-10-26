@@ -398,6 +398,9 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
     """Persistencia común; las entradas públicas verifican edición completa o aporte acotado."""
     from services.planeacion_equipo import validar, sincronizar, aplica
     validar(doc)
+    if doc['metadatos'].get('intervenciones_nee'):
+        from services.planeacion_intervenciones_nee import bloques
+        bloques(doc)
     if aplica(doc) and 'equipo' in doc['metadatos']:
         doc=sincronizar(doc)
     if estado not in ESTADOS:
@@ -529,6 +532,11 @@ def revisar(doc):
     competencias=doc['metadatos'].get('equipo',{}).get('competencias',[]) if doc['datos']['Función']=='Psicología' else []
     usa_competencias=doc['formato']=='XXIII' and any(texto(r.get('Necesidad documentada')) and texto(r.get('Descriptor de logro')) for r in competencias)
     if usa_competencias:required=()
+    from services import planeacion_intervenciones_nee as intervenciones
+    por_nee=intervenciones.aplica(doc) and bool(intervenciones.bloques(doc))
+    if por_nee:
+        faltas.extend(intervenciones.revisar(doc))
+        required=tuple(k for k in required if k not in ('aprendizajes','necesidades'))
     for key in required:
         if not any(tiene_contenido(doc,key,row) for row in tablas[key]):
             faltas.append('completar '+key)
@@ -539,14 +547,15 @@ def revisar(doc):
                      'curriculo':['NEE','Aprendizajes priorizados y/u objetivos','Descriptor de logro','Temporalidad'],
                      'participantes':['Nombre','Función']}}
     for key,fields in columnas[doc['formato']].items():
+        if por_nee and key in ('aprendizajes','necesidades'):continue
         if usa_competencias and key=='aprendizajes':continue
         for row in tablas[key]:
             if tiene_contenido(doc,key,row) and any(not texto(row.get(f)) for f in fields):
                 faltas.append('completar las celdas requeridas de '+key);break
-    if doc['formato']!='XXI' and not any(texto(r.get('Actividades')) and texto(r.get('Recursos')) and texto(r.get('Temporalidad',r.get('Fecha'))) for r in tablas['dosificacion']):
+    if not por_nee and doc['formato']!='XXI' and not any(texto(r.get('Actividades')) and texto(r.get('Recursos')) and texto(r.get('Temporalidad',r.get('Fecha'))) for r in tablas['dosificacion']):
         faltas.append('describir actividades, tiempos y recursos')
     evaluacion_ok = bool(texto(doc['textos'].get('Evaluación')) or any(str(r.get('Contextos','')).strip().lower() in ('evaluación','evaluacion') and texto(r.get('Actividades')) for r in tablas.get('dosificacion',[])))
-    if doc['formato']=='XXIII' and not evaluacion_ok:
+    if not por_nee and doc['formato']=='XXIII' and not evaluacion_ok:
         faltas.append('describir la evaluación formativa')
     from services.planeacion_equipo import revisar as revisar_equipo
     return faltas+revisar_equipo(doc)

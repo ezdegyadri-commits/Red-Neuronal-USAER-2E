@@ -52,7 +52,7 @@ class SintesisTests(TestCase):
             spec=papel.hoja(d)
             cells=[c for c in spec['cells'].values() if c['label']=='Necesidades educativas específicas']
             self.assertTrue(cells)
-            self.assertEqual(cells[0]['sugerencias_nee'][0]['texto'],NEED)
+            self.assertEqual(spec['nee_intervenciones'][0]['texto'],NEED)
             imp=papel.hoja(d,para_impresion=True)
             self.assertFalse(any(c.get('sugerencias_nee') for c in imp['cells'].values()))
         self.assertEqual(d,before)

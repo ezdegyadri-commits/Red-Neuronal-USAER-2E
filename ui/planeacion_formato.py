@@ -54,7 +54,7 @@ def _tabla(prefix,tabla,persist,abrir):
 
                 with columnas[j%len(columnas)]:
                     st.text_area(campo,value=str(row.get(campo,'') or ''),height=130,key=key,help=ayuda,on_change=_celda,args=(prefix,key,tabla,i,campo,persist))
-                    if campo in ('Necesidades educativas específicas', 'NEE'):
+                    if campo in ('Necesidades educativas específicas', 'NEE') and doc.get('metadatos',{}).get('modalidad_planeacion')!='individual':
                         from services.planeacion_nee import catalogo_nee_validadas
                         target_alumno = None
                         if row.get('_alumnos_apartados') and isinstance(row['_alumnos_apartados'], list):
@@ -110,6 +110,8 @@ def panel(prefix,persist,abrir,texto,materiales,curriculo,ia,autosave,preview,fi
     if doc['metadatos'].get('version_contexto')!=s.VERSION_CONTEXTO:
         doc=s.preparar_contexto(doc);abrir(prefix,doc);st.session_state[prefix+'_pending']=True
     st.caption('Edita sobre tu formato. Los datos y fuentes existentes se reutilizan; la IA propone solo cuando lo solicitas.')
+    from ui.planeacion_intervenciones_nee import panel as panel_nee
+    panel_nee(prefix,persist,abrir)
     with st.container(border=True):
         st.subheader(FORMATOS[doc['formato']]['titulo']);datos=doc['datos'];izq,der=st.columns(2)
         izq.write('Escuela regular: '+datos['Escuela regular']);izq.write('CCT: '+datos.get('CCT',''))

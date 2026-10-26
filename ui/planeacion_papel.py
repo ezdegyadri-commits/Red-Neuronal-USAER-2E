@@ -182,7 +182,7 @@ def hoja(prefix,volver=None):
                 u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar')
             st.session_state.pop(prefix+'_papel_rechazado',None)
             st.session_state.pop(prefix+'_papel_error',None)
-            if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados','inicio','equipo'):st.session_state[prefix+'_papel_panel']=action
+            if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados','incorporar_nee','inicio','equipo'):st.session_state[prefix+'_papel_panel']=action
             if action=='corregir':st.session_state[prefix+'_papel_panel']=event['panel']
             if action=='guardar' and nuevo==doc:u._persist(prefix)
             if action=='enviar':
