@@ -186,6 +186,8 @@ def hoja(prefix, volver=None):
     """)
     
     with st.form(key+'_form', clear_on_submit=False):
+        from ui.planeacion_intervenciones_nee import seleccionar
+        nuevas_nee=seleccionar(doc,key+'_nee_por_bloque')
         with st.container(border=True, key=key+'_hoja'):
             # Membrete Oficial Institucional
             st.markdown(f"""
@@ -348,6 +350,9 @@ def hoja(prefix, volver=None):
     if guardar:
         try:
             current = flujo.capturar(doc, spec, cambios, nuevas, retirar)
+            if nuevas_nee:
+                from services.planeacion_intervenciones_nee import incorporar
+                current=incorporar(current,nuevas_nee)
             st.session_state[prefix+'_doc'] = current
             st.session_state[prefix+'_pending'] = True
             if alumno_extra and indicador_extra.strip():

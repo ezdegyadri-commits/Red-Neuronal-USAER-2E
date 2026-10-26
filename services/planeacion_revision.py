@@ -14,6 +14,14 @@ def pendientes(doc):
         'curriculo':['NEE','Aprendizajes priorizados y/u objetivos','Descriptor de logro','Temporalidad'],
         'participantes':['Nombre','Función']}
     for falta in faltas:
+        if falta.startswith('completar intervención NEE '):
+            from services.planeacion_intervenciones_nee import bloques, etiqueta, CAMPOS
+            for i,b in enumerate(bloques(doc),1):
+                if not falta.startswith('completar intervención NEE '+str(i)+':'):continue
+                for campo in CAMPOS:
+                    if etiqueta(doc,campo) in falta and not b['campos'].get(campo,'').strip():
+                        agregar('Completar '+etiqueta(doc,campo)+' · NEE '+str(i),('intervencion_nee',b['id'],campo))
+            continue
         if falta=='capturar el maestro de grupo regular':
             agregar('Capturar el maestro de grupo regular',('maestro_grupo',));continue
         if falta in ('describir qué y cómo se trabaja en Aprendizaje para cada alumno','confirmar NI o RI y la situación inicial de cada alumno'):

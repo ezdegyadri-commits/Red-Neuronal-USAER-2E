@@ -197,6 +197,10 @@ def revisar(doc):
     e=doc['metadatos']['equipo'];faltas=[]
     try:validar(doc)
     except (ValueError,PermissionError) as exc:return [str(exc)]
+    from services.planeacion_intervenciones_nee import aplica as por_nee, bloques
+    # Las sesiones en subgrupo son del flujo grupal. El plan individual por NEE
+    # ya revisa sus actividades, temporalidad y evaluación en planeacion.revisar.
+    if por_nee(doc) and bloques(doc):return []
     manuales=[r for r in doc['tablas']['dosificacion'] if not r.get('_sesion_equipo') and
         all(str(r.get(k,'')).strip() for k in ('Actividades','Recursos','Fecha' if doc['formato']=='XXV' else 'Temporalidad'))]
     if not e['subgrupos'] and not manuales:faltas.append('organizar los alumnos en subgrupos de trabajo')

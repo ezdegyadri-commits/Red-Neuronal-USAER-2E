@@ -316,6 +316,8 @@ def hoja(prefix):
         _ficha(prefix,grupal)
         _referentes(prefix)
         _ayuda(prefix)
+        from ui.planeacion_intervenciones_nee import panel as panel_nee
+        panel_nee(prefix,u._persist,u._open)
         if doc['formato']=='XXI':
             with st.expander('Fuente del IEPP y datos del plan anual'):
                 u._text(prefix,'metadatos','fuente_iepp','Referencia del IEPP: fecha, folio o ubicación del informe')

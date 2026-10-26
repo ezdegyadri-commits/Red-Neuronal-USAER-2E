@@ -45,8 +45,21 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
         if destinatario:cell['destinatario']=str(destinatario)
         if target is not None and label in ('Necesidades educativas específicas','NEE','Necesidad documentada') and not colaborativa:
             # Sugerencias, no un catálogo que sustituya la redacción existente.
-            cell['sugerencias_nee']=necesidades_epp
+            cell['sugerencias_nee']=[] if doc['metadatos'].get('modalidad_planeacion')=='individual' else necesidades_epp
         cells[key]={'target':target,**cell};return cell
+    from services import planeacion_intervenciones_nee as intervenciones
+    if intervenciones.aplica(doc) and not colaborativa:
+        nombres={str(a['ID_Alumno']):a.get('Nombre del alumno',a['ID_Alumno']) for a in doc['datos']['Alumnos']}
+        for numero,b in enumerate(intervenciones.bloques(doc),1):
+            grupos=[('NEE, objetivo y logro',['NEE','Aprendizaje y/u objetivo','Descriptor de logro']),
+                ('Apoyos y ajustes',['Apoyos','Ajustes razonables','Contextos']),
+                ('Actividades y evaluación',['Actividades','Temporalidad','Recursos','Evaluación y seguimiento'])]
+            for n,(titulo,headers_nee) in enumerate(grupos):
+                tables.append({'id':'nee_'+b['id']+'_'+str(n),
+                    'title':f'Intervención NEE {numero} · {nombres[b["alumno"]]} · {titulo}',
+                    'headers':[intervenciones.etiqueta(doc,c) for c in headers_nee],'rows':[[celda(b['campos'].get(c,''),
+                        None if para_impresion else ('intervencion_nee',b['id'],c),intervenciones.etiqueta(doc,c),destinatario=b['alumno']) for c in headers_nee]],
+                    'add':False,'delete':False,'widths':[100/len(headers_nee)]*len(headers_nee)})
     grupal=doc['metadatos'].get('modalidad_planeacion')=='grupal' and doc['datos']['Función']=='Aprendizaje' and doc['metadatos'].get('vista_formato')!='trimestral'
     datos=doc['datos'];alumnos=datos['Alumnos'];cur=contexto_ia(doc)
     organizacion=doc['metadatos'].get('equipo',{}) if equipo.aplica(doc) else {}
@@ -154,6 +167,7 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
             [(k,c['target'],c['value']) for k,c in cells.items() if c['editable']]]
         firma=hashlib.sha256(json.dumps(contrato,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
     return {'documento':doc['id'],'huella':firma,'titulo':'Guía de Planeación Grupal' if grupal else FORMATOS[doc['formato']]['titulo'],
+        'nee_intervenciones':[{**r,'alumno_nombre':nombres.get(r['alumno_id'],r['alumno_id'])} for r in intervenciones.catalogo(doc)] if intervenciones.aplica(doc) and not colaborativa and not para_impresion else [],
         'header':header,'tables':tables,'textos':textos,'cells':cells,'grupal':grupal,'colaborativa':colaborativa,
         'cache_id':hashlib.sha256((actor.get('cuenta','')+'|'+actor.get('area','')+'|'+doc['id']).encode()).hexdigest(),
         'pendientes':avisos,
@@ -186,6 +200,9 @@ def aplicar(doc,event):
                     result['metadatos'].setdefault('equipo', {})['sugerencia_familia'] = value
                 elif ctx in ('evaluación', 'evaluacion') and target[3] == 'Actividades':
                     result['textos']['Evaluación'] = value
+        elif target[0]=='intervencion_nee':
+            from services.planeacion_intervenciones_nee import editar
+            result=editar(result,*target[1:],value)
         elif target[0]=='texto':
             result['textos'][target[1]]=value
             if doc['datos'].get('Función') == 'Psicología' and target[1] == 'Evaluación':
@@ -224,6 +241,9 @@ def aplicar(doc,event):
             if not isinstance(i,int) or event.get('confirmado') is not True:raise ValueError('Confirma el retiro de la fila.')
             if not 0<=i<len(result['tablas'][table]) or result['tablas'][table][i].get('_aporte'):raise PermissionError('Conserva la aportación de su autor.')
             result=f.quitar_fila(result,table,i)
+    elif action=='incorporar_nee':
+        from services.planeacion_intervenciones_nee import incorporar
+        result=incorporar(result,event.get('nee_ids'))
     elif action=='apartados':
         from services.planeacion_apartados import proponer
         result=proponer(result)

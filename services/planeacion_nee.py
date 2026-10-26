@@ -107,6 +107,10 @@ def resumir_plan_previo(plan):
     if necesidades:
         lineas.append('Necesidades previas: '+necesidades[:250])
     tablas=plan.get('tablas',{})
+    for b in plan.get('metadatos',{}).get('intervenciones_nee',[])[:40]:
+        campos=b.get('campos',{})
+        for label,key in (('Necesidad previa','NEE'),('Objetivo previo','Aprendizaje y/u objetivo'),('Actividad previa','Actividades')):
+            if campos.get(key):lineas.append(label+': '+str(campos[key])[:250])
     for k in ('aprendizajes','barreras','necesidades'):
         for fila in tablas.get(k,[])[:3]:
             obj=fila.get('Aprendizaje y/u objetivo') or fila.get('Aprendizajes y/u Objetivos','')
