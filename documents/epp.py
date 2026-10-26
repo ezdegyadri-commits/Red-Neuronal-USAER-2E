@@ -55,11 +55,12 @@ def generar_pdf(doc, alumno, incluir_firmas=True):
     values = {a: doc['partes'].get(a, {}).get('contenido', {}) for a in (*AREAS, 'Conclusión')}
     values['Aprendizaje'] = precargar(values['Aprendizaje'], alumno)
     fecha = max((v['fecha'] for v in doc['partes'].values()), default='')[:10]
+    epp_oficial_concluida = conclusion_vigente(doc) and all(values[a].get('validada') for a in AREAS)
     story = [p('Informe de Evaluación Psicopedagógica', styles['Title']), p('Servicio de Apoyo de Educación Especial · Anexo XVII'),
         p('Nombre de la escuela: ' + str(alumno.get('Nombre_Escuela', ''))),
         p('Nivel educativo: ' + str(alumno.get('Nivel_Educativo', '')) + ' · Zona escolar: 001'),
         p('Servicio de Apoyo: USAER 02-E · Fecha de elaboración: ' + fecha + ' · Ciclo: ' + doc['ciclo']),
-        p('Borrador interdisciplinario; pendiente de validación.' if not conclusion_vigente(doc) else 'Conclusión revisada por el equipo.'),
+        p('Borrador interdisciplinario; pendiente de validación.' if not epp_oficial_concluida else 'Informe oficial concluido y validado colegiadamente.'),
         p('1. Datos generales', styles['Heading2']), p('Nombre del alumno/a: ' + str(alumno.get('Nombre_Completo', ''))),
         p('CURP: ' + str(alumno.get('CURP', '')) + ' · Grado: ' + str(alumno.get('Grado', '')) + ' · Grupo: ' + str(alumno.get('Grupo', '')))]
     for f in GENERALES: story.append(p(f + ': ' + values['Aprendizaje'].get('generales', {}).get(f, '')))
@@ -121,8 +122,10 @@ def generar_pdf(doc, alumno, incluir_firmas=True):
         Paragraph("Nombre, firma y sello de Dirección Escolar", center)
     ]
 
+    aplicar_firma_dir = incluir_firmas and epp_oficial_concluida
+
     sub_firma = []
-    if incluir_firmas and firma_dir_path:
+    if aplicar_firma_dir and firma_dir_path:
         sub_firma.append(RLImage(firma_dir_path, width=82, height=36))
     else:
         sub_firma.append(Spacer(1, 26))
@@ -133,7 +136,7 @@ def generar_pdf(doc, alumno, incluir_firmas=True):
     ])
 
     sub_sello = []
-    if incluir_firmas and sello_path:
+    if aplicar_firma_dir and sello_path:
         sub_sello.append(RLImage(sello_path, width=46, height=54))
     else:
         sub_sello.append(Spacer(1, 28))

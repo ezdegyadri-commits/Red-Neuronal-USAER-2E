@@ -809,9 +809,49 @@ def epp_page():
                             _save(edit_active_prefix)
                             st.rerun()
 
-    # --- BARRA DE ACCIONES PRINCIPAL ---
+    # --- ESTATUS DEL PROCESO COLEGIADO Y VALIDACIÓN INTEGRAL ---
     st.write("")
     st.markdown("---")
+    st.markdown("### 🏁 Estatus del Proceso Colegiado y Descarga Oficial")
+
+    lista_pendientes = pendientes(doc)
+    concl_ok = conclusion_vigente(doc)
+    areas_validadas = {ar: doc['partes'].get(ar, {}).get('contenido', {}).get('validada', False) for ar in AREAS}
+    todas_validadas = all(areas_validadas.values())
+    epp_concluida = todas_validadas and concl_ok and len(lista_pendientes) == 0
+
+    if not epp_concluida:
+        st.warning(
+            "🔒 **Descarga oficial en PDF bloqueada temporalmente:**\n\n"
+            "Conforme al protocolo técnico-pedagógico, la descarga de la EPP completa en formato oficial (con firmas del equipo, "
+            "visto bueno y sello de Dirección) **se habilitará únicamente al concluir absolutamente todos los pasos previos "
+            "de llenado, revisión por disciplina y trabajo colaborativo interdisciplinario**."
+        )
+        with st.expander("📋 Ver avance de pasos previos y pendientes para la descarga", expanded=True):
+            col_v1, col_v2 = st.columns(2)
+            with col_v1:
+                st.markdown("**1. Llenado y revisión por disciplina:**")
+                icons_area = {'Aprendizaje': '📘', 'Psicología': '🧠', 'Comunicación': '🗣️', 'Trabajo Social': '🤝'}
+                for ar in AREAS:
+                    es_val = areas_validadas.get(ar, False)
+                    badge = "✅ **Revisado y validado**" if es_val else "⏳ *Pendiente de validación*"
+                    st.markdown(f"• {icons_area.get(ar, '')} **{ar}:** {badge}")
+            with col_v2:
+                st.markdown("**2. Conclusión colegiada y trabajo colaborativo:**")
+                concl_badge = "✅ **Acordada y vigente**" if concl_ok else "⏳ *Pendiente de acuerdo colegiado*"
+                st.markdown(f"• ⚖️ **Conclusión interdisciplinaria:** {concl_badge}")
+                if lista_pendientes:
+                    st.markdown("**Apartados por atender:**")
+                    for pend in lista_pendientes:
+                        st.caption(f"• {pend}")
+    else:
+        st.success(
+            "🎉 **¡Proceso de EPP 100% concluido!** Todos los pasos previos de llenado, revisión por disciplina "
+            "y trabajo colaborativo interdisciplinario han sido completados y validados. "
+            "El documento oficial está listo para generarse y descargarse con las firmas del equipo y el sello de Dirección."
+        )
+
+    # --- BARRA DE ACCIONES PRINCIPAL ---
     act_col1, act_col2, act_col3, act_col4 = st.columns([0.25, 0.25, 0.25, 0.25])
 
     with act_col1:
@@ -844,10 +884,18 @@ def epp_page():
     pdf_bytes = st.session_state.get(pdf_key)
 
     with act_col3:
-        if not pdf_bytes:
+        if not epp_concluida:
+            st.button(
+                "🔒 PDF Oficial (Bloqueado)",
+                disabled=True,
+                key=prefix + '_btn_prep_pdf_locked',
+                help="La descarga se desbloqueará automáticamente al concluir y validar todas las áreas y la conclusión.",
+                use_container_width=True
+            )
+        elif not pdf_bytes:
             if st.button("📄 Generar PDF oficial", key=prefix + '_btn_prep_pdf', use_container_width=True):
                 try:
-                    with st.spinner("Construyendo PDF oficial..."):
+                    with st.spinner("Construyendo PDF oficial con firmas y sello..."):
                         pdf_bytes = generar_pdf(doc, student)
                         st.session_state[pdf_key] = pdf_bytes
                         st.rerun()
@@ -865,12 +913,14 @@ def epp_page():
             )
 
     with act_col4:
-        if pdf_bytes:
+        if epp_concluida and pdf_bytes:
             try:
                 from ui.archivo_expediente import boton
                 boton([doc['alumno']], 'EPP', pdf_bytes, f"EPP-{doc['id'][:8]}.pdf", prefix + '_btn_archivar_exp', doc['id'], doc['ciclo'], 'EPP concluida')
             except Exception:
                 pass
+        elif not epp_concluida:
+            st.caption("🔒 Archivo al expediente bloqueado hasta concluir la EPP.")
         else:
             st.caption("Genera el PDF para archivar al expediente.")
 
