@@ -1479,3 +1479,4 @@ div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
 
 def inject():
     st.markdown(CSS, unsafe_allow_html=True)
+    st.html('<style>.stButton>button{min-height:48px;font-size:1rem;border-radius:12px;padding:.65rem 1.1rem}.stButton>button[kind="primary"]{min-height:54px;font-weight:700}[data-testid="stSegmentedControl"] button{min-height:48px;font-size:1rem}</style>')

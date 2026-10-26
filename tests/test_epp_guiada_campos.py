@@ -23,6 +23,8 @@ class VistaGuiadaTests(TestCase):
         app.run();self.assertFalse(app.exception)
         from services.epp_modelo import campos
         self.assertTrue(next(t for t in app.text_area if t.label==campos('Aprendizaje')[0]).value)
+        self.assertFalse(any(b.label=='🗑️ Vaciar' for b in app.button))
+        next(w for w in app.button_group if w.label=='Modo de trabajo:').set_value('⚖️ Conclusión y NEE').run()
         next(b for b in app.button if 'Generar propuesta de NEE oficial SEGEY' in b.label).click().run()
         self.assertFalse(app.exception)
         conclusion=next(t for t in app.text_area if t.label=='7.1. Conclusión')

@@ -125,6 +125,15 @@ def preparar_solicitud(doc,ajustes):
         evidencias['DOCENTE']=list(aliases)
     if not evidencias:raise ValueError('Falta evidencia educativa del alumno. Actualiza el expediente, incorpora el informe o describe una necesidad documentada antes de generar.')
     contexto=contexto_ia(sugerir_curriculo(doc,ajustes))
+    elegidos=ajustes.get('contextos_solicitados')
+    if elegidos is not None:
+        if not isinstance(elegidos,list) or not elegidos or any(c not in FORMATOS[doc['formato']]['contextos'] for c in elegidos):
+            raise ValueError('Elige al menos un contexto válido para las actividades.')
+        contexto['contextos_solicitados']=list(dict.fromkeys(elegidos))
+    if ajustes.get('actividades_solicitadas') is not None:
+        cantidad=ajustes['actividades_solicitadas']
+        if type(cantidad) is not int or not 1<=cantidad<=8:raise ValueError('Elige de una a ocho actividades distintas por propuesta.')
+        contexto['actividades_solicitadas']=cantidad
     contexto['huella_evidencias']=hashlib.sha256(json.dumps(fuentes,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
     # El contexto institucional no debe perderse al recuperar el expediente.
     for campo in ('contextualizacion_docente',):
@@ -142,24 +151,26 @@ def preparar_solicitud(doc,ajustes):
     if not resumen:resumen=resumen_previo(doc,fuentes)
     if doc['metadatos'].get('resumen_ia_completo'):
         resumen=doc['metadatos']['resumen_ia_completo'].strip()
+    bloques=[]
+    from services.planeacion_intervenciones_nee import aplica, bloques as intervenciones
+    for i,b in enumerate(intervenciones(doc) if aplica(doc) else [],1):
+        if b['alumno'] not in reversa or not str(b['campos'].get('NEE','')).strip():continue
+        ref='NEE-SELECCIONADA-'+str(i);evidencias[ref]=[reversa[b['alumno']]]
+        texto='\n'.join(k+': '+str(b['campos'].get(k,'')) for k in ('NEE','Apoyos','Ajustes razonables','Contextos') if b['campos'].get(k))
+        bloques.append({'referencia':ref+' · '+reversa[b['alumno']],'alcance':'NEE seleccionada para intervención; no diagnóstico','texto':texto[:1200]})
+    if bloques:resumen=resumen_previo(doc,bloques)[:5000]+'\n\n'+resumen[:6500]
     safe=deepcopy(ajustes)
     for campo in ('enfoque','apoyos'):
         safe[campo]=resumen_previo(doc,[{'referencia':'AJUSTE','alcance':'configuración docente; no evidencia de logro','texto':str(ajustes.get(campo,''))}]).split('\n\n',1)[-1][:1500] if ajustes.get(campo) else ''
     if contexto.get('contextualizacion_docente'):
         # Visible en el resumen que la persona revisa, y parte de la huella/caché.
         resumen=resumen[:7800]+'\n\n'+contexto['contextualizacion_docente']
-    previo=doc['metadatos'].get('generacion_completa',{})
-    base_igual=previo.get('configuracion_original')==ajustes
-    generadas=previo.get('filas_generadas',{}).get('dosificacion',[]) if base_igual else []
-    sesiones={r['id']:r for r in previo.get('sesiones_generadas',[])} if base_igual else {}
-    actuales={r['id']:r for r in doc['metadatos'].get('equipo',{}).get('sesiones',[])}
-    def salida_sin_editar(r):
-        if any(all(r.get(k,'')==v for k,v in base.items() if not k.startswith('_')) for base in generadas):return True
-        sid=r.get('_sesion_equipo')
-        return bool(sid in sesiones and actuales.get(sid)==sesiones[sid])
-    previas=[str(r.get('Actividades','')) for r in doc['tablas'].get('dosificacion',[]) if str(r.get('Actividades','')).strip() and not salida_sin_editar(r)]
+    previas=[str(r.get('Actividades','')) for r in doc['tablas'].get('dosificacion',[]) if str(r.get('Actividades','')).strip()]
+    previas.extend(str(r.get('actividad','')) for r in doc['metadatos'].get('equipo',{}).get('sesiones',[]) if r.get('actividad'))
+    previas.extend(str(r.get('campos',{}).get('Actividades','')) for r in doc['metadatos'].get('intervenciones_nee',[]) if r.get('campos',{}).get('Actividades'))
+    previas=list(dict.fromkeys(previas))
     # El mismo anonimizado que el resumen; nunca enviar la tabla nominal.
-    contexto['actividades_previas']=[resumen_previo(doc,[{'referencia':'ACTIVIDAD-PREVIA','alcance':'propuesta registrada, no logro','texto':t}]).split('\n\n',1)[-1][:1800] for t in previas[-8:]]
+    contexto['actividades_previas']=[resumen_previo(doc,[{'referencia':'ACTIVIDAD-PREVIA','alcance':'propuesta registrada, no logro','texto':t}]).split('\n\n',1)[-1][:1000] for t in previas[-30:]]
     if contexto['actividades_previas']:
         resumen=resumen[:7000]+'\n\nActividades previas para evitar repetición:\n'+'\n'.join(contexto['actividades_previas'])[:4500]
     firma=huella_completa(resumen,doc['formato'],doc['datos']['Función'],contexto,safe,aliases,evidencias)
@@ -237,8 +248,8 @@ def ensamblar(doc,respuesta,solicitud):
             grupos[n]=grupo
     # Las secuencias se dosifican en las sesiones configuradas. Cada fecha es una
     # propuesta de trabajo, no un registro de asistencia ni una reserva de horario.
-    for i,fecha in enumerate(fechas):
-        n=i%len(unidades);u=unidades[n]
+    for i,(fecha,u) in enumerate(zip(fechas,unidades)):
+        n=i
         actividad=u['actividad']
         if not es_equipo:actividad+='\nApoyos: '+u['apoyos']+'\nSeguimiento: '+u['evaluacion']
         if es_equipo:

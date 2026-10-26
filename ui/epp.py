@@ -201,15 +201,7 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
         current_text = value.get(section, {}).get(field_name, '') if section else value.get(field_name, '')
         key = edit_prefix + '_field_' + (section or '') + field_name
 
-        if current_text and str(current_text).strip():
-            c_lbl, c_clr = st.columns([0.84, 0.16])
-            with c_lbl:
-                st.markdown(f"**{field_name}**")
-            with c_clr:
-                if st.button("🗑️ Vaciar", key=f"clr_{key}", help=f"Eliminar texto propuesto de {field_name}"):
-                    _clear_field(edit_prefix, field_name, section)
-        else:
-            st.markdown(f"**{field_name}**")
+        st.markdown(f"**{field_name}**")
 
         st.text_area(
             label=field_name,
@@ -518,12 +510,7 @@ def epp_page():
             else:
                 st.markdown(f"<div style='padding:6px 0;'><span style='color:#1565c0; font-weight:500;'>✏️ Editando: <strong>{user_work_area}</strong> (borrador activo)</span></div>", unsafe_allow_html=True)
         with c_save_top:
-            if st.button("💾 Guardar cambios de mi área", key=prefix + '_quick_save_top', use_container_width=True):
-                _save(edit_active_prefix)
-                if can_edit_concl and 'Conclusión' in doc['partes']:
-                    _save(prefix + '_edit_' + doc['id'] + '_Conclusión')
-                st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
-                st.toast("Borrador guardado correctamente.", icon="💾")
+            st.caption('Al terminar, confirma la revisión de tu área al final del formato.')
 
     # =========================================================================
     # EL FORMATO VIVO: ANEXOS XVII Y XVIII DEL MANUAL USAER
@@ -533,14 +520,13 @@ def epp_page():
 
     # Selector de modo de trabajo: Agilidad, minimalismo y cero sobrecarga
     vistas = [f"🎯 Mi área ({user_work_area})", "⚖️ Conclusión y NEE", "👁️ Ver informe completo"] if user_work_area else ["⚖️ Conclusión y NEE", "👁️ Ver informe completo"]
-    vista_activa = st.radio(
+    vista_activa = st.segmented_control(
         "Modo de trabajo:",
         vistas,
-        index=0,
-        horizontal=True,
+        default=vistas[0],
         key=prefix + '_vista_modo',
         help="Elige si deseas enfocarte únicamente en los apartados de tu función o revisar todo el informe."
-    )
+    ) or vistas[0]
     modo_area = vista_activa.startswith("🎯 Mi área")
     modo_concl = vista_activa.startswith("⚖️ Conclusión")
     modo_todo = vista_activa.startswith("👁️ Ver informe")
@@ -697,7 +683,7 @@ def epp_page():
     # -------------------------------------------------------------------------
     # 7. CONCLUSIÓN INTERDISCIPLINARIA, NEE (SEGEY) Y BAP
     # -------------------------------------------------------------------------
-    if modo_todo or modo_concl or can_edit_concl:
+    if modo_todo or modo_concl:
         with st.expander("7. Conclusión interdisciplinaria, determinación de NEE y BAP", expanded=True):
             st.markdown(
                 """
@@ -832,13 +818,10 @@ def epp_page():
     epp_concluida = todas_validadas and concl_ok and len(lista_pendientes) == 0
 
     if not epp_concluida:
-        st.warning(
-            "🔒 **Descarga oficial en PDF bloqueada temporalmente:**\n\n"
-            "Conforme al protocolo técnico-pedagógico, la descarga de la EPP completa en formato oficial (con firmas del equipo, "
-            "visto bueno y sello de Dirección) **se habilitará únicamente al concluir absolutamente todos los pasos previos "
-            "de llenado, revisión por disciplina y trabajo colaborativo interdisciplinario**."
-        )
-        with st.expander("📋 Ver avance de pasos previos y pendientes para la descarga", expanded=True):
+        completadas=sum(areas_validadas.values())+int(concl_ok)
+        st.progress(completadas/5,text=str(completadas)+' de 5 revisiones confirmadas · tu informe continúa editable')
+        st.caption('El PDF oficial estará disponible al confirmar las áreas y la conclusión del equipo.')
+        with st.expander("📋 Ver avance de pasos previos y pendientes para la descarga", expanded=False):
             col_v1, col_v2 = st.columns(2)
             with col_v1:
                 st.markdown("**1. Llenado y revisión por disciplina:**")

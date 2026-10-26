@@ -88,6 +88,7 @@ class AsistenteTests(TestCase):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_string(HELP_APP,default_timeout=30).run()
         self.assertFalse(app.exception);before=deepcopy(app.session_state['p_doc'])
+        next(r for r in app.radio if r.label=='Preparar actividades').set_value('Con mis datos, sin IA').run()
         next(b for b in app.button if b.label=='Preparar propuesta').click().run()
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state['p_doc'],before)
