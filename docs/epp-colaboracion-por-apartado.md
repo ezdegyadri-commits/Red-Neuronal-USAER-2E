@@ -17,3 +17,7 @@
 Datos ficticios y repositorios simulados: permisos exactos, combinación concurrente y conflicto, exclusión/restauración, extracción de texto del PDF, precarga y corrección manual, pantallas de Comunicación/Trabajo Social, preparación del asistente sin IA, búsqueda histórica e inserción de filas. El contrato del cliente se verifica con DOM y reloj ficticios, incluyendo escritura durante guardado y conservación del respaldo.
 
 No se usaron alumnos reales en las pruebas ni se hicieron llamadas reales a IA. La recuperación de una planeación localizada en producción se realiza mostrando su identidad original; no requiere duplicarla, cambiar grado ni reasignar alumnado. La verificación en la aplicación publicada debe hacerse después del despliegue autorizado.
+
+## Compatibilidad de despliegue en Cloud
+
+La comprobación posterior al despliegue mostró la búsqueda nueva en Planeación, pero EPP seguía renderizando controles anteriores pese al registro «Updated app». La entrada versionada `ui.epp_acceso` comprueba el marcador de la interfaz. Si encuentra la versión anterior en memoria, recarga una sola vez y en orden el conjunto acotado de módulos EPP. No modifica `session_state`, no vacía cachés y no reinicia el proceso. En un arranque con el marcador actual no recarga módulos. Se prueba la ruta actual, la actualización única y el fallo explícito si el código esperado aún no está disponible. Esta compatibilidad no sustituye la verificación visual posterior a publicar.

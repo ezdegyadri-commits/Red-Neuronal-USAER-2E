@@ -24,6 +24,8 @@ from services.epp_analisis import (
     ensamblar_epp_completa_desde_documento
 )
 
+VERSION_INTERFAZ_EPP = '2026-10-26-colaborativa-v1'
+
 CATALOGO_INSTRUMENTOS_SEGEY = {
     'Psicología': [
         'Escala Wechsler de Inteligencia para Niños (WISC-IV)',
