@@ -1,7 +1,19 @@
 export default function(component) {
-  const words = component.data.words;
-  const known = new Set(words);
-  const rank = new Map(words.map((word, index) => [word, index]));
+  const cacheKey='__usaer_diccionario_es_v1';
+  let dictionary=globalThis[cacheKey];
+  if (!dictionary && Array.isArray(component.data.words)) {
+    const words=component.data.words;
+    dictionary={known:new Set(words),rank:new Map(words.map((word,index)=>[word,index]))};
+    globalThis[cacheKey]=dictionary;
+  }
+  const host=component.parentElement;
+  if (!dictionary) {
+    if (!host.__dictionaryRequested) {host.__dictionaryRequested=true;component.setStateValue('evento',{tipo:'pedir_diccionario'});}
+    return;
+  }
+  host.__dictionaryRequested=false;
+  if (Array.isArray(component.data.words)) component.setStateValue('evento',{tipo:'diccionario_listo'});
+  const {known,rank}=dictionary;
   const ignored = new Set();
   const controls = new Map();
   const letters = 'abcdefghijklmnñopqrstuvwxyzáéíóúü';
@@ -79,6 +91,8 @@ export default function(component) {
     for (const [field, state] of controls) if (!field.isConnected) {state.clear();controls.delete(field);}
   }
   scan();
-  const observer=new MutationObserver(scan); observer.observe(document.body,{childList:true,subtree:true});
-  return () => {observer.disconnect();for(const [field,state] of controls){state.clear();field.removeEventListener('input',state.changed);state.details.remove();}controls.clear();};
+  let frame=null;
+  const observer=new MutationObserver(()=>{if(frame===null)frame=requestAnimationFrame(()=>{frame=null;scan();});});
+  observer.observe(document.body,{childList:true,subtree:true});
+  return () => {observer.disconnect();if(frame!==null)cancelAnimationFrame(frame);for(const [field,state] of controls){state.clear();field.removeEventListener('input',state.changed);state.details.remove();}controls.clear();};
 }

@@ -20,7 +20,7 @@ if 'f_docs' not in st.session_state:
     st.session_state['f_docs']=[d]
 s.identidad=lambda:actor
 s.autorizar=lambda *a,**k:actor
-s.compartidos=lambda:deepcopy(st.session_state['f_docs'])
+s.compartidos=lambda documento=None:deepcopy(st.session_state['f_docs'])
 s.padron_autorizado=lambda:pd.DataFrame([ALUMNO])
 s.listar=lambda *a:[]
 s.refrescar=lambda:None

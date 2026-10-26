@@ -93,7 +93,7 @@ def lectura_equipo(base,did):
     now=time.monotonic()
     if not completa and now-st.session_state.get(base+'_lectura_equipo',float('-inf'))<10:return None
     st.session_state[base+'_lectura_equipo']=now
-    return next((d for d in s.compartidos() if d['id']==did),None)
+    return next((d for d in s.compartidos(documento=did) if d['id']==did),None)
 
 
 def _sincronizar_equipo(prefix):

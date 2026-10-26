@@ -705,16 +705,24 @@ def preparar_contexto(doc):
     return resultado
 
 
-def compartidos():
+def compartidos(documento=None):
     """Solo PI o guías de apoyo, con todos sus alumnos dentro de la asignación actual."""
     from services.planeacion_colaboracion import compartible
     from services.planeacion_grupo_unico import documentos
-    resultado=[]
-    for doc in documentos(versiones_actuales()):
+    resultado=[];versiones=versiones_actuales()
+    if documento:
+        base=next((d for d in reversed(versiones) if d['id']==documento),None)
+        if not base:return []
+        from services.planeacion_grupo_unico import clave
+        scope=clave(base)
+        # Reúne las copias y secciones del grado, sin reconstruir otras escuelas.
+        versiones=[d for d in versiones if d['id']==documento or scope and clave(d) and clave(d)[:4]==scope[:4]]
+    padron=padron_autorizado()
+    for doc in documentos(versiones):
         from services.planeacion_compartida import ampliar_matricula
-        doc=ampliar_matricula(doc,padron_autorizado())
+        doc=ampliar_matricula(doc,padron)
         if not compartible(doc):continue
-        try:autorizar(doc)
+        try:autorizar(doc,frame=padron)
         except PermissionError:continue
         resultado.append(deepcopy(doc))
     return resultado

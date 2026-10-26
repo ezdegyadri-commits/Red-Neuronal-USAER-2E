@@ -97,7 +97,7 @@ class RecorridoCompartidoTests(TestCase):
                 app.run()
                 selector=next(w for w in app.selectbox if w.label.startswith('Documento compartido'))
                 selector.set_value('segundo' if i==0 else 'tercero').run()
-                next(w for w in app.button if w.label=='Abrir Anexo XIX compartido').click().run()
+                next(w for w in app.button if w.label.startswith('Abrir Anexo XIX compartido')).click().run()
             # Otro integrante guarda 3°; cambia el orden de la lista y actualiza
             # apoyo en 2°. Ninguna sesión debe cambiar el documento seleccionado.
             uno['metadatos']['guia_grupal_manual']={'filas':[{'ID_Alumno':'A1','Aprendizaje':'Nuevo aporte de apoyo'}]}
@@ -125,7 +125,7 @@ class RecorridoCompartidoTests(TestCase):
                 self.assertFalse(app.exception)
                 self.assertFalse(app.tabs)
                 self.assertTrue(any(w.label=='Grado y grupo' for w in app.selectbox))
-                next(w for w in app.button if w.label=='Abrir Anexo XIX compartido').click().run()
+                next(w for w in app.button if w.label.startswith('Abrir Anexo XIX compartido')).click().run()
                 spec=app.session_state['qa_spec']
                 self.assertEqual({c['label'] for c in spec['cells'].values() if c['editable']},{'Comunicación','Observaciones de mi área'})
                 celda=next(k for k,c in spec['cells'].items() if c['editable'])
