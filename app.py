@@ -21,7 +21,7 @@ from ui.calendario_eventos import eventos_direccion, calendario_page
 from ui.tramites import tramites_page
 from services.tramites import gestor as gestor_tramites, puede_solicitar
 from ui.planeacion import planeacion_page, direccion_panel
-from ui.epp import epp_page
+from ui.epp_acceso import epp_page
 from ui.novedades_supervision import novedades_page
 from ui.sidebar import TITULOS_SIMPLIFICADOS
 from ui.hub import pagina_central_hub
