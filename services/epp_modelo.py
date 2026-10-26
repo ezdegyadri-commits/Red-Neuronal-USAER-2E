@@ -89,10 +89,18 @@ def validar_parte(area, value):
     if area not in (*AREAS, 'Conclusión') or not isinstance(value, dict):
         raise ValueError('Apartado no válido.')
     result = recuperar_campos_guiados(area,value)
+    for name,kind in (('no_requeridos',bool),('textos_previos_no_requeridos',str)):
+        values=result.get(name,{})
+        if not isinstance(values,dict) or not set(values)<=set(campos(area)) or any(not isinstance(v,kind) for v in values.values()):
+            raise ValueError('Marcación No se requiere fuera de los apartados autorizados.')
     if set(result.get('campos', {})) != set(campos(area)):
         raise ValueError('Los apartados deben conservar la estructura del Anexo XVII.')
     if any(not isinstance(v, str) or len(v) > 12000 for v in result['campos'].values()):
         raise ValueError('Texto del apartado no válido o demasiado extenso.')
+    for field,active in result.get('no_requeridos',{}).items():
+        if active:
+            result.setdefault('textos_previos_no_requeridos',{}).setdefault(field,result['campos'][field] if result['campos'][field]!='No se requiere' else '')
+            result['campos'][field]='No se requiere'
     if not isinstance(result.get('validada'),bool):raise ValueError('Revisión no válida.')
     if result['validada'] and area!='Conclusión' and not any(t.strip() for t in result['campos'].values()) and not str(result.get('sintesis','')).strip():
         raise ValueError('Registra hallazgos o justifica que el área no fue evaluada antes de confirmarla.')

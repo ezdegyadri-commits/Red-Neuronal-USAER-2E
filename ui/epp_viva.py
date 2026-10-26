@@ -77,6 +77,9 @@ def recibir(p,event):
         if action=='inicio':st.session_state[p+'_volver']=True
         elif action in ('antecedentes','ia','opciones','pdf'):st.session_state[p+'_panel']=action
         elif action=='equipo':st.session_state[p+'_lectura']=0
+        elif action=='redaccion':
+            c=papel.hoja(nuevo)['cells'].get(event.get('celda'))
+            st.session_state[p+'_redactor']=c['target']
     except (ValueError,PermissionError,RuntimeError) as exc:
         st.session_state[p+'_nonce']=nonce
         st.session_state[p+'_rechazado']=nonce
@@ -112,7 +115,7 @@ def hoja(p):
         aceptado_nonce=st.session_state.get(p+'_aceptado',''),rechazado=st.session_state.get(p+'_rechazado',''),error=d.get('causa',''))
     if event and event.get('nonce')!=st.session_state.get(p+'_nonce'):
         recibir(p,event)
-        if st.session_state.get(p+'_volver') or st.session_state.get(p+'_panel'):st.rerun(scope='app')
+        if st.session_state.get(p+'_volver') or st.session_state.get(p+'_panel') or st.session_state.get(p+'_redactor'):st.rerun(scope='app')
         refrescar_editor()
     if st.session_state.get(p+'_pending') or d:
         if d:st.warning(d['causa']+' '+d['accion'].replace('planeación','EPP'))
@@ -124,7 +127,7 @@ def hoja(p):
 
 def _incorporar(p,area,value):
     # Capturar el instrumento una vez también completa la tabla del informe.
-    if area!='Conclusión':
+    if area==s.actor()['area']:
         nombres=list(dict.fromkeys(e.get('nombre','') for e in value.get('evaluaciones',[]) if e.get('nombre')))
         fechas=list(dict.fromkeys(e.get('fecha','') for e in value.get('evaluaciones',[]) if e.get('fecha')))
         if not value.get('instrumentos','').strip():value['instrumentos']='\n'.join(nombres)
@@ -349,7 +352,19 @@ def page():
         if aviso:st.info(aviso)
         if s.es_coordinadora(doc) and st.button('Generar conclusión y NEE del equipo',key=p+'_conclusion_directa',type='primary'):
             st.session_state[p+'_ir_conclusion']=True;st.session_state[p+'_panel']='ia'
-        hoja(p);panel(p);return
+        hoja(p);panel(p)
+        target=st.session_state.get(p+'_redactor')
+        if target:
+            from ui.epp_redaccion import mostrar
+            area,_,campo=target
+            def aplicar_redaccion(texto,base):
+                v=papel.contenido(st.session_state[p+'_doc'],area)
+                if v['campos'].get(campo,'')!=base or v.get('no_requeridos',{}).get(campo):
+                    raise RuntimeError('El apartado cambió; revisa su texto antes de incorporar la propuesta.')
+                v['campos'][campo]=texto;v['validada']=False
+                _incorporar(p,area,v)
+            mostrar(p,st.session_state[p+'_doc'],area,campo,aplicar_redaccion)
+        return
     try:frame=s.planes.padron_autorizado().fillna('');docs=s.listar(True)
     except Exception:st.warning('No se pudo consultar la matrícula y las EPP. No se modificó ningún registro.');return
     if frame.empty:st.info('No hay alumnos disponibles en tu asignación.');return

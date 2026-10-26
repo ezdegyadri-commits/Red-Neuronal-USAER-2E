@@ -6,6 +6,24 @@ from tests.test_planeacion_todos_grupos import documento
 
 
 class RepositorioTests(TestCase):
+    def test_busqueda_global_encuentra_documento_antiguo_sin_modalidad_ni_grado_actual(self):
+        app=AppTest.from_string('''
+import streamlit as st
+from ui.planeacion_repositorio import panel
+from tests.test_planeacion_todos_grupos import documento
+d=documento(('A1',));d['id']='original-historico';d['metadatos'].pop('modalidad_planeacion',None)
+d['datos']['Alumnos'][0]['Nombre del alumno']='ESTUDIANTE HISTORICO QA';d['datos']['Alumnos'][0]['Grado']='5o.'
+st.session_state.setdefault('prueba_repositorio_Otros formatos guardados_buscar','No coincide')
+def abrir(base,doc):st.session_state['abierto']=doc['id']
+panel('prueba',[d],abrir)
+''',default_timeout=30).run()
+        self.assertFalse(app.exception)
+        next(t for t in app.text_input if t.label=='Buscar alumno en todas mis planeaciones').set_value('HISTORICO QA').run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('ESTUDIANTE HISTORICO QA' in h.value for h in app.subheader))
+        next(b for b in app.button if b.label=='Continuar esta planeación').click().run()
+        self.assertFalse(app.exception);self.assertEqual(app.session_state['abierto'],'original-historico')
+
     def test_no_anuncia_sin_trabajo_cuando_la_guia_tiene_aportes(self):
         d=documento(('A1',));d['metadatos']['guia_grupal_manual']={'filas':[{'ID_Alumno':'A1','Aprendizaje':'Actividad ya redactada'}]}
         self.assertIn('Con trabajo redactado',detalle_tarjeta(d))

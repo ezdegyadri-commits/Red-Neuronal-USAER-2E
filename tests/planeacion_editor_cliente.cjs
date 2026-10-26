@@ -13,6 +13,7 @@ function fixture(backup, referrer='https://usaer.test/', native=false) {
     set id(v) { this._id = v; nodes.set(v, this); } get id() { return this._id; }
     set textContent(v) { this._text = v; this.children = []; } get textContent() { return this._text + this.children.map(c => c.textContent || '').join(''); }
     get innerText() { return this.textContent; }
+    get lastChild() { return this.children.at(-1); }
     append(...items) { for (const c of items) { this.children.push(c); if (c && typeof c === 'object') c.parentElement = this; } }
     replaceChildren() { this.children = []; this._text = ''; }
     setAttribute(k, v) { this[k] = v; }
@@ -28,7 +29,7 @@ function fixture(backup, referrer='https://usaer.test/', native=false) {
   const status = new Element('div'); status.id = 'status';
   const parent = { postMessage: (m,target) => {messages.push(m);targets.push({type:m.type,target});} };
   const document = { referrer, activeElement: null, documentElement: { scrollHeight: 220 },
-    getElementById: id => nodes.get(id), createElement: tag => new Element(tag) };
+    getElementById: id => nodes.get(id), createElement: tag => new Element(tag),createTextNode:value=>({textContent:value}) };
   const context = { document, parent, location: { origin: 'https://usaer.test' }, URL, Blob, console,
     sessionStorage: { getItem: k => cache.get(k) || null, setItem: (k,v) => cache.set(k,v), removeItem: k => cache.delete(k) },
     setTimeout: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay }); return id; }, clearTimeout: id => timers.delete(id),
@@ -75,7 +76,7 @@ function hoja(value='', fingerprint='base') {
 // Barra breve y acciones inequívocas: guardar no es ayuda y descargar recoge el texto.
 {
   const f=fixture();f.render(hoja());
-  assert.deepEqual(f.tools.children.filter(e=>e.tagName==='BUTTON'&&e.className!=='navigation').map(e=>e.textContent),['Ayúdame a planear','Guardar planeación','Descargar']);
+  assert.deepEqual(f.tools.children.filter(e=>e.tagName==='BUTTON'&&e.className!=='navigation').map(e=>e.textContent),['Generar actividades','Guardar planeación','Descargar']);
   assert.ok(f.tools.children.some(e=>e.tagName==='DETAILS'));
   f.input('Texto aún no enviado');f.tools.children.find(e=>e.textContent==='Descargar').click();
   assert.equal(f.events()[0].accion,'pdf');assert.equal(f.events()[0].cambios.c0,'Texto aún no enviado');
@@ -243,7 +244,7 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   h.cache_id='epp-cuenta-alumno';f.render(h);
   assert.ok(f.tools.children.some(b=>b.textContent==='Guardar EPP'));
   assert.ok(f.tools.children.some(b=>b.textContent==='Antecedentes y evaluaciones'));
-  assert.ok(!f.tools.children.some(b=>b.textContent==='Ayúdame a planear'));
+  assert.ok(!f.tools.children.some(b=>b.textContent==='Generar actividades'));
   f.input('Hallazgo EPP mientras guarda');f.tick(4000);const e=f.events()[0];
   assert.ok(f.cache.has('usaer-hoja:epp-cuenta-alumno'));
   const nodo=f.nodes.get('celda-c0');f.render(h);
@@ -251,3 +252,20 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   f.render(hoja('Hallazgo EPP mientras guarda','revision-epp'),{aceptado_nonce:e.nonce,guardado:'confirmado'});
 }
 console.log('Editor: escritura no bloqueante, sincronización por área, respaldo, fecha, EPP y navegación protegida aprobados.');
+
+// Opciones por apartado: exclusión reversible, asistente y filas arriba/abajo.
+{
+  const f=fixture(),h=hoja('Hallazgo');h.tipo_documento='epp';h.cells.c0.apartado_epp=true;h.tables[0].rows[0][0]=h.cells.c0;f.render(h);
+  const controls=f.root.querySelectorAll('input');assert.equal(controls.length,1);
+  controls[0].checked=true;controls[0].handlers.change();assert.equal(f.events().at(-1).accion,'no_requiere');assert.equal(f.events().at(-1).activar,true);
+}
+{
+  const f=fixture(),h=hoja('No se requiere');h.cells.c0.apartado_epp=true;h.cells.c0.no_requerido=true;h.tables[0].rows[0][0]=h.cells.c0;f.render(h);
+  assert.equal(f.nodes.get('celda-c0').contentEditable,'false');
+  assert.ok(!f.root.querySelectorAll('button').some(x=>x.textContent==='Proponer redacción'));
+}
+{
+  const f=fixture(),h=hoja();h.tables[0].add=true;f.render(h);
+  f.root.querySelectorAll('button').find(x=>x.textContent==='Insertar abajo').click();
+  assert.equal(f.events().at(-1).accion,'agregar');assert.equal(f.events().at(-1).posicion,1);
+}

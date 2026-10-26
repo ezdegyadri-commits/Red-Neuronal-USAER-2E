@@ -166,7 +166,7 @@ def _abrir(prefix, doc, area):
     st.session_state[prefix + '_value'] = deepcopy(doc['partes'].get(area, {}).get('contenido', vacia(area)))
     if area == 'Aprendizaje':
         original = st.session_state[prefix + '_value']
-        filled = precargar(original, s.alumno_autorizado(doc['alumno']))
+        filled = precargar(original, s.alumno_autorizado(doc['alumno']),doc)
         st.session_state[prefix + '_value'] = filled
         if filled != original:
             _save(prefix)
@@ -188,7 +188,8 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
     - Vista colaborativa de lectura en vivo si pertenece a otra área.
     """
     section=section or 'campos'
-    is_editable = not is_director and ((target_area == actor_area) or (target_area == 'Conclusión' and can_edit_concl))
+    from services.epp_colaborativa import puede,omitido
+    is_editable = not is_director and (puede(s.actor(),target_area,section,field_name) or (target_area == 'Conclusión' and can_edit_concl))
     
     if is_editable:
         edit_prefix = prefix + '_edit_' + doc['id'] + '_' + target_area
@@ -209,10 +210,26 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
             key=key,
             height=height,
             label_visibility="collapsed",
+            disabled=section=='campos' and omitido(value,field_name),
             on_change=_field,
             args=(edit_prefix, key, section, field_name),
             placeholder=f"Observaciones y hallazgos documentados para {field_name}..."
         )
+        if section=='campos':
+            with st.popover('Opciones · '+field_name):
+                def marcar():
+                    from services.epp_colaborativa import no_requiere
+                    v=no_requiere(st.session_state[edit_prefix+'_value'],field_name,st.session_state[key+'_no_req'])
+                    st.session_state[edit_prefix+'_value']=v;st.session_state[key]=v['campos'][field_name];_save(edit_prefix)
+                st.checkbox('No se requiere · omitir en PDF',value=omitido(value,field_name),key=key+'_no_req',on_change=marcar)
+                if st.button('Proponer redacción',key=key+'_redactar',disabled=omitido(value,field_name)) or st.session_state.get(edit_prefix+'_redactor_'+field_name+'_abierto'):
+                    from ui.epp_redaccion import mostrar
+                    def aplicar_propuesta(texto,base):
+                        actual=st.session_state[edit_prefix+'_value']
+                        if actual['campos'].get(field_name,'')!=base:raise RuntimeError('El apartado cambió. Conserva la propuesta y revisa la edición actual.')
+                        actual['campos'][field_name]=texto;actual['validada']=False
+                        st.session_state[key]=texto;_save(edit_prefix)
+                    mostrar(edit_prefix,doc,target_area,field_name,aplicar_propuesta)
     else:
         part = doc.get('partes', {}).get(target_area, {})
         cont = part.get('contenido', {})
@@ -534,7 +551,7 @@ def epp_page():
     # -------------------------------------------------------------------------
     # 1. DATOS DE IDENTIFICACIÓN Y MOTIVO
     # -------------------------------------------------------------------------
-    if modo_todo or (modo_area and (user_work_area == 'Aprendizaje' or a['director'])):
+    if modo_todo or (modo_area and (user_work_area in ('Aprendizaje','Trabajo Social') or a['director'])):
         with st.expander("1. Datos de identificación y motivo de evaluación", expanded=True):
             col_m1, col_m2 = st.columns([0.65, 0.35])
             with col_m1:
@@ -545,7 +562,7 @@ def epp_page():
                 st.markdown('**Fecha final:** '+str(generales.get('Fecha final de evaluación') or 'Por confirmar'))
                 st.markdown(f"**Maestra de apoyo:** {doc['partes'].get('Aprendizaje', {}).get('autor', 'Por asignar')}")
 
-            if user_work_area == 'Aprendizaje' or a['director']:
+            if user_work_area in ('Aprendizaje','Trabajo Social') or a['director']:
                 with st.expander("📋 Datos generales complementarios (Domicilio, padres, escolaridad)"):
                     edit_apr = prefix + '_edit_' + doc['id'] + '_Aprendizaje'
                     if edit_apr + '_doc' not in st.session_state:
@@ -554,6 +571,7 @@ def epp_page():
                         if f != 'Motivo de evaluación':
                             _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Aprendizaje', f, section='generales', height=65, prefix=prefix)
 
+            if user_work_area == 'Aprendizaje' or a['director']:
                 with st.expander("🏫 Historia escolar previa"):
                     edit_apr = prefix + '_edit_' + doc['id'] + '_Aprendizaje'
                     if edit_apr + '_doc' not in st.session_state:
@@ -610,7 +628,7 @@ def epp_page():
                     _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Comprensión expresiva', prefix=prefix)
                     _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Comunicación', '4.1. Comprensión receptiva', prefix=prefix)
 
-            if modo_todo or (modo_area and (user_work_area == 'Aprendizaje' or a['director'])):
+            if modo_todo or (modo_area and (user_work_area in ('Aprendizaje','Comunicación') or a['director'])):
                 st.markdown("#### 📘 4.1. Habilidades Conceptuales y Académicas Funcionales")
                 c4_apr1, c4_apr2 = st.columns(2)
                 with c4_apr1:
@@ -635,7 +653,7 @@ def epp_page():
                     _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Identificación y autorregulación de emociones', prefix=prefix)
                     _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Psicología', '4.2. Autodeterminación', prefix=prefix)
 
-            if modo_todo or (modo_area and (user_work_area in ('Psicología', 'Trabajo Social') or a['director'])):
+            if modo_todo or (modo_area and (user_work_area in ('Psicología', 'Trabajo Social','Comunicación') or a['director'])):
                 st.markdown("#### 🤝 4.3. Habilidades Prácticas, Vida Diaria y Psicomotricidad")
                 c4_pra1, c4_pra2 = st.columns(2)
                 with c4_pra1:

@@ -15,6 +15,39 @@ class CanonicosTests(TestCase):
 
 
 class VistaGuiadaTests(TestCase):
+    def test_comunicacion_y_ts_ven_sus_campos_compartidos(self):
+        from streamlit.testing.v1 import AppTest
+        for area,fields in [('Comunicación',['4.1. Orientación temporal','4.3. Coordinación motriz fina','4.3. Coordinación motriz gruesa']),('Trabajo Social',['Domicilio','Nombre de la madre','Motivo de evaluación'])]:
+            app=AppTest.from_file(str(Path(__file__).parent/'fixtures/epp_viva_app.py'),default_timeout=30)
+            app.query_params['principal']='1';app.query_params['area']=area;app.run()
+            self.assertFalse(app.exception)
+            for field in fields:self.assertTrue(any(t.label==field and not t.disabled for t in app.text_area),field)
+
+    def test_asistente_prepara_resumen_sin_enviar_ni_reemplazar(self):
+        from streamlit.testing.v1 import AppTest
+        app=AppTest.from_file(str(Path(__file__).parent/'fixtures/epp_viva_app.py'),default_timeout=30)
+        app.query_params['principal']='1';app.run();self.assertFalse(app.exception)
+        next(b for b in app.button if b.label=='Proponer redacción').click().run();self.assertFalse(app.exception)
+        next(t for t in app.text_area if t.label.startswith('Tus ideas')).set_value('Necesita apoyos visuales durante la tarea.').run()
+        next(b for b in app.button if b.label=='Preparar texto para revisión').click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('apoyos visuales' in t.value for t in app.text_area if t.label.startswith('Resumen que se enviará')))
+        self.assertFalse(any(c.value for c in app.checkbox if c.label=='Revisé el resumen y autorizo enviarlo a IA'))
+
+    def test_no_requiere_conserva_texto_y_permanece_reversible(self):
+        from streamlit.testing.v1 import AppTest
+        from services.epp_modelo import campos
+        app=AppTest.from_file(str(Path(__file__).parent/'fixtures/epp_viva_app.py'),default_timeout=30)
+        app.query_params['principal']='1';app.run();self.assertFalse(app.exception)
+        campo=campos('Aprendizaje')[0]
+        original=next(t for t in app.text_area if t.label==campo).value
+        control=next(c for c in app.checkbox if c.key.endswith('_campos'+campo+'_no_req'))
+        control.check().run();self.assertFalse(app.exception)
+        self.assertEqual(next(t for t in app.text_area if t.label==campo).value,'No se requiere')
+        self.assertTrue(next(t for t in app.text_area if t.label==campo).disabled)
+        next(c for c in app.checkbox if c.key==control.key).uncheck().run();self.assertFalse(app.exception)
+        self.assertEqual(next(t for t in app.text_area if t.label==campo).value,original)
+
     def test_boton_de_la_captura_llena_conclusion_y_tabla_nee_y_permite_editar(self):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_file(str(Path(__file__).parent/'fixtures/epp_viva_app.py'),default_timeout=30)

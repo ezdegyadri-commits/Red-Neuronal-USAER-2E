@@ -29,7 +29,31 @@ def _entrada(base,actor):
     except Exception:
         docs=[];st.warning('No se pudieron consultar tus documentos. No se eliminó ningún borrador.')
 
-    tab_nueva,tab_continuar=st.tabs(['➕ Nueva planeación','📂 Continuar planeación'])
+    tab_continuar,tab_nueva=st.tabs(['📂 Continuar planeación','➕ Nueva planeación'])
+
+    with tab_continuar:
+        if st.button('Actualizar mis planeaciones guardadas',key=base+'_viva_actualizar_documentos'):
+            s.refrescar();st.rerun()
+        if docs:
+            from ui.planeacion_repositorio import panel as repositorio
+            repositorio(base,docs,_abrir)
+        else:
+            st.info('Aún no tienes planeaciones guardadas en tu cuenta. Usa la pestaña «➕ Nueva planeación» para comenzar una.')
+
+        with st.expander('👥 Planeación grupal compartida del equipo',expanded=False):
+            st.caption('Consulta o aporta en la misma hoja grupal de apoyo, psicología, comunicación y trabajo social.')
+            from ui.planeacion_colaboracion import panel as panel_colaboracion
+            panel_colaboracion(base+'_equipo_cont')
+
+        papelera(base)
+
+    with st.expander('Actualizar matrícula, recuperar un respaldo o consultar las guías',expanded=False):
+        if st.button('Actualizar matrícula disponible',key=base+'_viva_refresh'):s.refrescar_matricula();st.rerun()
+        from ui.planeacion_simple import _recuperar
+        _recuperar(base)
+        from ui.planeacion_ayuda import panel
+        panel(actor['area'])
+
 
     with tab_nueva:
         try:
@@ -133,28 +157,6 @@ def _entrada(base,actor):
                 crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente,todos_grupos=presentacion=='guia' and grupo=='Todos');st.rerun()
             except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
 
-    with tab_continuar:
-        if st.button('Actualizar mis planeaciones guardadas',key=base+'_viva_actualizar_documentos'):
-            s.refrescar();st.rerun()
-        if docs:
-            from ui.planeacion_repositorio import panel as repositorio
-            repositorio(base,docs,_abrir)
-        else:
-            st.info('Aún no tienes planeaciones guardadas en tu cuenta. Usa la pestaña «➕ Nueva planeación» para comenzar una.')
-
-        with st.expander('👥 Planeación grupal compartida del equipo',expanded=False):
-            st.caption('Consulta o aporta en la misma hoja grupal de apoyo, psicología, comunicación y trabajo social.')
-            from ui.planeacion_colaboracion import panel as panel_colaboracion
-            panel_colaboracion(base+'_equipo_cont')
-
-        papelera(base)
-
-    with st.expander('Actualizar matrícula, recuperar un respaldo o consultar las guías',expanded=False):
-        if st.button('Actualizar matrícula disponible',key=base+'_viva_refresh'):s.refrescar_matricula();st.rerun()
-        from ui.planeacion_simple import _recuperar
-        _recuperar(base)
-        from ui.planeacion_ayuda import panel
-        panel(actor['area'])
 
 
 def _matriz_cambio(prefix,key,base):

@@ -27,13 +27,17 @@ def editables(doc):
 def hoja(doc):
     allowed=editables(doc);a=s.actor();alumno=s.alumno_autorizado(doc['alumno'])
     values={area:contenido(doc,area) for area in (*AREAS,'Conclusión')}
-    values['Aprendizaje']=precargar(values['Aprendizaje'],alumno)
+    values['Aprendizaje']=precargar(values['Aprendizaje'],alumno,doc)
     cells={};tables=[]
     def cell(area,section,field,label=None,index=None):
         target=[area,section,field] if index is None else [area,section,index,field]
         key='e'+hashlib.sha256(json.dumps(target,ensure_ascii=False).encode()).hexdigest()[:16]
         value=values[area].get(section,{}).get(field,'') if section and index is None else values[area].get(field,'') if not section else values[area][section][index].get(field,'')
-        c={'id':key,'target':target,'value':str(value or ''),'label':label or field,'editable':area in allowed}
+        from services.epp_colaborativa import puede,omitido
+        editable=area in allowed or index is None and puede(a,area,section,field)
+        c={'id':key,'target':target,'value':str(value or ''),'label':label or field,'editable':editable}
+        if section=='campos' and editable:
+            c['apartado_epp']=True;c['no_requerido']=omitido(values[area],field)
         cells[key]=c;return c
     general=[]
     for field in GENERALES:general.append([cell('Aprendizaje','generales',field)])
@@ -104,6 +108,8 @@ def aplicar(doc,event,huella_esperada=None):
         if not c or not c['editable']:raise PermissionError('Solo puedes modificar los apartados de tu función.')
         if not isinstance(text,str) or len(text)>12000:raise ValueError('El texto supera el límite de este apartado.')
         area,section,*path=c['target'];v=value(area)
+        if section=='campos' and v.get('no_requeridos',{}).get(path[0]) and text!=v.get('campos',{}).get(path[0]):
+            raise ValueError('Desmarca «No se requiere» para editar este apartado.')
         if len(path)==2:
             index,field=path;v.setdefault(section,[])
             while len(v[section])<=index:v[section].append({})
@@ -113,13 +119,23 @@ def aplicar(doc,event,huella_esperada=None):
         if section=='generales':v['generales_editados']=sorted(set(v.get('generales_editados',[]))|{path[0]})
         v['validada']=False;modified.add(area)
     action=event.get('accion','guardar')
-    if action in ('agregar','retirar'):
+    if action in ('no_requiere','redaccion'):
+        c=spec['cells'].get(event.get('celda'))
+        if not c or not c.get('editable') or not c.get('apartado_epp'):raise PermissionError('Apartado fuera de tu función.')
+        if action=='no_requiere':
+            from services.epp_colaborativa import no_requiere
+            if type(event.get('activar')) is not bool:raise ValueError('Indica si se requiere este apartado.')
+            area,_,field=c['target'];result['partes'].setdefault(area,{})['contenido']=no_requiere(value(area),field,event['activar']);modified.add(area)
+    elif action in ('agregar','retirar'):
         parts=str(event.get('tabla','')).split('|')
         if len(parts)!=2:raise ValueError('Tabla no editable.')
         area,name=parts
         if area not in editables(doc) or name not in {'familia','historia','nee','bap'}:raise PermissionError('Tabla fuera de tu función.')
         v=value(area);headers={'familia':FAMILIA,'historia':HISTORIA,'nee':NEE,'bap':BAP}[name]
-        if action=='agregar':v.setdefault(name,[]).append(dict.fromkeys(headers,''))
+        if action=='agregar':
+            rows=v.setdefault(name,[]);pos=event.get('posicion',len(rows))
+            if type(pos) is not int or not 0<=pos<=len(rows):raise ValueError('Posición de fila no válida.')
+            rows.insert(pos,dict.fromkeys(headers,''))
         else:
             i=event.get('fila')
             if event.get('confirmado') is not True or not isinstance(i,int) or not 0<=i<len(v.get(name,[])):raise ValueError('Confirma una fila existente para retirarla.')

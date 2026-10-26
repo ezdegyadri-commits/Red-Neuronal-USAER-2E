@@ -24,7 +24,8 @@ class ContratoTests(EPPTests):
                 import re
                 self.assertTrue(all(re.fullmatch(r'[a-zA-Z0-9_-]+',key) for key in spec['cells']))
                 owners={c['target'][0] for c in spec['cells'].values() if c['editable']}
-                self.assertEqual(owners,{'Aprendizaje','Conclusión'} if area=='Aprendizaje' else set() if area=='Dirección' else {area})
+                expected={'Aprendizaje':{'Aprendizaje','Conclusión'},'Comunicación':{'Comunicación','Aprendizaje','Psicología'},'Trabajo Social':{'Trabajo Social','Aprendizaje'},'Psicología':{'Psicología'},'Dirección':set()}
+                self.assertEqual(owners,expected[area])
                 for section in ('2. Información inicial y salud','3. Funcionamiento intelectual','4. Conducta adaptativa','5. Funcionamiento académico','6. Contextos'):
                     self.assertTrue(any(t['title']==section for t in spec['tables']))
 
@@ -125,7 +126,18 @@ class PantallaTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertEqual(sum(r[2]=='META' for r in app.session_state['qa_rows']),1)
             spec=app.session_state['qa_spec']
-            self.assertEqual({c['target'][0] for c in spec['cells'].values() if c['editable']},{area})
+            expected={'Psicología':{'Psicología'},'Comunicación':{'Comunicación','Aprendizaje','Psicología'},'Trabajo Social':{'Trabajo Social','Aprendizaje'}}
+            self.assertEqual({c['target'][0] for c in spec['cells'].values() if c['editable']},expected[area])
+
+    def test_abrir_redactor_desde_hoja_nativa_conserva_el_apartado(self):
+        app=self.open();next(b for b in app.button if b.label=='Abrir EPP del alumno').click().run()
+        spec=app.session_state['qa_spec'];cell=next(c for c in spec['cells'].values() if c.get('apartado_epp'))
+        app.session_state['qa_event']={'nonce':'abrir-redactor-qa','documento':spec['documento'],'huella':spec['huella'],'cambios':{},'accion':'redaccion','celda':cell['id']}
+        app.run();self.assertFalse(app.exception)
+        next(t for t in app.text_area if t.label.startswith('Tus ideas')).set_value('Necesita modelado visual.').run()
+        next(b for b in app.button if b.label=='Preparar texto para revisión').click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('modelado visual' in t.value for t in app.text_area if t.label.startswith('Resumen que se enviará')))
 
 
 if __name__=='__main__':unittest.main()

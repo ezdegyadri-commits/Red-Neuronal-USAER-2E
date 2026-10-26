@@ -17,11 +17,13 @@ def editar_celda(doc,tabla,indice,campo,valor):
         return editar_en_formato(doc,row['_sesion_equipo'],campo,valor)
     result=deepcopy(doc);result['tablas'][tabla][indice][campo]=str(valor or '');return result
 
-def nueva_fila(doc,tabla):
+def nueva_fila(doc,tabla,indice=None):
     headers=FORMATOS[doc['formato']]['tablas'].get(tabla)
     if headers is None:raise ValueError('Tabla fuera del formato.')
     if len(doc['tablas'][tabla])>=100:raise ValueError('Revisa las cien filas existentes antes de añadir otra.')
-    result=deepcopy(doc);result['tablas'][tabla].append(dict.fromkeys(headers,''));return result
+    if indice is None:indice=len(doc['tablas'][tabla])
+    if type(indice) is not int or not 0<=indice<=len(doc['tablas'][tabla]):raise ValueError('Elige una posición de fila válida.')
+    result=deepcopy(doc);result['tablas'][tabla].insert(indice,dict.fromkeys(headers,''));return result
 
 def quitar_fila(doc,tabla,indice):
     if tabla not in FORMATOS[doc['formato']]['tablas']:raise ValueError('Tabla fuera del formato.')

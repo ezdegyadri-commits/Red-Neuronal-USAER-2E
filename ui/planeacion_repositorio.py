@@ -7,6 +7,10 @@ from utils.text import normalizar_texto
 
 
 def panel(base,docs,abrir):
+    buscar_todo=st.text_input('Buscar alumno en todas mis planeaciones',key=base+'_buscar_historial_completo')
+    if buscar_todo.strip():
+        texto=normalizar_texto(buscar_todo)
+        docs=[d for d in docs if texto in normalizar_texto(' '.join(a.get('Nombre del alumno','') for a in d['datos']['Alumnos']))]
     grupos=repositorios(docs)
     tabs=st.tabs([f'{nombre} ({len(items)})' for nombre,items in grupos.items()])
     for (nombre,items),tab in zip(grupos.items(),tabs):
@@ -16,6 +20,9 @@ def panel(base,docs,abrir):
                 st.info('Aún no hay planeaciones en este repositorio. Las nuevas aparecerán aquí automáticamente.');continue
             c1,c2=st.columns([1,2])
             grados=sorted({grado_canonico(a.get('Grado')) for d in items for a in d['datos']['Alumnos']}-{''})
+            if buscar_todo.strip():
+                st.session_state[key+'_grado']='Todos'
+                st.session_state[key+'_buscar']=''
             if st.session_state.get(key+'_grado','Todos') not in ['Todos']+grados:st.session_state[key+'_grado']='Todos'
             grado=c1.selectbox('Grado',['Todos']+grados,key=key+'_grado')
             buscar=c2.text_input('Buscar alumno o escuela',key=key+'_buscar')

@@ -18,6 +18,15 @@ def _extraer_texto_pdf(pdf_bytes):
 
 
 class PapelTests(unittest.TestCase):
+    def test_insertar_arriba_o_abajo_conserva_las_filas(self):
+        d=documento();antes=deepcopy(d)
+        for pos in (0,len(d['tablas']['dosificacion'])):
+            n=papel.aplicar(d,self.evento(d,accion='agregar',tabla='dosificacion',posicion=pos))
+            rows=n['tablas']['dosificacion'];self.assertTrue(rows[pos]['_fila_manual'])
+            self.assertEqual(rows[:pos]+rows[pos+1:],d['tablas']['dosificacion'])
+        self.assertEqual(d,antes)
+        for bad in (-1,10000,'0',True):
+            with self.assertRaises(ValueError):papel.aplicar(d,self.evento(d,accion='agregar',tabla='dosificacion',posicion=bad))
     def setUp(self):self.auth=patch.object(papel.s,'autorizar',return_value={});self.auth.start()
     def tearDown(self):self.auth.stop()
     def evento(self,d,**kwargs):return {'documento':d['id'],'huella':papel.huella(d),'nonce':'n','accion':'guardar','cambios':{},**kwargs}
