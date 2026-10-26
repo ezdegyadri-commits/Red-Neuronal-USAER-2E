@@ -24,6 +24,29 @@ if not st.session_state.qa_rows:
     s.actor=lambda:ACTOR
     s.crear(ALUMNO['ID_Alumno'],'2026-2027')
     s.actor=lambda:who
+if st.session_state.get('qa_conclusion_test'):
+    from services.epp_modelo import AREAS, campos, vacia
+    from tests.test_epp_conclusion_visible import propuesta
+    import ai.epp
+    def generar_qa(*args):
+        if st.session_state.get('qa_cambia_durante_ia'):
+            actual=s.listar()[0];v=deepcopy(actual['partes']['Psicología']['contenido'])
+            v['campos'][campos('Psicología')[0]]='Hallazgo nuevo durante generación QA'
+            s.actor=lambda:{**ACTOR,'area':'Psicología','cuenta':'ficticio-Psicología','rol':'Psicología'}
+            try:s.guardar(actual,'Psicología',v,actual['partes']['Psicología']['revision'])
+            finally:s.actor=lambda:who
+        return propuesta()
+    ai.epp.generar=generar_qa
+    s.contexto=lambda doc:{'metadatos':{'fuentes':[]},'datos':{'Alumnos':[]}}
+    s.planes.resumen_previo=lambda plan,parts:'\n'.join(f['referencia']+': '+f['texto'] for f in parts)
+    if not st.session_state.get('qa_sembrada'):
+        d=s.listar()[0]
+        for a in AREAS:
+            s.actor=lambda a=a:{**ACTOR,'area':a,'cuenta':ACTOR['cuenta'] if a=='Aprendizaje' else 'ficticio-'+a,'rol':'MAESTRO DE APOYO' if a=='Aprendizaje' else a}
+            v=vacia(a);v['campos'][campos(a)[0]]='Hallazgos documentados QA de '+a
+            s.guardar(d,a,v,'')
+        st.session_state.qa_sembrada=True
+    s.actor=lambda:who
 def fake_editor(**kw):
     st.session_state.qa_spec=kw['hoja']
     return st.session_state.get('qa_event')
