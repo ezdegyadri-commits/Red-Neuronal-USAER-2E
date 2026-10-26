@@ -6,7 +6,7 @@ from ai.planeacion_prompt import INSTRUCCIONES
 from services.planeacion_modelo import FORMATOS
 from services.planeacion_equipo import COMPETENCIAS
 
-VERSION='planeacion-completa-2026-10-21-v5'
+VERSION='planeacion-completa-2026-10-26-v6-sin-repeticion'
 CAMPOS=('necesidad','objetivo','descriptor','actividad','contexto','apoyos','recursos','evaluacion','fundamento')
 LISTAS=('evidencias','fuentes','referentes','destinatarios','competencias')
 
@@ -33,7 +33,7 @@ def solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
        'contextualizacion_docente':contexto.get('contextualizacion_docente',''),
        'actividades_previas_para_no_repetir':contexto.get('actividades_previas',[]),
        'configuracion':{k:ajustes[k] for k in ('duracion','sesiones','dias','enfoque','apoyos') if k in ajustes},
-       'contextos_admitidos':FORMATOS[formato]['contextos']}
+       'contextos_admitidos':contexto.get('contextos_solicitados',FORMATOS[formato]['contextos'])}
     reglas='''Prepara el borrador completo de planeación trimestral, no solo ideas sueltas.
 Devuelve hasta ocho unidades o secuencias distintas, para dosificar localmente en las
 sesiones configuradas. Identifica destinatarios solo con los alias.
@@ -97,7 +97,12 @@ apoyos, recursos, evaluacion, fundamento; y listas evidencias, fuentes, referent
 destinatarios y competencias. competencias queda vacía fuera de Psicología.
 '''
     limite=min(8,int(ajustes['sesiones']),max(6 if area=='Psicología' else 3,len(aliases)))
+    if contexto.get('actividades_solicitadas'):limite=contexto['actividades_solicitadas']
     reglas+='\nPara esta configuración devuelve como máximo '+str(limite)+' unidades. '
+    if contexto.get('actividades_solicitadas'):
+        reglas+='Devuelve exactamente '+str(limite)+' actividades diferentes, una por unidad, sin reutilizar la misma secuencia en distintas fechas. '
+    reglas+='Cada actividad debe responder a una necesidad documentada de sus destinatarios, sus apoyos y contexto reales. Varía la tarea central, materiales y respuesta observable; cambiar solo el título o los nombres no crea otra actividad. No fuerces competencias o contextos que no se hayan solicitado. '
+    reglas+='Distribuye inicio, desarrollo y cierre dentro de los '+str(ajustes.get('duracion',45))+' minutos elegidos. Usa únicamente los contextos admitidos; explica la adaptación individual cuando intervengan varios alumnos. '
     reglas+='Sé conciso y directo: actividad entre 300 y 650 caracteres (Inicio 5 min, Desarrollo con mediación/andamiaje, Cierre observable) y los demás textos entre 80 y 250 caracteres cada uno. No repitas antecedentes completos ni tablas normativas; usa sus identificadores.\n'
     reglas+='REGLAS ESTRICTAS DE DESTINATARIOS Y EVIDENCIAS:\n• Asigna a cada unidad únicamente los destinatarios que cuenten con su propia evidencia citada en esa misma unidad.\n• Si citas solo la evidencia de un alumno, coloca solo a ese alumno en destinatarios.\n'
     return INSTRUCCIONES.split('Devuelve solo JSON')[0]+'\n'+reglas+'\nDATOS DE CONSULTA:\n'+json.dumps(datos,ensure_ascii=False,sort_keys=True)
@@ -113,6 +118,9 @@ def validar_completa(data,formato,area,contexto,aliases,evidencias):
     fuentes={f['id'] for f in contexto.get('fuentes',[])}
     referentes={r['id'] for r in contexto.get('referentes_por_grado',[])}
     resultado=[]
+    cantidad=contexto.get('actividades_solicitadas')
+    if cantidad and len(data['unidades'])!=cantidad:
+        raise RespuestaInvalida('La IA no completó la cantidad de actividades distintas solicitada.','CantidadInvalida')
     for u in data['unidades']:
         if not isinstance(u,dict) or any(not isinstance(u.get(k),str) or not u[k].strip() or len(u[k])>4000 for k in CAMPOS):
             raise RespuestaInvalida('Una actividad llegó incompleta.','CamposIncompletos')
@@ -123,6 +131,8 @@ def validar_completa(data,formato,area,contexto,aliases,evidencias):
             norm = next((c for c in FORMATOS[formato]['contextos'] if c.lower().strip() == u['contexto'].lower().strip()), None)
             if norm: u['contexto'] = norm
             else: raise RespuestaInvalida('Contexto no permitido para este formato.','ContextoInvalido')
+        if contexto.get('contextos_solicitados') and u['contexto'] not in contexto['contextos_solicitados']:
+            raise RespuestaInvalida('La actividad no corresponde a los contextos elegidos.','ContextoInvalido')
         if isinstance(evidencias,dict):
             documentados={a for ref in u['evidencias'] for a in evidencias.get(ref,[])}
             dest_validos=[a for a in u['destinatarios'] if a in documentados]
@@ -147,7 +157,9 @@ def generar_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias):
     prompt=solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
     schema=deepcopy(SCHEMA)
     unidad=schema['properties']['unidades']['items']['properties']
-    unidad['contexto']['enum']=list(FORMATOS[formato]['contextos'])
+    unidad['contexto']['enum']=list(contexto.get('contextos_solicitados',FORMATOS[formato]['contextos']))
+    cantidad=contexto.get('actividades_solicitadas')
+    if cantidad:schema['properties']['unidades'].update(minItems=cantidad,maxItems=cantidad)
     permitidos={'evidencias':list(evidencias),'fuentes':[f['id'] for f in contexto.get('fuentes',[])],
         'referentes':[r['id'] for r in contexto.get('referentes_por_grado',[])],
         'destinatarios':list(aliases),'competencias':list(COMPETENCIAS) if area=='Psicología' else []}
@@ -164,13 +176,13 @@ def generar_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias):
         motivo=diagnostico.get('motivo')
         corregibles={'JSONInvalido','SalidaCortada','CamposIncompletos','EstructuraInvalida',
                      'ReferenciasInvalidas','ActividadRepetida','Vinculo_evidencias','Vinculo_fuentes',
-                     'Vinculo_referentes','Vinculo_destinatarios','EvidenciaAjena','ContextoInvalido'}
+                     'Vinculo_referentes','Vinculo_destinatarios','EvidenciaAjena','ContextoInvalido','CantidadInvalida'}
         if diagnostico.get('tipo')!='RespuestaNoVerificable' or motivo not in corregibles:raise
         # Una sola corrección sobre los mismos datos consentidos; nunca enviar
         # texto de error del proveedor ni una respuesta no validada como contexto.
         st.session_state.pop('planeacion_ia_reintentar_desde', None)
-        compacto=deepcopy(schema);compacto['properties']['unidades']['maxItems']=3
-        reparacion=prompt+'\nREINTENTO DE FORMATO: '+motivo+'. Devuelve como máximo tres unidades completas y concisas; '
+        compacto=deepcopy(schema);compacto['properties']['unidades']['maxItems']=cantidad or 3
+        reparacion=prompt+'\nREINTENTO DE FORMATO: '+motivo+'. Devuelve '+('exactamente '+str(cantidad) if cantidad else 'como máximo tres')+' unidades completas y concisas; '
         reparacion+='verifica cada ID contra los datos suministrados y la evidencia de cada destinatario. '
         reparacion+='Mantén actividades distintas de las previas y competencias pertinentes. No omitas campos ni inventes referencias. '
         reparacion+='En Psicología puedes abordar varias competencias justificadas en una misma unidad.\n'

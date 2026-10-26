@@ -73,6 +73,9 @@ def listar(incluir_eliminados=False,incluir_bajas=False):
         # Sólo la ausencia explícita permite un listado vacío. Nunca ocultar cuotas/permisos.
         if type(exc).__name__ == 'WorksheetNotFound': return []
         raise
+    # Filtrar antes de deserializar el historial completo de toda la USAER.
+    # Los permisos se vuelven a comprobar al editar y guardar cada apartado.
+    if 'Alumno' in rows:rows=rows.loc[rows['Alumno'].astype(str).isin(ids)]
     records=rows.fillna('').to_dict('records')
     known={str(r.get('Revision','')) for r in records}
     records.extend(deepcopy(r) for rev,r in recientes().items() if rev not in known)

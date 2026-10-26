@@ -35,27 +35,30 @@ def panel(prefix):
             st.text('Contenido: '+str(registro.get('contenido',''))+'\nPDA: '+str(registro.get('pda','')))
         for fuente in estado['fuentes']:st.caption(str(fuente['tipo'])+' · '+str(fuente['referencia']))
     for aviso in estado['avisos']:st.info(aviso)
-    st.markdown('**Elige prioridades y apoyos**')
-    st.caption('Son propuestas para revisar, no diagnósticos. Puedes quitar o cambiar cualquier selección.')
-    selecciones={}
-    selecciones['prioridades']=st.multiselect('Qué vamos a trabajar',estado['permitidas'],default=defaults['prioridades'],format_func=lambda p:rapido.PRIORIDADES[p][0],key=widgets+'_prioridades')
-    selecciones['tematica']=st.text_input('Otra temática importante (opcional)',value=defaults['tematica'],max_chars=300,placeholder='Interés, situación o tema pertinente para este alumno',key=widgets+'_tematica')
-    selecciones['apoyos']=st.multiselect('Apoyos para participar y responder',list(rapido.APOYOS),default=defaults['apoyos'],format_func=lambda p:rapido.APOYOS[p][0],key=widgets+'_apoyos')
-    selecciones['metodo']=st.selectbox('Cómo lo trabajaremos',list(rapido.METODOS),index=list(rapido.METODOS).index(defaults['metodo']),format_func=lambda p:rapido.METODOS[p],key=widgets+'_metodo')
-    with st.expander('Ajustar tiempos, contextos o acuerdos',expanded=False):
-        selecciones['contextos']=st.multiselect('Contextos de intervención',FORMATOS[doc['formato']]['contextos'],default=defaults['contextos'],key=widgets+'_contextos')
+    st.markdown('**Prepara actividades distintas para tus alumnos**')
+    a,b=st.columns(2)
+    cantidad=a.selectbox('Cantidad de actividades',list(range(1,9)),index=2,key=widgets+'_cantidad')
+    selecciones={**defaults}
+    selecciones['duracion']=b.selectbox('Minutos por actividad',[15,20,30,45,60],index=[15,20,30,45,60].index(defaults['duracion']),key=widgets+'_duracion')
+    selecciones['contextos']=st.multiselect('Contextos de intervención',FORMATOS[doc['formato']]['contextos'],default=defaults['contextos'],key=widgets+'_contextos')
+    selecciones['tematica']=st.text_input('Temática o interés del alumno (opcional)',value=defaults['tematica'],max_chars=300,placeholder='Se utilizarán sus necesidades y antecedentes si lo dejas vacío',key=widgets+'_tematica')
+    with st.expander('Personalizar apoyos y otros detalles (opcional)',expanded=False):
+        st.caption('Las opciones ya están sugeridas con los datos del alumno. Modifícalas solo si lo necesitas.')
+        selecciones['prioridades']=st.multiselect('Qué vamos a trabajar',estado['permitidas'],default=defaults['prioridades'],format_func=lambda p:rapido.PRIORIDADES[p][0],key=widgets+'_prioridades')
+        selecciones['apoyos']=st.multiselect('Apoyos para participar y responder',list(rapido.APOYOS),default=defaults['apoyos'],format_func=lambda p:rapido.APOYOS[p][0],key=widgets+'_apoyos')
+        selecciones['metodo']=st.selectbox('Cómo lo trabajaremos',list(rapido.METODOS),index=list(rapido.METODOS).index(defaults['metodo']),format_func=lambda p:rapido.METODOS[p],key=widgets+'_metodo')
         a,b=st.columns(2)
-        selecciones['duracion']=a.selectbox('Minutos por sesión',[15,20,30,45,60],index=[15,20,30,45,60].index(defaults['duracion']),key=widgets+'_duracion')
         selecciones['frecuencia']=b.selectbox('Frecuencia propuesta',rapido.FRECUENCIAS,index=rapido.FRECUENCIAS.index(defaults['frecuencia']),key=widgets+'_frecuencia')
         selecciones['acuerdos']=st.multiselect('Acuerdos CTE registrados',list(estado['acuerdos']),default=defaults['acuerdos'],format_func=lambda p:estado['acuerdos'][p]['texto'],key=widgets+'_acuerdos',disabled=not estado['acuerdos'])
         if not estado['acuerdos']:st.caption('No hay acuerdos de CTE explícitos y verificados vinculados a esta planeación.')
         selecciones['completar']=st.checkbox('Completar apartados vacíos al preparar sin IA',value=defaults['completar'],key=widgets+'_completar')
         st.caption('El autollenado es opcional: no se recuperarán campos que retiraste sin que lo solicites.')
+        motor=st.radio('Preparar actividades',['Con mis datos, sin IA','Con IA'],index=1,horizontal=True,key=key+'_motor')
     errores=rapido.validar(doc,selecciones)
     for error in errores:st.warning(error)
-    motor=st.radio('Preparar actividades',['Con mis datos, sin IA','Con IA'],horizontal=True,key=key+'_motor')
-    preparar=st.button('Preparar propuesta',type='primary',disabled=bool(errores),key=widgets+'_preparar')
-    if not errores:config={**config,**rapido.orientaciones(doc,selecciones),'duracion':selecciones['duracion']}
+    preparar=st.button('Preparar propuesta',type='primary',disabled=bool(errores),key=widgets+'_preparar',use_container_width=True)
+    if not errores:config={**config,**rapido.orientaciones(doc,selecciones),'duracion':selecciones['duracion'],
+        'sesiones':cantidad,'actividades_solicitadas':cantidad,'contextos_solicitados':selecciones['contextos']}
     if preparar:
         st.session_state.pop(key+'_propuesta',None)
         st.session_state.pop(key+'_solicitud',None)
