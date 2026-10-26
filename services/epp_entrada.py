@@ -36,15 +36,42 @@ def datos_registrados(alumno):
         result['Edad']=texto(alumno['Edad_1_Septiembre'])+' años (referencia del padrón al 1 de septiembre; confirmar ciclo)'
     return result
 
-def precargar(value, alumno):
+def datos_entrevista(doc):
+    """Solo etiquetas explícitas y registros estructurados; no inferir datos familiares."""
+    import re
+    import unicodedata
+    def norm(s):
+        return ''.join(c for c in unicodedata.normalize('NFD',s.casefold()) if unicodedata.category(c)!='Mn').strip()
+    fields={norm(f):f for f in GENERALES}
+    result={}
+    ts=(doc or {}).get('partes',{}).get('Trabajo Social',{}).get('contenido',{})
+    for evaluation in ts.get('evaluaciones',[]):
+        if 'entrevista' not in norm(str(evaluation.get('nombre',''))):continue
+        for line in str(evaluation.get('texto','')).splitlines():
+            pair=re.split(r'\s*:\s*',line,maxsplit=1)
+            if len(pair)==2 and norm(pair[0]) in fields and texto(pair[1]):
+                result[fields[norm(pair[0])]]=texto(pair[1])[:1000]
+    for row in ts.get('familia',[]):
+        parent={'madre':'madre','padre':'padre'}.get(norm(str(row.get('Parentesco',''))))
+        if not parent:continue
+        for col,label in [('Nombre','Nombre'),('Edad','Edad'),('Escolaridad','Escolaridad')]:
+            if texto(row.get(col)):result[f'{label} de la {parent}' if parent=='madre' else f'{label} del {parent}']=texto(row[col])
+    return result
+
+def precargar(value, alumno, doc=None):
     result=deepcopy(value)
     generales=result.setdefault('generales',{})
     edited=set(result.get('generales_editados',[]))
     origins=result.setdefault('origen_generales',{})
-    for field,text in datos_registrados(alumno).items():
-        if field not in edited and not generales.get(field):
+    interview=datos_entrevista(doc)
+    if interview.get('Fecha de nacimiento') and not interview.get('Edad'):
+        derived=datos_registrados({'Fecha de nacimiento':interview['Fecha de nacimiento']})
+        if derived.get('Edad'):interview['Edad']=derived['Edad']
+    for field,text in {**datos_registrados(alumno),**interview}.items():
+        source='Entrevista de Trabajo Social; verificar con la familia.' if field in interview else 'Registro autorizado del alumno; verificar al revisar la EPP.'
+        if field not in edited and (not generales.get(field) or field in interview and origins.get(field,'').startswith(('Registro autorizado','Entrevista de Trabajo Social'))):
             generales[field]=text
-            origins[field]='Registro autorizado del alumno; verificar al revisar la EPP.'
+            origins[field]=source
     return result
 
 def huella_instrumentos(doc, area, value):

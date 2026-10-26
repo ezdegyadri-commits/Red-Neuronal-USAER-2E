@@ -98,7 +98,8 @@ def autorizar(doc, parte=None):
             if not es_coordinadora(canonical):
                 raise PermissionError('La maestra coordinadora integra la conclusión acordada por el equipo.')
         elif parte != a['area'] or a['director']:
-            raise PermissionError('Solo puedes editar los apartados de tu función.')
+            from services.epp_colaborativa import comparte
+            if not comparte(a,parte):raise PermissionError('Solo puedes editar los apartados de tu función o los campos compartidos contigo.')
     return a
 
 def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR',actual_confirmado=None):
@@ -160,7 +161,7 @@ def combinar(base, local, remoto):
             b,l,r=base.get(k,missing),local.get(k,missing),remoto.get(k,missing)
             if l==b:v=r
             elif r==b or l==r:v=l
-            elif all(isinstance(x,dict) for x in (b,l,r)):v=combinar(b,l,r)
+            elif isinstance(l,dict) and isinstance(r,dict) and (isinstance(b,dict) or b is missing):v=combinar({} if b is missing else b,l,r)
             else:raise RuntimeError('Otra sesión cambió el mismo dato de tu área. Se conservan ambas versiones: respalda tu texto y revisa el dato en conflicto.')
             if v is not missing:result[k]=deepcopy(v)
         return result
@@ -180,8 +181,12 @@ def guardar_cambios(doc, parte, base, value, revision):
         return guardar(actual,parte,combinado,latest.get('revision',''),_actual_confirmado=actual)
 
 def guardar(doc, parte, value, revision, _actual_confirmado=None):
-    autorizar(doc,parte)
+    a=autorizar(doc,parte)
     clean = validar_parte(parte,value)
+    if parte!=a['area'] and parte!='Conclusión':
+        from services.epp_colaborativa import validar_cambios
+        current=_actual_confirmado or _actual(doc['alumno'],doc['ciclo'])
+        validar_cambios(a,parte,current['partes'].get(parte,{}).get('contenido',vacia(parte)),clean)
     # Una propuesta de IA jamás valida un área ni una conclusión.
     if parte == 'Conclusión' and clean.get('validada'):
         clean['revisiones_areas']={area:doc['partes'].get(area,{}).get('revision','') for area in AREAS}

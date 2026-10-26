@@ -10,7 +10,7 @@ def fuentes(doc):
     result=[]
     for area in AREAS:
         p=doc['partes'].get(area,{}).get('contenido',{})
-        items=[(k,str(v).strip()) for k,v in p.get('campos',{}).items() if str(v).strip()]
+        items=[(k,str(v).strip()) for k,v in p.get('campos',{}).items() if str(v).strip() and not p.get('no_requeridos',{}).get(k)]
         if str(p.get('sintesis','')).strip():items.append(('Síntesis',p['sintesis']))
         items.extend(('Evaluación '+str(e.get('nombre','')),str(e.get('texto','')).strip())
             for e in p.get('evaluaciones',[]) if str(e.get('texto','')).strip())

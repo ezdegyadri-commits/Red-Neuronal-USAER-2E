@@ -235,7 +235,8 @@ def aplicar(doc,event):
             return cambiar_fila(result,event.get('fila') if action=='retirar' else None,event.get('alumno'))
         if table not in doc['tablas'] or spec['grupal']:raise ValueError('Selecciona una tabla del formato.')
         if action=='agregar':
-            result=f.nueva_fila(result,table);result['tablas'][table][-1]['_fila_manual']=True
+            indice=event.get('posicion',len(result['tablas'][table]))
+            result=f.nueva_fila(result,table,indice);result['tablas'][table][indice]['_fila_manual']=True
         else:
             i=event.get('fila')
             if not isinstance(i,int) or event.get('confirmado') is not True:raise ValueError('Confirma el retiro de la fila.')

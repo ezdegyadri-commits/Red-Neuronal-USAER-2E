@@ -53,7 +53,7 @@ def generar_pdf(doc, alumno, incluir_firmas=True):
             ('GRID', (0, 0), (-1, -1), .3, colors.grey), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
         return t
     values = {a: doc['partes'].get(a, {}).get('contenido', {}) for a in (*AREAS, 'Conclusión')}
-    values['Aprendizaje'] = precargar(values['Aprendizaje'], alumno)
+    values['Aprendizaje'] = precargar(values['Aprendizaje'], alumno,doc)
     fecha = max((v['fecha'] for v in doc['partes'].values()), default='')[:10]
     epp_oficial_concluida = conclusion_vigente(doc) and all(values[a].get('validada') for a in AREAS)
     story = [p('Informe de Evaluación Psicopedagógica', styles['Title']), p('Servicio de Apoyo de Educación Especial · Anexo XVII'),
@@ -69,17 +69,21 @@ def generar_pdf(doc, alumno, incluir_firmas=True):
             '\n' + '\n'.join(e.get('nombre', '') + (' · ' + e['fecha'] if e.get('fecha') else '') for e in values[a].get('evaluaciones', [])),
             'Especialista que aplicó': doc['partes'].get(a, {}).get('autor', '')} for a in AREAS]))
     for section, areas in SECCIONES.items():
+        from services.epp_colaborativa import omitido
+        if all(omitido(values[area],f) for area,fields in areas.items() for f in fields):continue
         story.extend([Spacer(1, 8), p(section, styles['Heading2'])])
         for area, fields in areas.items():
             for f in fields:
+                if omitido(values[area],f):continue
                 story.append(p(f, styles['Heading3'])); story.append(p(values[area].get('campos', {}).get(f, '')))
                 if f == '6.1. Historia escolar': story.append(table(HISTORIA, values['Aprendizaje'].get('historia', [])))
                 if f == '6.2. Contexto familiar': story.append(table(FAMILIA, values['Trabajo Social'].get('familia', [])))
     conclusion = values['Conclusión']
-    story.extend([p('7. Conclusión, determinación de las NEE e identificación de las BAP', styles['Heading2']),
-        p('7.1. Conclusión', styles['Heading3']), p(conclusion.get('campos', {}).get('7.1. Conclusión', ''))])
+    story.append(p('7. Conclusión, determinación de las NEE e identificación de las BAP', styles['Heading2']))
+    if not omitido(conclusion,'7.1. Conclusión'):
+        story.extend([p('7.1. Conclusión', styles['Heading3']),p(conclusion.get('campos',{}).get('7.1. Conclusión',''))])
     for f in ['Énfasis de atención acordado', 'Asociación educativa sustentada', 'Acuerdos y apoyos del equipo']:
-        if conclusion.get('campos', {}).get(f): story.append(p(f + ': ' + conclusion['campos'][f]))
+        if not omitido(conclusion,f) and conclusion.get('campos', {}).get(f): story.append(p(f + ': ' + conclusion['campos'][f]))
     story.extend([p('7.2. Determinación de las necesidades educativas específicas', styles['Heading3']),
         table(['Aspectos', 'Características relevantes', 'NEE'], conclusion.get('nee', [])),
         p('7.3. Identificación de BAP', styles['Heading3']), table(['Contextos', 'Tipo de barrera'], conclusion.get('bap', [])),
