@@ -20,7 +20,8 @@ from documents.epp import generar_pdf
 from ai.epp import generar
 from services.epp_entrada import precargar, huella_instrumentos, entrada_directa
 from services.epp_analisis import (
-    identificar_instrumento_y_areas, distribuir_hallazgos_en_epp, proponer_nee_segey, incorporar_prueba_a_epp
+    identificar_instrumento_y_areas, distribuir_hallazgos_en_epp, proponer_nee_segey, incorporar_prueba_a_epp,
+    ensamblar_epp_completa_desde_documento
 )
 
 CATALOGO_INSTRUMENTOS_SEGEY = {
@@ -349,6 +350,75 @@ def epp_page():
                 f"</div>",
                 unsafe_allow_html=True
             )
+    st.write("")
+
+    # --- 📄 DIGITALIZADOR Y ENSAMBLADOR INTELIGENTE DE EPP COMPLETA ---
+    with st.expander("📥 Subir documento escaneado de la EPP (PDF / Foto) y ensamblar en formato oficial", expanded=False):
+        st.markdown(
+            """
+            <div style='background-color: #f7fafc; border-left: 4px solid #3182ce; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px;'>
+                <strong>Capturar una vez y reutilizar:</strong> Sube aquí un expediente o informe escaneado de la EPP (PDF, Word o imagen de hasta 32 MB). 
+                La plataforma extraerá los hallazgos de cada disciplina, los distribuirá en sus apartados correspondientes del Manual USAER (Anexos XVII y XVIII) 
+                y formulará la propuesta oficial SEGEY de NEE y BAP para validación del equipo colegiado.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        col_up_scan, col_btn_scan = st.columns([0.68, 0.32])
+        with col_up_scan:
+            scan_file = st.file_uploader(
+                "Documento escaneado de la EPP",
+                type=['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx'],
+                key=prefix + '_epp_full_scan_file',
+                help="Sube un archivo PDF o imagen escaneada con la evaluación psicopedagógica del alumno."
+            )
+        with col_btn_scan:
+            st.write("")
+            st.write("")
+            btn_ensamblar = st.button(
+                "⚡ Leer y ensamblar en EPP",
+                disabled=not scan_file,
+                key=prefix + '_btn_ensamblar_scan',
+                use_container_width=True
+            )
+        if scan_file and btn_ensamblar:
+            try:
+                with st.spinner("Leyendo y transcribiendo documento escaneado..."):
+                    read = leer_material(scan_file.name, scan_file.getvalue())
+                    texto_extraido = read.get('texto', '')
+                if not texto_extraido.strip():
+                    st.error("No se pudo extraer texto legible del documento cargado. Si es una imagen o escaneo, asegúrate de que sea nítido.")
+                else:
+                    with st.spinner("Analizando y ensamblando apartados oficiales de la EPP..."):
+                        res_ens = ensamblar_epp_completa_desde_documento(doc, texto_extraido, scan_file.name)
+
+                        # Actualizar session_state de las áreas abiertas
+                        for area_k in (*AREAS, 'Conclusión'):
+                            p_k = prefix + '_edit_' + doc['id'] + '_' + area_k
+                            if p_k + '_value' in st.session_state:
+                                st.session_state[p_k + '_value'] = deepcopy(doc['partes'][area_k]['contenido'])
+                                _save(p_k)
+
+                        # Guardar el documento completo
+                        if user_work_area:
+                            _save(edit_active_prefix)
+                        if can_edit_concl and 'Conclusión' in doc['partes']:
+                            _save(prefix + '_edit_' + doc['id'] + '_Conclusión')
+
+                        # Invalidar caché PDF para que refleje lo nuevo
+                        st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
+
+                        st.success(
+                            f"✅ **EPP ensamblada exitosamente a partir de {scan_file.name}:**\n\n"
+                            f"• **Áreas actualizadas:** {', '.join(res_ens['areas_ensambladas'])}\n"
+                            f"• **Campos modificados:** {res_ens['campos_modificados_totales']}\n"
+                            f"• **Instrumentos detectados:** {', '.join(res_ens['instrumentos_detectados']) or 'Evaluación diagnóstica'}\n"
+                            f"• **Propuesta de NEE:** {res_ens['total_nee']} necesidades formuladas bajo esquema SEGEY.\n\n"
+                            f"Los apartados están listos en el Formato Vivo para revisión del equipo."
+                        )
+                        st.rerun()
+            except Exception as exc:
+                st.error(f"Error al procesar el escaneo: {exc}")
 
     st.write("")
 
@@ -785,11 +855,12 @@ def epp_page():
                     st.error(f"Pendiente de datos: {exc}")
         else:
             st.download_button(
-                "⬇️ Descargar PDF oficial",
+                "⬇️ Descargar EPP oficial (firmas y sello)",
                 pdf_bytes,
                 file_name=f"EPP-{student.get('Nombre_Completo', 'Alumno')[:20].replace(' ', '_')}-{doc['ciclo']}.pdf",
                 mime="application/pdf",
                 key=prefix + '_main_pdf_download',
+                help="Descarga el Informe Oficial de Evaluación Psicopedagógica (Anexos XVII y XVIII) con firmas del equipo, firma de Dirección y sello oficial de USAER 02-E.",
                 use_container_width=True
             )
 

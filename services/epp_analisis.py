@@ -109,6 +109,16 @@ def distribuir_hallazgos_en_epp(area, texto, campos_actuales):
     if not parrafos:
         parrafos = [p.strip() for p in str(texto or '').split('\n') if len(p.strip()) > 25]
 
+    unidades = []
+    for p in parrafos:
+        oraciones = [s.strip() for s in re.split(r'\.\s+(?=[A-ZÁÉÍÓÚÑ])', p) if len(s.strip()) > 15]
+        if len(oraciones) > 1:
+            unidades.extend(oraciones)
+        else:
+            unidades.append(p)
+    if not unidades:
+        unidades = parrafos
+
     identificados = identificar_instrumento_y_areas(texto, area)
     campos_objetivo = []
     for match in identificados:
@@ -133,13 +143,17 @@ def distribuir_hallazgos_en_epp(area, texto, campos_actuales):
         'Comprensión': ['comprensión', 'expresiva', 'receptiva', 'órdenes', 'instrucciones'],
         'Curricular': ['competencia', 'pda', 'grado', 'contenidos', 'lectura', 'matemáticas'],
         'Estilo': ['estilo', 'canal', 'visual', 'auditivo', 'kinestésico', 'motivación'],
+        'Embarazo': ['embarazo', 'gestación', 'prenatal', 'meses'],
+        'Parto': ['parto', 'término', 'cesárea', 'apgar', 'incubadora', 'al nacer'],
         'Familiar': ['familia', 'padres', 'hogar', 'madre', 'padre', 'hermanos', 'dinámica'],
-        'Salud': ['salud', 'enfermedad', 'médico', 'alergia', 'tratamiento', 'parto', 'embarazo'],
+        'Salud': ['salud', 'enfermedad', 'médico', 'alergia', 'tratamiento'],
         'Motriz': ['motriz', 'coordinación', 'fina', 'gruesa', 'trazo', 'postura'],
+        'Autocuidado': ['autocuidado', 'vestido', 'higiene', 'alimentación', 'esfínteres'],
+        'Social': ['social', 'comunidad', 'amigos', 'vecinos', 'entorno'],
     }
 
     asignados = set()
-    for parrafo in parrafos:
+    for parrafo in unidades:
         p_low = parrafo.lower()
         mejor_campo = None
         for campo in campos_objetivo:
@@ -390,3 +404,179 @@ def incorporar_prueba_a_epp(doc, area, texto, nombre_instrumento=None, fecha_apl
         'campos_afectados': campos_afectados,
         'propuesta_nee': propuesta_nee
     }
+
+
+def ensamblar_epp_completa_desde_documento(doc, texto, nombre_archivo='Documento escaneado'):
+    """Toma el texto extraído de un documento o escaneo completo de EPP,
+    clasifica y ensambla los datos en los apartados oficiales de cada área
+    (Aprendizaje, Psicología, Comunicación, Trabajo Social) y Conclusión (NEE/BAP).
+    """
+    texto_limpio = str(texto or '').strip()
+    if not texto_limpio or len(texto_limpio) < 20:
+        raise ValueError("El documento escaneado no contiene suficiente texto legible para ensamblar la EPP.")
+
+    lineas = [l.strip() for l in texto_limpio.splitlines() if l.strip()]
+    parrafos = [p.strip() for p in re.split(r'\n\s*\n', texto_limpio) if len(p.strip()) > 20]
+    if not parrafos:
+        parrafos = [l for l in lineas if len(l) > 25]
+
+    claves_area = {
+        'Trabajo Social': [
+            'embarazo', 'parto', 'desarrollo motor', 'control de esfínteres', 'salud',
+            'dinámica familiar', 'contexto familiar', 'visita domiciliaria', 'sociofamiliar',
+            'estudio social', 'padre', 'madre', 'hermanos', 'hogar', 'vivienda', 'anexo xii', 'anexo xi'
+        ],
+        'Psicología': [
+            'wisc', 'wechsler', 'raven', 'bender', 'dfh', 'figura humana', 'frostig', 'rey',
+            'atención', 'memoria', 'percepción', 'razonamiento', 'cociente intelectual', 'ci',
+            'intelectual', 'afectivo', 'conductual', 'emocional', 'autoestima', 'autoconcepto',
+            'conducta adaptativa', 'socialización', 'vineland', 'abas', 'autorregulación'
+        ],
+        'Comunicación': [
+            'lenguaje', 'comunicación', 'habla', 'fonológico', 'morfosintáctico', 'semántico',
+            'pragmático', 'articulación', 'fonema', 'comprensión expresiva', 'comprensión receptiva',
+            'saac', 'voz', 'fluidez', 'intención comunicativa', 'laiz', 'flores'
+        ],
+        'Aprendizaje': [
+            'competencia curricular', 'estilo de aprendizaje', 'canal de aprendizaje',
+            'lectura funcional', 'escritura funcional', 'matemáticas funcionales', 'cálculo',
+            'contexto escolar', 'áulico', 'ritmo de aprendizaje', 'pda', 'anexo xiv', 'macotela',
+            'historia escolar', 'grado escolar'
+        ],
+        'Conclusión': [
+            'conclusión', 'determinación de nee', 'necesidades educativas específicas', 'nee',
+            'bap', 'barreras para el aprendizaje', 'apoyos requeridos', 'acuerdos del equipo',
+            'ajustes razonables', 'diagnóstico'
+        ]
+    }
+
+    bloques_por_area = {a: [] for a in (*AREAS, 'Conclusión')}
+    area_actual = 'Aprendizaje'
+
+    for parrafo in parrafos:
+        p_low = parrafo.lower()
+        cambio = None
+        if re.search(r'\b(?:1\.\s*datos generales|motivo de evaluaci[oó]n|informaci[oó]n inicial)\b', p_low):
+            cambio = 'Aprendizaje'
+        elif re.search(r'\b(?:2\.\s*datos sobre el desarrollo|historia familiar|estudio social|desarrollo)\b', p_low):
+            cambio = 'Trabajo Social'
+        elif re.search(r'\b(?:3\.\s*área intelectual|área psicol[oó]gica|psicol[oó]gico|conducta adaptativa)\b', p_low):
+            cambio = 'Psicología'
+        elif re.search(r'\b(?:4\.\s*área comunicativa|comunicaci[oó]n y lenguaje|lenguaje y habla)\b', p_low):
+            cambio = 'Comunicación'
+        elif re.search(r'\b(?:5\.\s*competencia curricular|estilo de aprendizaje|pedag[oó]gico)\b', p_low):
+            cambio = 'Aprendizaje'
+        elif re.search(r'\b(?:6\.\s*contextos|historia escolar|contexto familiar)\b', p_low):
+            if 'familiar' in p_low or 'social' in p_low:
+                cambio = 'Trabajo Social'
+            else:
+                cambio = 'Aprendizaje'
+        elif re.search(r'\b(?:7\.\s*conclusi[oó]n|determinaci[oó]n de (?:las )?nee|identificaci[oó]n de bap|apoyos y acuerdos)\b', p_low):
+            cambio = 'Conclusión'
+
+        if cambio:
+            area_actual = cambio
+        else:
+            puntuaciones = {k: sum(1 for c in v if c in p_low) for k, v in claves_area.items()}
+            mejor = max(puntuaciones, key=puntuaciones.get)
+            if puntuaciones[mejor] > 0:
+                area_actual = mejor
+
+        bloques_por_area[area_actual].append(parrafo)
+
+    campos_modificados_totales = 0
+    areas_ensambladas = []
+    instrumentos_detectados = []
+
+    for area in AREAS:
+        texto_area = '\n\n'.join(bloques_por_area[area])
+        if not texto_area.strip():
+            continue
+
+        parte = doc.setdefault('partes', {}).setdefault(area, {})
+        contenido = parte.setdefault('contenido', vacia(area))
+        campos_previos = dict(contenido.setdefault('campos', {}))
+
+        nuevos_campos = distribuir_hallazgos_en_epp(area, texto_area, campos_previos)
+        contenido['campos'] = nuevos_campos
+
+        modificados = sum(1 for c, v in nuevos_campos.items() if v != campos_previos.get(c, ''))
+        campos_modificados_totales += modificados
+
+        matches = identificar_instrumento_y_areas(texto_area, area)
+        for m in matches:
+            inst_nombre = m['instrumento']
+            if inst_nombre not in instrumentos_detectados:
+                instrumentos_detectados.append(inst_nombre)
+            inst_actual = str(contenido.get('instrumentos', '') or '').strip()
+            if inst_nombre not in inst_actual:
+                contenido['instrumentos'] = f"{inst_actual}\n• {inst_nombre}".strip()
+
+        digest = hashlib.sha256((nombre_archivo + '|' + texto_area).encode('utf-8')).hexdigest()
+        evals = contenido.setdefault('evaluaciones', [])
+        if not any(e.get('id') == digest for e in evals):
+            evals.append({
+                'id': digest,
+                'nombre': f"Escaneo: {nombre_archivo[:35]}",
+                'texto': texto_area[:12000]
+            })
+
+        contenido['validada'] = False
+        areas_ensambladas.append(area)
+
+    texto_concl = '\n\n'.join(bloques_por_area['Conclusión'])
+    parte_concl = doc.setdefault('partes', {}).setdefault('Conclusión', {})
+    cont_concl = parte_concl.setdefault('contenido', vacia('Conclusión'))
+    cont_concl['validada'] = False
+
+    if texto_concl.strip():
+        actual_71 = cont_concl.setdefault('campos', {}).get('7.1. Conclusión', '')
+        if not actual_71:
+            cont_concl['campos']['7.1. Conclusión'] = texto_concl[:1500]
+            campos_modificados_totales += 1
+
+    patron_nee = re.compile(r'(?:^|\n)[-•*\d.)\s]*(?:necesita|requiere|presenta necesidad de|apoyo para)\s+([^\n.]+)', re.IGNORECASE)
+    matches_nee = patron_nee.findall(texto_limpio)
+
+    if matches_nee and len(matches_nee) >= 2:
+        nuevas_nee = []
+        aspectos = ['Funcionamiento intelectual', 'Habilidades conceptuales', 'Habilidades sociales', 'Habilidades prácticas', 'Funcionamiento académico']
+        for idx, m_txt in enumerate(matches_nee[:5]):
+            m_limpio = m_txt.strip()
+            verbo = 'Necesita ' if not m_limpio.lower().startswith(('necesita', 'requiere')) else ''
+            nee_desc = f"{verbo}{m_limpio}."
+            nuevas_nee.append({
+                'Aspectos': aspectos[idx % len(aspectos)],
+                'Características relevantes': 'Identificado en evaluación psicopedagógica escaneada.',
+                'NEE': nee_desc,
+                'Apoyos': 'Acompañamiento docente, apoyos visuales y mediación pedagógica.',
+                'Ajustes razonables': 'Dosificación del tiempo y enfoque DUA en planeación de aula.',
+                'Responsables': 'Maestra de apoyo y Docente regular',
+                'Fecha o período': f"Ciclo escolar {doc.get('ciclo', '2026-2027')}"
+            })
+        cont_concl['nee'] = nuevas_nee
+    else:
+        propuesta = proponer_nee_segey(doc)
+        cont_concl['nee'] = propuesta['nee']
+        if not cont_concl.get('bap'):
+            cont_concl['bap'] = propuesta['bap']
+        for k, v in propuesta['campos'].items():
+            if not str(cont_concl.get('campos', {}).get(k, '')).strip():
+                cont_concl['campos'][k] = v
+                campos_modificados_totales += 1
+
+    if not cont_concl.get('bap'):
+        propuesta = proponer_nee_segey(doc)
+        cont_concl['bap'] = propuesta['bap']
+
+    areas_ensambladas.append('Conclusión y NEE')
+
+    return {
+        'nombre_archivo': nombre_archivo,
+        'areas_ensambladas': areas_ensambladas,
+        'campos_modificados_totales': campos_modificados_totales,
+        'instrumentos_detectados': instrumentos_detectados,
+        'total_nee': len(cont_concl.get('nee', [])),
+        'total_bap': len(cont_concl.get('bap', []))
+    }
+

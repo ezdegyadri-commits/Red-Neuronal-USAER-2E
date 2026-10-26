@@ -118,5 +118,56 @@ class TestEPPAnalisisYPlaneacionMejoras(unittest.TestCase):
         concl_cont = doc['partes']['Conclusión']['contenido']
         self.assertTrue(len(concl_cont['nee']) == 5)
 
+    def test_ensamblar_epp_completa_desde_documento(self):
+        from services.epp_analisis import ensamblar_epp_completa_desde_documento
+        doc = {'alumno': '101', 'ciclo': '2026-2027', 'partes': {}}
+        texto_scan = """
+        INFORME DE EVALUACIÓN PSICOPEDAGÓGICA
+        
+        2. DATOS SOBRE EL DESARROLLO Y CONTEXTO FAMILIAR
+        Embarazo normoevolutivo sin complicaciones. Parto a término. Familia nuclear compuesta por padre, madre y dos hermanos. Dinámica familiar participativa y con apoyo en el hogar.
+        
+        3. ÁREA INTELECTUAL Y CONDUCTA ADAPTATIVA
+        Se aplicó la Escala Wechsler WISC-IV y Test Bender. En atención sostenida presenta periodos breves de focalización. Muestra adecuada memoria de trabajo pero requiere apoyos visuales. Razonamiento lógico en nivel medio.
+        
+        4. ÁREA COMUNICATIVA Y LINGÜÍSTICA
+        En lenguaje oral fonológico presenta sustitución de fonemas en habla espontánea. Intención comunicativa adecuada y comprensión receptiva conservada.
+        
+        5. COMPETENCIA CURRICULAR Y ESTILO DE APRENDIZAJE
+        En lectura y escritura funcional se encuentra en proceso alfabético inicial. Canal de aprendizaje preponderantemente visual y kinestésico.
+        
+        7. CONCLUSIÓN Y DETERMINACIÓN DE NEE
+        • Necesita focalizar y mantener la atención en consignas académicas mediante apoyos visuales.
+        • Necesita consolidar la alfabetización inicial y la comprensión lectora funcional.
+        • Necesita afianzar la pronunciación de fonemas en lenguaje oral.
+        """
+        res = ensamblar_epp_completa_desde_documento(doc, texto_scan, 'EPP_Escaneada_Juan.pdf')
+        self.assertIn('Aprendizaje', res['areas_ensambladas'])
+        self.assertIn('Psicología', res['areas_ensambladas'])
+        self.assertIn('Comunicación', res['areas_ensambladas'])
+        self.assertIn('Trabajo Social', res['areas_ensambladas'])
+        self.assertIn('Conclusión y NEE', res['areas_ensambladas'])
+        self.assertGreater(res['campos_modificados_totales'], 5)
+        self.assertGreaterEqual(res['total_nee'], 3)
+        self.assertGreaterEqual(res['total_bap'], 1)
+
+        partes = doc['partes']
+        self.assertIn('Psicología', partes)
+        self.assertIn('WISC-IV', partes['Psicología']['contenido']['instrumentos'])
+        self.assertTrue(len(partes['Psicología']['contenido']['campos']['3.1. Atención']) > 0)
+
+        self.assertIn('Trabajo Social', partes)
+        self.assertTrue(len(partes['Trabajo Social']['contenido']['campos']['2.1. Embarazo']) > 0)
+
+        self.assertIn('Comunicación', partes)
+        self.assertTrue(len(partes['Comunicación']['contenido']['campos']['4.1. Lenguaje oral: fonológico']) > 0)
+
+        self.assertIn('Aprendizaje', partes)
+        self.assertTrue(len(partes['Aprendizaje']['contenido']['campos']['5.2. Estilo de aprendizaje']) > 0)
+
+        self.assertIn('Conclusión', partes)
+        self.assertTrue(len(partes['Conclusión']['contenido']['nee']) >= 3)
+
 if __name__ == '__main__':
     unittest.main()
+
