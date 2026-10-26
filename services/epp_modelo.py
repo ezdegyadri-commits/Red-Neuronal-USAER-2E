@@ -72,6 +72,7 @@ def reconstruir(rows):
             key = clave(str(row['Alumno']), str(row['Ciclo']))
             parte = str(row['Parte'])
             if parte not in ('META', *AREAS, 'Conclusión'): continue
+            if parte!='META':value=recuperar_campos_guiados(parte,value)
             version=(key,parte,str(row['Revision']))
             if version in seen:continue
             seen.add(version)
@@ -87,7 +88,7 @@ def reconstruir(rows):
 def validar_parte(area, value):
     if area not in (*AREAS, 'Conclusión') or not isinstance(value, dict):
         raise ValueError('Apartado no válido.')
-    result = deepcopy(value)
+    result = recuperar_campos_guiados(area,value)
     if set(result.get('campos', {})) != set(campos(area)):
         raise ValueError('Los apartados deben conservar la estructura del Anexo XVII.')
     if any(not isinstance(v, str) or len(v) > 12000 for v in result['campos'].values()):
@@ -126,6 +127,17 @@ def validar_parte(area, value):
                 if len(row[key])>12000:raise ValueError('Celda demasiado extensa.')
     if len(json.dumps(result, ensure_ascii=False)) > 36000:
         raise ValueError('El área es demasiado extensa; conserva únicamente los hallazgos pertinentes.')
+    return result
+
+
+def recuperar_campos_guiados(area,value):
+    """Recupera captura antigua en raíz sin borrar ni sustituir campos canónicos."""
+    result=deepcopy(value)
+    if not isinstance(result.get('campos'),dict):return result
+    for field in campos(area):
+        anterior=result.get(field)
+        if not result['campos'].get(field) and isinstance(anterior,str) and anterior.strip():
+            result['campos'][field]=anterior
     return result
 
 def pendientes(doc):

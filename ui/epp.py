@@ -187,6 +187,7 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
     - Editable directamente si el usuario pertenece al área (o coordinadora en Conclusión / Director).
     - Vista colaborativa de lectura en vivo si pertenece a otra área.
     """
+    section=section or 'campos'
     is_editable = not is_director and ((target_area == actor_area) or (target_area == 'Conclusión' and can_edit_concl))
     
     if is_editable:
@@ -195,6 +196,8 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
             _abrir(edit_prefix, doc, target_area)
 
         value = st.session_state[edit_prefix + '_value']
+        if section=='campos' and not value.get('campos',{}).get(field_name) and isinstance(value.get(field_name),str):
+            value.setdefault('campos',{})[field_name]=value[field_name]
         current_text = value.get(section, {}).get(field_name, '') if section else value.get(field_name, '')
         key = edit_prefix + '_field_' + (section or '') + field_name
 
@@ -724,7 +727,15 @@ def epp_page():
                         val_c['bap'] = prop['bap']
                         val_c['validada'] = False
                         _save(edit_concl)
-                        st.success("✨ Propuesta oficial de NEE y BAP ensamblada con base en los hallazgos de las 4 áreas.")
+                        # Los widgets y las tablas guardan su propia base: renovarla
+                        # tras el ensamblaje para que muestren el contenido canónico.
+                        for k in list(st.session_state):
+                            if k.startswith(edit_concl+'_field_') or k.startswith(edit_concl+'_table_'):
+                                del st.session_state[k]
+                        if st.session_state.get(edit_concl+'_pending'):
+                            st.warning('Propuesta incorporada al formato; falta confirmar el guardado central. Tu texto se conserva.')
+                        else:
+                            st.success('Propuesta incorporada al formato y guardada para revisión del equipo.')
                         st.rerun()
                 with col_b2:
                     st.caption("Sincroniza y redacta automáticamente según los hallazgos del equipo.")
