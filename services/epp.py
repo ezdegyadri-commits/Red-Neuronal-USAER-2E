@@ -206,10 +206,8 @@ def resumen(doc, parte, value, plan):
     autorizar(doc)
     parts = []
     if parte == 'Conclusión':
-        for area in AREAS:
-            p = doc['partes'].get(area,{}).get('contenido',{})
-            for f,t in p.get('campos',{}).items():
-                if t: parts.append({'referencia':area+' / '+f,'alcance':'hallazgos del área; revisión humana pendiente' if not p.get('validada') else 'área revisada', 'texto':t})
+        from services.epp_conclusion import fuentes
+        parts=fuentes(doc)
     else:
         if not value.get('evaluaciones'):
             raise ValueError('Incorpora primero los resultados revisados de un instrumento de esta área.')
@@ -218,6 +216,7 @@ def resumen(doc, parte, value, plan):
                 'texto':'Instrumento: '+e.get('nombre','')+'\nFecha: '+e.get('fecha','por confirmar')+
                     '\nEntrada: '+e.get('entrada','CARGA')+'\n'+e.get('texto','')})
     for f in plan['metadatos'].get('fuentes',[]):
+        if parte=='Conclusión':continue  # El cierre se sustenta en los hallazgos actuales del equipo.
         if f.get('vinculo_verificado') and f.get('alumno') == doc['alumno']:
             parts.append(f)
     return planes.resumen_previo(plan,parts)

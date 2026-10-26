@@ -137,7 +137,10 @@ def _incorporar(p,area,value):
 def herramientas(p):
     doc=st.session_state[p+'_doc'];allowed=papel.editables(doc)
     if not allowed:st.info('Vista de consulta del informe compartido.');return
-    area=st.selectbox('Mi área de trabajo',allowed,key=p+'_area_herramientas')
+    area_key=p+'_area_herramientas'
+    if st.session_state.pop(p+'_ir_conclusion',False) and 'Conclusión' in allowed:
+        st.session_state[area_key]='Conclusión'
+    area=st.selectbox('Mi área de trabajo',allowed,key=area_key)
     v=papel.contenido(doc,area)
     st.caption('Los hallazgos y el análisis se incorporan al mismo informe. No se crea otra EPP ni se reescriben aportaciones ajenas.')
     tab1,tab2,tab3=st.tabs(['Antecedentes','Evaluaciones de mi área','Análisis y revisión'])
@@ -219,10 +222,15 @@ def herramientas(p):
                     st.caption('Síntesis de la evaluación conservada; el registro original no cambia.')
     with tab3:
         from services.epp_entrada import huella_instrumentos
-        if st.button('Preparar resumen para el análisis',key=p+'_resumen_'+area):
+        if st.button('Preparar resumen para el análisis',key=p+'_preparar_resumen_'+area):
             try:
+                if not guardar(p,True):raise ValueError('Falta confirmar el guardado de tu captura. Reintenta sin cerrar esta EPP.')
+                st.session_state[p+'_lectura']=0;sincronizar(p)
+                if st.session_state.get(p+'_lectura_error'):raise ValueError('No se pudieron recuperar los hallazgos actuales del equipo. Reintenta preparar el resumen.')
+                doc=st.session_state[p+'_doc'];v=papel.contenido(doc,area)
                 plan=s.contexto(doc);st.session_state[p+'_contexto']=plan
                 st.session_state[p+'_resumen_'+area]=s.resumen(doc,area,v,plan)
+                st.session_state[p+'_resumen_texto_'+area]=st.session_state[p+'_resumen_'+area]
                 st.session_state[p+'_huella_'+area]=huella_instrumentos(doc,area,v)
                 st.session_state.pop(p+'_consent_'+area,None)
             except Exception as exc:st.warning(str(exc) if isinstance(exc,ValueError) else 'No se pudo preparar el resumen; no se enviaron datos a IA.')
@@ -231,7 +239,8 @@ def herramientas(p):
             if stale:st.warning('Cambiaron las evaluaciones. Prepara de nuevo el resumen antes de analizar.')
             resumen=st.text_area('Resumen que se enviará a IA: elimina nombres, CURP, domicilios y contactos',value=st.session_state[p+'_resumen_'+area],max_chars=12000,key=p+'_resumen_texto_'+area)
             consent=st.checkbox('Revisé el resumen anonimizado y autorizo su análisis en Gemini',key=p+'_consent_'+area)
-            if st.button('Proponer solo los apartados vacíos',disabled=not consent or stale,key=p+'_generar_'+area):
+            if area=='Conclusión':st.caption('Llena la conclusión con los hallazgos de las cuatro áreas y agrega sus NEE y BAP. El texto anterior se conserva en el historial; revisa la propuesta antes de validarla.')
+            if st.button('Generar y llenar conclusión y NEE' if area=='Conclusión' else 'Proponer solo los apartados vacíos',disabled=not consent or stale,key=p+'_generar_'+area):
                 try:
                     from ai.epp import generar
                     bar=st.progress(0,text='Preparando los hallazgos revisados…');bar.progress(20,text='Analizando las evaluaciones y redactando la propuesta…')
@@ -242,14 +251,25 @@ def herramientas(p):
                         r=generar(resumen,area)
                         st.session_state[p+'_propuesta_'+area]={'huella':fingerprint,'resultado':r}
                     bar.progress(85,text='Comprobando fuentes y conservando tu redacción…')
-                    for f,t in r['campos'].items():
-                        if not str(v['campos'].get(f,'')).strip():v['campos'][f]=t
                     if area=='Conclusión':
-                        for name in ('nee','bap'):
-                            if not any(str(row.get('NEE' if name=='nee' else 'Tipo de barrera','')).strip() for row in v[name]):v[name]=r[name]
+                        expected=st.session_state[p+'_huella_'+area]
+                        st.session_state[p+'_lectura']=0;sincronizar(p)
+                        actual=st.session_state[p+'_doc']
+                        if st.session_state.get(p+'_lectura_error') or expected!=huella_instrumentos(actual,area,v):
+                            raise ValueError('El equipo actualizó sus hallazgos durante el análisis. La propuesta se conserva en esta sesión; prepara el resumen actualizado antes de incorporarla.')
+                        from services.epp_conclusion import incorporar
+                        v=incorporar(papel.contenido(actual,area),r,{a:actual['partes'].get(a,{}).get('revision','') for a in AREAS})
+                    else:
+                        for f,t in r['campos'].items():
+                            if not str(v['campos'].get(f,'')).strip():v['campos'][f]=t
                     v['validada']=False;v['pendientes_ia']=r['faltantes']
-                    if _incorporar(p,area,v):bar.progress(100,text='Propuesta guardada para revisión profesional.')
-                    else:bar.empty()
+                    confirmado=_incorporar(p,area,v)
+                    if confirmado:
+                        bar.progress(100,text='Propuesta incorporada al formato y guardada para revisión.')
+                        st.session_state[p+'_aviso_ia']='La propuesta ya está en los apartados del formato. Revísala antes de validar.'
+                    else:st.session_state[p+'_aviso_ia']='La propuesta está en el formato; su guardado central sigue pendiente. No cierres esta sesión.'
+                    st.session_state.pop(p+'_panel',None)
+                    st.rerun(scope='app')
                 except Exception as exc:st.warning(str(exc) if isinstance(exc,(ValueError,RuntimeError)) else 'No se completó el análisis. Tu redacción permanece intacta; puedes continuar sin IA.')
         st.caption('La IA no aplica ni califica pruebas, no determina CI ni emite diagnósticos. No sustituye la revisión del equipo.')
         with st.expander('Recuperar un respaldo de mi área'):
@@ -325,6 +345,10 @@ def page():
         doc=st.session_state[p+'_doc'];s.autorizar(doc)
         if doc['partes']['META']['estado']=='ELIMINADO':st.warning('Este informe fue retirado. Su historial y tu edición pendiente se conservan.');return
         st.caption('Escribe directamente en los apartados de tu función. Los aportes de las demás áreas se muestran para consulta y se actualizan sin mover tu selección.')
+        aviso=st.session_state.pop(p+'_aviso_ia',None)
+        if aviso:st.info(aviso)
+        if s.es_coordinadora(doc) and st.button('Generar conclusión y NEE del equipo',key=p+'_conclusion_directa',type='primary'):
+            st.session_state[p+'_ir_conclusion']=True;st.session_state[p+'_panel']='ia'
         hoja(p);panel(p);return
     try:frame=s.planes.padron_autorizado().fillna('');docs=s.listar(True)
     except Exception:st.warning('No se pudo consultar la matrícula y las EPP. No se modificó ningún registro.');return

@@ -56,6 +56,9 @@ BAP CONTEXTUALES: Describe barreras del entorno en los contextos Áulico, Escola
             if not isinstance(rows,list) or len(rows)>20:raise ValueError('Tabla no válida.')
             for row in rows:
                 if not isinstance(row,dict) or set(row)!=set(cols) or any(not isinstance(t,str) or len(t)>3000 for t in row.values()):raise ValueError('Fila no válida.')
+                if key=='nee' and row.get('NEE','').strip():
+                    row['NEE']=re.sub(r'^\s*Requiere\b','Necesita',row['NEE'],flags=re.I)
+                    if not re.match(r'^Necesita\s+\w+',row['NEE'],re.I):raise ValueError('La NEE debe expresar Necesita + verbo + qué, sustentada en los hallazgos.')
             if area!='Conclusión' and rows:raise ValueError('El área no debe determinar la conclusión.')
         return r
     try:
