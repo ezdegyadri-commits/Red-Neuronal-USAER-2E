@@ -61,6 +61,7 @@ def installation_help():
 
 
 def install_metadata():
+    import streamlit as st
     # Initialize metadata on connection without re-injecting the iframe on every interaction.
     # No private data or credentials are passed to JavaScript.
     if not st.session_state.get('_mobile_install_meta_init'):

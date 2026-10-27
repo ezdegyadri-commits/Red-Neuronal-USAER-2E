@@ -7,6 +7,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class MobileInstallationTest(unittest.TestCase):
+    def test_startup_metadata_runs_without_login_and_only_once_per_session(self):
+        from streamlit.testing.v1 import AppTest
+        app = AppTest.from_string('from ui.mobile_install import install_metadata\ninstall_metadata()').run()
+        self.assertFalse(app.exception)
+        self.assertTrue(app.session_state['_mobile_install_meta_init'])
+        self.assertEqual(len(app.get('iframe')), 1)
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(len(app.get('iframe')), 0)
+
     def test_download_exact_signed_apk(self):
         from ui.mobile_install import android_apk, APK_SHA256, APK_NAME
         import hashlib
