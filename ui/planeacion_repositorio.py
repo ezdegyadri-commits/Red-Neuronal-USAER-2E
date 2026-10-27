@@ -30,11 +30,11 @@ def panel(base,docs,abrir):
                        and (not buscar.strip() or normalizar_texto(buscar) in normalizar_texto(titulo_tarjeta(d)+' '+d['datos'].get('Escuela regular','')))]
             if not filtradas:
                 st.info('No hay coincidencias con estos filtros. No se eliminó ninguna planeación.');continue
-            paginas=math.ceil(len(filtradas)/6)
+            paginas=math.ceil(len(filtradas)/12)
             if st.session_state.get(key+'_pagina',1)>paginas:st.session_state[key+'_pagina']=1
             pagina=st.selectbox('Página',range(1,paginas+1),key=key+'_pagina') if paginas>1 else 1
             st.caption(f'{len(filtradas)} planeación(es) · ordenadas con trabajo redactado y guardados recientes primero')
-            for doc in filtradas[(pagina-1)*6:pagina*6]:
+            for doc in filtradas[(pagina-1)*12:pagina*12]:
                 with st.container(border=True):
                     st.subheader(titulo_tarjeta(doc))
                     st.caption(detalle_tarjeta(doc))
