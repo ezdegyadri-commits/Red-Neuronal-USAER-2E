@@ -115,7 +115,7 @@ def redactar_apartado_epp(apartado, notas, area="Aprendizaje", alumno_contexto=N
         key = st.secrets.get('GEMINI_API_KEY', '')
         if key:
             genai_legacy.configure(api_key=key)
-            model = genai_legacy.GenerativeModel('gemini-2.5-flash')
+            model = genai_legacy.GenerativeModel(GEMINI_MODEL)
             resp = model.generate_content(prompt)
             if resp and resp.text:
                 return resp.text.strip()

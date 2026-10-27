@@ -35,21 +35,61 @@ Tema central: {tema or "No especificado"}
 Notas de Dirección: {notas or "Sin notas adicionales"}"""
 
 
+MODELOS_HEREDADOS_RELATORIA = {
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-preview-09-2025",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-3.1-flash-lite-preview",
+}
+MODELO_DURABLE_DEFAULT = "gemini-3.8-flash"
+
+
+def _resolver_modelo_gemini_relatoria():
+    try:
+        solicitado = st.secrets.get("RELATORIAS_GEMINI_MODEL") or st.secrets.get("GEMINI_MODEL")
+    except Exception:
+        solicitado = None
+    if not solicitado:
+        solicitado = GEMINI_MODEL
+    candidato = str(solicitado).removeprefix("models/").strip()
+    if candidato in MODELOS_HEREDADOS_RELATORIA or not candidato:
+        return MODELO_DURABLE_DEFAULT
+    return candidato
+
+
 def _procesar_gemini(ruta, prompt):
     cliente = gemini_client()
     if cliente is None:
         raise RuntimeError("Falta GEMINI_API_KEY en los secretos de Streamlit.")
+    modelo_principal = _resolver_modelo_gemini_relatoria()
+    candidatos = [modelo_principal]
+    for alt in ["gemini-3.8-flash", "gemini-3.5-flash"]:
+        if alt not in candidatos:
+            candidatos.append(alt)
+
     archivo = None
     try:
         archivo = cliente.files.upload(file=ruta)
-        resultado = cliente.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=[prompt, archivo],
-        )
-        texto = (getattr(resultado, "text", "") or "").strip()
-        if not texto:
-            raise RuntimeError("Gemini no devolvió texto.")
-        return texto
+        ultimo_error = None
+        for modelo in candidatos:
+            try:
+                resultado = cliente.models.generate_content(
+                    model=modelo,
+                    contents=[prompt, archivo],
+                )
+                texto = (getattr(resultado, "text", "") or "").strip()
+                if texto:
+                    return texto
+            except Exception as exc:
+                err_str = str(exc)
+                ultimo_error = exc
+                if "404" in err_str or "NOT_FOUND" in err_str or "no longer available" in err_str.lower():
+                    continue
+                raise exc
+        if ultimo_error:
+            raise ultimo_error
+        raise RuntimeError("Gemini no devolvió texto.")
     finally:
         if archivo is not None:
             try:
@@ -146,6 +186,8 @@ def generador_relatorias_director():
     st.warning("El audio se enviará al proveedor de IA seleccionado. Evita incluir datos sensibles de alumnos y confirma que tienes autorización.")
     with st.expander("Abrir generador", expanded=False):
         motor = st.radio("Motor de IA", ["ChatGPT (OpenAI)", "Gemini (Google)"], horizontal=True, key="relatoria_motor")
+        if motor == "Gemini (Google)":
+            st.caption("✨ Motor de alta durabilidad: **Gemini 3.8 Flash** (procesamiento nativo de audio institucional)")
         modo = st.radio("Captura", ["Subir archivo", "Grabar en el navegador"], horizontal=True, key="relatoria_modo")
         if modo == "Subir archivo":
             audio = st.file_uploader(
