@@ -8,7 +8,7 @@ import random
 from contextvars import ContextVar
 from contextlib import contextmanager
 import streamlit as st
-from ai.planeacion_prompt import solicitud, validar_respuesta
+from ai.planeacion_prompt import solicitud, validar_respuesta, INSTRUCCIONES
 
 DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 MODEL = os.environ.get('PLANEACION_GEMINI_MODEL', DEFAULT_MODEL)
@@ -86,9 +86,11 @@ def _proponer_openai(prompt, schema=None, max_tokens=4000):
         return None
     from openai import OpenAI
     client = OpenAI(api_key=api_key, timeout=60.0, max_retries=2)
+    base_system = INSTRUCCIONES.split('Devuelve solo JSON')[0].strip()
     instruccion_formato = (
-        "Eres un especialista educativo de USAER. "
-        "Devuelve EXCLUSIVAMENTE un objeto JSON válido que cumpla estrictamente con la estructura solicitada."
+        f"{base_system}\n\n"
+        "INSTRUCCIÓN OBLIGATORIA DE FORMATO:\n"
+        "Devuelve EXCLUSIVAMENTE un objeto JSON válido que cumpla estrictamente con la estructura solicitada, sin bloques markdown ni texto adicional fuera del JSON."
     )
     messages = [
         {"role": "system", "content": instruccion_formato},

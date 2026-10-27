@@ -339,11 +339,46 @@ def _text(prefix,section,field,label=None):
 
 
 def _ai(prefix,doc,revision=False):
+    col_mot1, col_mot2 = st.columns([0.72, 0.28])
+    with col_mot1:
+        motor_plan = st.radio(
+            "Motor de IA",
+            ["Gemini Pro (Google)", "Gemini Flash (Google)", "ChatGPT (OpenAI)"],
+            horizontal=True,
+            key=prefix + "_ai_motor_ia"
+        )
+        if "Gemini Pro" in motor_plan:
+            st.session_state['planeacion_motor'] = 'Gemini (Google)'
+            st.session_state['planeacion_modelo_preferido'] = 'gemini-2.5-pro'
+        elif "Gemini Flash" in motor_plan:
+            st.session_state['planeacion_motor'] = 'Gemini (Google)'
+            st.session_state['planeacion_modelo_preferido'] = 'gemini-3.8-flash'
+        else:
+            st.session_state['planeacion_motor'] = 'ChatGPT (OpenAI)'
+            has_sec = False
+            try:
+                has_sec = bool(st.secrets.get("OPENAI_API_KEY"))
+            except Exception:
+                has_sec = False
+            if not has_sec:
+                st.text_input(
+                    "OpenAI API Key (ChatGPT Plus)",
+                    type="password",
+                    key="planeacion_openai_key",
+                    help="Tu clave se usará en esta sesión para generar propuestas con GPT-4o.",
+                )
     modelo = modelo_configurado()
     st.caption('La IA se usa solo cuando solicitas propuestas. El expediente y los datos del formato se preparan automáticamente.')
     _text(prefix,'metadatos','resumen_educativo','Resumen educativo sin nombres, CURP, contactos ni identificadores')
     current=st.session_state[prefix+'_doc']
-    resumen=current['metadatos'].get('resumen_educativo','')
+    
+    aliases={'Alumno '+str(i+1):a['ID_Alumno'] for i,a in enumerate(current.get('datos',{}).get('Alumnos',[]))}
+    reversa={v:k for k,v in aliases.items()}
+    from services.planeacion_generacion import construir_payload_estructurado_xml
+    payload_xml = construir_payload_estructurado_xml(current, aliases, reversa)
+    resumen_base = current['metadatos'].get('resumen_educativo','').strip()
+    resumen = (payload_xml + '\n\n' + resumen_base) if '<evaluacion_psicopedagogica>' not in resumen_base else resumen_base
+
     contexto=contexto_ia(current)
     if contexto.get('contextualizacion_docente'):
         contexto['contextualizacion_docente']=servicio.resumen_previo(current,[{'referencia':'CONTEXTO-ESCOLAR','alcance':'contextualización declarada','texto':contexto['contextualizacion_docente']}]).split('\n\n',1)[-1]

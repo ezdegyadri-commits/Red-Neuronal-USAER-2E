@@ -98,5 +98,55 @@ class MotorTests(unittest.TestCase):
             self.assertIsInstance(res, dict)
             self.assertEqual(client.models.generate_content.call_args.kwargs['model'], 'gemini-2.5-pro')
 
+    def test_blindaje_pedagogico_prompt(self):
+        from ai.planeacion_prompt import INSTRUCCIONES
+        self.assertIn("ORIGEN DUAL OBLIGATORIO DE LAS NEE", INSTRUCCIONES)
+        self.assertIn("<evaluacion_psicopedagogica>", INSTRUCCIONES)
+        self.assertIn("<contexto_documentado>", INSTRUCCIONES)
+        self.assertIn("<ediciones_manuales_docente>", INSTRUCCIONES)
+        self.assertIn("FILTRO DE NIVEL REAL DE DESARROLLO", INSTRUCCIONES)
+        self.assertIn("TRAZABILIDAD Y SUSTENTO DOCUMENTAL", INSTRUCCIONES)
+        self.assertIn("SUBORDINACIÓN ESTRICTA A EDICIONES MANUALES DEL DOCENTE", INSTRUCCIONES)
+        self.assertIn("MARCO DUA Y ACTIVIDADES DIVERSIFICADAS", INSTRUCCIONES)
+
+    def test_payload_xml_estructurado_y_subordinacion(self):
+        from services.planeacion_generacion import construir_payload_estructurado_xml
+        doc = {
+            'datos': {
+                'Alumnos': [
+                    {'ID_Alumno': 'ALU-100', 'Grado': '3°', 'Condicion': 'Discapacidad Intelectual'}
+                ]
+            },
+            'metadatos': {
+                'fuentes': [
+                    {'tipo': 'EPP', 'referencia': 'E1', 'alumno': 'ALU-100', 'fecha': '2026-09-15', 'texto': 'Nivel presilábico, conteo hasta 5 con material concreto.'},
+                    {'tipo': 'SEGUIMIENTO', 'referencia': 'E2', 'alumno': 'ALU-100', 'fecha': '2026-10-02', 'texto': 'NEE detectada: Requiere andamiaje uno a uno en conteo.'}
+                ],
+                'intervenciones_nee': [
+                    {'alumno': 'ALU-100', 'campos': {'NEE': 'Consolidar correspondencia grafofonética', 'Apoyos': 'Tarjetas ARASAAC'}}
+                ],
+                'curriculo': {'adaptaciones': {}}
+            },
+            'tablas': {
+                'aprendizajes': [
+                    {'Necesidades educativas específicas': 'Conciencia fonológica', 'Aprendizaje y/u objetivo': 'Identificar sonido inicial', 'Descriptor de logro': 'Señala tarjeta con sonido /m/'}
+                ],
+                'barreras': [],
+                'necesidades': []
+            }
+        }
+        aliases = {'Alumno 1': 'ALU-100'}
+        reversa = {'ALU-100': 'Alumno 1'}
+        xml = construir_payload_estructurado_xml(doc, aliases, reversa)
+        
+        self.assertIn('<evaluacion_psicopedagogica>', xml)
+        self.assertIn('Nivel presilábico, conteo hasta 5', xml)
+        self.assertIn('<contexto_documentado>', xml)
+        self.assertIn('NEE detectada: Requiere andamiaje', xml)
+        self.assertIn('<ediciones_manuales_docente>', xml)
+        self.assertIn('VERDAD ABSOLUTA Y PRIORIDAD TOTAL', xml)
+        self.assertIn('Conciencia fonológica', xml)
+        self.assertIn('Tarjetas ARASAAC', xml)
+
 if __name__=='__main__':unittest.main()
 

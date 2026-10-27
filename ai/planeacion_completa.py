@@ -23,7 +23,7 @@ SCHEMA={'type':'object','required':['observaciones','faltantes','unidades','suge
 
 def solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias):
     if formato not in ('XXIII','XXV'):raise ValueError('Esta generación corresponde a la planeación trimestral; el plan anual conserva su propio formato.')
-    if not str(resumen).strip() or len(resumen)>12000:raise ValueError('Revisa el resumen educativo antes de generar.')
+    if not str(resumen).strip() or len(resumen)>60000:raise ValueError('Revisa el resumen educativo antes de generar.')
     fuentes=[{k:f[k] for k in ('id','titulo','organismo','edicion') if k in f} for f in contexto.get('fuentes',[])]
     datos={'resumen_educativo_revisado':resumen,'funcion':area,'anexo':formato,
        'alumnos_anonimos':list(aliases),'referentes':contexto.get('referentes_por_grado',[]),

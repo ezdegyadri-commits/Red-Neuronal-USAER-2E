@@ -139,6 +139,134 @@ def antecedentes_y_nee_individuales(doc, aliases, reversa):
     return "\n\n".join(lineas)
 
 
+def construir_payload_estructurado_xml(doc, aliases, reversa):
+    """Construye las secciones XML requeridas por el blindaje pedagógico:
+    <evaluacion_psicopedagogica>: Nivel de competencia curricular, estilo, diagnóstico y BAP.
+    <contexto_documentado>: Eventos significativos registrados, actas de visita y hojas de acuerdos.
+    <ediciones_manuales_docente>: Estado actual de tablas y campos definidos manualmente.
+    """
+    fuentes = fuentes_pertinentes(doc)
+    if not fuentes and doc.get('metadatos', {}).get('fuentes'):
+        ids = {a['ID_Alumno'] for a in doc.get('datos', {}).get('Alumnos', [])}
+        fuentes = [f for f in doc['metadatos']['fuentes'] if f.get('texto') and (not f.get('alumno') or set(str(f['alumno']).split(',')) <= ids)]
+    
+    # 1. EVALUACIÓN PSICOPEDAGÓGICA (EPP)
+    epp_items = []
+    for a in doc.get('datos', {}).get('Alumnos', []):
+        aid = a.get('ID_Alumno')
+        label = reversa.get(aid, 'Alumno')
+        datos_base = []
+        if a.get('Grado'):
+            datos_base.append(f"Grado escolar oficial: {a['Grado']}")
+        for k in ('Condicion', 'Condición', 'Discapacidad', 'Aptitud', 'Subclasificacion', 'Atencion_Previa'):
+            v = str(a.get(k, '') or '').strip()
+            if v and v.lower() not in ('ninguna', 'no', 'sin registro', 'nan'):
+                datos_base.append(f"{k}: {v}")
+        if datos_base:
+            epp_items.append(f"[{label} · Antecedentes]: " + ", ".join(datos_base))
+
+    for f in fuentes:
+        if f.get('tipo') in ('EPP', 'EPP_ESCANEADA'):
+            alumnos_f = [reversa[i] for i in str(f.get('alumno', '')).split(',') if i in reversa]
+            dest = ", ".join(alumnos_f) if alumnos_f else "General"
+            ref = f.get('referencia', 'EPP')
+            fecha = f.get('fecha', '')
+            texto_f = str(f.get('texto', '')).strip()
+            epp_items.append(f"[{ref} · {dest} · Fecha {fecha}]:\n{texto_f}")
+
+    xml_epp = (
+        "<evaluacion_psicopedagogica>\n"
+        + ("\n\n".join(epp_items) if epp_items else "Sin registros de EPP formal.")
+        + "\n</evaluacion_psicopedagogica>"
+    )
+
+    # 2. CONTEXTO DOCUMENTADO
+    contexto_items = []
+    for f in fuentes:
+        tipo = f.get('tipo')
+        if tipo in ('V', 'SEGUIMIENTO', 'DOCUMENTO_REVISADO', 'MATERIAL'):
+            alumnos_f = [reversa[i] for i in str(f.get('alumno', '')).split(',') if i in reversa]
+            dest = ", ".join(alumnos_f) if alumnos_f else "General"
+            ref = f.get('referencia', 'CTX')
+            fecha = f.get('fecha', '')
+            tipo_desc = 'Acta de visita / Hoja de sugerencias' if tipo == 'V' else ('Evento significativo registrado' if tipo == 'SEGUIMIENTO' else 'Documento de apoyo')
+            texto_f = str(f.get('texto', '')).strip()
+            aviso_nee = ""
+            if any(term in texto_f.lower() for term in ('nee', 'necesidad', 'requiere', 'presenta dificultad', 'apoyo prioritario')):
+                aviso_nee = " [Nota: Contiene NEE o prioridad detectada directamente por el docente/equipo]"
+            contexto_items.append(f"[{ref} · {tipo_desc}{aviso_nee} · {dest} · Fecha {fecha}]:\n{texto_f}")
+
+    xml_contexto = (
+        "<contexto_documentado>\n"
+        + ("\n\n".join(contexto_items) if contexto_items else "Sin eventos ni actas registradas.")
+        + "\n</contexto_documentado>"
+    )
+
+    # 3. EDICIONES MANUALES DEL DOCENTE
+    ediciones_items = []
+    intervenciones = doc.get('metadatos', {}).get('intervenciones_nee', [])
+    for idx, b in enumerate(intervenciones, 1):
+        campos = b.get('campos', {})
+        aid = b.get('alumno')
+        label = reversa.get(aid, 'Alumno')
+        partes = [f"{k}: {v}" for k, v in campos.items() if str(v).strip()]
+        if partes:
+            ediciones_items.append(f"[Intervención NEE {idx} fijada en pantalla · {label}]:\n" + "\n".join(partes))
+
+    for row in doc.get('tablas', {}).get('aprendizajes', []):
+        if any(str(row.get(k, '')).strip() for k in ('Necesidades educativas específicas', 'Aprendizaje y/u objetivo', 'Descriptor de logro')):
+            ediciones_items.append(
+                f"[Fila de Aprendizajes en Pantalla]:\n"
+                f"• NEE: {row.get('Necesidades educativas específicas', '')}\n"
+                f"• Objetivo: {row.get('Aprendizaje y/u objetivo', '')}\n"
+                f"• Descriptor: {row.get('Descriptor de logro', '')}"
+            )
+    for row in doc.get('tablas', {}).get('barreras', []):
+        if any(str(row.get(k, '')).strip() for k in ('Barreras para el Aprendizaje y la Participación', 'Apoyos y/o ajustes razonables')):
+            ediciones_items.append(
+                f"[Fila de Barreras en Pantalla]:\n"
+                f"• BAP: {row.get('Barreras para el Aprendizaje y la Participación', '')}\n"
+                f"• Apoyos/Ajustes: {row.get('Apoyos y/o ajustes razonables', '')}"
+            )
+    for row in doc.get('tablas', {}).get('necesidades', []):
+        if any(str(row.get(k, '')).strip() for k in ('NEE', 'Aprendizajes y/u Objetivos', 'Descriptor de Logro')):
+            ediciones_items.append(
+                f"[Fila de NEE en Pantalla]:\n"
+                f"• NEE: {row.get('NEE', '')}\n"
+                f"• Objetivo: {row.get('Aprendizajes y/u Objetivos', '')}\n"
+                f"• Descriptor: {row.get('Descriptor de Logro', '')}"
+            )
+
+    for rid, adapt in doc.get('metadatos', {}).get('curriculo', {}).get('adaptaciones', {}).items():
+        if adapt.get('contenido') or adapt.get('pda'):
+            ediciones_items.append(
+                f"[Adaptación Curricular Docente en Pantalla - Ref {rid}]:\n"
+                f"• Contenido adaptado: {adapt.get('contenido', '')}\n"
+                f"• PDA adaptado: {adapt.get('pda', '')}"
+            )
+
+    notas = doc.get('metadatos', {}).get('necesidades_confirmadas', '').strip()
+    if notas and notas != doc.get('metadatos', {}).get('campos_autoprellenados', {}).get('necesidades_confirmadas'):
+        ediciones_items.append(f"[Notas / Necesidades Confirmadas por el Docente]:\n{notas}")
+
+    if ediciones_items:
+        xml_ediciones = (
+            "<ediciones_manuales_docente>\n"
+            "VERDAD ABSOLUTA Y PRIORIDAD TOTAL: El docente ya definió los siguientes campos en pantalla. "
+            "Subordina al 100% las actividades, apoyos DUA y descriptores a estos elementos manuales, descartando cualquier propuesta previa por defecto:\n\n"
+            + "\n\n".join(ediciones_items)
+            + "\n</ediciones_manuales_docente>"
+        )
+    else:
+        xml_ediciones = (
+            "<ediciones_manuales_docente>\n"
+            "Sin ediciones manuales previas en tablas. Construir propuestas subordinadas estrictamente a <evaluacion_psicopedagogica> y <contexto_documentado>.\n"
+            "</ediciones_manuales_docente>"
+        )
+
+    return f"{xml_epp}\n\n{xml_contexto}\n\n{xml_ediciones}"
+
+
 def preparar_solicitud(doc,ajustes):
     from services.planeacion import autorizar,resumen_previo
     autorizar(doc,True)
@@ -173,18 +301,18 @@ def preparar_solicitud(doc,ajustes):
     for adaptacion in contexto.get('adaptaciones_docentes',{}).values():
         for campo,value in list(adaptacion.items()):
             adaptacion[campo]=resumen_previo(doc,[{'referencia':'ADAPTACION','alcance':'redacción docente','texto':value}]).split('\n\n',1)[-1][:4000]
-    # El resumen visible es lo único que se transmite. Los alias y ajustes no
-    # contienen nombres reales; también se minimizan los campos libres.
-    resumen=doc['metadatos'].get('resumen_educativo','').strip()
-    notas=doc['metadatos'].get('necesidades_confirmadas','')
-    extra=resumen_previo(doc,[{'referencia':'DOCENTE','alcance':'información para confirmar','texto':notas}]) if notas else ''
-    resumen=(resumen[:9000]+'\n'+extra[:2800]).strip()
-    if not resumen:resumen=resumen_previo(doc,fuentes)
-    if doc['metadatos'].get('resumen_ia_completo'):
-        resumen=doc['metadatos']['resumen_ia_completo'].strip()
-    perfiles=antecedentes_y_nee_individuales(doc,aliases,reversa)
-    if perfiles:
-        resumen=perfiles[:3200]+'\n\n'+resumen[:8800]
+    
+    # Payload estructurado XML inyectado directamente
+    payload_xml = construir_payload_estructurado_xml(doc, aliases, reversa)
+    resumen_custom = doc['metadatos'].get('resumen_ia_completo', '').strip()
+    if resumen_custom:
+        resumen = payload_xml + '\n\n' + resumen_custom
+    else:
+        resumen_educativo = doc['metadatos'].get('resumen_educativo', '').strip()
+        if not resumen_educativo:
+            resumen_educativo = resumen_previo(doc, fuentes)
+        resumen = payload_xml + '\n\n' + resumen_educativo
+    
     bloques=[]
     from services.planeacion_intervenciones_nee import aplica, bloques as intervenciones
     for i,b in enumerate(intervenciones(doc) if aplica(doc) else [],1):
@@ -192,7 +320,7 @@ def preparar_solicitud(doc,ajustes):
         ref='NEE-SELECCIONADA-'+str(i);evidencias[ref]=[reversa[b['alumno']]]
         texto='\n'.join(k+': '+str(b['campos'].get(k,'')) for k in ('NEE','Apoyos','Ajustes razonables','Contextos') if b['campos'].get(k))
         bloques.append({'referencia':ref+' · '+reversa[b['alumno']],'alcance':'NEE seleccionada para intervención; no diagnóstico','texto':texto[:1200]})
-    if bloques:resumen=resumen_previo(doc,bloques)[:5000]+'\n\n'+resumen[:6500]
+    if bloques:resumen=resumen_previo(doc,bloques)[:5000]+'\n\n'+resumen
     safe=deepcopy(ajustes)
     for campo in ('enfoque','apoyos'):
         safe[campo]=resumen_previo(doc,[{'referencia':'AJUSTE','alcance':'configuración docente; no evidencia de logro','texto':str(ajustes.get(campo,''))}]).split('\n\n',1)[-1][:1500] if ajustes.get(campo) else ''
