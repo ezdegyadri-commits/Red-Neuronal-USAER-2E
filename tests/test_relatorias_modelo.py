@@ -48,5 +48,50 @@ class RelatoriasModeloTests(unittest.TestCase):
             cliente.files.delete.assert_called_once_with(name="files/test_audio")
 
 
+    def test_procesar_gemini_reintenta_ante_503_unavailable_alta_demanda(self):
+        cliente = Mock()
+        archivo_mock = SimpleNamespace(name="files/test_audio")
+        cliente.files.upload.return_value = archivo_mock
+
+        llamadas = []
+
+        def side_effect(model, contents):
+            llamadas.append(model)
+            if model == "gemini-3.8-flash":
+                raise RuntimeError("503 UNAVAILABLE. This model is currently experiencing high demand. Spikes in demand are usually temporary.")
+            return SimpleNamespace(text="Relatoría generada tras conmutar por 503")
+
+        cliente.models.generate_content.side_effect = side_effect
+
+        with patch.object(relatorias, "gemini_client", return_value=cliente), \
+             patch.object(relatorias, "_resolver_modelo_gemini_relatoria", return_value="gemini-3.8-flash"), \
+             patch("time.sleep", return_value=None):
+            texto = relatorias._procesar_gemini("ruta/falsa/audio.mp3", "prompt")
+            self.assertEqual(texto, "Relatoría generada tras conmutar por 503")
+            self.assertIn("gemini-3.8-flash", llamadas)
+            self.assertIn("gemini-2.5-pro", llamadas)
+
+    def test_procesar_gemini_con_modelo_preferido_pro(self):
+        cliente = Mock()
+        archivo_mock = SimpleNamespace(name="files/test_audio")
+        cliente.files.upload.return_value = archivo_mock
+
+        modelos_invocados = []
+
+        def side_effect(model, contents):
+            modelos_invocados.append(model)
+            return SimpleNamespace(text="Relatoría con Pro")
+
+        cliente.models.generate_content.side_effect = side_effect
+
+        with patch.object(relatorias, "gemini_client", return_value=cliente):
+            texto = relatorias._procesar_gemini(
+                "ruta/falsa/audio.mp3", "prompt", modelo_preferido="gemini-2.5-pro"
+            )
+            self.assertEqual(texto, "Relatoría con Pro")
+            self.assertEqual(modelos_invocados[0], "gemini-2.5-pro")
+
+
 if __name__ == "__main__":
     unittest.main()
+

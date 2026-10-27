@@ -129,11 +129,16 @@ def validar_parte(area, value):
     if 'generales_editados' in result:
         if not isinstance(result['generales_editados'],list) or any(f not in GENERALES for f in result['generales_editados']):
             raise ValueError('Identificación de datos corregidos no válida.')
-    for name,headers in [('nee',NEE),('bap',BAP),('familia',FAMILIA),('historia',HISTORIA)]:
-        if name not in result:continue
-        if not isinstance(result[name],list) or len(result[name])>100:raise ValueError('Tabla no válida.')
+    for name, headers in [
+        ('nee', set(NEE) | set(NEE_TABLA_OFICIAL)),
+        ('bap', set(BAP) | set(BAP_TABLA_OFICIAL)),
+        ('familia', set(FAMILIA) | set(FAMILIA_OFICIAL)),
+        ('historia', set(HISTORIA))
+    ]:
+        if name not in result: continue
+        if not isinstance(result[name], list) or len(result[name]) > 100: raise ValueError('Tabla no válida.')
         for row in result[name]:
-            if not isinstance(row,dict) or not set(row)<=set(headers):raise ValueError('Columnas no válidas.')
+            if not isinstance(row, dict) or not set(row) <= headers: raise ValueError('Columnas no válidas.')
             for key,text in list(row.items()):
                 row[key]='' if text is None else str(text)
                 if len(row[key])>12000:raise ValueError('Celda demasiado extensa.')
@@ -142,14 +147,31 @@ def validar_parte(area, value):
     return result
 
 
-def recuperar_campos_guiados(area,value):
+def recuperar_campos_guiados(area, value):
     """Recupera captura antigua en raíz sin borrar ni sustituir campos canónicos."""
-    result=deepcopy(value)
-    if not isinstance(result.get('campos'),dict):return result
+    result = deepcopy(value)
+    if not isinstance(result.get('campos'), dict):
+        return result
     for field in campos(area):
-        anterior=result.get(field)
-        if not result['campos'].get(field) and isinstance(anterior,str) and anterior.strip():
-            result['campos'][field]=anterior
+        anterior = result.get(field)
+        if not result['campos'].get(field) and isinstance(anterior, str) and anterior.strip():
+            result['campos'][field] = anterior
+    # Armonización automática y transparente de tablas a las columnas del modelo oficial
+    if area == 'Trabajo Social' and isinstance(result.get('familia'), list):
+        for r in result['familia']:
+            if isinstance(r, dict):
+                if 'Ocupación y sueldo' in r and not r.get('Ocupación'):
+                    r['Ocupación'] = r['Ocupación y sueldo'].split('-')[0].strip()
+                if 'Estado Civil' not in r:
+                    r['Estado Civil'] = 'Soltera' if 'nna' in str(r.get('Parentesco', '')).lower() else ''
+    if area == 'Conclusión' and isinstance(result.get('nee'), list):
+        col_desc = 'Descripción de las características más relevantes del alumno que afectan su desempeño académico y social'
+        for r in result['nee']:
+            if isinstance(r, dict):
+                if 'Características relevantes' in r and not r.get(col_desc):
+                    r[col_desc] = r['Características relevantes']
+                elif col_desc in r and not r.get('Características relevantes'):
+                    r['Características relevantes'] = r[col_desc]
     return result
 
 def pendientes(doc):

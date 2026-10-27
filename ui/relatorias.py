@@ -58,22 +58,35 @@ def _resolver_modelo_gemini_relatoria():
     return candidato
 
 
-def _procesar_gemini(ruta, prompt):
+def _procesar_gemini(ruta, prompt, modelo_preferido=None, callback_progreso=None):
     cliente = gemini_client()
     if cliente is None:
         raise RuntimeError("Falta GEMINI_API_KEY en los secretos de Streamlit.")
-    modelo_principal = _resolver_modelo_gemini_relatoria()
-    candidatos = [modelo_principal]
-    for alt in ["gemini-3.8-flash", "gemini-3.5-flash"]:
-        if alt not in candidatos:
-            candidatos.append(alt)
+
+    candidatos = []
+    if modelo_preferido:
+        candidatos.append(str(modelo_preferido).removeprefix("models/").strip())
+    modelo_config = _resolver_modelo_gemini_relatoria()
+    if modelo_config not in candidatos:
+        candidatos.append(modelo_config)
+
+    # Cadena resiliente de respaldo: Pro y Flash
+    pool_respaldo = ["gemini-2.5-pro", "gemini-3.8-flash", "gemini-3.5-flash", "gemini-1.5-pro"]
+    for m in pool_respaldo:
+        if m not in candidatos:
+            candidatos.append(m)
 
     archivo = None
     try:
+        if callback_progreso:
+            callback_progreso(0.15, "Subiendo audio a Gemini...")
         archivo = cliente.files.upload(file=ruta)
         ultimo_error = None
-        for modelo in candidatos:
+
+        for idx, modelo in enumerate(candidatos, start=1):
             try:
+                if callback_progreso:
+                    callback_progreso(0.3 + 0.45 * (idx / len(candidatos)), f"Redactando relatoría con {modelo}...")
                 resultado = cliente.models.generate_content(
                     model=modelo,
                     contents=[prompt, archivo],
@@ -84,11 +97,33 @@ def _procesar_gemini(ruta, prompt):
             except Exception as exc:
                 err_str = str(exc)
                 ultimo_error = exc
-                if "404" in err_str or "NOT_FOUND" in err_str or "no longer available" in err_str.lower():
+                es_error_reintentable = any(
+                    tok in err_str.lower()
+                    for tok in [
+                        "503", "unavailable", "high demand", "spikes in demand",
+                        "429", "resource_exhausted", "quota", "rate limit",
+                        "404", "not_found", "no longer available",
+                        "500", "internal",
+                    ]
+                )
+                if es_error_reintentable:
+                    if callback_progreso and idx < len(candidatos):
+                        siguiente = candidatos[idx]
+                        callback_progreso(
+                            0.35 + 0.45 * (idx / len(candidatos)),
+                            f"{modelo} reportó alta demanda. Cambiando a {siguiente}...",
+                        )
+                    import time
+                    time.sleep(1.0)
                     continue
                 raise exc
+
         if ultimo_error:
-            raise ultimo_error
+            raise RuntimeError(
+                f"Alta demanda en los modelos de Gemini ({ultimo_error}). "
+                "Como cuentas con ChatGPT Plus / OpenAI, puedes cambiar momentáneamente al motor "
+                "'ChatGPT (OpenAI)' arriba para procesar tu relatoría de inmediato."
+            )
         raise RuntimeError("Gemini no devolvió texto.")
     finally:
         if archivo is not None:
@@ -98,13 +133,17 @@ def _procesar_gemini(ruta, prompt):
                 pass
 
 
-def _procesar_openai(ruta, prompt, progreso):
-    try:
-        api_key = st.secrets.get("OPENAI_API_KEY", "")
-    except Exception:
-        api_key = ""
+def _procesar_openai(ruta, prompt, progreso, api_key_manual=None):
+    api_key = api_key_manual
     if not api_key:
-        raise RuntimeError("Falta OPENAI_API_KEY en los secretos de Streamlit.")
+        try:
+            api_key = st.secrets.get("OPENAI_API_KEY", "")
+        except Exception:
+            api_key = ""
+    if not api_key:
+        raise RuntimeError(
+            "Falta OPENAI_API_KEY. Ingresa tu API Key de OpenAI en la casilla correspondiente o en los secretos de Streamlit."
+        )
     from openai import OpenAI
 
     cliente = OpenAI(api_key=api_key, timeout=900.0, max_retries=2)
@@ -185,9 +224,38 @@ def generador_relatorias_director():
     st.caption("Genera, revisa y descarga la relatoría en PDF carta con membrete, sello y hoja de firmas.")
     st.warning("El audio se enviará al proveedor de IA seleccionado. Evita incluir datos sensibles de alumnos y confirma que tienes autorización.")
     with st.expander("Abrir generador", expanded=False):
-        motor = st.radio("Motor de IA", ["ChatGPT (OpenAI)", "Gemini (Google)"], horizontal=True, key="relatoria_motor")
+        motor = st.radio("Motor de IA", ["Gemini (Google)", "ChatGPT (OpenAI)"], horizontal=True, key="relatoria_motor")
+        modelo_gemini_elegido = None
         if motor == "Gemini (Google)":
-            st.caption("✨ Motor de alta durabilidad: **Gemini 3.8 Flash** (procesamiento nativo de audio institucional)")
+            variante = st.radio(
+                "Nivel de modelo Gemini",
+                [
+                    "Gemini Pro (Recomendado · Mayor capacidad, estabilidad y durabilidad)",
+                    "Gemini Flash (Rápido)",
+                ],
+                horizontal=True,
+                key="relatoria_gemini_tier",
+            )
+            if "Pro" in variante:
+                modelo_gemini_elegido = "gemini-2.5-pro"
+                st.caption("✨ **Gemini Pro**: Procesamiento con el modelo insignia de Google, alta durabilidad y tolerancia a saturaciones.")
+            else:
+                modelo_gemini_elegido = "gemini-3.8-flash"
+                st.caption("⚡ **Gemini Flash**: Procesamiento ultrarrápido con fallback automático a Gemini Pro si hay alta demanda.")
+        else:
+            st.caption("✨ **ChatGPT Plus (OpenAI)**: Transcripción con Whisper y redacción oficial con GPT-4o.")
+            has_secret = False
+            try:
+                has_secret = bool(st.secrets.get("OPENAI_API_KEY"))
+            except Exception:
+                has_secret = False
+            if not has_secret:
+                st.text_input(
+                    "OpenAI API Key (Opcional si ya está en secrets)",
+                    type="password",
+                    key="relatoria_openai_key",
+                    help="Ingresa tu clave de OpenAI para transcribir con Whisper y redactar con GPT-4o.",
+                )
         modo = st.radio("Captura", ["Subir archivo", "Grabar en el navegador"], horizontal=True, key="relatoria_modo")
         if modo == "Subir archivo":
             audio = st.file_uploader(
@@ -264,9 +332,15 @@ def generador_relatorias_director():
                         prompt = _prompt(sesion, tema, notas, tipo_junta, modalidad_junta, fecha)
                         callback = lambda valor, mensaje: barra.progress(valor, text=mensaje)
                         if motor == "Gemini (Google)":
-                            texto = _procesar_gemini(ruta, prompt)
+                            texto = _procesar_gemini(
+                                ruta,
+                                prompt,
+                                modelo_preferido=modelo_gemini_elegido,
+                                callback_progreso=callback,
+                            )
                         else:
-                            texto = _procesar_openai(ruta, prompt, callback)
+                            api_manual = st.session_state.get("relatoria_openai_key")
+                            texto = _procesar_openai(ruta, prompt, callback, api_key_manual=api_manual)
                     if not texto:
                         raise RuntimeError("No se generó contenido.")
                     st.session_state["relatoria_texto_generado"] = texto
