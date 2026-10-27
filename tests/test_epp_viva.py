@@ -131,10 +131,10 @@ class PantallaTests(unittest.TestCase):
         spec=app.session_state['qa_spec'];cell=next(c for c in spec['cells'].values() if c.get('apartado_epp'))
         app.session_state['qa_event']={'nonce':'abrir-redactor-qa','documento':spec['documento'],'huella':spec['huella'],'cambios':{},'accion':'redaccion','celda':cell['id']}
         app.run();self.assertFalse(app.exception)
-        next(t for t in app.text_area if t.label.startswith('Tus ideas')).set_value('Necesita modelado visual.').run()
-        next(b for b in app.button if b.label=='Preparar texto para revisión').click().run()
-        self.assertFalse(app.exception)
-        self.assertTrue(any('modelado visual' in t.value for t in app.text_area if t.label.startswith('Resumen que se enviará')))
+        self.assertFalse(app.get('dialog'))
+        self.assertTrue(any(c.label.startswith('Autorizo usar los hallazgos') for c in app.checkbox))
+        self.assertTrue(next(b for b in app.button if b.label=='✨ Redactar EPP Automáticamente').disabled)
+
 
 
 if __name__=='__main__':unittest.main()

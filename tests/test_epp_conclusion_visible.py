@@ -52,28 +52,43 @@ class PantallaConclusionTests(unittest.TestCase):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_file(str(Path(__file__).parent/'fixtures/epp_viva_app.py'),default_timeout=30)
         app.session_state['qa_conclusion_test']=True
-        app.session_state['qa_cambia_durante_ia']=cambia
         app.run()
         next(b for b in app.button if b.label=='Abrir EPP del alumno').click().run()
-        next(b for b in app.button if b.label=='Generar conclusión y NEE del equipo').click().run()
+        next(c for c in app.checkbox if c.label.startswith('Autorizo usar los hallazgos')).check().run()
         self.assertFalse(app.exception)
-        self.assertEqual(next(x for x in app.selectbox if x.label=='Mi área de trabajo').value,'Conclusión')
-        next(b for b in app.button if b.label=='Preparar resumen para el análisis').click().run()
-        next(c for c in app.checkbox if 'autorizo su análisis' in c.label).check().run()
+        return app
+
+    def generar(self,app,cambia=False):
+        from concurrent.futures import Future
+        from unittest.mock import patch
+        from tests.test_epp_contextual import respuesta
+        from ui import epp_contextual as ui
+        def enqueue(p,config):
+            r=respuesta(p);ref=p['datos']['fuentes'][0]['id']
+            r['nee']=[dict(propuesta()['nee'][0],fuentes=[ref])]
+            r['bap']=[dict(propuesta()['bap'][0],fuentes=[ref])]
+            if cambia:
+                import streamlit as st
+                key=next(k for k in st.session_state if k.startswith('epp_viva_') and k.endswith('_doc'))
+                doc=deepcopy(st.session_state[key])
+                doc['partes']['Psicología']['contenido']['campos'][campos('Psicología')[0]]='Hallazgo actualizado durante IA'
+                st.session_state[key]=doc
+            future=Future();future.set_result(r);return future
+        with patch('ai.epp_contextual.enviar',side_effect=enqueue),patch('ai.epp_contextual.configuracion',return_value={}),patch('ui.epp_viva.guardar',return_value=True):
+            next(b for b in app.button if b.label=='✨ Redactar EPP Automáticamente').click().run()
         return app
 
     def test_genera_guarda_y_muestra_en_formato_sin_esperar_tick(self):
-        app=self.preparar()
-        next(b for b in app.button if b.label=='Generar y llenar conclusión y NEE').click().run()
+        app=self.generar(self.preparar())
         self.assertFalse(app.exception)
         spec=app.session_state['qa_spec']
-        self.assertTrue(any(c['value'].startswith('Propuesta QA interdisciplinaria') for c in spec['cells'].values()))
+        self.assertTrue(any(c['value'].startswith('Hallazgo documentado') for c in spec['cells'].values()))
         self.assertTrue(any(c['value']=='Necesita comprender consignas con apoyos visuales.' for c in spec['cells'].values()))
-        self.assertTrue(any(r[2]=='Conclusión' for r in app.session_state['qa_rows']))
+        # El borrador visible precede al acuse de guardado, gestionado por su cola.
+        self.assertTrue(any(c['value'] for c in spec['cells'].values() if c.get('target')==['Conclusión','campos','7.1. Conclusión']))
 
     def test_hallazgos_nuevos_durante_ia_impiden_incorporar_cierre_obsoleto(self):
-        app=self.preparar(cambia=True)
-        next(b for b in app.button if b.label=='Generar y llenar conclusión y NEE').click().run()
+        app=self.generar(self.preparar(),cambia=True)
         self.assertFalse(app.exception)
         self.assertTrue(any('actualizó sus hallazgos' in x.value for x in app.warning))
         self.assertFalse(any(r[2]=='Conclusión' for r in app.session_state['qa_rows']))

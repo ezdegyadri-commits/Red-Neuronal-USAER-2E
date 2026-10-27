@@ -18,12 +18,12 @@ def _estado(prefix,get_value,save_value):
     st.caption('Aplicación pendiente de confirmación; puedes continuar.' if st.session_state.get(prefix+'_aplicacion_sucia') else 'Borrador de aplicación confirmado.')
 
 
-def digital(doc,area,prefix,get_value,save_value,nombre=None):
+def digital(doc,area,prefix,get_value,save_value,nombre=None,codigo_preseleccionado=None):
     codigos=[k for k,v in motor.DEFINICIONES.items() if v['area']==area and (not nombre or nombre==v['nombre'])]
     if not codigos:
         st.info('Este instrumento aún no tiene un protocolo y reglas de corrección verificadas en la plataforma. Registra resultados profesionales o utiliza Foto / escaneo. No se calculan puntuaciones por aproximación.')
         return
-    codigo=st.selectbox('Formato digital disponible',codigos,format_func=lambda k:motor.DEFINICIONES[k]['nombre'],key=prefix+'_digital')
+    codigo=codigo_preseleccionado if codigo_preseleccionado in codigos else st.selectbox('Formato digital disponible',codigos,format_func=lambda k:motor.DEFINICIONES[k]['nombre'],key=prefix+'_digital')
     d=motor.DEFINICIONES[codigo];key=prefix+'_digital_'+codigo
     def captura():return deepcopy(get_value().get('aplicaciones_en_curso',{}).get(codigo,motor.plantilla(codigo)))
     def guardar_captura(cap):
@@ -81,8 +81,21 @@ def digital(doc,area,prefix,get_value,save_value,nombre=None):
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
 
 
-def externo(doc,area,prefix,get_value,save_value):
-    st.caption('Carga el informe de resultados o una foto legible. La transcripción es local; antes del análisis revisa el texto y el resumen anonimizado. No envíes cuadernillos completos, reactivos protegidos ni datos de terceros.')
+@st.fragment(run_every=1)
+def _lectura_visual(key):
+    job=st.session_state.get(key+'_vision')
+    if not job:return
+    if not job.done():st.progress(35,text='Leyendo los resultados del instrumento…');return
+    st.session_state.pop(key+'_vision',None)
+    try:
+        st.session_state[key+'_lectura']=job.result()
+        st.session_state.pop(key+'_vision_error',None)
+    except Exception:st.session_state[key+'_vision_error']='No se completó la lectura visual; conserva el archivo y prueba la lectura local o una imagen más clara.'
+    st.rerun(scope='app')
+
+
+def externo(doc,area,prefix,get_value,save_value,solo_carga=False):
+    st.caption('Carga el informe de resultados o una foto legible. Puedes leerlo localmente o autorizar su lectura visual con Gemini. Revisa la síntesis antes de vincularla. No envíes cuadernillos completos, reactivos protegidos ni datos de terceros.')
     source=st.radio('Origen del documento',['Archivo o escaneo','Tomar fotografía'],horizontal=True,key=prefix+'_origen')
     if source=='Tomar fotografía':upload=st.camera_input('Fotografiar informe de resultados',key=prefix+'_camara')
     else:upload=st.file_uploader('Informe externo o escaneo',type=['pdf','png','jpg','jpeg','webp','docx'],max_upload_size=32,key=prefix+'_archivo')
@@ -90,12 +103,24 @@ def externo(doc,area,prefix,get_value,save_value):
     data=upload.getvalue()
     if len(data)>32*1024*1024:st.warning('Usa un archivo de hasta 32 MB.');return
     fid=hashlib.sha256(data).hexdigest();key=prefix+'_externo_'+fid[:16]
-    if st.button('Leer foto o escaneo',key=key+'_leer'):
+    visual=False
+    ext=upload.name.rsplit('.',1)[-1].lower()
+    if solo_carga and ext in ('pdf','png','jpg','jpeg','webp') and len(data)<=5*1024*1024:
+        visual=st.checkbox('Autorizar lectura visual con IA de este archivo del alumno',key=key+'_autorizar_vision')
+    if st.button('Leer foto o escaneo',key=key+'_leer',disabled=key+'_vision' in st.session_state):
         try:
-            from services.materiales_planeacion import leer_material
-            with st.spinner('Leyendo el documento sin enviarlo a IA…'):read=leer_material(upload.name,data)
-            st.session_state[key+'_lectura']=read
+            st.session_state.pop(key+'_vision_error',None)
+            if visual:
+                from ai.epp_contextual import enviar_lectura,configuracion
+                mime={'pdf':'application/pdf','png':'image/png','jpg':'image/jpeg','jpeg':'image/jpeg','webp':'image/webp'}[ext]
+                st.session_state[key+'_vision']=enviar_lectura(data,mime,configuracion())
+            else:
+                from services.materiales_planeacion import leer_material
+                with st.spinner('Leyendo el documento sin enviarlo a IA…'):read=leer_material(upload.name,data)
+                st.session_state[key+'_lectura']=read
         except Exception:st.warning('No se pudo leer el archivo. Intenta una foto frontal y nítida o un PDF con texto; el informe anterior no cambió.')
+    _lectura_visual(key)
+    if st.session_state.get(key+'_vision_error'):st.warning(st.session_state[key+'_vision_error'])
     read=st.session_state.get(key+'_lectura')
     if not read:return
     for aviso in read.get('avisos',[]):st.caption(aviso)
@@ -108,7 +133,7 @@ def externo(doc,area,prefix,get_value,save_value):
     st.caption('Al guardar se conservarán el original y su síntesis en el expediente, sin otro botón de archivo.' if archivable else
         'Se conservarán los resultados revisados en la EPP. Para conservar también el original en el expediente, utiliza PDF, JPG o PNG de hasta 5 MB.')
     fingerprint=hashlib.sha256(json.dumps([texto,nombre,str(fecha)]).encode()).hexdigest()
-    if st.button('Guardar evaluación y preparar análisis',disabled=not reviewed or not texto.strip(),key=key+'_preparar'):
+    if st.button('Vincular instrumento a esta EPP' if solo_carga else 'Guardar evaluación y preparar análisis',disabled=not reviewed or not texto.strip(),key=key+'_preparar'):
         try:
             from services.epp_entrada import entrada_directa
             from services import epp as s
@@ -125,13 +150,16 @@ def externo(doc,area,prefix,get_value,save_value):
                     st.success('Original y síntesis confirmados en el expediente; disponibles como antecedentes.')
                 except Exception:
                     st.warning('Los resultados están guardados en la EPP, pero no se confirmó el archivo o su síntesis. Conserva esta carga y vuelve a pulsar Guardar evaluación; no se duplicará una copia ya confirmada.')
+            if solo_carga:
+                st.success('Instrumento vinculado. Ya puedes usar Redactar EPP Automáticamente.')
+                st.rerun()
             plan=s.contexto(doc)
             st.session_state[key+'_resumen']=s.resumen(doc,area,value,plan)
             from services.epp_entrada import huella_instrumentos
             st.session_state[key+'_fuente']=(fingerprint,huella_instrumentos(doc,area,get_value()))
             st.session_state.pop(key+'_consent',None);st.session_state.pop(key+'_resumen_editado',None)
         except Exception as exc:st.warning(str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se pudo reunir el contexto; la evaluación guardada se conserva. Reintenta preparar el análisis.')
-    if key+'_resumen' not in st.session_state:return
+    if solo_carga or key+'_resumen' not in st.session_state:return
     from services.epp_entrada import huella_instrumentos
     stale=st.session_state.get(key+'_fuente')!=(fingerprint,huella_instrumentos(doc,area,get_value()))
     if stale:st.warning('Cambió la lectura, el instrumento o la fecha. Prepara otra vez el análisis para no usar un resumen anterior.')

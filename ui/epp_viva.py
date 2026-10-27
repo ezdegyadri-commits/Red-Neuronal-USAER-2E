@@ -358,22 +358,29 @@ def page():
         st.caption('Escribe directamente en los apartados de tu función. Los aportes de las demás áreas se muestran para consulta y se actualizan sin mover tu selección.')
         aviso=st.session_state.pop(p+'_aviso_ia',None)
         if aviso:st.info(aviso)
-        if s.es_coordinadora(doc) and st.button('Generar conclusión y NEE del equipo',key=p+'_conclusion_directa',type='primary'):
-            st.session_state[p+'_ir_conclusion']=True;st.session_state[p+'_panel']='ia'
+        from ui import epp_contextual as contextual
+        ia_key=p+'_contextual'
+        area=s.actor()['area']
+        def persistir(value,manual):
+            nuevo=deepcopy(st.session_state[p+'_doc'])
+            nuevo['partes'].setdefault(area,{})['contenido']=deepcopy(value)
+            preparar_cambios(p,nuevo,{area})
+            return guardar(p,manual,background=True)
+        def incorporar_ia(nuevo,areas):
+            preparar_cambios(p,nuevo,areas)
+            guardar(p,True,background=True)
+        if area in AREAS and not s.actor()['director']:
+            contextual.instrumentos(doc,area,ia_key,lambda:papel.contenido(st.session_state[p+'_doc'],area),persistir)
+            target=st.session_state.pop(p+'_redactor',None)
+            if target:
+                if st.session_state.get(ia_key+'_consent'):
+                    try:contextual.iniciar(ia_key,st.session_state[p+'_doc'],(target[0],target[2]))
+                    except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+                else:st.info('Autoriza los hallazgos anonimizados en la barra superior para usar Autocompletar.')
+            contextual.barra(ia_key,lambda:st.session_state[p+'_doc'],incorporar_ia)
         hoja(p);panel(p)
         from ui.epp_guardado_asincrono import acuses
         acuses(p)
-        target=st.session_state.get(p+'_redactor')
-        if target:
-            from ui.epp_redaccion import mostrar
-            area,_,campo=target
-            def aplicar_redaccion(texto,base):
-                v=papel.contenido(st.session_state[p+'_doc'],area)
-                if v['campos'].get(campo,'')!=base or v.get('no_requeridos',{}).get(campo):
-                    raise RuntimeError('El apartado cambió; revisa su texto antes de incorporar la propuesta.')
-                v['campos'][campo]=texto;v['validada']=False
-                _incorporar(p,area,v)
-            mostrar(p,st.session_state[p+'_doc'],area,campo,aplicar_redaccion)
         return
     try:frame=s.planes.padron_autorizado().fillna('');docs=s.listar(True)
     except Exception:st.warning('No se pudo consultar la matrícula y las EPP. No se modificó ningún registro.');return
