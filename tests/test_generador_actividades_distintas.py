@@ -43,6 +43,32 @@ class ActividadesDistintasTests(TestCase):
         self.assertIn('NEE-SELECCIONADA-1',sol['resumen'])
         self.assertEqual(sol['evidencias']['NEE-SELECCIONADA-1'],['Alumno 1'])
 
+    def test_ensamblar_aisla_tabla_superior_y_escribe_solo_en_dosificacion(self):
+        d,sol=self.preparar();r=resultado(sol,'Aprendizaje')
+        # Guardar estado de tabla superior antes
+        tabla1_antes=deepcopy(d['tablas'].get('aprendizajes',[]))
+        nuevo=g.ensamblar(d,r,sol)
+        # La tabla superior permanece intacta (aislamiento estricto, read-only)
+        self.assertEqual(nuevo['tablas'].get('aprendizajes',[]), tabla1_antes)
+        # La dosificación contiene las actividades generadas (unidireccional a Tabla 2)
+        actividades=[row['Actividades'] for row in nuevo['tablas']['dosificacion'] if row.get('Actividades')]
+        self.assertEqual(len(actividades), 2)
+
+    def test_admite_bateria_amplia_actividades(self):
+        d,sol=self.preparar(cantidad=2);r=resultado(sol,'Aprendizaje')
+        # Crear 15 unidades válidas para probar que el validador acepta batería extendida
+        base_u=deepcopy(r['unidades'][0])
+        unidades_15=[]
+        for i in range(15):
+            u=deepcopy(base_u)
+            u['actividad']=f'Inicio {i}: ver material. Desarrollo: andamiaje de actividad {i}. Cierre: registro observable {i}.'
+            unidades_15.append(u)
+        r_15={'observaciones':'OK','faltantes':[],'unidades':unidades_15,'sugerencia_familia':''}
+        # Validar que 15 unidades no causan error de límite en validar_completa
+        contexto_15={**sol['contexto'], 'actividades_solicitadas': 15}
+        validados=validar_completa(r_15,d['formato'],'Aprendizaje',contexto_15,sol['aliases'],sol['evidencias'])
+        self.assertEqual(len(validados['unidades']), 15)
+
     def test_seleccion_y_cantidad_visibles_antes_de_preparar(self):
         from streamlit.testing.v1 import AppTest
         from tests.test_planeacion_documento_directo import HELP_APP

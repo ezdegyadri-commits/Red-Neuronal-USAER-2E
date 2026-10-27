@@ -89,7 +89,8 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     dias=ajustes['dias'];enfoque=ajustes.get('enfoque','');apoyos=ajustes.get('apoyos','')
     grado=ajustes.get('grado_referencia');campo=ajustes.get('campo_referencia','Lenguajes')
     if compact:
-        st.caption(f"{sesiones} sesiones · {duracion} min · {', '.join(dias)} · desde {inicio.isoformat()}")
+        act_actual = ajustes.get('actividades_solicitadas', min(15, int(sesiones)))
+        st.caption(f"{sesiones} sesiones · {act_actual} actividades progresivas · {duracion} min · {', '.join(dias)} · desde {inicio.isoformat()}")
         st.caption(f"Referencia sugerida: {grado}° · {campo}." if grado else f"Referencia sugerida del grupo · {campo}.")
         key=base+'_enfoque'
         enfoque=st.text_area('Barrera prioritaria (opcional)' if doc['datos']['Función']=='Trabajo Social' else '¿Qué quieres priorizar? (opcional)',value=enfoque,max_chars=1500,key=key,on_change=_ajuste,args=(prefix,key,'enfoque',persist))
@@ -120,8 +121,12 @@ def panel_generacion(prefix,persist,abrir,compact=False):
         inicio=izquierda.date_input('Primera fecha propuesta',value=date.fromisoformat(ajustes['inicio']),min_value=date.fromisoformat(desde),max_value=date.fromisoformat(hasta),key=key,on_change=_ajuste,args=(prefix,key,'inicio',persist))
         key=base+'_duracion'
         duracion=derecha.number_input('Duración de cada sesión (minutos)',min_value=15,max_value=180,value=int(ajustes['duracion']),step=5,key=key,on_change=_ajuste,args=(prefix,key,'duracion',persist))
+        col_ses1, col_ses2 = izquierda.columns(2)
         key=base+'_sesiones'
-        sesiones=izquierda.number_input('Sesiones a organizar en el trimestre',min_value=1,max_value=36,value=int(ajustes['sesiones']),key=key,on_change=_ajuste,args=(prefix,key,'sesiones',persist))
+        sesiones=col_ses1.number_input('Sesiones en el trimestre',min_value=1,max_value=36,value=int(ajustes['sesiones']),key=key,on_change=_ajuste,args=(prefix,key,'sesiones',persist))
+        key_act=base+'_actividades_solicitadas'
+        act_def = min(int(sesiones), max(10, int(ajustes.get('actividades_solicitadas', min(15, int(sesiones))))))
+        actividades_solicitadas = col_ses2.number_input('Actividades distintas',min_value=1,max_value=24,value=act_def,step=1,key=key_act,on_change=_ajuste,args=(prefix,key_act,'actividades_solicitadas',persist),help='Define cuántas actividades progresivas distintas generar para cubrir el trimestre (ej. 10 a 15).')
         key=base+'_dias'
         dias=derecha.multiselect('Días para proponer las sesiones',list(g.DIAS),default=ajustes['dias'],key=key,on_change=_ajuste,args=(prefix,key,'dias',persist))
         if not compact:
@@ -135,7 +140,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
         campo=derecha.selectbox('Campo para fundamentar las actividades',list(g.CAMPOS),index=list(g.CAMPOS).index(ajustes.get('campo_referencia','Lenguajes')),key=campo_key,on_change=_ajuste,args=(prefix,campo_key,'campo_referencia',persist))
         st.caption('El sistema propone referentes exactos del catálogo por tema y grado elegido. Puedes cambiar a un grado anterior sin modificar el padrón. Los referentes sugeridos requieren revisión y siguen siendo editables.')
         st.caption('Las fechas evitan fines de semana, CTE y suspensiones del calendario cargado. Son propuestas: no reservan espacios ni sustituyen la revisión de tu horario o cronograma.')
-    ajustes={**ajustes,'inicio':inicio.isoformat(),'duracion':duracion,'sesiones':sesiones,'dias':dias,'enfoque':enfoque,'apoyos':apoyos,'grado_referencia':grado,'campo_referencia':campo}
+    ajustes={**ajustes,'inicio':inicio.isoformat(),'duracion':duracion,'sesiones':sesiones,'actividades_solicitadas':actividades_solicitadas if 'actividades_solicitadas' in locals() else ajustes.get('actividades_solicitadas', 12),'dias':dias,'enfoque':enfoque,'apoyos':apoyos,'grado_referencia':grado,'campo_referencia':campo}
     # Los servicios existentes ya admiten un enfoque educativo. Sin cambiar su
     # contrato, presentar las prioridades opcionales como orientación, no hallazgos.
     orientaciones=[]

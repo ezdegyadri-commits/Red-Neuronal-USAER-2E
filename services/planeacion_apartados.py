@@ -65,26 +65,30 @@ def proponer(doc):
         necesidad_texto=nee
         verbos={'Reconocer':'reconoce','Expresar':'expresa','Comprender':'comprende','Construir':'construye','Representar':'representa','Participar':'participa'}
         verbo=objetivo.split(' ',1)[0]
-        objetivo=verbos.get(verbo,verbo.lower())+' '+objetivo.split(' ',1)[1]
-        if relevantes:objetivo+='\nContenido de referencia: '+ '; '.join(r['contenido'] for r in relevantes[:3])+'.'
+        objetivo_adaptado=verbos.get(verbo,verbo.lower())+' '+objetivo.split(' ',1)[1]
+        if relevantes:
+            pda_texto = f"{relevantes[0].get('contenido', '')} — {relevantes[0].get('pda', '')}"
+        else:
+            pda_texto = objetivo_adaptado
         valores=({'Barreras para el Aprendizaje y la Participación':nombre+' · Propuesta para revisar las barreras documentadas del entorno; no equivale a una NEE.',
-                   'Apoyos y/o ajustes razonables':'Propuesta para revisión: ofrecer información accesible, revisar los recursos reales con las personas implicadas y dar seguimiento a los acuerdos que efectivamente se alcancen.'} if tabla=='barreras' else
-                  {'Necesidades educativas específicas':necesidad_texto,'Aprendizaje y/u objetivo':nombre+': '+objetivo,'Descriptor de logro':nombre+': '+descriptor})
+                   'Apoyos y/u ajustes razonables':'Propuesta para revisión: ofrecer información accesible, revisar los recursos reales con las personas implicadas y dar seguimiento a los acuerdos que efectivamente se alcancen.'} if tabla=='barreras' else
+                  {'Necesidades educativas específicas':necesidad_texto,'Aprendizaje y/u objetivo':pda_texto,'Descriptor de logro':descriptor})
+        
+        # Consolidación: si ya existe una fila con la misma NEE, no crear filas parásitas duplicadas
+        if tabla == 'aprendizajes' and any(r.get('Necesidades educativas específicas') == necesidad_texto for r in rows):
+            continue
+
         row=next((r for r in rows if r.get('_alumnos_apartados')==[aid] and not r.get('_aporte') and not r.get('_sesion_equipo')),None)
         if row is None and len(alumnos)==1:
             row=next((r for r in rows if not r.get('_aporte') and not r.get('_sesion_equipo') and not r.get('_alumnos_apartados') and any(not str(r.get(h,'') or '').strip() for h in headers)),None)
         if row is None:
             row=next((r for r in rows if not any(str(r.get(h,'') or '').strip() for h in headers) and not r.get('_aporte') and not r.get('_sesion_equipo') and not r.get('_alumnos_apartados')),None)
-            # Una tabla ya redactada no recibe filas paralelas que aparenten
-            # reemplazar sus decisiones. Solo completar blancos vinculados.
             if row is None and any(r for r in rows if not r.get('_alumnos_apartados')):continue
             if row is None:
                 if len(rows)>=100:break
                 row=dict.fromkeys(headers,'');rows.append(row)
             row['_alumnos_apartados']=[aid]
         else:row.setdefault('_alumnos_apartados',[aid])
-        # Reparar solo la copia exacta que produjo la versión anterior; una
-        # redacción modificada por la docente nunca se reemplaza a ciegas.
         legacy=nombre+' · Antecedentes para revisar la necesidad educativa (no confirma NEE):\n'+'\n\n'.join('['+str(f.get('referencia',''))+'] '+str(f['texto'])[:900] for f in vinculadas[:3])
         if tabla=='aprendizajes' and row.get('Necesidades educativas específicas')==legacy:
             row['Necesidades educativas específicas']=nee
@@ -92,7 +96,8 @@ def proponer(doc):
             if value and not str(row.get(campo,'') or '').strip():row[campo]=value
         row['_origenes_apartados']=[{'tipo':f.get('tipo',''),'registro':f.get('registro',''),'alumno':f.get('alumno',''),'referencia':f.get('referencia','')} for f in propias[:3]]
         row['_referentes_apartados']=[r['id'] for r in relevantes]
-        if tabla=='aprendizajes' and row.get('Necesidades educativas específicas')==nee:row['_nee_origen']=origen_nee
+        if tabla=='aprendizajes' and row.get('Necesidades educativas específicas')==nee:
+            row['_nee_origen']=origen_nee
     if result!=doc:
         result['metadatos']['propuestas_apartados']={'motor':'sin IA','requiere_revision_docente':True,
             'aviso':'Se prioriza la NEE registrada por la maestra o en EPP revisada; si falta, se propone una hipótesis educativa para aceptar, editar o eliminar. BAPSE no se copia como NEE. Las propuestas no determinan diagnósticos ni logros alcanzados.'}

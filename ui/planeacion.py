@@ -445,14 +445,13 @@ def _ai(prefix,doc,revision=False):
             incluida=proposal in st.session_state[prefix+'_doc']['metadatos'].get('Propuestas IA revisadas',[])
             if not revision and st.button('Ya añadida al borrador' if incluida else 'Añadir al borrador',disabled=incluida,key=prefix+'_apply_'+str(i)):
                 current=deepcopy(st.session_state[prefix+'_doc']);tables=current['tablas'];fmt=current['formato']
-                if fmt=='XXIII':
-                    tables['aprendizajes'].append({'Necesidades educativas específicas':proposal['necesidad'],'Aprendizaje y/u objetivo':proposal['objetivo'],'Descriptor de logro':proposal['descriptor']})
-                elif fmt=='XXV':
-                    tables['barreras'].append({'Barreras para el Aprendizaje y la Participación':proposal['necesidad'],'Apoyos y/o ajustes razonables':proposal['actividad']})
-                else:
-                    tables['necesidades'].append({'NEE':proposal['necesidad'],'Aprendizajes y/u Objetivos':proposal['objetivo'],'Descriptor de Logro':proposal['descriptor'],'Apoyos o ajustes':proposal['actividad'],'Temporalidad':proposal['temporalidad'],'Seguimiento':proposal['evaluacion']})
+                # BLOQUEO Y AISLAMIENTO DE TABLA 1:
+                # La tabla superior es ESTRICTAMENTE de solo lectura durante la incorporación de actividades.
+                # Se escribe exclusivamente en la organización de actividades (Tabla 2: dosificación).
                 if fmt!='XXI':
                     tables['dosificacion'].append({'Contextos':proposal['contexto'],'Actividades':proposal['actividad'],'Temporalidad' if fmt=='XXIII' else 'Fecha':proposal['temporalidad'],'Recursos':proposal['recursos']})
+                else:
+                    tables['dosificacion'].append({'Contextos':proposal.get('contexto','Aula regular'),'Actividades':proposal['actividad'],'Fecha':proposal.get('temporalidad',''),'Recursos':proposal.get('recursos','')})
                 current['metadatos'].setdefault('Propuestas IA revisadas',[]).append(proposal)
                 _open(prefix,current);_persist(prefix);st.rerun()
 

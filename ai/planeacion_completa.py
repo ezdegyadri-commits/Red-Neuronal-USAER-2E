@@ -35,8 +35,8 @@ def solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
        'configuracion':{k:ajustes[k] for k in ('duracion','sesiones','dias','enfoque','apoyos') if k in ajustes},
        'contextos_admitidos':contexto.get('contextos_solicitados',FORMATOS[formato]['contextos'])}
     reglas='''Prepara el borrador completo de planeación trimestral, no solo ideas sueltas.
-Devuelve hasta ocho unidades o secuencias distintas, para dosificar localmente en las
-sesiones configuradas. Identifica destinatarios solo con los alias.
+Devuelve las unidades o secuencias solicitadas (hasta 20 actividades progresivas), para dosificar localmente en las
+sesiones configuradas del trimestre. Identifica destinatarios solo con los alias.
 Cita al menos una evidencia educativa y una fuente normativa incluidas por unidad.
 Vincula cada destinatario con evidencia propia: si una evidencia documenta a un
 solo alias, dirige esa actividad únicamente a ese alias. Una actividad para varios
@@ -96,8 +96,8 @@ incluye los campos de texto necesidad, objetivo, descriptor, actividad, contexto
 apoyos, recursos, evaluacion, fundamento; y listas evidencias, fuentes, referentes,
 destinatarios y competencias. competencias queda vacía fuera de Psicología.
 '''
-    limite=min(8,int(ajustes['sesiones']),max(6 if area=='Psicología' else 3,len(aliases)))
-    if contexto.get('actividades_solicitadas'):limite=contexto['actividades_solicitadas']
+    limite=min(24,int(ajustes.get('sesiones', 12)),max(10 if area!='Psicología' else 6,len(aliases)))
+    if contexto.get('actividades_solicitadas'):limite=min(24, max(1, int(contexto['actividades_solicitadas'])))
     reglas+='\nPara esta configuración devuelve como máximo '+str(limite)+' unidades. '
     if contexto.get('actividades_solicitadas'):
         reglas+='Devuelve exactamente '+str(limite)+' actividades diferentes, una por unidad, sin reutilizar la misma secuencia en distintas fechas. '
@@ -113,7 +113,7 @@ def huella_completa(*args):
 
 
 def validar_completa(data,formato,area,contexto,aliases,evidencias):
-    if not isinstance(data,dict) or not isinstance(data.get('unidades'),list) or len(data['unidades'])>8:
+    if not isinstance(data,dict) or not isinstance(data.get('unidades'),list) or len(data['unidades'])>25:
         raise RespuestaInvalida('La planeación llegó sin una estructura válida.','EstructuraInvalida')
     fuentes={f['id'] for f in contexto.get('fuentes',[])}
     referentes={r['id'] for r in contexto.get('referentes_por_grado',[])}
