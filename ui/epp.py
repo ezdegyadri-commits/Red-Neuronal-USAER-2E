@@ -24,7 +24,7 @@ from services.epp_analisis import (
     ensamblar_epp_completa_desde_documento
 )
 
-VERSION_INTERFAZ_EPP = '2026-10-26-colaborativa-v1'
+VERSION_INTERFAZ_EPP = '2026-10-27-contextual-v1'
 
 CATALOGO_INSTRUMENTOS_SEGEY = {
     'Psicología': [
@@ -74,7 +74,7 @@ CATALOGO_INSTRUMENTOS_SEGEY['Psicología'].append('Guía para la Observación de
 def _guardar_aplicacion(prefix,value,manual):
     st.session_state[prefix+'_value']=deepcopy(value)
     st.session_state[prefix+'_pending']=True
-    if manual:_save(prefix)
+    if manual:_save(prefix,manual=True)
     return not st.session_state.get(prefix+'_pending')
 
 
@@ -162,7 +162,7 @@ def _grid(prefix, name, headers, disabled_cols=None):
                 r['Características relevantes'] = r['Descripción de las características más relevantes del alumno que afectan su desempeño académico y social']
         for h in headers:
             r.setdefault(h, '')
-    key = prefix + '_table_' + name
+    key = prefix + '_table_' + name + '_' + hashlib.sha256('|'.join(headers).encode()).hexdigest()[:6]
     basekey = key + '_base'
     if basekey not in st.session_state:
         st.session_state[basekey] = base
@@ -314,7 +314,13 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
         current_text = value.get(section, {}).get(field_name, '') if section else value.get(field_name, '')
         key = edit_prefix + '_field_' + (section or '') + field_name
 
-        st.markdown(f"**{field_name}**")
+        title, action = st.columns([0.78,0.22])
+        title.markdown(f"**{field_name}**")
+        if section=='campos' and not omitido(value,field_name):
+            with action:
+                from ui import epp_contextual as contextual
+                contextual.inline(prefix+'_contextual_'+doc['id'],lambda:contextual.actual(prefix,doc),target_area,field_name,current_text)
+
 
         st.text_area(
             label=field_name,
@@ -438,6 +444,8 @@ def epp_page():
             st.rerun()
         return
 
+    from ui.epp_contextual import actual
+    doc = actual(prefix,doc)
     student = s.alumno_autorizado(doc['alumno'])
     is_coordinator = s.es_coordinadora(doc)
     can_edit_concl = is_coordinator or a['director']
@@ -471,183 +479,21 @@ def epp_page():
             )
     st.write("")
 
-    # --- 📄 DIGITALIZADOR Y ENSAMBLADOR INTELIGENTE DE EPP COMPLETA ---
-    with st.expander("📥 Subir documento escaneado de la EPP (PDF / Foto) y ensamblar en formato oficial", expanded=False):
-        st.markdown(
-            """
-            <div style='background-color: #f7fafc; border-left: 4px solid #3182ce; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px;'>
-                <strong>Capturar una vez y reutilizar:</strong> Sube aquí un expediente o informe escaneado de la EPP (PDF, Word o imagen de hasta 32 MB). 
-                La plataforma extraerá los hallazgos de cada disciplina, los distribuirá en sus apartados correspondientes del Manual USAER (Anexos XVII y XVIII) 
-                y formulará la propuesta oficial SEGEY de NEE y BAP para validación del equipo colegiado.
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        col_up_scan, col_btn_scan = st.columns([0.68, 0.32])
-        with col_up_scan:
-            scan_file = st.file_uploader(
-                "Documento escaneado de la EPP",
-                type=['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx'],
-                key=prefix + '_epp_full_scan_file',
-                help="Sube un archivo PDF o imagen escaneada con la evaluación psicopedagógica del alumno."
-            )
-        with col_btn_scan:
-            st.write("")
-            st.write("")
-            btn_ensamblar = st.button(
-                "⚡ Leer y ensamblar en EPP",
-                disabled=not scan_file,
-                key=prefix + '_btn_ensamblar_scan',
-                use_container_width=True
-            )
-        if scan_file and btn_ensamblar:
-            try:
-                with st.spinner("Leyendo y transcribiendo documento escaneado..."):
-                    read = leer_material(scan_file.name, scan_file.getvalue())
-                    texto_extraido = read.get('texto', '')
-                if not texto_extraido.strip():
-                    st.error("No se pudo extraer texto legible del documento cargado. Si es una imagen o escaneo, asegúrate de que sea nítido.")
-                else:
-                    with st.spinner("Analizando y ensamblando apartados oficiales de la EPP..."):
-                        res_ens = ensamblar_epp_completa_desde_documento(doc, texto_extraido, scan_file.name)
-
-                        # Actualizar session_state de las áreas abiertas
-                        for area_k in (*AREAS, 'Conclusión'):
-                            p_k = prefix + '_edit_' + doc['id'] + '_' + area_k
-                            if p_k + '_value' in st.session_state:
-                                st.session_state[p_k + '_value'] = deepcopy(doc['partes'][area_k]['contenido'])
-                                _save(p_k)
-
-                        # Guardar el documento completo
-                        if user_work_area:
-                            _save(edit_active_prefix)
-                        if can_edit_concl and 'Conclusión' in doc['partes']:
-                            _save(prefix + '_edit_' + doc['id'] + '_Conclusión')
-
-                        # Invalidar caché PDF para que refleje lo nuevo
-                        st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
-
-                        st.success(
-                            f"✅ **EPP ensamblada exitosamente a partir de {scan_file.name}:**\n\n"
-                            f"• **Áreas actualizadas:** {', '.join(res_ens['areas_ensambladas'])}\n"
-                            f"• **Campos modificados:** {res_ens['campos_modificados_totales']}\n"
-                            f"• **Instrumentos detectados:** {', '.join(res_ens['instrumentos_detectados']) or 'Evaluación diagnóstica'}\n"
-                            f"• **Propuesta de NEE:** {res_ens['total_nee']} necesidades formuladas bajo esquema SEGEY.\n\n"
-                            f"Los apartados están listos en el Formato Vivo para revisión del equipo."
-                        )
-                        st.rerun()
-            except Exception as exc:
-                st.error(f"Error al procesar el escaneo: {exc}")
-
-    st.write("")
-
-    # Determinar qué área edita este usuario
-    user_work_area = a['area'] if a['area'] in AREAS and not a['director'] else ('Aprendizaje' if a['director'] else None)
-    if is_coordinator and not user_work_area:
-        user_work_area = 'Aprendizaje'
-
+    # Un solo hub y una solicitud contextual compartidos con la vista papel.
+    user_work_area = a['area'] if a['area'] in AREAS and not a['director'] else None
     edit_active_prefix = prefix + '_edit_' + doc['id'] + '_' + (user_work_area or 'Aprendizaje')
-    if edit_active_prefix + '_doc' not in st.session_state and user_work_area:
-        _abrir(edit_active_prefix, doc, user_work_area)
-
-    # --- ⚡ CENTRO ÁGIL DE EVALUACIÓN Y PRUEBAS ---
-    if user_work_area and not a['director']:
-        with st.container():
-            st.markdown(
-                f"""
-                <div style='background: linear-gradient(135deg, #f0f7ff 0%, #e6f0fa 100%); border-left: 5px solid #2b6cb0; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;'>
-                    <h4 style='margin:0; color:#1a365d;'>⚡ Centro Ágil de Evaluación · {user_work_area}</h4>
-                    <span style='font-size:0.85rem; color:#4a5568;'>Aplica formatos con reglas verificadas o revisa una evaluación externa. Los resultados se integran a tu área; la conclusión y NEE requieren revisión del equipo.</span>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-            tab_scan, tab_direct = st.tabs(['📷 Subir escaneo o prueba (PDF / Foto)', '✍️ Aplicar / Registrar prueba directamente'])
-
-            with tab_scan:
-                from ui.epp_instrumentos import externo
-                externo(doc,user_work_area,edit_active_prefix+'_scan',
-                    lambda:st.session_state[edit_active_prefix+'_value'],
-                    lambda value,manual:_guardar_aplicacion(edit_active_prefix,value,manual))
-
-            with tab_direct:
-                cat_area = CATALOGO_INSTRUMENTOS_SEGEY.get(user_work_area, [])
-                col_d1, col_d2 = st.columns([0.65, 0.35])
-                with col_d1:
-                    inst_sel = st.selectbox('Instrumento del catálogo normativo SEGEY (Tabla 14)', ['(Personalizado / Otro instrumento)'] + cat_area, key=edit_active_prefix + '_sel_cat')
-                    if inst_sel.startswith('(Personalizado'):
-                        nombre_inst_directo = st.text_input('Nombre de la prueba aplicada', placeholder='Ej. Batería psicopedagógica informal...', key=edit_active_prefix + '_inst_custom')
-                    else:
-                        nombre_inst_directo = inst_sel
-                with col_d2:
-                    fecha_dir = st.date_input('Fecha de aplicación', value=None,format='DD/MM/YYYY',key=edit_active_prefix + '_fecha_dir')
-
-                from ui.epp_instrumentos import digital
-                digital(doc,user_work_area,edit_active_prefix+'_aplicar',
-                    lambda:st.session_state[edit_active_prefix+'_value'],
-                    lambda value,manual:_guardar_aplicacion(edit_active_prefix,value,manual),
-                    nombre=nombre_inst_directo or None)
-                st.caption('O registra a continuación resultados previamente obtenidos por el profesional; no se simula la corrección de una prueba externa.')
-
-                obs_directas = st.text_area(
-                    'Resultados, observaciones y puntuaciones obtenidas',
-                    placeholder='Escribe o pega aquí los hallazgos documentados de la prueba...',
-                    height=120,
-                    key=edit_active_prefix + '_obs_directas'
-                )
-
-                if st.button('⚡ Incorporar hallazgos al Formato Vivo', disabled=not obs_directas.strip() or not fecha_dir, key=edit_active_prefix + '_btn_direct_fill'):
-                    try:
-                        res_inc = incorporar_prueba_a_epp(
-                            doc,
-                            user_work_area,
-                            obs_directas,
-                            nombre_instrumento=nombre_inst_directo,
-                            fecha_aplicacion=fecha_dir.isoformat(),
-                            auto_actualizar_conclusion=can_edit_concl
-                        )
-                        st.session_state[edit_active_prefix + '_value'] = deepcopy(doc['partes'][user_work_area]['contenido'])
-                        _save(edit_active_prefix)
-
-                        if can_edit_concl and 'Conclusión' in doc['partes']:
-                            prefix_concl = prefix + '_edit_' + doc['id'] + '_Conclusión'
-                            if prefix_concl + '_doc' in st.session_state:
-                                st.session_state[prefix_concl + '_value'] = deepcopy(doc['partes']['Conclusión']['contenido'])
-                                _save(prefix_concl)
-
-                        st.success(f"✨ Se incorporó: **{res_inc['instrumento']}**. Los campos correspondientes se actualizaron en el Formato Vivo.")
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"Error al incorporar la prueba: {exc}")
-
-    st.write("")
-    st.markdown("---")
-
-    # Barra superior de guardado rápido y estado
+    if user_work_area and edit_active_prefix+'_doc' not in st.session_state:
+        _abrir(edit_active_prefix,doc,user_work_area)
+    from ui import epp_contextual as contextual
+    ia_key=prefix+'_contextual_'+doc['id']
+    get_doc=lambda:contextual.actual(prefix,doc)
     if user_work_area:
-        is_val = st.session_state[edit_active_prefix + '_value'].get('validada', False)
-        c_status, c_save_top, c_redact = st.columns([0.48, 0.26, 0.26])
-        with c_status:
-            if is_val:
-                st.markdown(f"<div style='padding:6px 0;'><span style='color:#2e7d32; font-weight:600;'>✅ Tu área ({user_work_area}) está validada</span></div>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"<div style='padding:6px 0;'><span style='color:#1565c0; font-weight:500;'>✏️ Editando: <strong>{user_work_area}</strong> (borrador activo)</span></div>", unsafe_allow_html=True)
-        with c_save_top:
-            st.caption('Autoguardado activo. Confirma al terminar.')
-        with c_redact:
-            if st.button('Proponer redacción', key=edit_active_prefix+'_btn_redactar_maestro', use_container_width=True, help='Asistente maestro de redacción para los apartados de tu área') or st.session_state.get(edit_active_prefix+'_redactor_maestro_abierto'):
-                from ui.epp_redaccion import mostrar_maestro
-                def aplicar_maestro(campo_elegido, texto, base):
-                    actual = st.session_state[edit_active_prefix + '_value']
-                    if actual['campos'].get(campo_elegido, '') != base:
-                        raise RuntimeError('El apartado cambió. Conserva la propuesta y revisa la edición actual.')
-                    actual['campos'][campo_elegido] = texto
-                    actual['validada'] = False
-                    key_campo = edit_active_prefix + '_field_campos' + campo_elegido
-                    st.session_state[key_campo] = texto
-                    _save(edit_active_prefix)
-                mostrar_maestro(edit_active_prefix, doc, user_work_area, aplicar_maestro)
+        contextual.instrumentos(doc,user_work_area,ia_key,
+            lambda:st.session_state[edit_active_prefix+'_value'],
+            lambda value,manual:_guardar_aplicacion(edit_active_prefix,value,manual))
+        contextual.barra(ia_key,get_doc,lambda nuevo,areas:contextual.incorporar(prefix,nuevo,areas))
+        contextual.guardados(prefix,doc['id'])
+    doc=get_doc()
 
     # =========================================================================
     # EL FORMATO VIVO: ANEXOS XVII Y XVIII DEL MANUAL USAER
@@ -660,7 +506,7 @@ def epp_page():
     vista_activa = st.segmented_control(
         "Modo de trabajo:",
         vistas,
-        default=vistas[0],
+        default=vistas[-1],
         key=prefix + '_vista_modo',
         help="Elige si deseas enfocarte únicamente en los apartados de tu función o revisar todo el informe."
     ) or vistas[0]
@@ -848,31 +694,7 @@ def epp_page():
             if can_edit_concl and edit_concl + '_doc' not in st.session_state:
                 _abrir(edit_concl, doc, 'Conclusión')
 
-            if can_edit_concl:
-                col_b1, col_b2 = st.columns([0.7, 0.3])
-                with col_b1:
-                    if st.button("🎯 Generar propuesta de NEE oficial SEGEY y Acuerdos Interdisciplinarios", key=prefix + '_btn_gen_nee_vivo'):
-                        prop = proponer_nee_segey(doc)
-                        val_c = st.session_state[edit_concl + '_value']
-                        for k, v in prop['campos'].items():
-                            if not str(val_c.get('campos', {}).get(k, '')).strip():
-                                val_c.setdefault('campos', {})[k] = v
-                        val_c['nee'] = prop['nee']
-                        val_c['bap'] = prop['bap']
-                        val_c['validada'] = False
-                        _save(edit_concl)
-                        # Los widgets y las tablas guardan su propia base: renovarla
-                        # tras el ensamblaje para que muestren el contenido canónico.
-                        for k in list(st.session_state):
-                            if k.startswith(edit_concl+'_field_') or k.startswith(edit_concl+'_table_'):
-                                del st.session_state[k]
-                        if st.session_state.get(edit_concl+'_pending'):
-                            st.warning('Propuesta incorporada al formato; falta confirmar el guardado central. Tu texto se conserva.')
-                        else:
-                            st.success('Propuesta incorporada al formato y guardada para revisión del equipo.')
-                        st.rerun()
-                with col_b2:
-                    st.caption("Sincroniza y redacta automáticamente según los hallazgos del equipo.")
+            st.caption('La redacción global integra conclusión, NEE y BAP con los hallazgos del equipo. Revisa los acuerdos antes de validarlos.')
 
             # Campos de conclusión
             _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', '7.1. Conclusión', height=100, prefix=prefix)
@@ -1016,11 +838,15 @@ def epp_page():
 
     with act_col1:
         if user_work_area and st.button("💾 Guardar borrador", key=prefix + '_main_save', use_container_width=True):
-            _save(edit_active_prefix, manual=True)
-            if can_edit_concl and 'Conclusión' in doc['partes']:
-                _save(prefix + '_edit_' + doc['id'] + '_Conclusión', manual=True)
-            st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
-            st.success("Borrador guardado exitosamente.")
+            targets={user_work_area}|set(st.session_state.get(prefix+'_ia_areas_pendientes_'+doc['id'],[]))
+            if can_edit_concl:targets.add('Conclusión')
+            for area in targets:
+                edit=prefix+'_edit_'+doc['id']+'_'+area
+                if edit+'_doc' in st.session_state:_save(edit,manual=True)
+            st.session_state.pop(prefix+'_pdf_bytes_'+doc['id'],None)
+            if any(st.session_state.get(prefix+'_edit_'+doc['id']+'_'+area+'_pending') for area in targets):
+                st.warning('Tu borrador se conserva; hay cambios pendientes de confirmación.')
+            else:st.success('Borrador guardado.')
 
     with act_col2:
         if user_work_area:

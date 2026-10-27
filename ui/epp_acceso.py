@@ -6,7 +6,7 @@ su marcador. No vacía cachés ni session_state; en un arranque normal no recarg
 import importlib
 import threading
 
-VERSION='2026-10-26-colaborativa-v1'
+VERSION='2026-10-27-contextual-v1'
 _lock=threading.RLock()
 _MODULOS=('services.epp_modelo','services.epp_entrada','services.epp_conclusion',
           'services.epp','services.epp_papel','documents.epp','ui.epp_viva','ui.epp')

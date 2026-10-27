@@ -27,12 +27,10 @@ class VistaGuiadaTests(TestCase):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_file(str(Path(__file__).parent/'fixtures/epp_viva_app.py'),default_timeout=30)
         app.query_params['principal']='1';app.run();self.assertFalse(app.exception)
-        next(b for b in app.button if b.label=='Proponer redacción').click().run();self.assertFalse(app.exception)
-        next(t for t in app.text_area if t.label.startswith('Tus ideas')).set_value('Necesita apoyos visuales durante la tarea.').run()
-        next(b for b in app.button if b.label=='Preparar texto para revisión').click().run()
-        self.assertFalse(app.exception)
-        self.assertTrue(any('apoyos visuales' in t.value for t in app.text_area if t.label.startswith('Resumen que se enviará')))
-        self.assertFalse(any(c.value for c in app.checkbox if c.label=='Revisé el resumen y autorizo enviarlo a IA'))
+        self.assertTrue(next(b for b in app.button if b.label=='✨ Redactar EPP Automáticamente').disabled)
+        self.assertTrue(any(b.label=='✨ Autocompletar' for b in app.button))
+        self.assertFalse(app.get('dialog'))
+        self.assertFalse(next(c for c in app.checkbox if c.label.startswith('Autorizo usar los hallazgos')).value)
 
     def test_no_requiere_conserva_texto_y_permanece_reversible(self):
         from streamlit.testing.v1 import AppTest
@@ -57,17 +55,23 @@ class VistaGuiadaTests(TestCase):
         from services.epp_modelo import campos
         self.assertTrue(next(t for t in app.text_area if t.label==campos('Aprendizaje')[0]).value)
         self.assertFalse(any(b.label=='🗑️ Vaciar' for b in app.button))
-        next(w for w in app.button_group if w.label=='Modo de trabajo:').set_value('⚖️ Conclusión y NEE').run()
-        next(b for b in app.button if 'Generar propuesta de NEE oficial SEGEY' in b.label).click().run()
+        from concurrent.futures import Future
+        from unittest.mock import patch
+        from tests.test_epp_contextual import respuesta
+        from services.epp_modelo import NEE
+        def enqueue(p,config):
+            r=respuesta(p);row=dict.fromkeys(NEE,'');row['NEE']='Necesita utilizar apoyos visuales';row['fuentes']=[p['datos']['fuentes'][0]['id']]
+            r['nee']=[row];future=Future();future.set_result(r);return future
+        with patch('ai.epp_contextual.enviar',side_effect=enqueue),patch('ai.epp_contextual.configuracion',return_value={}),patch('ui.epp_contextual.guardados'):
+            next(c for c in app.checkbox if c.label.startswith('Autorizo usar los hallazgos')).check().run()
+            next(b for b in app.button if b.label=='✨ Redactar EPP Automáticamente').click().run()
         self.assertFalse(app.exception)
         conclusion=next(t for t in app.text_area if t.label=='7.1. Conclusión')
         self.assertTrue(conclusion.value)
         import hashlib
-        from tests.test_epp import ACTOR, ALUMNO
+        from tests.test_epp import ACTOR,ALUMNO
         from services.epp_modelo import clave
         prefix='epp_'+hashlib.sha256(ACTOR['cuenta'].encode()).hexdigest()[:12]+'_edit_'+clave(ALUMNO['ID_Alumno'],'2026-2027')+'_Conclusión'
-        self.assertTrue(any(r.get('NEE','').startswith('Necesita') for r in app.session_state[prefix+'_table_nee_base']))
+        self.assertTrue(any(r.get('NEE','').startswith('Necesita') for r in app.session_state[prefix+'_value']['nee']))
         conclusion.set_value('CONCLUSION-EDITADA-QA').run();self.assertFalse(app.exception)
-        import json
-        ultimo=[json.loads(r[-1]) for r in app.session_state['qa_rows'] if r[2]=='Conclusión'][-1]
-        self.assertEqual(ultimo['campos']['7.1. Conclusión'],'CONCLUSION-EDITADA-QA')
+        self.assertEqual(app.session_state[prefix+'_value']['campos']['7.1. Conclusión'],'CONCLUSION-EDITADA-QA')
