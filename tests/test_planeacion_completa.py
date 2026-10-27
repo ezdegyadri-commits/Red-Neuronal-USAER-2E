@@ -65,7 +65,12 @@ class GeneracionCompletaTests(unittest.TestCase):
     def setUp(self):
         self.a=patch.object(s,'autorizar',return_value={'cuenta':'cuenta-ficticia','director':False});self.a.start();self.addCleanup(self.a.stop)
     def preparar(self,area='Aprendizaje',dos=False):
-        d=g.prellenar(documento(area,dos));ajustes={**g.configuracion(d),'inicio':'2026-10-07','grado_referencia':3}
+        d=g.prellenar(documento(area,dos))
+        if area == 'Trabajo Social':
+            d['tablas']['barreras'] = [{'Barreras para el Aprendizaje y la Participación': 'BAP Inicial', 'Apoyos y/o ajustes razonables': 'Ajuste inicial'}]
+        elif 'aprendizajes' in d['tablas']:
+            d['tablas']['aprendizajes'] = [{'Alumnos': 'Alumno 1', 'Necesidades educativas específicas': 'Lectoescritura', 'Aprendizaje y/u objetivo': 'PDA Inicial', 'Descriptor de logro': 'Descriptor inicial'}]
+        ajustes={**g.configuracion(d),'inicio':'2026-10-07','grado_referencia':3}
         return d,g.preparar_solicitud(d,ajustes)
     def test_prellenado_no_inventa_y_no_pisa_redaccion(self):
         d=documento();nuevo=g.prellenar(d)

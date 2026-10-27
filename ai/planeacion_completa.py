@@ -34,7 +34,7 @@ def solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
        'actividades_previas_para_no_repetir':contexto.get('actividades_previas',[]),
        'configuracion':{k:ajustes[k] for k in ('duracion','sesiones','dias','enfoque','apoyos') if k in ajustes},
        'contextos_admitidos':contexto.get('contextos_solicitados',FORMATOS[formato]['contextos'])}
-    reglas='''Prepara el borrador completo de planeación trimestral, no solo ideas sueltas.
+    reglas='''Prepara el borrador completo de planeación trimestral basándote ESTRICTAMENTE en los antecedentes clínicos y pedagógicos del alumno.
 Devuelve las unidades o secuencias solicitadas (hasta 20 actividades progresivas), para dosificar localmente en las
 sesiones configuradas del trimestre. Identifica destinatarios solo con los alias.
 Cita al menos una evidencia educativa y una fuente normativa incluidas por unidad.
@@ -43,33 +43,32 @@ solo alias, dirige esa actividad únicamente a ese alias. Una actividad para var
 alumnos requiere evidencia proporcionada para cada uno. No extrapoles ni atribuyas
 a otro alumno la evidencia individual de alguien más.
 
-CRITERIOS PEDAGÓGICOS FUNDAMENTALES (ZONA DE DESARROLLO PRÓXIMO):
-1. NUNCA equipares diagnóstico clínico, condición o grado administrativo con nivel de desempeño.
-   Si el alumno está en 4°, 5° o 6° pero presenta habilidades iniciales de lectoescritura
-   (presilábico, silábico) o cálculo (conteo 1 a 10), calibra la actividad a su nivel real
-   de ejecución con mediación concreta, adaptando la temática a su edad cronológica (temas dignos
-   y de su interés; NO infantilices).
-2. ESTRUCTURA CONCRETA DE CADA ACTIVIDAD ('actividad'):
-   - Inicio (5-10 min): activación visual, modelado o anticipación de la tarea.
-   - Desarrollo (20-25 min): mediación docente paso a paso con andamiaje (material manipulable,
-     apoyos gráficos, preguntas guía o instrucciones segmentadas).
-   - Cierre (10 min): demostración práctica y observable del avance.
-   - Variante multinivel: indica brevemente una opción de apoyo (si hay dificultad) y una de reto (si consolida rápido).
-3. RECURSOS ACCESIBLES ('recursos'):
-   Utiliza exclusivamente materiales cotidianos del aula y de la escuela (tarjetas, pizarrón, cuadernos,
-   fichas de conteo, imágenes). Evita recursos costosos, tecnológicos o inaccesibles.
-4. DESCRIPTOR DE LOGRO ('descriptor'):
-   Redacta con verbos observables en presente (señala, clasifica, asocia, comunica, resuelve con apoyo).
-   Evita verbos teóricos o abstractos como 'comprenderá' o 'conocerá'.
-5. CONTINUIDAD PEDAGÓGICA Y VARIEDAD:
-   No copies ni reformules superficialmente las actividades previas suministradas.
-   Cada unidad nueva debe cambiar la tarea observable, la dinámica o el producto,
-   manteniendo los apoyos y objetivos que requieran continuidad según la evidencia.
-   No basta cambiar nombres, materiales o verbos. No repitas unidades dentro de la respuesta.
-   Si no hay datos para justificar una progresión, propón una exploración diferente,
-   declárala propuesta y solicita confirmación; nunca inventes logros ni intereses.
-   Aprovecha los antecedentes y actividades previas registradas para dar seguimiento a los objetivos
-   iniciados; no repitas mecánicamente lo ya superado ni des saltos curriculares descontextualizados.
+REGLAS DE ORO Y BLINDAJE PEDAGÓGICO:
+1. ANCLAJE OBLIGATORIO A LOS ANTECEDENTES Y DIAGNÓSTICO:
+   - Analiza el diagnóstico (ej. TEA, TDAH, Dificultades Severas de Aprendizaje) y la fase/grado del alumno.
+   - Si el alumno está en una etapa inicial (ej. presilábico o conteo básico hasta 50), las NEE y actividades deben enfocarse en adquirir lectura/escritura y concepto de número.
+   - Si está en un nivel intermedio, enfocar en sílabas inversas/complejas o valor posicional hasta unidades de millar.
+   - Si está avanzado, enfocar en fluidez, comprensión y resolución de problemas de suma/resta.
+
+2. PROHIBICIÓN ESTRICTA DE TEXTOS GENÉRICOS (ANTI-PLANTILLAS):
+   - Queda ESTRICTAMENTE PROHIBIDO usar frases de relleno como "participa en una actividad vinculada al antecedente" o "el alumno realiza la acción propuesta por un medio accesible".
+   - Cada PDA ('objetivo') debe corresponder al programa sintético de la NEM alineado a la Fase real del alumno (Fase 3, 4 o 5).
+   - Los Descriptores de Logro ('descriptor') deben ser acciones observables y medibles, estructuradas como rúbricas (ej. "Lee y escribe su nombre con apoyo de sílabas móviles", "Resuelve situaciones problemáticas utilizando conteo con fichas").
+
+3. ESTRUCTURACIÓN DE ACTIVIDADES TANGIBLES Y MATERIAL CONCRETO:
+   - Las actividades deben dividirse claramente por contexto (Aula regular, Aula de apoyo).
+   - Deben incluir el uso explícito de recursos didácticos físicos adaptados a la NEE (ej. sílabas móviles, bloques base diez, fichas de conteo, tarjetas de imágenes, tableros ARASAAC).
+   - La redacción de la actividad debe mostrar el andamiaje del docente (ej. "El docente modela el procedimiento...", "El alumno manipula el material...", "El alumno explica oralmente o muestra su resolución..."):
+     • Inicio (5-10 min): activación visual, modelado o anticipación con material concreto.
+     • Desarrollo (20-25 min): andamiaje docente escalonado paso a paso con ajuste razonable.
+     • Cierre (10 min): demostración práctica y observable del avance formativo.
+     • Variante multinivel: apoyo ante dificultad y reto si consolida rápido.
+
+4. CONTINUIDAD PEDAGÓGICA Y VARIEDAD:
+   - No copies ni reformules superficialmente las actividades previas suministradas.
+   - Cada unidad nueva debe cambiar la tarea observable, la dinámica o el producto,
+     manteniendo los apoyos y objetivos que requieran continuidad según la evidencia.
+   - No repitas mecánicamente lo ya superado ni des saltos curriculares descontextualizados.
 
 Si hay PDA elegidos, vincula identificadores suministrados; no inventes otros.
 Las evidencias indican qué se registró, no que el alumno logró un objetivo futuro.

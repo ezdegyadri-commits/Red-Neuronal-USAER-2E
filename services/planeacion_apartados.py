@@ -49,21 +49,33 @@ def proponer(doc):
             objetivo='Expresar una elección, una necesidad o una idea en un intercambio funcional mediante el canal de comunicación pertinente.'
             descriptor='El alumno comunica una elección, petición o idea mediante un canal accesible.'
         elif any(t in texto for t in ('LECTURA','LECTO','LEER')):
-            objetivo='Comprender información de un texto pertinente y comunicar una idea mediante una respuesta accesible.'
-            descriptor='El alumno identifica información de un texto leído o escuchado y comunica una idea por un medio accesible.'
+            if any(t in texto for t in ('PRESILAB','SILAB','INICIAL','FONOL')):
+                objetivo='Desarrollar conciencia fonológica y correspondencia grafofonética mediante tarjetas con imágenes y modelado docente.'
+                descriptor='El alumno identifica el sonido inicial y asocia la grafía correspondiente utilizando tarjetas con imágenes.'
+            else:
+                objetivo='Localizar información explícita en textos breves y expresar oralmente o con apoyo visual la idea principal.'
+                descriptor='El alumno lee frases cortas o escucha la lectura mediada y señala los elementos clave del texto.'
         elif 'ESCRIT' in texto:
-            objetivo='Construir y compartir un mensaje significativo mediante escritura o una forma de expresión accesible.'
-            descriptor='El alumno produce y comparte un mensaje relacionado con la actividad.'
+            if any(t in texto for t in ('PRESILAB','SILAB','INICIAL','NOMBRE')):
+                objetivo='Escribir su nombre y palabras significativas de su entorno apoyándose en sílabas móviles y modelado.'
+                descriptor='El alumno forma y escribe palabras cortas de su entorno utilizando sílabas móviles.'
+            else:
+                objetivo='Producir enunciados significativos apoyándose en bancos de palabras y referentes gráficos.'
+                descriptor='El alumno redacta oraciones sencillas con propósito comunicativo empleando apoyos visuales.'
         elif any(t in texto for t in ('NUMER','CONTEO','CANTIDAD','MATEMAT')):
-            objetivo='Representar y resolver una situación de cantidad vinculada al contenido pertinente con recursos accesibles.'
-            descriptor='El alumno representa una cantidad y explica su solución con los apoyos previstos.'
+            if any(t in texto for t in ('BASICO','INICIAL','1 A 10','1 A 20','1 A 50','CONTEO')):
+                objetivo='Consolidar el conteo con correspondencia uno a uno y la asociación cantidad-numeral con material concreto.'
+                descriptor='El alumno cuenta colecciones de objetos hasta 50 y asocia la cantidad con el numeral mediante fichas de conteo.'
+            else:
+                objetivo='Resolver situaciones problemáticas de suma y resta contextualizadas utilizando material manipulativo y esquemas.'
+                descriptor='El alumno resuelve situaciones problemáticas cotidianas empleando bloques base diez o fichas y explica su resultado.'
         else:
-            objetivo='Participar en una actividad vinculada al antecedente documentado o al contenido seleccionado, mediante apoyos pertinentes.'
-            descriptor='El alumno realiza la acción propuesta y comunica su respuesta por un medio accesible.'
+            objetivo='Desarrollar habilidades de seguimiento de instrucciones y resolución de tareas paso a paso mediante modelado y material manipulativo.'
+            descriptor='El alumno sigue la secuencia guiada por el docente manipulando el material concreto adaptado y comunica su respuesta.'
         nombre=a['Nombre del alumno']
         antecedente='\n\n'.join('['+str(f.get('referencia',''))+'] '+str(f['texto'])[:900] for f in propias[:3])
         necesidad_texto=nee
-        verbos={'Reconocer':'reconoce','Expresar':'expresa','Comprender':'comprende','Construir':'construye','Representar':'representa','Participar':'participa'}
+        verbos={'Reconocer':'reconoce','Expresar':'expresa','Comprender':'comprende','Construir':'construye','Representar':'representa','Participar':'participa','Desarrollar':'desarrolla','Localizar':'localiza','Escribir':'escribe','Producir':'produce','Consolidar':'consolida','Resolver':'resuelve'}
         verbo=objetivo.split(' ',1)[0]
         objetivo_adaptado=verbos.get(verbo,verbo.lower())+' '+objetivo.split(' ',1)[1]
         if relevantes:
