@@ -409,6 +409,8 @@ def guardar(doc, estado='BORRADOR', observaciones=None):
     from services.planeacion_grupo_unico import clave
     grupo=clave(doc)
     if grupo:
+        from services.planeacion_alumnos import validar_incorporaciones
+        validar_incorporaciones(doc,padron_autorizado())
         if actor['area']!='Aprendizaje' and not actor['director']:raise PermissionError('Solo apoyo inicia el Anexo XIX; los especialistas aportan a su columna.')
         # Incluye borradores antiguos que todavía traen UUID aleatorio.
         with candado('grupo:'+json.dumps(grupo)):
@@ -451,7 +453,15 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
                 requiere_conciliacion=latest is not None and _firma_guardado(latest,latest['estado'],None)!=_firma_guardado(unico,unico['estado'],None)
                 latest=unico
                 if doc['metadatos'].get('unificacion_grupal')!=latest['metadatos'].get('unificacion_grupal'):
-                    raise RuntimeError('Se recuperaron aportes de otro documento del grupo. Conserva tu texto y abre la hoja unificada antes de guardar.')
+                    from services.planeacion_grupo_unico import conciliar,reintegrar_copias
+                    fuentes=latest['metadatos'].get('unificacion_grupal',{}).get('fuentes',{})
+                    originales=reintegrar_copias({v['id']:v for v in instantanea})
+                    doc=conciliar(doc,[v for sid,v in originales.items() if fuentes.get(sid)==v['revision']])
+                    autorizar(doc,True,frame=padron_autorizado())
+                    from services.planeacion_alumnos import validar_incorporaciones
+                    validar_incorporaciones(doc,padron_autorizado())
+                    if doc['metadatos'].get('unificacion_grupal')!=latest['metadatos'].get('unificacion_grupal'):
+                        raise RuntimeError('Los aportes cambiaron durante la conciliación. Tu texto se conserva; actualiza la hoja del equipo.')
         if latest and doc['metadatos'].get('borrador_eliminado') and latest['estado']!='BORRADOR':
             raise PermissionError('El documento ya fue enviado o revisado; no se puede eliminar como borrador.')
         if restauracion and (not latest or not latest['metadatos'].get('borrador_eliminado')):
@@ -483,6 +493,11 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
                 from services.planeacion_compartida import ampliar_matricula
                 base_matricula=deepcopy(latest)
                 base_matricula['metadatos']['individuales_en_sesion_grupal']=bool(doc['metadatos'].get('individuales_en_sesion_grupal'))
+                from services.planeacion_alumnos import validar_incorporaciones
+                validar_incorporaciones(doc,padron_autorizado())
+                base_matricula['metadatos']['alumnos_incluidos_grupal']=deepcopy(doc['metadatos'].get('alumnos_incluidos_grupal',[]))
+                base_matricula['metadatos']['excepciones_individuales_grupal']=deepcopy(doc['metadatos'].get('excepciones_individuales_grupal',{}))
+                if doc['metadatos'].get('alcance_grupal'):base_matricula['metadatos']['alcance_grupal']=deepcopy(doc['metadatos']['alcance_grupal'])
                 ampliada=ampliar_matricula(base_matricula,padron_autorizado())
                 if doc['datos']['Alumnos']!=ampliada['datos']['Alumnos']:identidad_cambia=True
             if latest['cuenta']!=doc['cuenta'] or latest['formato']!=doc['formato'] or identidad_cambia:

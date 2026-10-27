@@ -45,6 +45,8 @@ def _unir_filas(a,b):
 def conciliar(base,otros):
     from services.planeacion_modalidad import guia_grupal,GUIA_XIX
     result=deepcopy(base);meta=result['metadatos']
+    from services.planeacion_ambito import ambito
+    scope=ambito(base)
     registro=meta.setdefault('unificacion_grupal',{'fuentes':{},'conflictos_area':[]})
     pendientes=[d for d in otros if registro['fuentes'].get(d['id'])!=d['revision']]
     if not pendientes:return result
@@ -52,6 +54,7 @@ def conciliar(base,otros):
     alumnos={a['ID_Alumno']:a for a in result['datos']['Alumnos']}
     aportes=meta.setdefault('aportaciones_equipo',{})
     for d in pendientes:
+        meta['alumnos_incluidos_grupal']=list(dict.fromkeys([*meta.get('alumnos_incluidos_grupal',[]),*d['metadatos'].get('alumnos_incluidos_grupal',[])]))
         fuente=guia_grupal(d)
         for a in d['datos']['Alumnos']:alumnos.setdefault(a['ID_Alumno'],deepcopy(a))
         for r in fuente['filas']:
@@ -74,6 +77,7 @@ def conciliar(base,otros):
         for campo,valor in d.get('textos',{}).items():result['textos'][campo]=_texto(result['textos'].get(campo),valor)
         registro['fuentes'][d['id']]=d['revision']
     guia['filas']=list(filas.values());result['datos']['Alumnos']=list(alumnos.values())
+    if scope:meta['alcance_grupal']={'grado':scope[0],'grupo':scope[1]}
     # La columna visible y la aportación editable tienen exactamente el mismo
     # texto conciliado; ninguna revisión antigua vuelve a insertarse al borrar.
     for area,aporte in aportes.items():
@@ -86,12 +90,44 @@ def conciliar(base,otros):
     return result
 
 
+def reintegrar_copias(ultimas):
+    """Copias adaptadas del mismo grupo vuelven a su raíz, sin tocar originales.
+
+    Solo alcanza copias con origen comprobable; no convierte subgrupos
+    trimestrales independientes ni mezcla grados, letras, autores o periodos.
+    """
+    from utils.escolar import grado_canonico,grupo_canonico
+    from services.planeacion_modalidad import modalidad
+    result=dict(ultimas)
+    for did,doc in ultimas.items():
+        if doc['metadatos'].get('vista_formato')!='trimestral' or doc['metadatos'].get('borrador_eliminado'):continue
+        origen=doc;vistos={did}
+        while (sid:=origen['metadatos'].get('copia_de',{}).get('documento')) and sid in ultimas and sid not in vistos:
+            vistos.add(sid);origen=ultimas[sid]
+        k=clave(origen)
+        if not k or doc.get('cuenta')!=origen.get('cuenta') or doc.get('formato')!=origen.get('formato'):continue
+        if (doc['datos'].get('Función')!='Aprendizaje' or doc['metadatos'].get('modalidad_planeacion')!='grupal'
+            or clave_escuela(doc['datos']['ID_Escuela'])!=k[0]
+            or str(doc['datos']['Curso escolar']).replace('–','-')!=k[1]
+            or str(doc['datos']['Trimestre'])!=k[2]):continue
+        alumnos=doc['datos']['Alumnos']
+        if not alumnos or any(grado_canonico(a.get('Grado'))!=k[3] or modalidad(a)=='individual'
+            or k[4]!='*' and grupo_canonico(a.get('Grupo')) not in {k[4],''} for a in alumnos):continue
+        copia=deepcopy(doc);m=copia['metadatos']
+        m['vista_formato']='guia';m['alcance_grupal']={'grado':k[3],'grupo':k[4]}
+        m['reintegrada_grupal_en']=origen['id']
+        m['alumnos_incluidos_grupal']=list(dict.fromkeys([*m.get('alumnos_incluidos_grupal',[]),*[str(a['ID_Alumno']) for a in alumnos if not grupo_canonico(a.get('Grupo'))]]))
+        result[did]=copia
+    return result
+
+
 def documentos(versiones):
     """Conserva un ID estable, elegido por su primera versión (no último guardado)."""
     ultimas={};creados={}
     for d in versiones:
         ultimas[d['id']]=d
         creados[d['id']]=min(creados.get(d['id'],d.get('guardado_en','')),d.get('guardado_en',''))
+    ultimas=reintegrar_copias(ultimas)
     # Archivar la hoja unificada no debe revivir las copias que ya reunió.
     retirados={sid for d in ultimas.values() if d['metadatos'].get('borrador_eliminado')
         for sid in d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{})}
@@ -112,7 +148,7 @@ def documentos(versiones):
         # solamente las versiones más recientes (su fecha cambió al guardar).
         # No reactivar una copia antigua por tener una fecha de guardado anterior.
         ids={d['id'] for d in docs}
-        docs.sort(key=lambda d:(clave(d)[-1]!='*',-len(ids & set(d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{}))),creados[d['id']],d['id']))
+        docs.sort(key=lambda d:(clave(d)[-1]!='*',bool(d['metadatos'].get('reintegrada_grupal_en')),-len(ids & set(d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{}))),creados[d['id']],d['id']))
         salida.append(conciliar(docs[0],docs[1:]) if len(docs)>1 else deepcopy(docs[0]))
     return salida
 

@@ -269,3 +269,13 @@ console.log('Editor: escritura no bloqueante, sincronización por área, respald
   f.root.querySelectorAll('button').find(x=>x.textContent==='Insertar abajo').click();
   assert.equal(f.events().at(-1).accion,'agregar');assert.equal(f.events().at(-1).posicion,1);
 }
+
+// Incorporar alumnos usa la misma hoja y transmite primero la edición pendiente.
+{
+  const f=fixture(),h=hoja();h.grupal=true;h.colaborativa=false;f.render(h);
+  f.input('Aporte antes de incorporar al alumno');
+  f.tools.children.find(x=>x.textContent==='Añadir alumno').click();
+  const event=f.events().at(-1);
+  assert.equal(event.accion,'alumnos');
+  assert.equal(event.cambios.c0,'Aporte antes de incorporar al alumno');
+}

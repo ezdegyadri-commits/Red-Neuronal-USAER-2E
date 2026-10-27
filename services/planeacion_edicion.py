@@ -64,6 +64,12 @@ def copiar(doc,ids,ciclo,trimestre,grupal=False,incluir_individuales=False):
     if not ids or len(rows)!=len(ids):raise PermissionError('Selecciona alumnos de tu matrícula autorizada.')
     if {clave_escuela(v) for v in rows['ID_Escuela']}!={clave_escuela(doc['datos']['ID_Escuela'])}:
         raise PermissionError('La copia debe corresponder a la misma escuela.')
+    from services.planeacion_compartida import es_guia
+    if es_guia(doc) and grupal and str(doc['datos']['Curso escolar']).replace('–','-')==f'{int(ciclo)}-{int(ciclo)+1}' and str(doc['datos']['Trimestre'])==str(trimestre):
+        from services.planeacion_alumnos import elegibles
+        mismos=set(elegibles(doc,frame,True)['ID_Alumno'].astype(str))
+        if set(ids)<=mismos:
+            raise ValueError('Para añadir alumnos al mismo grupo y periodo usa «Añadir alumno a esta planeación». Se conserva la misma hoja; no se duplica el documento.')
     tipo='grupal' if grupal else 'individual'
     if doc['formato']=='XXI' and not grupal and len(ids)!=1:raise ValueError('El Plan de intervención anual conserva un solo alumno y su IEPP.')
     formato=('XXIII' if doc['formato']=='XXI' and grupal else doc['formato'])

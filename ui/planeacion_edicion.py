@@ -48,7 +48,13 @@ def panel(prefix):
     doc=st.session_state[prefix+'_doc']
     with st.expander('Editar planeación · opciones'):
         st.caption('Trabaja sobre el mismo formato. Al guardar modificaciones se crea una versión en borrador; el historial anterior se conserva.')
-        opcion=st.selectbox('¿Qué quieres modificar?',['Elige una opción','Actividades y orden','Alumnos o periodo · copia adaptada','Referentes oficiales','Reformular actividades con IA','Recuperar una versión anterior'],key=prefix+'_editar_opcion')
+        from services.planeacion_compartida import es_guia
+        opciones=['Elige una opción']+(['Añadir alumnos a esta planeación'] if es_guia(doc) else [])+['Actividades y orden','Alumnos o periodo · copia adaptada','Referentes oficiales','Reformular actividades con IA','Recuperar una versión anterior']
+        opcion=st.selectbox('¿Qué quieres modificar?',opciones,key=prefix+'_editar_opcion')
+        if opcion=='Añadir alumnos a esta planeación':
+            from ui.planeacion_alumnos import panel as alumnos
+            alumnos(prefix)
+            return
         if opcion=='Actividades y orden':
             st.info('Edita las celdas del formato que aparecen debajo. Puedes añadir o retirar filas con sus botones. Aquí puedes cambiar su orden.')
             tablas=list(FORMATOS[doc['formato']]['tablas'])

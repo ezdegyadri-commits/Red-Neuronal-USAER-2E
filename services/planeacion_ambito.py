@@ -9,14 +9,17 @@ def ambito(doc):
     grado=next(iter(grados))
     alcance=doc.get('metadatos',{}).get('alcance_grupal',{})
     if alcance:
-        if alcance!={'grado':grado,'grupo':'*'}:return None
-        return grado,'*'
+        if set(alcance)!={'grado','grupo'} or grado_canonico(alcance['grado'])!=grado:return None
+        grupo=grupo_canonico(alcance['grupo'])
+        grupos={grupo_canonico(a.get('Grupo')) for a in alumnos}
+        if grupo!='*' and not grupos<={grupo,''}:return None
+        return grado,grupo
     grupos={grupo_canonico(a.get('Grupo')) for a in alumnos}
     return (grado,next(iter(grupos))) if len(grupos)==1 else None
 
 
 def etiqueta(doc):
     scope=ambito(doc)
-    if scope and scope[1]=='*':return scope[0]+' · Todos los grupos'
+    if scope:return scope[0]+(' · Todos los grupos' if scope[1]=='*' else ' '+scope[1] if scope[1] else ' · Sin grupo registrado')
     return ', '.join(sorted({(grado_canonico(a.get('Grado'))+' '+grupo_canonico(a.get('Grupo'))).strip()
                             for a in doc['datos']['Alumnos']}))

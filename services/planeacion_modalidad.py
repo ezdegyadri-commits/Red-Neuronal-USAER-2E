@@ -42,9 +42,11 @@ def guia_grupal(doc):
     existentes={r['ID_Alumno']:r for r in prev.get('filas',[])}
     zona={r['ID_Alumno']:r for r in doc['metadatos'].get('grupal_zona',doc['metadatos'].get('equipo',{}).get('grupal',[]))}
     excluidos=set(map(str,doc.get('metadatos',{}).get('alumnos_excluidos_grupal',[])))
+    from services.planeacion_excepciones import autorizadas
+    excepciones=autorizadas(doc)
     filas=[]
     for a in doc['datos']['Alumnos']:
-        if modalidad(a)=='individual' or str(a['ID_Alumno']) in excluidos:continue
+        if (modalidad(a)=='individual' and str(a['ID_Alumno']) not in excepciones) or str(a['ID_Alumno']) in excluidos:continue
         row={'ID_Alumno':a['ID_Alumno'],**{h:'' for h in GUIA_XIX}}
         row.update(existentes.get(a['ID_Alumno'],{}))
         row['Nombre alumno']=a['Nombre del alumno'];row['Discapacidad o condición']=a['Condición']

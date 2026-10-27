@@ -255,9 +255,14 @@ def _contenido_conexiones(prefix):
                     from ui.planeacion_asistente import panel
                     panel(prefix)
             elif action=='alumnos':
-                from ui.planeacion_edicion import panel
-                st.caption('Añade o retira destinatarios mediante una copia adaptada. Se conserva el documento previo y no se elimina ningún registro del padrón.')
-                panel(prefix)
+                from services.planeacion_compartida import es_guia
+                if es_guia(current):
+                    from ui.planeacion_alumnos import panel
+                    panel(prefix)
+                else:
+                    from ui.planeacion_edicion import panel
+                    st.caption('Las copias para otro alumno o periodo conservan el documento previo y su historial.')
+                    panel(prefix)
             elif action=='materiales':
                 u._materiales(prefix,current)
             elif action=='detalle':
