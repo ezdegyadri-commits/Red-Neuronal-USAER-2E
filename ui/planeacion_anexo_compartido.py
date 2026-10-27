@@ -17,13 +17,15 @@ def _preview(base,actor):
 def recibir_edicion(base,event):
     """Valida y guarda el parche antes del único render del fragmento."""
     from ui.planeacion_colaboracion import _guardar
-    if event.get('nonce')==st.session_state.get(base+'_nonce'):return
+    if event.get('nonce')==st.session_state.get(base+'_nonce'):
+        if event.get('accion')=='guardar' and st.session_state.get(base+'_pending'):_guardar(base,background=True)
+        return
     try:
         filas,obs=papel.aplicar_aporte(_preview(base,s.identidad()),event,con_observaciones=True)
         st.session_state[base+'_nonce']=event['nonce']
         if filas!=st.session_state[base+'_filas'] or obs!=st.session_state[base+'_obs'] or event['accion']=='guardar':
             st.session_state[base+'_filas']=filas;st.session_state[base+'_obs']=obs
-            _guardar(base,automatic=event['accion']=='autoguardar')
+            _guardar(base,automatic=event['accion']=='autoguardar',background=True)
         if not st.session_state.get(base+'_pending'):st.session_state[base+'_ack']=event['nonce']
         st.session_state.pop(base+'_rechazado',None)
         st.session_state.pop(base+'_error_hoja',None)
@@ -46,7 +48,7 @@ def panel(prefix,doc):
     actual=st.session_state[base+'_doc']
     st.session_state[base+'_intervalo']=15
     try:
-        reciente=lectura_equipo(base,doc['id'])
+        reciente=lectura_equipo(base,doc['id'],background=True)
         if reciente:
             from services.planeacion_compartida import actualizar_lectura
             actual=actualizar_lectura(actual,reciente,actor['area'])
@@ -70,7 +72,7 @@ def panel(prefix,doc):
             if r not in respaldo:respaldo.append(deepcopy(r))
         st.session_state[base+'_filas']=[r for r in st.session_state[base+'_filas'] if str(r.get('ID_Alumno')) in activos]
         st.caption('Las aportaciones de alumnos con baja o traslado se conservan en el historial y en tu respaldo; ya no se editan en la matrícula activa.')
-    if st.session_state.get(base+'_pending'):_guardar(base,automatic=True)
+    if st.session_state.get(base+'_pending'):_guardar(base,automatic=True,background=True)
     actual=st.session_state[base+'_doc']
     preview=_preview(base,actor)
     st.caption('Escribe en '+actor['area']+'. Tu hoja permanece abierta mientras se guardan los cambios y se reciben los aportes del equipo. Usa «Guardar planeación» para confirmar ahora.')
@@ -80,6 +82,8 @@ def panel(prefix,doc):
         aceptado_nonce=st.session_state.get(base+'_ack',''),
         rechazado=st.session_state.get(base+'_rechazado',''),
         error=st.session_state.get(base+'_error_hoja',''),key=base+'_hoja',default=None,
+        error_guardado_nonce=st.session_state.get(base+'_io_error_nonce',''),
+        error_guardado=st.session_state.get(base+'_error',''),
         on_edicion=lambda event:recibir_edicion(base,event))
     if event and event.get('nonce')!=st.session_state.get(base+'_nonce'):
         try:
@@ -87,7 +91,7 @@ def panel(prefix,doc):
             st.session_state[base+'_nonce']=event['nonce']
             if filas!=st.session_state[base+'_filas'] or obs!=st.session_state[base+'_obs'] or event.get('accion')=='guardar' or event.get('accion')=='inicio' and st.session_state.get(base+'_pending'):
                 st.session_state[base+'_filas']=filas;st.session_state[base+'_obs']=obs;st.session_state[base+'_pending']=True
-                _guardar(base,automatic=event.get('accion')=='autoguardar')
+                _guardar(base,automatic=event.get('accion')=='autoguardar',background=True)
             # Recibir el evento no equivale a guardarlo: el cliente conserva
             # su respaldo mientras el guardado esté pendiente o en reintento.
             if not st.session_state.get(base+'_pending'):

@@ -2,6 +2,8 @@
 from pathlib import Path
 from weakref import WeakKeyDictionary
 import hashlib
+import json
+import time
 import streamlit as st
 import streamlit.components.v2 as components
 from streamlit.components.v2.get_bidi_component_manager import get_bidi_component_manager
@@ -26,9 +28,14 @@ def recuperar():
                 st.session_state['_sesion_token'] = s.emitir(cuenta)
                 st.session_state['_sesion_emitir'] = False
             borrador = {k: st.session_state[k] for k in CAMPOS if k in st.session_state}
+            firma=hashlib.sha256(json.dumps([cuenta,borrador],sort_keys=True,default=str,ensure_ascii=False).encode()).hexdigest()
+            cache=st.session_state.get('_sesion_borrador_cifrado',{})
+            if not st.session_state.get('_sesion_conservar_borrador') and (cache.get('firma')!=firma or time.monotonic()-cache.get('fecha',0)>1800):
+                cache={'firma':firma,'fecha':time.monotonic(),'cifrado':s.proteger_borrador(cuenta,borrador)}
+                st.session_state['_sesion_borrador_cifrado']=cache
             datos.update(token=st.session_state.get('_sesion_token', ''),
                 cuenta=hashlib.sha256(cuenta.encode()).hexdigest(),
-                borrador='' if st.session_state.get('_sesion_conservar_borrador') else s.proteger_borrador(cuenta, borrador),
+                borrador='' if st.session_state.get('_sesion_conservar_borrador') else cache['cifrado'],
                 tiene_borrador=bool(borrador.get('evento_descripcion')))
         except Exception:
             # La recuperación es opcional; un fallo no impide el acceso normal.

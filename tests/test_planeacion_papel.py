@@ -194,6 +194,9 @@ class PapelUITests(unittest.TestCase):
             states=app._tree.get_widget_states()
             states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':agregar}))
             app._run(states);self.assertFalse(app.exception)
+            for k,v in app.session_state.items():
+                if k.endswith('_trabajo_io'):v['future'].result(timeout=3)
+            app.run();self.assertFalse(app.exception)
             antes=len(app.session_state.versiones_ficticias)
             component=app.get('bidi_component')[0];spec=json.loads(component.proto.json)['hoja']
         celda=next(k for k,c in spec['cells'].items() if c['label']=='Actividades' and c['editable'])
@@ -202,6 +205,9 @@ class PapelUITests(unittest.TestCase):
         states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':event}))
         app._run(states)
         self.assertFalse(app.exception)
+        for k,v in app.session_state.items():
+            if k.endswith('_trabajo_io'):v['future'].result(timeout=3)
+        app.run();self.assertFalse(app.exception)
         self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)
         self.assertTrue(any(r['Actividades']=='Cambio dentro del documento' for r in app.session_state.versiones_ficticias[-1]['tablas']['dosificacion']))
         app.run();self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)

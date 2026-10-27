@@ -19,6 +19,11 @@ def padron_ficticio():
 
 
 class RemigioTests(TestCase):
+    def setUp(self):
+        expedientes.repo.clear_alumnos_cache()
+
+    def tearDown(self):
+        expedientes.repo.clear_alumnos_cache()
     def test_estadistica_sexto_incluye_ambas_modalidades_sin_otra_responsable(self):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_file(str(Path(__file__).parent/'fixtures/estadistica_sexto_compartida_app.py'),default_timeout=30).run()

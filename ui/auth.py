@@ -120,6 +120,7 @@ def _cerrar():
     st.session_state.pop('_sesion_token', None)
     st.session_state.pop('_sesion_emitir', None)
     st.session_state.pop('_sesion_conservar_borrador', None)
+    st.session_state.pop('_sesion_borrador_cifrado', None)
     from services.sesiones_recuperables import CAMPOS
     for campo in CAMPOS:
         st.session_state.pop(campo, None)

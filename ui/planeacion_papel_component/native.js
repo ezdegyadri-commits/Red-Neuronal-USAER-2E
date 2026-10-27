@@ -12,7 +12,7 @@ export default function mount(component) {
     return () => { if (state.generation === generation) state.dispose(); };
   }
   const nativeWindow = globalThis.window, nativeDocument = globalThis.document;
-  const timeouts = new Set(), intervals = new Set(), observers = new Set(), listeners = [];
+  const timeouts = new Set(), intervals = new Set(), frames = new Set(), observers = new Set(), listeners = [];
   const state = { component, receive: null, disposed: false, generation: 1 };
   host.__usaerEditor = state;
   const document = new Proxy(nativeDocument, { get(target, key) {
@@ -39,6 +39,10 @@ export default function mount(component) {
     intervals.add(id); return id;
   };
   const clearInterval = id => { intervals.delete(id); globalThis.clearInterval(id); };
+  const requestAnimationFrame = callback => {
+    const id=globalThis.requestAnimationFrame(()=>{frames.delete(id);if(!state.disposed)callback();});
+    frames.add(id);return id;
+  };
   const ResizeObserver = class {
     constructor(callback) { this.observer = new globalThis.ResizeObserver(callback); observers.add(this.observer); }
     observe(element) { this.observer.observe(element); }
@@ -59,6 +63,7 @@ export default function mount(component) {
     state.disposed = true;
     for (const id of timeouts) globalThis.clearTimeout(id);
     for (const id of intervals) globalThis.clearInterval(id);
+    for (const id of frames) globalThis.cancelAnimationFrame(id);
     for (const observer of observers) observer.disconnect();
     for (const [type, callback, options] of listeners) nativeWindow.removeEventListener(type, callback, options);
     if (host.__usaerEditor === state) delete host.__usaerEditor;

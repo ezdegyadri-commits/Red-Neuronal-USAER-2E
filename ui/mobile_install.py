@@ -1,6 +1,7 @@
 """Same-origin installation metadata; no new accounts, cache or data storage."""
 from pathlib import Path
 import hashlib
+from functools import lru_cache
 
 PORTAL_URL = "https://red-neuronal-usaer-2e.streamlit.app/"
 APK_NAME = "USAER-02E-Android-1.0.0.apk"
@@ -9,6 +10,7 @@ APK_URL = "https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USA
 APK_PATH = Path(__file__).resolve().parents[1] / "static" / APK_NAME
 
 
+@lru_cache(maxsize=1)
 def android_apk():
     """Only serve the exact public, signed release; no accounts/data involved."""
     payload = APK_PATH.read_bytes()

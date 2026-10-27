@@ -49,6 +49,9 @@ def _vinculo_individual(r, alumno, padron):
 
 
 def identidad():
+    from services.trabajos_documento import contexto
+    trabajo=contexto()
+    if trabajo is not None:return deepcopy(trabajo['actor'])
     if not st.session_state.get('autenticado'):
         raise PermissionError('Inicia sesión.')
     cuenta = texto(st.session_state.get('usuario'))
@@ -63,6 +66,9 @@ def identidad():
 
 
 def padron_autorizado():
+    from services.trabajos_documento import contexto
+    trabajo=contexto()
+    if trabajo is not None:return _padron_actor(identidad(),trabajo['escuelas'])
     actor = identidad()
     # No reutilizar subconjuntos calculados por la antigua comparación por apellido.
     cache_key = f"_padron_autorizado_identidad_v3_{actor['cuenta']}_{st.session_state.get('escuelas_permitidas','')}"
@@ -72,9 +78,17 @@ def padron_autorizado():
     if cached is not None and (leido is None or ahora-leido<60):
         st.session_state[cache_key+'_leido_en']=leido if leido is not None else ahora
         return cached.copy()
+    frame=_padron_actor(actor,st.session_state.get('escuelas_permitidas',''))
+    if hasattr(st, 'session_state'):
+        st.session_state[cache_key] = frame
+        st.session_state[cache_key+'_leido_en']=ahora
+    return frame.copy()
+
+
+def _padron_actor(actor,escuelas):
     # Diego usa su identidad canónica aunque Usuarios haya abreviado la función.
     rol = 'TRABAJO SOCIAL' if actor['area']=='Trabajo Social' else actor['rol']
-    frame = preparar_matricula(alumnos_visibles(rol, st.session_state.get('escuelas_permitidas',''), actor['nombre']))
+    frame = preparar_matricula(alumnos_visibles(rol, escuelas, actor['nombre']))
     if 'Estatus' in frame:
         frame=frame.loc[~frame['Estatus'].fillna('').map(normalizar_texto).isin({'BAJA','INACTIVO','RETIRADO','ELIMINADO'})].copy()
     if actor['perfil'] and not actor['director'] and not frame.empty:
@@ -86,9 +100,6 @@ def padron_autorizado():
                 permitidas.add(c)
         escuelas_frame = frame['Nombre_Escuela'].fillna('').astype(str).str.strip().str.upper().map(normalizar_texto)
         frame = frame.loc[escuelas_frame.isin(permitidas) | frame['ID_Escuela'].map(clave_escuela).isin(permitidas)].copy()
-    if hasattr(st, 'session_state'):
-        st.session_state[cache_key] = frame
-        st.session_state[cache_key+'_leido_en']=ahora
     return frame.copy()
 
 

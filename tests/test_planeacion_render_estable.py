@@ -64,7 +64,11 @@ editor(key='editor_prueba',hoja={'documento':'ficticio'},on_edicion=recibir,
         from ui import planeacion_colaboracion as guardado
         with patch.object(s,'identidad',return_value=actor),patch.object(s,'autorizar',return_value=actor),patch.object(equipo.st,'session_state',state),patch.object(s,'guardar_aportacion',side_effect=RuntimeError('Sin red ficticia')),patch.object(equipo.st,'rerun') as rerun:
             event=self.evento(equipo._preview('p',actor),True)
-            equipo.recibir_edicion('p',event);equipo.recibir_edicion('p',event)
+            equipo.recibir_edicion('p',event);future=state['p_trabajo_io']['future']
+            equipo.recibir_edicion('p',event)
+            with self.assertRaises(RuntimeError):future.result(timeout=2)
+            from ui.guardado_asincrono import persistir
+            if 'p_trabajo_io' in state:persistir('p',aporte=True)
             rerun.assert_not_called()
         self.assertTrue(state['p_pending']);self.assertNotIn('p_ack',state)
         self.assertEqual(state['p_filas'][0]['Texto en formato'],'Actividad ficticia')
@@ -74,7 +78,11 @@ editor(key='editor_prueba',hoja={'documento':'ficticio'},on_edicion=recibir,
         doc=grupal();state={'p_doc':doc,'p_filas':[],'p_obs':''}
         with patch.object(s,'identidad',return_value=actor),patch.object(s,'autorizar',return_value=actor),patch.object(equipo.st,'session_state',state),patch.object(s,'guardar_aportacion',return_value=deepcopy(doc)) as write,patch.object(equipo.st,'rerun') as rerun:
             event=self.evento(equipo._preview('p',actor),True);event['accion']='guardar'
-            equipo.recibir_edicion('p',event);equipo.recibir_edicion('p',event)
+            equipo.recibir_edicion('p',event);future=state['p_trabajo_io']['future']
+            equipo.recibir_edicion('p',event)
+            future.result(timeout=2)
+            from ui.guardado_asincrono import persistir
+            if 'p_trabajo_io' in state:persistir('p',aporte=True)
             write.assert_called_once();rerun.assert_not_called()
         self.assertEqual(state['p_ack'],event['nonce']);self.assertFalse(state['p_pending'])
 
