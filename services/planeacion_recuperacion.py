@@ -33,7 +33,7 @@ def repositorios(docs):
 
 def titulo_tarjeta(doc):
     from services.planeacion_ambito import etiqueta as grupo
-    if doc.get('metadatos',{}).get('modalidad_planeacion')=='individual' or len(doc['datos']['Alumnos'])==1:
+    if doc.get('metadatos',{}).get('modalidad_planeacion')=='individual':
         return ' · '.join(a['Nombre del alumno'] for a in doc['datos']['Alumnos']) or 'Planeación individual'
     return grupo(doc) or 'Planeación guardada'
 

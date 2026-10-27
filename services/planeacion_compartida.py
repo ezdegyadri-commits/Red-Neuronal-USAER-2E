@@ -86,15 +86,18 @@ def ampliar_matricula(doc,frame):
     if not scope:return result
     grado,grupo=scope
     modalidades={'grupal'}
+    from services.planeacion_excepciones import autorizadas
+    excepciones=autorizadas(doc)
     presentes={a['ID_Alumno'] for a in result['datos']['Alumnos']}
     excluidos_manuales=set(map(str,doc.get('metadatos',{}).get('alumnos_excluidos_grupal',[])))
+    incluidos=set(map(str,doc.get('metadatos',{}).get('alumnos_incluidos_grupal',[])))
     contexto={}
     for r in frame.to_dict('records'):
-        if (str(r.get('ID_Alumno','')) in presentes or modalidad(r) not in modalidades
+        if (str(r.get('ID_Alumno','')) in presentes or modalidad(r) not in modalidades and str(r.get('ID_Alumno')) not in excepciones
             or str(r.get('ID_Alumno','')) in excluidos_manuales
             or clave_escuela(r.get('ID_Escuela'))!=clave_escuela(doc['datos']['ID_Escuela'])
             or grado_canonico(r.get('Grado'))!=grado
-            or (grupo!='*' and grupo_canonico(r.get('Grupo'))!=grupo)
+            or (grupo!='*' and grupo_canonico(r.get('Grupo'))!=grupo and not (str(r.get('ID_Alumno')) in incluidos and not grupo_canonico(r.get('Grupo'))))
             or normalizar_texto(r.get('Estatus','')) in {'BAJA','INACTIVO','RETIRADO','ELIMINADO'}):continue
         result['datos']['Alumnos'].append(alumno_padron(r));presentes.add(str(r['ID_Alumno']))
     for r in frame.to_dict('records'):
@@ -183,8 +186,10 @@ def proyectar_individuales(doc,frame):
     actuales={str(r['ID_Alumno']):r for r in frame.to_dict('records')
               if clave_escuela(r.get('ID_Escuela'))==clave_escuela(doc['datos']['ID_Escuela'])}
     excluidos_manuales=set(map(str,doc.get('metadatos',{}).get('alumnos_excluidos_grupal',[])))
+    from services.planeacion_excepciones import autorizadas
+    excepciones=autorizadas(doc)
     excluidos={str(a['ID_Alumno']) for a in doc['datos']['Alumnos']
-               if modalidad(actuales.get(str(a['ID_Alumno']),a))=='individual' or str(a['ID_Alumno']) in excluidos_manuales}
+               if (modalidad(actuales.get(str(a['ID_Alumno']),a))=='individual' and str(a['ID_Alumno']) not in excepciones) or str(a['ID_Alumno']) in excluidos_manuales}
     if not excluidos:return result
     meta=result['metadatos'];historia=meta.setdefault('alumnos_atencion_individual_archivados',{})
     filas={str(r['ID_Alumno']):r for r in meta.get('guia_grupal_manual',{}).get('filas',[])}
