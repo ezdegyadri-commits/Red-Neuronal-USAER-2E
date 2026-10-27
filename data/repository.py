@@ -67,6 +67,10 @@ def clear_alumnos_cache():
   _alumnos_operativos.clear()
  except Exception:
   pass
+ try:
+  _escuelas_cached.clear()
+ except Exception:
+  pass
 
 def alumnos():
  """Lee la base interna vigente con caché operativa en memoria."""
@@ -373,7 +377,11 @@ def eventos_alumno(
   ].copy()
  resultado.attrs["eventos_ambiguos"] = eventos_ambiguos
  return resultado
-def escuelas(): return read('Escuelas')
+@st.cache_data(ttl=300, show_spinner=False)
+def _escuelas_cached():
+ return read('Escuelas')
+
+def escuelas(): return _escuelas_cached().copy()
 def visitas(): return read('Registro_Visitas')
 def oficios_comision(): return read('Oficios_Comision')
 def configuracion_oficios():

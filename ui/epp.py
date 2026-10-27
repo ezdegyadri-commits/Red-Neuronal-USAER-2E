@@ -231,20 +231,11 @@ def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, fie
             placeholder=f"Observaciones y hallazgos documentados para {field_name}..."
         )
         if section=='campos':
-            with st.popover('Opciones · '+field_name):
-                def marcar():
-                    from services.epp_colaborativa import no_requiere
-                    v=no_requiere(st.session_state[edit_prefix+'_value'],field_name,st.session_state[key+'_no_req'])
-                    st.session_state[edit_prefix+'_value']=v;st.session_state[key]=v['campos'][field_name];_save(edit_prefix)
-                st.checkbox('No se requiere · omitir en PDF',value=omitido(value,field_name),key=key+'_no_req',on_change=marcar)
-                if st.button('Proponer redacción',key=key+'_redactar',disabled=omitido(value,field_name)) or st.session_state.get(edit_prefix+'_redactor_'+field_name+'_abierto'):
-                    from ui.epp_redaccion import mostrar
-                    def aplicar_propuesta(texto,base):
-                        actual=st.session_state[edit_prefix+'_value']
-                        if actual['campos'].get(field_name,'')!=base:raise RuntimeError('El apartado cambió. Conserva la propuesta y revisa la edición actual.')
-                        actual['campos'][field_name]=texto;actual['validada']=False
-                        st.session_state[key]=texto;_save(edit_prefix)
-                    mostrar(edit_prefix,doc,target_area,field_name,aplicar_propuesta)
+            def marcar():
+                from services.epp_colaborativa import no_requiere
+                v=no_requiere(st.session_state[edit_prefix+'_value'],field_name,st.session_state[key+'_no_req'])
+                st.session_state[edit_prefix+'_value']=v;st.session_state[key]=v['campos'][field_name];_save(edit_prefix)
+            st.checkbox('No se requiere · omitir en PDF',value=omitido(value,field_name),key=key+'_no_req',on_change=marcar)
     else:
         part = doc.get('partes', {}).get(target_area, {})
         cont = part.get('contenido', {})
@@ -539,14 +530,27 @@ def epp_page():
     # Barra superior de guardado rápido y estado
     if user_work_area:
         is_val = st.session_state[edit_active_prefix + '_value'].get('validada', False)
-        c_status, c_save_top = st.columns([0.72, 0.28])
+        c_status, c_save_top, c_redact = st.columns([0.48, 0.26, 0.26])
         with c_status:
             if is_val:
                 st.markdown(f"<div style='padding:6px 0;'><span style='color:#2e7d32; font-weight:600;'>✅ Tu área ({user_work_area}) está validada</span></div>", unsafe_allow_html=True)
             else:
                 st.markdown(f"<div style='padding:6px 0;'><span style='color:#1565c0; font-weight:500;'>✏️ Editando: <strong>{user_work_area}</strong> (borrador activo)</span></div>", unsafe_allow_html=True)
         with c_save_top:
-            st.caption('Al terminar, confirma la revisión de tu área al final del formato.')
+            st.caption('Autoguardado activo. Confirma al terminar.')
+        with c_redact:
+            if st.button('Proponer redacción', key=edit_active_prefix+'_btn_redactar_maestro', use_container_width=True, help='Asistente maestro de redacción para los apartados de tu área') or st.session_state.get(edit_active_prefix+'_redactor_maestro_abierto'):
+                from ui.epp_redaccion import mostrar_maestro
+                def aplicar_maestro(campo_elegido, texto, base):
+                    actual = st.session_state[edit_active_prefix + '_value']
+                    if actual['campos'].get(campo_elegido, '') != base:
+                        raise RuntimeError('El apartado cambió. Conserva la propuesta y revisa la edición actual.')
+                    actual['campos'][campo_elegido] = texto
+                    actual['validada'] = False
+                    key_campo = edit_active_prefix + '_field_campos' + campo_elegido
+                    st.session_state[key_campo] = texto
+                    _save(edit_active_prefix)
+                mostrar_maestro(edit_active_prefix, doc, user_work_area, aplicar_maestro)
 
     # =========================================================================
     # EL FORMATO VIVO: ANEXOS XVII Y XVIII DEL MANUAL USAER

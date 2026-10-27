@@ -5,6 +5,7 @@ import pandas as pd
 from services import epp as s
 from tests.test_epp import ACTOR,ALUMNO
 from ui import epp_viva as ui,planeacion_papel as editor
+import ai.epp
 st.set_page_config(layout='wide')
 area=st.session_state.get('qa_area',st.query_params.get('area','Aprendizaje'))
 who={**ACTOR,'area':area,'cuenta':'docente-ficticia' if area=='Aprendizaje' else 'ficticio-'+area,'rol':'MAESTRO DE APOYO' if area=='Aprendizaje' else area}
@@ -28,6 +29,8 @@ if st.session_state.get('qa_conclusion_test'):
     from services.epp_modelo import AREAS, campos, vacia
     from tests.test_epp_conclusion_visible import propuesta
     import ai.epp
+    if not hasattr(ai.epp, '_qa_orig_generar'):
+        ai.epp._qa_orig_generar = ai.epp.generar
     def generar_qa(*args):
         if st.session_state.get('qa_cambia_durante_ia'):
             actual=s.listar()[0];v=deepcopy(actual['partes']['Psicología']['contenido'])
@@ -47,6 +50,9 @@ if st.session_state.get('qa_conclusion_test'):
             s.guardar(d,a,v,'')
         st.session_state.qa_sembrada=True
     s.actor=lambda:who
+elif hasattr(ai.epp, '_qa_orig_generar'):
+    import ai.epp
+    ai.epp.generar = ai.epp._qa_orig_generar
 def fake_editor(**kw):
     st.session_state.qa_spec=kw['hoja']
     return st.session_state.get('qa_event')

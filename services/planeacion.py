@@ -71,7 +71,7 @@ def padron_autorizado():
     leido=st.session_state.get(cache_key+'_leido_en')
     if cached is not None and (leido is None or ahora-leido<60):
         st.session_state[cache_key+'_leido_en']=leido if leido is not None else ahora
-        return preparar_matricula(cached).copy()
+        return cached.copy()
     # Diego usa su identidad canónica aunque Usuarios haya abreviado la función.
     rol = 'TRABAJO SOCIAL' if actor['area']=='Trabajo Social' else actor['rol']
     frame = preparar_matricula(alumnos_visibles(rol, st.session_state.get('escuelas_permitidas',''), actor['nombre']))
