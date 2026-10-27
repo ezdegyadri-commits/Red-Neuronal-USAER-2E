@@ -25,20 +25,11 @@ def _entrada(base,actor):
     from ui import planeacion as u
     from ui.planeacion_simple import periodo_actual,crear_borrador
     from ui.planeacion_borradores import papelera
-    try:docs=[d for d in s.listar() if d['cuenta']==actor['cuenta']]
-    except Exception:
-        docs=[];st.warning('No se pudieron consultar tus documentos. No se eliminó ningún borrador.')
-
     tab_continuar,tab_nueva=st.tabs(['📂 Continuar planeación','➕ Nueva planeación'])
 
     with tab_continuar:
-        if st.button('Actualizar mis planeaciones guardadas',key=base+'_viva_actualizar_documentos'):
-            s.refrescar();st.rerun()
-        if docs:
-            from ui.planeacion_repositorio import panel as repositorio
-            repositorio(base,docs,_abrir)
-        else:
-            st.info('Aún no tienes planeaciones guardadas en tu cuenta. Usa la pestaña «➕ Nueva planeación» para comenzar una.')
+        from ui.planeacion_repositorio import listado
+        docs=listado(base,_abrir)
 
         with st.expander('👥 Planeación grupal compartida del equipo',expanded=False):
             st.caption('Consulta o aporta en la misma hoja grupal de apoyo, psicología, comunicación y trabajo social.')
