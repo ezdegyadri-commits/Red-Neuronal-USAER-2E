@@ -6,6 +6,22 @@ from utils.escolar import grado_canonico
 from utils.text import normalizar_texto
 
 
+@st.fragment(run_every=10)
+def listado(base,abrir):
+    """Actualiza solo las tarjetas; no toca el editor ni invalida cachés globales."""
+    from services import planeacion as s
+    actor=s.identidad()
+    try:
+        docs=[d for d in s.listar() if d['cuenta']==actor['cuenta']]
+    except Exception:
+        st.warning('No se pudo actualizar el listado. Se reintentará automáticamente; tus planeaciones siguen conservadas.')
+        return []
+    st.caption('Tus planeaciones se actualizan automáticamente.')
+    if docs:panel(base,docs,abrir)
+    else:st.info('Aún no tienes planeaciones guardadas en tu cuenta. Las nuevas aparecerán aquí automáticamente.')
+    return docs
+
+
 def panel(base,docs,abrir):
     buscar_todo=st.text_input('Buscar alumno en todas mis planeaciones',key=base+'_buscar_historial_completo')
     if buscar_todo.strip():
