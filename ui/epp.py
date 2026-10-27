@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 from services import epp as s
 from services.epp_modelo import (
-    AREAS, SECCIONES, campos, vacia, NEE, BAP, FAMILIA, HISTORIA, GENERALES, pendientes, conclusion_vigente
+    AREAS, SECCIONES, campos, vacia, NEE, BAP, FAMILIA, FAMILIA_OFICIAL, TABLA_INSTRUMENTOS, NEE_TABLA_OFICIAL, BAP_TABLA_OFICIAL, HISTORIA, GENERALES, pendientes, conclusion_vigente
 )
 from services.materiales_planeacion import TIPOS, leer_material
 from documents.epp import generar_pdf
@@ -150,21 +150,108 @@ def _table(prefix, key, name, base):
     _save(prefix)
 
 
-def _grid(prefix, name, headers):
-    """Renderiza el editor interactivo de tabla."""
+def _grid(prefix, name, headers, disabled_cols=None):
+    """Renderiza el editor interactivo de tabla con soporte canónico para columnas del modelo oficial."""
     base = deepcopy(st.session_state[prefix + '_value'].get(name, []))
+    for r in base:
+        if 'Características relevantes' in r and 'Descripción de las características más relevantes del alumno que afectan su desempeño académico y social' in headers:
+            if not r.get('Descripción de las características más relevantes del alumno que afectan su desempeño académico y social'):
+                r['Descripción de las características más relevantes del alumno que afectan su desempeño académico y social'] = r['Características relevantes']
+        if 'Descripción de las características más relevantes del alumno que afectan su desempeño académico y social' in r and 'Características relevantes' in headers:
+            if not r.get('Características relevantes'):
+                r['Características relevantes'] = r['Descripción de las características más relevantes del alumno que afectan su desempeño académico y social']
+        for h in headers:
+            r.setdefault(h, '')
     key = prefix + '_table_' + name
     basekey = key + '_base'
     if basekey not in st.session_state:
         st.session_state[basekey] = base
+    df = pd.DataFrame(st.session_state[basekey], columns=headers).fillna('')
+    col_cfg = {}
+    if disabled_cols:
+        for c in disabled_cols:
+            col_cfg[c] = st.column_config.Column(disabled=True)
     st.data_editor(
-        pd.DataFrame(st.session_state[basekey], columns=headers).fillna(''),
+        df,
         num_rows='dynamic',
         hide_index=True,
         use_container_width=True,
         key=key,
+        column_config=col_cfg if col_cfg else None,
         on_change=_table,
         args=(prefix, key, name, st.session_state[basekey])
+    )
+
+
+def _tabla_instrumentos_especialistas(doc, prefix, actor_area, can_edit_concl, is_director):
+    """Renderiza y gestiona la tabla interactiva de Instrumentos aplicados y especialistas (Pág. 1 del modelo oficial)."""
+    st.markdown("#### 📋 Instrumentos aplicados y especialistas por área")
+    st.caption("Cada disciplina puede registrar sus pruebas aplicadas y especialista; la maestra de apoyo y dirección coordinan el informe.")
+    
+    mapeo_area_etiqueta = {
+        'Aprendizaje': 'Pedagógica (Aprendizaje)',
+        'Psicología': 'Psicológica',
+        'Comunicación': 'Comunicación',
+        'Trabajo Social': 'Trabajo Social'
+    }
+    mapeo_etiqueta_area = {v: k for k, v in mapeo_area_etiqueta.items()}
+    
+    filas = []
+    for ar in AREAS:
+        part = doc.get('partes', {}).get(ar, {})
+        cont = part.get('contenido', {})
+        inst_txt = str(cont.get('instrumentos', '') or '').strip()
+        evals = cont.get('evaluaciones', [])
+        if evals and not inst_txt:
+            inst_txt = ' • '.join(e.get('nombre', 'Prueba') for e in evals)
+        autor = str(part.get('autor', '') or '').strip()
+        filas.append({
+            'Área': mapeo_area_etiqueta.get(ar, ar),
+            'Instrumentos aplicados': inst_txt,
+            'Especialista que aplicó': autor
+        })
+    
+    key_editor = prefix + '_tabla_instrumentos_editor'
+    base_key = key_editor + '_base'
+    if base_key not in st.session_state:
+        st.session_state[base_key] = filas
+        
+    def _guardar_instrumentos_tabla():
+        edits = st.session_state.get(key_editor, {})
+        edited_rows = edits.get('edited_rows', {})
+        for idx_str, updates in edited_rows.items():
+            idx = int(idx_str)
+            if 0 <= idx < len(filas):
+                etiqueta = filas[idx]['Área']
+                ar = mapeo_etiqueta_area.get(etiqueta, etiqueta)
+                puede_editar_fila = is_director or can_edit_concl or (actor_area == ar)
+                if puede_editar_fila:
+                    if 'Instrumentos aplicados' in updates:
+                        nuevos_inst = updates['Instrumentos aplicados']
+                        doc.setdefault('partes', {}).setdefault(ar, {}).setdefault('contenido', {})['instrumentos'] = nuevos_inst
+                        p_area = prefix + '_edit_' + doc['id'] + '_' + ar
+                        if p_area + '_value' in st.session_state:
+                            st.session_state[p_area + '_value']['instrumentos'] = nuevos_inst
+                            _save(p_area)
+                    if 'Especialista que aplicó' in updates:
+                        nuevo_autor = updates['Especialista que aplicó']
+                        doc.setdefault('partes', {}).setdefault(ar, {})['autor'] = nuevo_autor
+        st.session_state.pop(base_key, None)
+    
+    column_config = {
+        'Área': st.column_config.TextColumn('Área disciplinaria', disabled=True, width='medium'),
+        'Instrumentos aplicados': st.column_config.TextColumn('Instrumentos aplicados', width='large'),
+        'Especialista que aplicó': st.column_config.TextColumn('Especialista que aplicó', width='medium')
+    }
+    
+    df_inst = pd.DataFrame(st.session_state[base_key])
+    st.data_editor(
+        df_inst,
+        column_config=column_config,
+        hide_index=True,
+        use_container_width=True,
+        key=key_editor,
+        on_change=_guardar_instrumentos_tabla
     )
 
 
@@ -611,6 +698,8 @@ def epp_page():
                         _abrir(edit_apr, doc, 'Aprendizaje')
                     _grid(edit_apr, 'historia', HISTORIA)
 
+            _tabla_instrumentos_especialistas(doc, prefix, user_work_area, can_edit_concl, a['director'])
+
     # -------------------------------------------------------------------------
     # 2. INFORMACIÓN INICIAL Y DE SALUD
     # -------------------------------------------------------------------------
@@ -724,12 +813,20 @@ def epp_page():
                 _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '6.2. Contexto familiar', prefix=prefix)
                 _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Trabajo Social', '6.3. Contexto social', prefix=prefix)
 
-            if user_work_area == 'Trabajo Social' or a['director']:
-                with st.expander("👨‍👩‍👧 Composición familiar (permanece privada)"):
+            with st.expander("👨‍👩‍👧 Estructura y composición familiar (modelo oficial)", expanded=True if user_work_area == 'Trabajo Social' else False):
+                if user_work_area == 'Trabajo Social' or a['director']:
+                    st.caption("Captura de miembros de la familia según la entrevista social (Pág. 9 del modelo):")
                     edit_ts = prefix + '_edit_' + doc['id'] + '_Trabajo Social'
                     if edit_ts + '_doc' not in st.session_state:
                         _abrir(edit_ts, doc, 'Trabajo Social')
-                    _grid(edit_ts, 'familia', FAMILIA)
+                    _grid(edit_ts, 'familia', FAMILIA_OFICIAL)
+                else:
+                    fam_rows = doc.get('partes', {}).get('Trabajo Social', {}).get('contenido', {}).get('familia', [])
+                    if fam_rows:
+                        df_fam = pd.DataFrame(fam_rows, columns=FAMILIA_OFICIAL).fillna('')
+                        st.dataframe(df_fam, hide_index=True, use_container_width=True)
+                    else:
+                        st.caption("*(Información de composición familiar pendiente de aportar por Trabajo Social)*")
 
     # -------------------------------------------------------------------------
     # 7. CONCLUSIÓN INTERDISCIPLINARIA, NEE (SEGEY) Y BAP
@@ -783,29 +880,47 @@ def epp_page():
             _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', 'Asociación educativa sustentada', height=75, prefix=prefix)
             _render_field(doc, user_work_area, can_edit_concl, a['director'], 'Conclusión', 'Acuerdos y apoyos del equipo', height=90, prefix=prefix)
 
-            st.markdown("#### 🎯 Necesidades Educativas Específicas (NEE)")
+            st.markdown("#### 🎯 Necesidades Educativas Específicas (NEE) · Tabla 7.2 Oficial")
             if can_edit_concl:
-                st.caption("Puedes editar, añadir o retirar filas directamente en la tabla:")
-                _grid(edit_concl, 'nee', NEE)
+                st.caption("Edita dinámicamente las NEE según los 5 aspectos normativos (Págs. 13-14 del modelo):")
+                _grid(edit_concl, 'nee', NEE_TABLA_OFICIAL, disabled_cols=['Aspectos'])
+                with st.expander("🔍 Ver columnas ampliadas de apoyos y ajustes razonables (Anexo XVIII)"):
+                    _grid(edit_concl, 'nee', NEE)
             else:
                 nees = doc['partes'].get('Conclusión', {}).get('contenido', {}).get('nee', [])
                 if any(any(str(r.get(k, '')).strip() for k in NEE) for r in nees):
-                    df_nee = pd.DataFrame(nees)[[c for c in NEE if c in pd.DataFrame(nees).columns]].fillna('')
+                    cols_show = [c for c in NEE_TABLA_OFICIAL if c in pd.DataFrame(nees).columns] or NEE[:3]
+                    df_nee = pd.DataFrame(nees)[cols_show].fillna('')
                     st.dataframe(df_nee, hide_index=True, use_container_width=True)
                 else:
                     st.caption("*(La maestra de apoyo integrará las NEE acordadas por el equipo)*")
 
-            st.markdown("#### 🚧 Barreras para el Aprendizaje y la Participación (BAP)")
+            st.markdown("#### 🚧 Barreras para el Aprendizaje y la Participación (BAP) · Tabla 7.3 Oficial")
             if can_edit_concl:
-                st.caption("Barreras identificadas por contexto:")
-                _grid(edit_concl, 'bap', BAP)
+                st.caption("Barreras identificadas por contexto (Pág. 14 del modelo):")
+                _grid(edit_concl, 'bap', BAP_TABLA_OFICIAL, disabled_cols=['Contextos'])
+                with st.expander("🔍 Ver columnas ampliadas de acciones y responsables"):
+                    _grid(edit_concl, 'bap', BAP)
             else:
                 baps = doc['partes'].get('Conclusión', {}).get('contenido', {}).get('bap', [])
                 if any(any(str(r.get(k, '')).strip() for k in BAP) for r in baps):
-                    df_bap = pd.DataFrame(baps)[[c for c in BAP if c in pd.DataFrame(baps).columns]].fillna('')
+                    cols_bap = [c for c in BAP_TABLA_OFICIAL if c in pd.DataFrame(baps).columns] or BAP[:2]
+                    df_bap = pd.DataFrame(baps)[cols_bap].fillna('')
                     st.dataframe(df_bap, hide_index=True, use_container_width=True)
                 else:
                     st.caption("*(BAP pendientes de integración)*")
+
+            with st.expander("✍️ Personas implicadas en la evaluación psicopedagógica y firmas", expanded=True):
+                st.caption("Directorio interdisciplinario que avala y firma el informe oficial (Pág. 15 del modelo).")
+                filas_firmas = [
+                    {'Nombre': student.get('Nombre_Docente_Regular', '') or doc['partes'].get('Aprendizaje', {}).get('generales', {}).get('Nombre del maestro/a', '') or 'Docente de Grupo', 'Función': 'Docente de Grupo Regular', 'Estado': 'Informado'},
+                    {'Nombre': doc['partes'].get('Aprendizaje', {}).get('autor', '') or 'Por asignar', 'Función': 'Maestra de Apoyo (Pedagógica)', 'Estado': '✅ Validada' if doc['partes'].get('Aprendizaje', {}).get('contenido', {}).get('validada') else '✏️ Borrador'},
+                    {'Nombre': doc['partes'].get('Psicología', {}).get('autor', '') or 'Por asignar', 'Función': 'Psicóloga', 'Estado': '✅ Validada' if doc['partes'].get('Psicología', {}).get('contenido', {}).get('validada') else '✏️ Borrador'},
+                    {'Nombre': doc['partes'].get('Comunicación', {}).get('autor', '') or 'Por asignar', 'Función': 'Maestra de Comunicación', 'Estado': '✅ Validada' if doc['partes'].get('Comunicación', {}).get('contenido', {}).get('validada') else '✏️ Borrador'},
+                    {'Nombre': doc['partes'].get('Trabajo Social', {}).get('autor', '') or 'Por asignar', 'Función': 'Trabajadora Social', 'Estado': '✅ Validada' if doc['partes'].get('Trabajo Social', {}).get('contenido', {}).get('validada') else '✏️ Borrador'},
+                    {'Nombre': 'Psic. Edgar Adrián Yam Briceño MD', 'Función': 'Director de la USAER 02-E', 'Estado': 'Firma y Sello Oficial'}
+                ]
+                st.dataframe(pd.DataFrame(filas_firmas), hide_index=True, use_container_width=True)
 
     # -------------------------------------------------------------------------
     # INSTRUMENTOS Y SÍNTESIS DE MI ÁREA

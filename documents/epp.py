@@ -6,7 +6,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, KeepTogether
-from services.epp_modelo import SECCIONES, AREAS, NEE, BAP, FAMILIA, HISTORIA, GENERALES, conclusion_vigente
+from services.epp_modelo import SECCIONES, AREAS, NEE, BAP, FAMILIA, FAMILIA_OFICIAL, HISTORIA, GENERALES, conclusion_vigente
 from services.epp_entrada import precargar
 
 def _recursos_firmas():
@@ -90,7 +90,9 @@ def generar_pdf(doc, alumno, incluir_firmas=True):
                 if f == '6.1. Historia escolar' and 'historia' not in no_requeridos and not omitido(values['Aprendizaje'], 'historia'):
                     section_items.append(table(HISTORIA, values['Aprendizaje'].get('historia', [])))
                 if f == '6.2. Contexto familiar' and 'familia' not in no_requeridos and not omitido(values['Trabajo Social'], 'familia'):
-                    section_items.append(table(FAMILIA, values['Trabajo Social'].get('familia', [])))
+                    fam_rows = values['Trabajo Social'].get('familia', [])
+                    fam_headers = [c for c in FAMILIA_OFICIAL if any(c in r for r in fam_rows)] or (FAMILIA if any(c in r for r in fam_rows for c in FAMILIA) else FAMILIA_OFICIAL)
+                    section_items.append(table(fam_headers, fam_rows))
         if section_items:
             story.extend([Spacer(1, 8), p(section, styles['Heading2'])])
             story.extend(section_items)

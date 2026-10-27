@@ -36,6 +36,10 @@ CONCLUSION = ['7.1. Conclusión', 'Énfasis de atención acordado', 'Asociación
 NEE = ['Aspectos', 'Características relevantes', 'NEE', 'Apoyos', 'Ajustes razonables', 'Responsables', 'Fecha o período']
 BAP = ['Contextos', 'Tipo de barrera', 'Acciones generales', 'Responsables', 'Fecha o período']
 FAMILIA = ['Nombre', 'Parentesco', 'Rol y participación con el alumno', 'Fecha de nacimiento', 'Edad', 'Escolaridad', 'Ocupación y sueldo']
+FAMILIA_OFICIAL = ['Nombre', 'Parentesco', 'Edad', 'Estado Civil', 'Ocupación', 'Escolaridad']
+TABLA_INSTRUMENTOS = ['Área', 'Instrumentos aplicados', 'Especialista que aplicó']
+NEE_TABLA_OFICIAL = ['Aspectos', 'Descripción de las características más relevantes del alumno que afectan su desempeño académico y social', 'NEE']
+BAP_TABLA_OFICIAL = ['Contextos', 'Tipo de barrera']
 HISTORIA = ['Curso escolar', 'Grado/grupo', 'Nivel educativo', 'Escuela de Educación Especial', 'Escuela de Educación Regular', 'Observaciones']
 GENERALES = ['Fecha de nacimiento', 'Edad', 'Domicilio', 'Nombre de la madre', 'Edad de la madre',
     'Escolaridad de la madre', 'Ocupación de la madre', 'Domicilio de la madre', 'Nombre del padre',

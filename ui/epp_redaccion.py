@@ -79,7 +79,16 @@ def mostrar_maestro(prefix, doc, area, aplicar):
         base = st.session_state.get(prefix+'_value',{}).get('campos',{}).get(campo, doc['partes'].get(area,{}).get('contenido',{}).get('campos',{}).get(campo,''))
         k_campo = key + '_' + campo
 
-        ideas = st.text_area('Tus ideas u observaciones (opcional si ya hay resultados)', key=k_campo+'_ideas', max_chars=3000)
+        evals_area = doc.get('partes', {}).get(area, {}).get('contenido', {}).get('evaluaciones', [])
+        insts_txt = str(doc.get('partes', {}).get(area, {}).get('contenido', {}).get('instrumentos', '') or '').strip()
+        if evals_area or insts_txt:
+            total_ev = len(evals_area)
+            desc_ev = f"{total_ev} prueba(s) cargada(s) en la plataforma" if total_ev else ""
+            desc_ins = insts_txt.replace('\n', ', ')[:120] if insts_txt else ""
+            info_txt = " • ".join(filter(None, [desc_ins, desc_ev]))
+            st.info(f"🔗 **Instrumentos vinculados ({area}):** {info_txt}\n\n*El asistente redactará tomando en cuenta estos hallazgos automáticamente.*")
+
+        ideas = st.text_area('Tus ideas u observaciones complementarias (opcional si ya hay resultados de instrumentos)', key=k_campo+'_ideas', max_chars=3000)
         if st.button('Preparar texto para revisión', key=k_campo+'_preparar'):
             try:
                 st.session_state[k_campo+'_resumen'] = servicio.preparar(doc, area, campo, ideas)
