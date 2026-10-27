@@ -307,6 +307,9 @@ def listar(todas_versiones=False):
             autorizar(doc, frame=padron)
         except PermissionError:
             continue
+        if not todas_versiones:
+            from services.planeacion_recuperacion import clasificar_heredada
+            doc=clasificar_heredada(doc,padron)
         resultado.append(deepcopy(doc))
     if todas_versiones:
         return resultado

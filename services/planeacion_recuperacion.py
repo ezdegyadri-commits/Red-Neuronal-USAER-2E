@@ -1,5 +1,27 @@
 """Recuperación visible, sin reescribir ni fusionar documentos guardados."""
 from services.planeacion_matricula import clave_escuela
+from copy import deepcopy
+
+
+def clasificar_heredada(doc,padron):
+    """Proyección de lectura: recupera individuales antiguas sin otra copia.
+
+    Se ejecuta después de autorizar. No infiere por nombres ni convierte
+    planes ambiguos en guías grupales; el historial permanece idéntico.
+    """
+    if doc.get('metadatos',{}).get('modalidad_planeacion'):return doc
+    alumnos=doc.get('datos',{}).get('Alumnos',[])
+    ids=[str(a.get('ID_Alumno','')).strip() for a in alumnos]
+    if not ids or not all(ids) or len(ids)!=len(set(ids)) or 'ID_Alumno' not in padron:return doc
+    rows=padron.loc[padron['ID_Alumno'].astype(str).str.strip().isin(ids)]
+    if len(rows)!=len(ids) or set(rows['ID_Alumno'].astype(str).str.strip())!=set(ids):return doc
+    from services.planeacion_modalidad import modalidad
+    if any(clave_escuela(r.get('ID_Escuela'))!=clave_escuela(doc['datos'].get('ID_Escuela'))
+           or modalidad(r)!='individual' for r in rows.to_dict('records')):return doc
+    copia=deepcopy(doc)
+    copia.setdefault('metadatos',{})['modalidad_planeacion']='individual'
+    copia['metadatos']['origen_modalidad']='Planeación anterior sin clasificación; atención individual verificada en el padrón autorizado.'
+    return copia
 
 
 def actividades_redactadas(doc):
@@ -33,7 +55,8 @@ def repositorios(docs):
 
 def titulo_tarjeta(doc):
     from services.planeacion_ambito import etiqueta as grupo
-    if doc.get('metadatos',{}).get('modalidad_planeacion')=='individual':
+    tipo=doc.get('metadatos',{}).get('modalidad_planeacion')
+    if tipo=='individual' or not tipo and len(doc['datos']['Alumnos'])==1:
         return ' · '.join(a['Nombre del alumno'] for a in doc['datos']['Alumnos']) or 'Planeación individual'
     return grupo(doc) or 'Planeación guardada'
 

@@ -20,6 +20,13 @@ def panel(base,docs,abrir):
                 st.info('Aún no hay planeaciones en este repositorio. Las nuevas aparecerán aquí automáticamente.');continue
             c1,c2=st.columns([1,2])
             grados=sorted({grado_canonico(a.get('Grado')) for d in items for a in d['datos']['Alumnos']}-{''})
+            catalogo=tuple(sorted(d['id'] for d in items))
+            if st.session_state.get(key+'_catalogo')!=catalogo:
+                # Una recuperación no queda escondida por filtros del listado previo.
+                st.session_state[key+'_grado']='Todos'
+                st.session_state[key+'_buscar']=''
+                st.session_state[key+'_pagina']=1
+                st.session_state[key+'_catalogo']=catalogo
             if buscar_todo.strip():
                 st.session_state[key+'_grado']='Todos'
                 st.session_state[key+'_buscar']=''
