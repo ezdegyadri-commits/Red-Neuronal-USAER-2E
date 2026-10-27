@@ -89,5 +89,11 @@ if "navegacion_principal" not in st.session_state or st.session_state["navegacio
 
 page = st.session_state["navegacion_principal"]
 
+# El punto de entrada sí se ejecuta tras el despliegue de Cloud. Una entrada
+# EPP importada anteriormente puede conservar su propio marcador antiguo.
+if page == "EPP":
+    from ui.epp_actualizacion import preparar_entrada
+    preparar_entrada('2026-10-27-contextual-v1')
+
 from ui.contenido_modulo import mostrar as mostrar_modulo
 mostrar_modulo(page,rol,escuelas,menu)
