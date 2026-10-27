@@ -10,7 +10,10 @@ from services.planeacion_modelo import FORMATOS
 from services.planeacion_estabilidad import GuardadoPendiente
 
 
-def _guardar(base,automatic=False):
+def _guardar(base,automatic=False,background=False):
+    if background or base+'_trabajo_io' in st.session_state:
+        from ui.guardado_asincrono import persistir
+        return persistir(base,automatic=automatic,aporte=True)
     st.session_state[base+'_pending']=True
     if automatic and (time.monotonic()<st.session_state.get(base+'_retry_at',0) or time.monotonic()-st.session_state.get(base+'_intento',0)<st.session_state.get(base+'_intervalo',60)):return
     st.session_state[base+'_intento']=time.monotonic()
@@ -88,7 +91,10 @@ def panel(prefix):
         from services.planeacion_compartida import es_guia
         if es_guia(doc) and actor['area'] in ('Psicología','Comunicación','Trabajo Social'):
             from ui.planeacion_anexo_compartido import panel as hoja_compartida
-            hoja_compartida(prefix,doc);return
+            hoja_compartida(prefix,doc)
+            from ui.guardado_asincrono import acuses
+            acuses(prefix+'_'+doc['id']+'_'+actor['area'],aporte=True)
+            return
         if es_guia(doc) and actor['area']=='Aprendizaje':
             try:s.autorizar(doc,True)
             except PermissionError:

@@ -25,6 +25,9 @@ def conservar(prefix,base):
     firma=hashlib.sha256(json.dumps(payload,ensure_ascii=False,sort_keys=True,default=str).encode()).hexdigest()[:24]
     destino=base+'_envio_'+firma
     for s,valor in payload.items():st.session_state[destino+s]=valor
+    # Un Future no se copia: su acuse sigue al mismo borrador conservado.
+    if prefix+'_trabajo_io' in st.session_state:
+        st.session_state[destino+'_trabajo_io']=st.session_state.pop(prefix+'_trabajo_io')
     st.session_state[destino+'_pending']=True
     st.session_state[destino+'_origen']=prefix
     st.session_state[destino+'_raiz']=base

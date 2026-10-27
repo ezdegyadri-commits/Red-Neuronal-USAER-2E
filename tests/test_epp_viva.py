@@ -61,14 +61,11 @@ class ContratoTests(EPPTests):
         self.assertEqual(len(self.sheet.rows),2)
 
     def test_acuse_perdido_reintento_recupera_sin_duplicar(self):
-        d=self.doc();v=vacia('Aprendizaje');original=s.df_sheet;calls=0
-        def read(*args):
-            nonlocal calls
-            calls+=1
-            if calls==3:raise ConnectionError('Confirmación interrumpida')
-            return original(*args)
-        # Acceso, lectura de revisión y confirmación posterior al envío.
-        with patch.object(s,'df_sheet',side_effect=read):
+        d=self.doc();v=vacia('Aprendizaje');original=self.sheet.append_rows
+        def append(*args,**kwargs):
+            original(*args,**kwargs)
+            raise ConnectionError('Confirmación interrumpida después del append')
+        with patch.object(self.sheet,'append_rows',side_effect=append):
             with self.assertRaises(ConnectionError):s.guardar(d,'Aprendizaje',v,'')
         self.assertEqual(len(self.sheet.rows),2)
         s.guardar(d,'Aprendizaje',v,'');self.assertEqual(len(self.sheet.rows),2)

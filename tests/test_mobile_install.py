@@ -7,6 +7,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class MobileInstallationTest(unittest.TestCase):
+    def setUp(self):
+        from ui.mobile_install import android_apk
+        android_apk.cache_clear()
+
+    def tearDown(self):
+        from ui.mobile_install import android_apk
+        android_apk.cache_clear()
     def test_startup_metadata_runs_without_login_and_only_once_per_session(self):
         from streamlit.testing.v1 import AppTest
         app = AppTest.from_string('from ui.mobile_install import install_metadata\ninstall_metadata()').run()

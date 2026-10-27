@@ -188,7 +188,10 @@ def _prefix():
     return 'planeacion_'+hashlib.sha256(servicio.identidad()['cuenta'].encode()).hexdigest()[:12]
 
 
-def _persist(prefix,estado=None,automatic=False):
+def _persist(prefix,estado=None,automatic=False,background=False):
+    if background or prefix+'_trabajo_io' in st.session_state:
+        from ui.guardado_asincrono import persistir
+        return persistir(prefix,estado,automatic)
     doc=st.session_state[prefix+'_doc']
     estado=estado or st.session_state.get(prefix+'_estado_pendiente') or doc.get('estado','BORRADOR')
     st.session_state[prefix+'_estado_pendiente']=estado

@@ -66,13 +66,15 @@ def refrescar_editor():
 def recibir_edicion(prefix,event):
     """Mismo validador y persistencia; sin una segunda recarga del editor."""
     from ui import planeacion as u
-    if event.get('nonce')==st.session_state.get(prefix+'_papel_nonce'):return
+    if event.get('nonce')==st.session_state.get(prefix+'_papel_nonce'):
+        if event.get('accion')=='guardar' and st.session_state.get(prefix+'_pending'):u._persist(prefix,background=True)
+        return
     try:
         doc=st.session_state[prefix+'_doc']
         nuevo=papel.aplicar(doc,event)
         st.session_state[prefix+'_papel_nonce']=event['nonce']
         if nuevo!=doc:u._open(prefix,nuevo)
-        if nuevo!=doc or event['accion']=='guardar':u._persist(prefix,automatic=event['accion']=='autoguardar')
+        if nuevo!=doc or event['accion']=='guardar':u._persist(prefix,automatic=event['accion']=='autoguardar',background=True)
         if not st.session_state.get(prefix+'_pending'):
             st.session_state[prefix+'_papel_aceptado']=event['nonce']
         st.session_state.pop(prefix+'_papel_rechazado',None)
@@ -83,7 +85,7 @@ def recibir_edicion(prefix,event):
         st.session_state[prefix+'_papel_error']=str(exc)
 
 
-def lectura_equipo(base,did):
+def lectura_equipo(base,did,background=False):
     """La recepción de cada campo no dispara otra consulta del catálogo completo."""
     from services import planeacion as s
     from streamlit.runtime.scriptrunner import get_script_run_ctx
@@ -93,6 +95,10 @@ def lectura_equipo(base,did):
     now=time.monotonic()
     if not completa and now-st.session_state.get(base+'_lectura_equipo',float('-inf'))<10:return None
     st.session_state[base+'_lectura_equipo']=now
+    if background:
+        from ui.lecturas_documento import consultar
+        docs=consultar(base+'_consulta_io_'+did,s.compartidos,did)
+        return next((d for d in docs if d['id']==did),None) if docs is not None else None
     return next((d for d in s.compartidos(documento=did) if d['id']==did),None)
 
 
@@ -102,7 +108,7 @@ def _sincronizar_equipo(prefix):
     doc=st.session_state[prefix+'_doc']
     if not es_guia(doc):return
     try:
-        latest=lectura_equipo(prefix,doc['id'])
+        latest=lectura_equipo(prefix,doc['id'],background=True)
         if latest:
             nuevo=actualizar_aportes_autor(doc,latest)
             if nuevo!=doc:
@@ -164,13 +170,15 @@ def hoja(prefix,volver=None):
                         u._open(prefix, doc_mod); u._persist(prefix); refrescar_editor()
     # Guardado y lectura remota viven en el mismo fragmento que la hoja:
     # ninguna pausa de escritura desmonta el módulo completo.
-    if st.session_state.get(prefix+'_pending'):u._persist(prefix,automatic=True)
+    if st.session_state.get(prefix+'_pending'):u._persist(prefix,automatic=True,background=True)
     doc=st.session_state[prefix+'_doc']
     event=editor(hoja=papel.hoja(doc),guardado=doc.get('guardado_en','') if not st.session_state.get(prefix+'_pending') else '',
         aceptado=st.session_state.pop(prefix+'_papel_legacy',False),
         aceptado_nonce=st.session_state.get(prefix+'_papel_aceptado',''),
         rechazado=st.session_state.get(prefix+'_papel_rechazado',''),
         error=st.session_state.get(prefix+'_papel_error',''),key=prefix+'_papel_'+doc['id'],default=None,
+        error_guardado_nonce=st.session_state.get(prefix+'_io_error_nonce',''),
+        error_guardado=st.session_state.get(prefix+'_error',''),
         on_edicion=lambda event:recibir_edicion(prefix,event))
     if event and event.get('nonce')!=st.session_state.get(prefix+'_papel_nonce'):
         try:
@@ -179,14 +187,14 @@ def hoja(prefix,volver=None):
             action=event.get('accion')
             estado='ENVIADO' if action=='enviar' and not u.servicio.revisar(nuevo) else 'BORRADOR'
             if nuevo!=doc:
-                u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar')
+                u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar',background=True)
             st.session_state.pop(prefix+'_papel_rechazado',None)
             st.session_state.pop(prefix+'_papel_error',None)
             if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados','incorporar_nee','inicio','equipo'):st.session_state[prefix+'_papel_panel']=action
             if action=='corregir':st.session_state[prefix+'_papel_panel']=event['panel']
-            if action=='guardar' and nuevo==doc:u._persist(prefix)
+            if action=='guardar' and nuevo==doc:u._persist(prefix,background=True)
             if action=='enviar':
-                if estado=='ENVIADO' and nuevo==doc:u._persist(prefix,'ENVIADO')
+                if estado=='ENVIADO' and nuevo==doc:u._persist(prefix,'ENVIADO',background=True)
                 elif estado!='ENVIADO':st.session_state[prefix+'_papel_aviso']='Completa los aspectos pendientes antes de enviar. Se conserva tu borrador.'
             if action=='pdf':st.session_state[prefix+'_mostrar_pdf']=True
             if action=='equipo':
@@ -310,6 +318,8 @@ def presentar(prefix,volver=None):
         return captura(prefix,volver)
     hoja(prefix,volver)
     conexiones(prefix)
+    from ui.guardado_asincrono import acuses
+    acuses(prefix)
 
 
 def pagina():

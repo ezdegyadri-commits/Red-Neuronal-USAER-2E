@@ -32,7 +32,10 @@ def preparar_cambios(p,nuevo,areas):
     st.session_state[p+'_pending']=bool(cola)
 
 
-def guardar(p,manual=False):
+def guardar(p,manual=False,background=False):
+    if background or p+'_trabajo_io' in st.session_state:
+        from ui.epp_guardado_asincrono import guardar as guardar_io
+        return guardar_io(p,manual)
     cola=st.session_state.get(p+'_cola',{})
     if not cola:return True
     if st.session_state.get(p+'_cuenta',s.actor()['cuenta'])!=s.actor()['cuenta']:
@@ -63,7 +66,7 @@ def recibir(p,event):
     nonce=event.get('nonce')
     if not isinstance(nonce,str) or len(nonce)>120:raise ValueError('Envío sin identificador válido.')
     if nonce==st.session_state.get(p+'_nonce'):
-        if st.session_state.get(p+'_pending'):guardar(p)
+        if st.session_state.get(p+'_pending'):guardar(p,manual=event.get('accion')=='guardar',background=True)
         return
     doc=st.session_state[p+'_doc']
     try:
@@ -72,7 +75,7 @@ def recibir(p,event):
         if areas:st.session_state[p+'_huella_pendiente']=event['huella']
         st.session_state[p+'_nonce']=nonce
         st.session_state.pop(p+'_rechazado',None)
-        if guardar(p,manual=event['accion']!='autoguardar'):st.session_state[p+'_aceptado']=nonce
+        if guardar(p,manual=event['accion']!='autoguardar',background=True):st.session_state[p+'_aceptado']=nonce
         action=event['accion']
         if action=='inicio':st.session_state[p+'_volver']=True
         elif action in ('antecedentes','ia','opciones','pdf'):st.session_state[p+'_panel']=action
@@ -86,14 +89,18 @@ def recibir(p,event):
         st.session_state[p+'_diagnostico']=diagnostico(exc)
 
 
-def sincronizar(p):
+def sincronizar(p,background=False):
     if time.monotonic()-st.session_state.get(p+'_lectura',0)<10:return
     st.session_state[p+'_lectura']=time.monotonic()
     doc=st.session_state[p+'_doc']
     try:
         # Guardados de cualquier integrante invalidan el caché compartido. Las
         # lecturas periódicas no lo vacían para cada maestra/celda.
-        remote=next((d for d in s.listar(True) if d['id']==doc['id']),None)
+        if background:
+            from ui.lecturas_documento import consultar
+            docs=consultar(p+'_consulta_io',s.listar,True)
+            remote=next((d for d in docs if d['id']==doc['id']),None) if docs is not None else None
+        else:remote=next((d for d in s.listar(True) if d['id']==doc['id']),None)
         if not remote:return
         cola=st.session_state.get(p+'_cola',{})
         for area,part in remote['partes'].items():
@@ -104,7 +111,7 @@ def sincronizar(p):
 
 @st.fragment(run_every=10)
 def hoja(p):
-    sincronizar(p);guardar(p)
+    guardar(p,background=True);sincronizar(p,background=True)
     doc=st.session_state[p+'_doc']
     from ui.planeacion_papel import editor,refrescar_editor
     d=st.session_state.get(p+'_diagnostico',{})
@@ -112,7 +119,8 @@ def hoja(p):
     if st.session_state.get(p+'_pending') and st.session_state.get(p+'_huella_pendiente'):spec['huella']=st.session_state[p+'_huella_pendiente']
     event=editor(key=p+'_papel',hoja=spec,on_edicion=lambda e:recibir(p,e),
         guardado='' if st.session_state.get(p+'_pending') else max((r.get('fecha','') for r in doc['partes'].values()),default=''),
-        aceptado_nonce=st.session_state.get(p+'_aceptado',''),rechazado=st.session_state.get(p+'_rechazado',''),error=d.get('causa',''))
+        aceptado_nonce=st.session_state.get(p+'_aceptado',''),rechazado=st.session_state.get(p+'_rechazado',''),error=d.get('causa',''),
+        error_guardado_nonce=st.session_state.get(p+'_io_error_nonce',''),error_guardado=d.get('causa',''))
     if event and event.get('nonce')!=st.session_state.get(p+'_nonce'):
         recibir(p,event)
         if st.session_state.get(p+'_volver') or st.session_state.get(p+'_panel') or st.session_state.get(p+'_redactor'):st.rerun(scope='app')
@@ -353,6 +361,8 @@ def page():
         if s.es_coordinadora(doc) and st.button('Generar conclusión y NEE del equipo',key=p+'_conclusion_directa',type='primary'):
             st.session_state[p+'_ir_conclusion']=True;st.session_state[p+'_panel']='ia'
         hoja(p);panel(p)
+        from ui.epp_guardado_asincrono import acuses
+        acuses(p)
         target=st.session_state.get(p+'_redactor')
         if target:
             from ui.epp_redaccion import mostrar

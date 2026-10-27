@@ -17,12 +17,14 @@ function fixture(backup, referrer='https://usaer.test/', native=false) {
     append(...items) { for (const c of items) { this.children.push(c); if (c && typeof c === 'object') c.parentElement = this; } }
     replaceChildren() { this.children = []; this._text = ''; }
     setAttribute(k, v) { this[k] = v; }
+    removeAttribute(k) { delete this[k]; }
+    dispatchEvent(event) {event.target ||= this;this.handlers[event.type]?.(event);if(event.bubbles!==false)this.parentElement?.dispatchEvent?.(event);}
     addEventListener(type, fn) { this.handlers[type] = fn; }
     querySelectorAll(selector) {
       const all = this.children.flatMap(c => c instanceof Element ? [c, ...c.querySelectorAll('*')] : []);
       return all.filter(c => selector === '*' || selector === '[data-cell]' && c.dataset.cell || selector.toUpperCase() === c.tagName);
     }
-    focus() {} scrollIntoView() {} click() { this.handlers.click?.({}); }
+    focus() {} scrollIntoView() {} click() {if(!this.disabled)this.dispatchEvent({type:'click',target:this});}
   }
   const root = new Element('article'); root.id = 'page';
   const tools = new Element('div'); tools.id = 'tools';
@@ -34,6 +36,7 @@ function fixture(backup, referrer='https://usaer.test/', native=false) {
     sessionStorage: { getItem: k => cache.get(k) || null, setItem: (k,v) => cache.set(k,v), removeItem: k => cache.delete(k) },
     setTimeout: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay }); return id; }, clearTimeout: id => timers.delete(id),
     setInterval: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay, interval: true }); return id; }, clearInterval: id => timers.delete(id),
+    requestAnimationFrame: fn => {const id=++sequence;timers.set(id,{fn,delay:16});return id;},cancelAnimationFrame:id=>timers.delete(id),
     queueMicrotask: fn => fn(), ResizeObserver: class { observe() {} disconnect() {} },
     window: { addEventListener: (type, fn) => { listeners[type] = fn; },removeEventListener: type => { delete listeners[type]; } } };
   let component,host,cleanup;
@@ -51,7 +54,7 @@ function fixture(backup, referrer='https://usaer.test/', native=false) {
     else listeners.message({source, origin, data:{type:'streamlit:render', args:{hoja,...extra}}});
   }
   function tick(delay) { const pending = [...timers]; for (const [id,t] of pending) if (t.delay === delay && timers.has(id)) { if (!t.interval) timers.delete(id); t.fn(); } }
-  function input(value, id='c0') { const e=nodes.get('celda-'+id); e.textContent=value; e.handlers.input({}); root.handlers.input?.({}); }
+  function input(value, id='c0') { const e=nodes.get('celda-'+id); e.textContent=value; e.dispatchEvent({type:'input',target:e}); }
   const events = () => messages.filter(m => m.type === 'streamlit:setComponentValue').map(m => m.value);
   return { nodes, root, tools, status, render, tick, input, events, messages, targets, cache, listeners, parent,
     dispose:()=>cleanup?.(),cleanups,timers };
@@ -234,7 +237,7 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
   f.render(h);
   const input=f.nodes.get('celda-c0');
   assert.equal(input.parentElement.className,'date-cell');assert.equal(input.type,'date');
-  assert.equal(input.value,'2026-10-23');input.value='2026-10-24';input.handlers.change();f.tick(1000);
+  assert.equal(input.value,'2026-10-23');input.value='2026-10-24';input.dispatchEvent({type:'change',target:input});f.tick(1000);
   assert.equal(f.events()[0].cambios.c0,'2026-10-24');
   assert.match(html,/\.date-cell input\[type=date\][^{]*\{[^}]*min-width:0/);
 }
@@ -278,4 +281,38 @@ console.log('Editor: escritura no bloqueante, sincronización por área, respald
   const event=f.events().at(-1);
   assert.equal(event.accion,'alumnos');
   assert.equal(event.cambios.c0,'Aporte antes de incorporar al alumno');
+}
+
+// Clic inmediato: un solo envío y botón liberado únicamente al recibir su acuse.
+{
+  const f=fixture();f.render(hoja());
+  const save=f.tools.children.find(b=>b.textContent==='Guardar planeación');
+  save.click();save.click();assert.equal(f.events().length,1);
+  assert.equal(save.disabled,true);assert.equal(save['aria-busy'],'true');
+  f.render(hoja(),{aceptado_nonce:f.events()[0].nonce,guardado:'confirmado'});
+  assert.equal(save.disabled,false);assert.equal(save['aria-busy'],undefined);
+}
+
+// Cien escrituras no miden el layout cien veces ni crean listeners por celda.
+{
+  const f=fixture();f.render(hoja());f.tick(16);
+  const before=f.messages.filter(m=>m.type==='streamlit:setFrameHeight').length;
+  for(let i=0;i<100;i++)f.input('Texto '+i);
+  assert.equal(f.messages.filter(m=>m.type==='streamlit:setFrameHeight').length,before);
+  f.tick(16);
+  assert.equal(f.messages.filter(m=>m.type==='streamlit:setFrameHeight').length,before);
+  assert.equal(f.nodes.get('celda-c0').handlers.input,undefined);
+  f.tick(4000);assert.equal(f.events().length,1);assert.equal(f.events()[0].cambios.c0,'Texto 99');
+}
+
+// Un fallo libera el botón; el reintento conserva nonce y respaldo, sin otro envío lógico.
+{
+  const f=fixture();f.render(hoja());f.input('Borrador protegido');
+  const save=f.tools.children.find(b=>b.textContent==='Guardar planeación');save.click();
+  const first=f.events()[0];
+  f.render(hoja(),{error_guardado_nonce:first.nonce,error_guardado:'Red ficticia no disponible'});
+  assert.equal(save.disabled,false);assert.ok(f.cache.size);
+  save.click();assert.equal(f.events().at(-1).nonce,first.nonce);assert.equal(save.disabled,true);
+  f.render(hoja('Borrador protegido','nueva'),{aceptado_nonce:first.nonce,guardado:'confirmado'});
+  assert.equal(save.disabled,false);assert.equal(f.cache.size,0);
 }
