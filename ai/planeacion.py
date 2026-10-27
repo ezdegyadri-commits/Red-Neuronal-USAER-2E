@@ -71,14 +71,67 @@ def _fallo(exc, modelo=None):
     return 'No se completó la propuesta. Dirección puede revisar el diagnóstico; tu borrador se conserva.'
 
 
+def _proponer_openai(prompt, schema=None, max_tokens=4000):
+    api_key = (
+        st.session_state.get('relatoria_openai_key')
+        or st.session_state.get('planeacion_openai_key')
+        or st.session_state.get('OPENAI_API_KEY')
+    )
+    if not api_key:
+        try:
+            api_key = st.secrets.get('OPENAI_API_KEY', '')
+        except Exception:
+            api_key = ''
+    if not api_key:
+        return None
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key, timeout=60.0, max_retries=2)
+    instruccion_formato = (
+        "Eres un especialista educativo de USAER. "
+        "Devuelve EXCLUSIVAMENTE un objeto JSON válido que cumpla estrictamente con la estructura solicitada."
+    )
+    messages = [
+        {"role": "system", "content": instruccion_formato},
+        {"role": "user", "content": prompt},
+    ]
+    completion = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        response_format={"type": "json_object"},
+        temperature=0.2,
+        max_tokens=min(int(max_tokens), 4000),
+    )
+    return (completion.choices[0].message.content or "").strip()
+
+
 def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=None, _schema=None, _validador=None, _max_tokens=4000):
     prompt = _prompt or solicitud(resumen, formato, area, revisar, curriculo)
-    modelo = modelo_configurado()
+    modelo_config = modelo_configurado()
+    preferido = st.session_state.get('planeacion_modelo_preferido')
+    modelo = preferido or modelo_config
+
+    motor_solicitado = st.session_state.get('planeacion_motor') or st.session_state.get('epp_motor')
+    if motor_solicitado == 'ChatGPT (OpenAI)':
+        try:
+            notificar_progreso('solicitando')
+            raw_openai = _proponer_openai(prompt, _schema, _max_tokens)
+            if raw_openai:
+                notificar_progreso('validando')
+                raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw_openai.strip())
+                return _validador(json.loads(raw)) if _validador else validar_respuesta(json.loads(raw), curriculo)
+        except Exception as exc:
+            logger.warning('openai_planeacion_error: %s', exc)
+
     if time.monotonic() < st.session_state.get('planeacion_ia_reintentar_desde', 0):
         raise RuntimeError('Espera unos 30 segundos antes de volver a solicitar IA. Puedes seguir editando tu borrador.')
     try:
         key = st.secrets.get('GEMINI_API_KEY', '')
         if not key:
+            raw_openai = _proponer_openai(prompt, _schema, _max_tokens)
+            if raw_openai:
+                notificar_progreso('validando')
+                raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw_openai.strip())
+                return _validador(json.loads(raw)) if _validador else validar_respuesta(json.loads(raw), curriculo)
             st.session_state['planeacion_ia_diagnostico'] = {
                 'codigo': None, 'tipo': 'ClaveNoConfigurada', 'motor': modelo}
             raise RuntimeError('La IA no está configurada; puedes continuar editando.')
@@ -101,21 +154,49 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
                         'fuentes': {'type': 'array', 'items': {'type': 'string'}},
                         'referentes': {'type': 'array', 'items': {'type': 'string'}}}}}}}
         if _schema is not None:config['response_schema']=_schema
-        if modelo.startswith('gemini-2.5-flash'):
+        if str(modelo).startswith('gemini-2.5-flash'):
             config['thinking_config'] = {'thinking_budget': 0}
-        # Un solo reintento breve. Nunca cambia de proveedor ni repite errores de
-        # permisos, configuración o saldo. El SDK no añade reintentos ocultos.
-        for intento in range(2):
-            try:
-                notificar_progreso('solicitando' if not intento else 'reintento')
-                response = cli.models.generate_content(model=modelo, contents=prompt, config=config)
+
+        candidatos = [modelo]
+        for alt in ['gemini-2.5-pro', 'gemini-3.8-flash', 'gemini-3.5-flash-lite']:
+            if alt not in candidatos:
+                candidatos.append(alt)
+
+        response = None
+        ultimo_exc = None
+        ultimo_mod = modelo
+
+        for mod_actual in candidatos:
+            for intento in range(2):
+                try:
+                    notificar_progreso('solicitando' if not intento else 'reintento')
+                    response = cli.models.generate_content(model=mod_actual, contents=prompt, config=config)
+                    ultimo_mod = mod_actual
+                    break
+                except Exception as exc:
+                    ultimo_exc = exc
+                    ultimo_mod = mod_actual
+                    codigo = getattr(exc, 'code', None)
+                    temporal = codigo in (408, 429, 500, 502, 503, 504) or isinstance(exc, TimeoutError) or 'Timeout' in type(exc).__name__
+                    if not temporal:
+                        break
+                    if intento == 0:
+                        time.sleep(1 + random.random() * 0.5)
+            if response is not None:
                 break
-            except Exception as exc:
-                codigo = getattr(exc, 'code', None)
-                temporal = codigo in (408, 429, 500, 502, 503, 504) or isinstance(exc, TimeoutError) or 'Timeout' in type(exc).__name__
-                if intento or not temporal:
-                    raise RuntimeError(_fallo(exc, modelo)) from None
-                time.sleep(1 + random.random() * 0.5)
+            codigo_err = getattr(ultimo_exc, 'code', None)
+            if codigo_err in (400, 401, 402, 403, 404, 429):
+                break
+
+        if response is None:
+            raw_openai = _proponer_openai(prompt, _schema, _max_tokens)
+            if raw_openai:
+                notificar_progreso('validando')
+                raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw_openai.strip())
+                return _validador(json.loads(raw)) if _validador else validar_respuesta(json.loads(raw), curriculo)
+            if ultimo_exc is not None:
+                raise RuntimeError(_fallo(ultimo_exc, ultimo_mod)) from None
+            raise RuntimeError('No fue posible completar la propuesta de IA.')
     except RuntimeError:
         raise
     except Exception as exc:

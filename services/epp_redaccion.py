@@ -55,15 +55,59 @@ def preparar(doc,area,campo,ideas=''):
     text=re.sub(r'(?<!\d)(?:\+?52[\s-]*)?(?:\d[\s()-]*){10}(?!\d)','[contacto retirado]',text)
     return text
 
-def generar(resumen,campo):
+def generar(resumen, campo, area='Aprendizaje'):
     from ai.planeacion import proponer
-    if not isinstance(resumen,str) or not resumen.strip() or len(resumen)>12000:raise ValueError('Revisa el resumen antes de proponer redacción.')
-    prompt=('Actúa como especialista de educación especial (USAER). Redacta el apartado '+campo+' para un Informe de Evaluación Psicopedagógica (EPP oficial SEGEY). '
-            'Básate estrictamente en las observaciones, ideas y hallazgos de los instrumentos aplicados y registrados en la plataforma. '
-            'Conserva los términos técnicos, edades de desarrollo, puntuaciones o hallazgos cualitativos indicados en los instrumentos (p. ej. WISC, Bender, DFH, pruebas de lenguaje o competencia curricular). '
-            'Redacta de forma profesional, clara y pedagógica, distinguiendo fortalezas de barreras y necesidades de apoyo. No inventes antecedentes, diagnósticos ni datos no contenidos en el resumen. '
-            'Devuelve JSON con la clave "redaccion", sin nombres propios ni identificadores personales.\nDATOS Y HALLAZGOS DE INSTRUMENTOS:\n'+resumen)
+    if not isinstance(resumen, str) or not resumen.strip() or len(resumen) > 12000:
+        raise ValueError('Revisa el resumen antes de proponer redacción.')
+
+    guias_rol = {
+        'Aprendizaje': (
+            'Especialista en Aprendizaje (Maestra de Apoyo). Focaliza en procesos de adquisición '
+            'de la lectura, escritura, cálculo, estilo y ritmo de aprendizaje, competencia curricular (NEM) y barreras en el aula regular.'
+        ),
+        'Psicología': (
+            'Especialista en Psicología. Focaliza en la esfera socioemocional, conducta adaptativa, '
+            'funciones ejecutivas, dinámica vincular, autoconcepto, habilidades sociales y barreras actitudinales/escolares.'
+        ),
+        'Comunicación': (
+            'Especialista en Comunicación y Lenguaje. Focaliza en los niveles del lenguaje (fonológico, '
+            'semántico, morfosintáctico, pragmático), habla, voz, fluidez, sistemas alternativos/aumentativos (SAAC) y acceso comunicativo.'
+        ),
+        'Trabajo Social': (
+            'Especialista en Trabajo Social. Focaliza en el contexto familiar y comunitario, dinámica '
+            'de crianza, nivel socioeconómico, redes de apoyo, condiciones de habitabilidad y barreras contextuales del entorno.'
+        ),
+        'Conclusión': (
+            'Equipo Interdisciplinario USAER. Síntesis colegiada integral que contrasta los hallazgos '
+            'de todas las disciplinas para definir NEE (Fórmula SEGEY: Necesita + verbo infinitivo + qué) y BAP contextuales.'
+        ),
+    }
+    enfoque_rol = guias_rol.get(area, f'Especialista de USAER en {area}')
+
+    prompt = (
+        f"Actúa como {enfoque_rol}.\n"
+        f"Redacta el apartado oficial '{campo}' para un Informe de Evaluación Psicopedagógica (EPP oficial SEGEY).\n"
+        f"Lineamientos pedagógicos rigurosos:\n"
+        f"1. ROL Y PERSPECTIVA PROFESIONAL: Redacta estrictamente desde tu disciplina ({area}), respondiendo a las características particulares de la dimensión y apartado solicitado ('{campo}').\n"
+        f"2. SUSTENTO DOCUMENTAL EN INSTRUMENTOS: Básate de forma directa y fehaciente en los hallazgos de las pruebas, escalas, baterías o instrumentos aplicados (ej. WISC, Bender, DFH, evaluación curricular, pruebas de lenguaje) registrados en la plataforma.\n"
+        f"3. ESTILO TÉCNICO Y ACCESIBLE: Redacta en tercera persona con lenguaje profesional y descriptivo, claro para docentes y familias, sin diagnósticos clínicos no sustentados ni adjetivos peyorativos.\n"
+        f"4. FORTALEZAS Y BARRERAS: Distingue claramente las capacidades y fortalezas demostradas por el alumno frente a las barreras del entorno o necesidades específicas de apoyo.\n"
+        f"Devuelve exclusivamente un objeto JSON con la clave 'redaccion', sin nombres propios ni datos identificadores.\n\n"
+        f"HALLAZGOS, INSTRUMENTOS Y OBSERVACIONES REGISTRADAS:\n" + resumen
+    )
+
     def validar(r):
-        if not isinstance(r,dict) or not isinstance(r.get('redaccion'),str) or not r['redaccion'].strip() or len(r['redaccion'])>6000:raise ValueError('La redacción no llegó completa; tu texto sigue intacto.')
+        if not isinstance(r, dict) or not isinstance(r.get('redaccion'), str) or not r['redaccion'].strip() or len(r['redaccion']) > 6000:
+            raise ValueError('La redacción no llegó completa; tu texto sigue intacto.')
         return r
-    return proponer(resumen,'EPP','Redacción de apartado',_prompt=prompt,_schema={'type':'object','required':['redaccion'],'properties':{'redaccion':{'type':'string'}}},_validador=validar,_max_tokens=2000)['redaccion']
+
+    return proponer(
+        resumen,
+        'EPP',
+        'Redacción de apartado',
+        _prompt=prompt,
+        _schema={'type': 'object', 'required': ['redaccion'], 'properties': {'redaccion': {'type': 'string'}}},
+        _validador=validar,
+        _max_tokens=2500,
+    )['redaccion']
+

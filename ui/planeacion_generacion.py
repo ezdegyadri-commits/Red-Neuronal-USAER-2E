@@ -56,6 +56,34 @@ def panel_generacion(prefix,persist,abrir,compact=False):
         st.markdown('**Para añadir actividades con IA**\n\n1. Revisa el resumen y marca la confirmación.\n2. Pulsa **Generar e integrar actividades al formato**.\n3. Si es una actualización, revisa la vista previa y pulsa **Aplicar actualización conservando mis ediciones**.\n4. Cierra este panel: las actividades están en **Organización de las actividades de aprendizaje → Actividades**. No copies ni pegues; edítalas ahí y guarda la hoja.')
     ajustes={**g.configuracion(doc),**doc['metadatos'].get('configuracion_generacion',{})}
     generation=st.session_state.get(prefix+'_generation',0);base=f'{prefix}_{generation}_generar'
+    col_mot1, col_mot2 = st.columns([0.72, 0.28])
+    with col_mot1:
+        motor_plan = st.radio(
+            "Motor de IA",
+            ["Gemini Pro (Google)", "Gemini Flash (Google)", "ChatGPT (OpenAI)"],
+            horizontal=True,
+            key=base + "_motor_ia"
+        )
+        if "Gemini Pro" in motor_plan:
+            st.session_state['planeacion_motor'] = 'Gemini (Google)'
+            st.session_state['planeacion_modelo_preferido'] = 'gemini-2.5-pro'
+        elif "Gemini Flash" in motor_plan:
+            st.session_state['planeacion_motor'] = 'Gemini (Google)'
+            st.session_state['planeacion_modelo_preferido'] = 'gemini-3.8-flash'
+        else:
+            st.session_state['planeacion_motor'] = 'ChatGPT (OpenAI)'
+            has_sec = False
+            try:
+                has_sec = bool(st.secrets.get("OPENAI_API_KEY"))
+            except Exception:
+                has_sec = False
+            if not has_sec:
+                st.text_input(
+                    "OpenAI API Key (ChatGPT Plus)",
+                    type="password",
+                    key="planeacion_openai_key",
+                    help="Tu clave se usará en esta sesión para generar propuestas con GPT-4o.",
+                )
     from datetime import date
     inicio=date.fromisoformat(ajustes['inicio']);duracion=ajustes['duracion'];sesiones=ajustes['sesiones']
     dias=ajustes['dias'];enfoque=ajustes.get('enfoque','');apoyos=ajustes.get('apoyos','')

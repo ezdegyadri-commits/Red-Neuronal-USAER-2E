@@ -108,6 +108,37 @@ def fechas_sesiones(doc,ajustes):
     return fechas
 
 
+def antecedentes_y_nee_individuales(doc, aliases, reversa):
+    lineas = []
+    catalogo_nee = doc.get('metadatos', {}).get('catalogo_nee_actual', [])
+    nee_por_alumno = {}
+    if isinstance(catalogo_nee, list):
+        for n in catalogo_nee:
+            aid = str(n.get('alumno', ''))
+            if aid in reversa:
+                label = reversa[aid]
+                txt = str(n.get('texto', '') or '').strip()
+                if txt:
+                    nee_por_alumno.setdefault(label, []).append(txt)
+
+    for i, a in enumerate(doc['datos']['Alumnos']):
+        aid = a.get('ID_Alumno')
+        label = reversa.get(aid, f"Alumno {i+1}")
+        datos_alumno = []
+        grado = a.get('Grado', '')
+        if grado:
+            datos_alumno.append(f"Grado escolar oficial: {grado}")
+        for k in ('Condicion', 'Condición', 'Discapacidad', 'Aptitud', 'Subclasificacion', 'Atencion_Previa'):
+            val = str(a.get(k, '') or '').strip()
+            if val and val.lower() not in ('ninguna', 'no', 'sin registro', 'nan'):
+                datos_alumno.append(f"Situación / condición documentada: {val}")
+        if label in nee_por_alumno:
+            datos_alumno.append("Necesidades Educativas Específicas (NEE) documentadas:\n• " + "\n• ".join(nee_por_alumno[label][:4]))
+        if datos_alumno:
+            lineas.append(f"[{label} · Antecedentes y Necesidades Educativas Específicas]:\n" + "\n".join(datos_alumno))
+    return "\n\n".join(lineas)
+
+
 def preparar_solicitud(doc,ajustes):
     from services.planeacion import autorizar,resumen_previo
     autorizar(doc,True)
@@ -151,6 +182,9 @@ def preparar_solicitud(doc,ajustes):
     if not resumen:resumen=resumen_previo(doc,fuentes)
     if doc['metadatos'].get('resumen_ia_completo'):
         resumen=doc['metadatos']['resumen_ia_completo'].strip()
+    perfiles=antecedentes_y_nee_individuales(doc,aliases,reversa)
+    if perfiles:
+        resumen=perfiles[:3200]+'\n\n'+resumen[:8800]
     bloques=[]
     from services.planeacion_intervenciones_nee import aplica, bloques as intervenciones
     for i,b in enumerate(intervenciones(doc) if aplica(doc) else [],1):

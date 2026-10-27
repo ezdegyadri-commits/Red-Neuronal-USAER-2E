@@ -27,7 +27,7 @@ def mostrar(prefix,doc,area,campo,aplicar):
         if st.button('Proponer redacción',disabled=not check,key=key+'_generar'):
             try:
                 with st.spinner('Redactando a partir de tus hallazgos…'):
-                    st.session_state[key+'_propuesta']=servicio.generar(resumen,campo)
+                    st.session_state[key+'_propuesta']=servicio.generar(resumen,campo,area=area)
                     st.session_state[key+'_resultado']=st.session_state[key+'_propuesta']
             except Exception:st.warning('No se completó la redacción. Tu texto se conserva y puedes continuar escribiendo.')
         if key+'_propuesta' not in st.session_state:return
@@ -66,6 +66,17 @@ def mostrar_maestro(prefix, doc, area, aplicar):
         c_top1, c_top2 = st.columns([0.72, 0.28])
         with c_top1:
             st.caption(f'Asistente inteligente para el área de **{area}**. Selecciona el apartado que deseas enriquecer:')
+            motor_sel = st.radio(
+                "Motor de IA",
+                ["Gemini Pro (Google)", "ChatGPT (OpenAI)"],
+                horizontal=True,
+                key=key + "_motor_sel"
+            )
+            if "Gemini" in motor_sel:
+                st.session_state['epp_motor'] = 'Gemini (Google)'
+                st.session_state['planeacion_modelo_preferido'] = 'gemini-2.5-pro'
+            else:
+                st.session_state['epp_motor'] = 'ChatGPT (OpenAI)'
         with c_top2:
             if st.button('Volver al formato', key=key+'_cerrar_btn', use_container_width=True):
                 cerrar(); st.rerun(scope='app')
@@ -106,7 +117,7 @@ def mostrar_maestro(prefix, doc, area, aplicar):
         if st.button('Proponer redacción', disabled=not check, key=k_campo+'_generar'):
             try:
                 with st.spinner('Redactando a partir de tus hallazgos…'):
-                    st.session_state[k_campo+'_propuesta'] = servicio.generar(resumen, campo)
+                    st.session_state[k_campo+'_propuesta'] = servicio.generar(resumen, campo, area=area)
                     st.session_state[k_campo+'_resultado'] = st.session_state[k_campo+'_propuesta']
             except Exception:
                 st.warning('No se completó la redacción. Tu texto se conserva y puedes continuar escribiendo.')

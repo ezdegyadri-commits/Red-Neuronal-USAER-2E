@@ -73,4 +73,30 @@ class MotorTests(unittest.TestCase):
         with patch.object(motor.st,'secrets',{'PLANEACION_GEMINI_MODEL':'gemini-3.1-flash-lite'}):
             self.assertEqual(motor.modelo_configurado(),'gemini-3.1-flash-lite')
 
+    def test_chatgpt_openai_directo(self):
+        json_resp = json.dumps({'observaciones':'Propuesta con OpenAI','faltantes':[],'propuestas':[]})
+        state = {'planeacion_motor': 'ChatGPT (OpenAI)'}
+        with patch.object(motor.st, 'session_state', state), \
+             patch.object(motor, '_proponer_openai', return_value=json_resp) as mock_oa:
+            res = motor.proponer('Resumen educativo', 'XXIII', 'Aprendizaje')
+            self.assertIsInstance(res, dict)
+            self.assertEqual(res['observaciones'], 'Propuesta con OpenAI')
+            mock_oa.assert_called_once()
+
+    def test_gemini_pro_preferido(self):
+        respuesta = json.dumps({'observaciones':'Propuesta Gemini Pro','faltantes':[],'propuestas':[]})
+        client = Mock()
+        client.models.generate_content.return_value = SimpleNamespace(text=respuesta)
+        types = SimpleNamespace(HttpOptions=lambda **kw:kw, HttpRetryOptions=lambda **kw:kw)
+        genai = SimpleNamespace(Client=Mock(return_value=client), types=types)
+        google = SimpleNamespace(genai=genai)
+        state = {'planeacion_modelo_preferido': 'gemini-2.5-pro'}
+        with patch.dict(sys.modules, {'google': google, 'google.genai': genai, 'google.genai.types': types}), \
+             patch.object(motor.st, 'secrets', {'GEMINI_API_KEY': 'clave-test'}), \
+             patch.object(motor.st, 'session_state', state):
+            res = motor.proponer('Resumen ficticio', 'XXIII', 'Aprendizaje')
+            self.assertIsInstance(res, dict)
+            self.assertEqual(client.models.generate_content.call_args.kwargs['model'], 'gemini-2.5-pro')
+
 if __name__=='__main__':unittest.main()
+
