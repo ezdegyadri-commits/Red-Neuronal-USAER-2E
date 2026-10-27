@@ -127,9 +127,82 @@ def estadisticas_page(df):
     a3.metric("Edad máxima", int(edades_validas.max()) if not edades_validas.empty else "Sin dato")
     st.caption(f"Ámbito: {seleccion}. Las edades registradas corresponden al corte del 1 de septiembre indicado en el padrón.")
     if vista=='Padrón':
-        from ui.tablas import tabla_paginada
-        columnas=[c for c in ('Nombre_Completo','Grado','Grupo','Condicion_Discapacidad','Tipo_Atencion','Estatus') if c in muestra]
-        tabla_paginada(muestra[columnas].rename(columns={'Nombre_Completo':'Alumno','Condicion_Discapacidad':'Condición','Tipo_Atencion':'Atención'}),'padron_tabla')
+        st.markdown("### 📋 Editor Directo del Padrón de Alumnos")
+        st.caption("Edita directamente cualquier celda (Grado, Grupo, Condición, Atención, Estatus, Sexo, Edad). Al terminar, pulsa «Guardar cambios del padrón» para aplicar a la base central.")
+        alumnos_editables = muestra[
+            muestra.get("ID_Alumno", pd.Series(index=muestra.index, dtype="object"))
+            .fillna("").astype(str).str.strip().ne("")
+        ].copy()
+        if alumnos_editables.empty:
+            st.info("No hay alumnos disponibles para edición.")
+        else:
+            alumnos_editables = alumnos_editables.drop_duplicates("ID_Alumno", keep="first")
+            ids_editables = set(alumnos_editables["ID_Alumno"].astype(str).tolist())
+            cols_presentes = [c for c in ('ID_Alumno', 'Nombre_Completo', 'Grado', 'Grupo', 'Condicion_Discapacidad', 'Tipo_Atencion', 'Estatus', 'Sexo', 'Edad_1_Septiembre') if c in alumnos_editables.columns]
+            df_editor = alumnos_editables[cols_presentes].copy()
+            df_editor = df_editor.rename(columns={'Nombre_Completo': 'Alumno', 'Condicion_Discapacidad': 'Condición', 'Tipo_Atencion': 'Atención', 'Edad_1_Septiembre': 'Edad'})
+            if 'Edad' in df_editor.columns:
+                df_editor['Edad'] = pd.to_numeric(df_editor['Edad'], errors='coerce').fillna(0).astype(int)
+            for col in ('Alumno', 'Grado', 'Grupo', 'Condición', 'Atención', 'Estatus', 'Sexo'):
+                if col in df_editor.columns:
+                    df_editor[col] = df_editor[col].fillna('').astype(str).str.strip()
+            condiciones_lista = ["INTELECTUAL", "BAJA VISIÓN", "CEGUERA", "HIPOACUSIA", "SORDERA", "MOTORA", "MÚLTIPLE", "SORDOCEGUERA", "TEA", "PSICOSOCIAL", "AS", "TDA/TDAH", "APRENDIZAJE", "COMUNICACIÓN", "CONDUCTA"]
+            column_config = {
+                "ID_Alumno": st.column_config.TextColumn("ID Alumno", disabled=True, width="small"),
+                "Alumno": st.column_config.TextColumn("Nombre del Alumno", width="large"),
+                "Grado": st.column_config.SelectboxColumn("Grado", options=["1°", "2°", "3°", "4°", "5°", "6°"], width="small"),
+                "Grupo": st.column_config.TextColumn("Grupo", width="small"),
+                "Condición": st.column_config.SelectboxColumn("Condición", options=condiciones_lista, width="medium"),
+                "Atención": st.column_config.SelectboxColumn("Atención", options=["Individual", "Grupal"], width="small"),
+                "Estatus": st.column_config.SelectboxColumn("Estatus", options=["ACTIVO", "BAJA", "PENDIENTE"], width="small"),
+                "Sexo": st.column_config.SelectboxColumn("Sexo", options=["H", "M"], width="small"),
+                "Edad": st.column_config.NumberColumn("Edad", min_value=3, max_value=25, step=1, width="small")
+            }
+            key_editor = f"padron_directo_editor_{normalizar_texto(seleccion)}"
+            edited_df = st.data_editor(
+                df_editor,
+                column_config=column_config,
+                hide_index=True,
+                use_container_width=True,
+                key=key_editor,
+                num_rows="fixed"
+            )
+            col_btn, _ = st.columns([0.35, 0.65])
+            with col_btn:
+                guardar_directo = st.button("💾 Guardar cambios del padrón", type="primary", key=key_editor+"_btn_guardar", use_container_width=True)
+            if guardar_directo:
+                map_cols = {'Alumno': 'Nombre_Completo', 'Condición': 'Condicion_Discapacidad', 'Atención': 'Tipo_Atencion', 'Edad': 'Edad_1_Septiembre', 'Grado': 'Grado', 'Grupo': 'Grupo', 'Estatus': 'Estatus', 'Sexo': 'Sexo'}
+                total_modificados = 0
+                errores = []
+                for idx in df_editor.index:
+                    aid = str(df_editor.loc[idx, 'ID_Alumno']).strip()
+                    if not aid or aid not in ids_editables: continue
+                    cambios_fila = {}
+                    for c_disp, c_orig in map_cols.items():
+                        if c_disp in df_editor.columns and c_disp in edited_df.columns:
+                            val_ant = df_editor.loc[idx, c_disp]
+                            val_nvo = edited_df.loc[idx, c_disp]
+                            if str(val_ant).strip() != str(val_nvo).strip():
+                                if c_disp == 'Edad':
+                                    val_nvo = int(val_nvo) if val_nvo else ''
+                                elif c_disp == 'Grado':
+                                    from utils.escolar import grado_canonico
+                                    val_nvo = grado_canonico(val_nvo)
+                                cambios_fila[c_orig] = val_nvo
+                    if cambios_fila:
+                        try:
+                            repo.update_alumno(aid, cambios_fila, ids_editables)
+                            total_modificados += 1
+                        except Exception as ex:
+                            errores.append(f"{aid}: {ex}")
+                if total_modificados > 0:
+                    repo.clear_alumnos_cache()
+                    st.success(f"✅ Se actualizaron {total_modificados} alumno(s) exitosamente en la base central.")
+                    st.rerun()
+                elif errores:
+                    st.error("Ocurrieron errores al guardar: " + "; ".join(errores))
+                else:
+                    st.info("No detecté cambios en la tabla. Edita las celdas directamente antes de guardar.")
 
     st.markdown("### Listado nominal para impresión")
     st.caption(
@@ -185,7 +258,7 @@ def estadisticas_page(df):
         width="stretch",
         key=f"listado_nominal_pdf_{normalizar_texto(seleccion)}",
     )
-    with st.expander("Editar o actualizar datos del listado nominal", expanded=False):
+    with st.expander("📝 Formulario individual detallado (CURP y campos adicionales)", expanded=False):
         st.caption(
             "Selecciona un alumno para corregir sus datos, incluida la condición. "
             "Los cambios se guardan en la base central. Los campos vacíos no borran "

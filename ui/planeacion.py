@@ -637,7 +637,8 @@ def _direccion_panel():
     schools=['Todas']+sorted({d['datos']['Escuela regular'] for d in docs})
     school=st.selectbox('Escuela',schools,key=prefix+'_school')
     docs=[d for d in docs if school=='Todas' or d['datos']['Escuela regular']==school]
-    selected=st.selectbox('Documento',range(len(docs)),format_func=lambda i:f"{docs[i]['datos']['Nombre del especialista']} · {docs[i]['formato']} · {docs[i]['datos'].get('Periodo','')} · {docs[i]['estado']}",key=prefix+'_selected')
+    from services.planeacion_recuperacion import titulo_tarjeta
+    selected=st.selectbox('Documento',range(len(docs)),format_func=lambda i:f"{docs[i]['datos']['Nombre del especialista']} · {titulo_tarjeta(docs[i])} · {docs[i]['formato']} · {docs[i]['datos'].get('Periodo','')} · {docs[i]['estado']}",key=prefix+'_selected')
     doc=docs[selected]
     if doc['metadatos'].get('version_contexto')!=servicio.VERSION_CONTEXTO:
         doc=servicio.preparar_contexto(doc)

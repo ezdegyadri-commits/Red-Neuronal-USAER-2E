@@ -78,8 +78,16 @@ def _guardar_aplicacion(prefix,value,manual):
     return not st.session_state.get(prefix+'_pending')
 
 
-def _save(prefix):
-    """Guarda el apartado en curso en el repositorio canónico."""
+def _save(prefix, manual=False):
+    """Guarda el apartado en curso con respuesta instantánea en sesión y sincronización agrupada."""
+    import time
+    st.session_state[prefix+'_pending'] = True
+    now = time.monotonic()
+    if not manual:
+        ultimo = st.session_state.get(prefix+'_ultimo_guardado_red', 0)
+        if now - ultimo < 30:
+            st.session_state[prefix+'_auto_pendiente'] = True
+            return
     try:
         doc=st.session_state[prefix+'_doc'];area=st.session_state[prefix+'_area']
         value=st.session_state[prefix+'_value'];revision=doc['partes'].get(area,{}).get('revision','')
@@ -93,6 +101,8 @@ def _save(prefix):
         st.session_state.pop(prefix+'_error',None)
         st.session_state[prefix+'_pending']=False
         st.session_state[prefix+'_saved']=saved['fecha']
+        st.session_state[prefix+'_ultimo_guardado_red']=now
+        st.session_state.pop(prefix+'_auto_pendiente', None)
     except Exception as exc:
         st.session_state[prefix+'_pending']=True
         st.session_state[prefix+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó el guardado. Tu texto sigue en esta sesión: descarga el respaldo y vuelve a intentar.'
@@ -891,9 +901,9 @@ def epp_page():
 
     with act_col1:
         if user_work_area and st.button("💾 Guardar borrador", key=prefix + '_main_save', use_container_width=True):
-            _save(edit_active_prefix)
+            _save(edit_active_prefix, manual=True)
             if can_edit_concl and 'Conclusión' in doc['partes']:
-                _save(prefix + '_edit_' + doc['id'] + '_Conclusión')
+                _save(prefix + '_edit_' + doc['id'] + '_Conclusión', manual=True)
             st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
             st.success("Borrador guardado exitosamente.")
 
@@ -903,7 +913,7 @@ def epp_page():
             btn_txt = "✅ Área validada" if val_actual else "Confirmar revisión de mi área"
             if st.button(btn_txt, key=prefix + '_main_validate', use_container_width=True):
                 st.session_state[edit_active_prefix + '_value']['validada'] = True
-                _save(edit_active_prefix)
+                _save(edit_active_prefix, manual=True)
                 st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
                 st.success(f"Área {user_work_area} confirmada y validada.")
                 st.rerun()
