@@ -74,28 +74,33 @@ def filtrar_alumnos_por_escuelas(df, escuelas):
         escuelas = [parte.strip() for parte in escuelas.split(",") if parte.strip()]
 
     permitidas = set()
+    from services.planeacion_matricula import clave_escuela
     for valor in escuelas or []:
         valor_n = normalizar_texto(valor)
         if not valor_n:
             continue
         permitidas.add(valor_n)
+        c = clave_escuela(valor)
+        if c:
+            permitidas.add(normalizar_texto(c))
         for nombre, codigo in ESCUELAS_USAER.items():
-            if valor_n in {normalizar_texto(nombre), normalizar_texto(codigo)}:
+            if valor_n in {normalizar_texto(nombre), normalizar_texto(codigo)} or (c and c == codigo):
                 permitidas.update({normalizar_texto(nombre), normalizar_texto(codigo)})
     if not permitidas:
         return df.iloc[0:0].copy()
 
+    df_clean = df.copy()
     mascara = pd.Series(False, index=df.index)
     for columna in columnas:
-        valores = df[columna].fillna("").astype(str).map(normalizar_texto)
+        valores = df_clean[columna].fillna("").astype(str).str.strip().str.upper().map(normalizar_texto)
+        mascara |= valores.isin(permitidas)
         for escuela in permitidas:
-            if len(escuela) < 5:
-                mascara |= valores.eq(escuela)
-            else:
-                mascara |= valores.eq(escuela) | valores.str.contains(
-                    escuela, regex=False, na=False
-                )
-    resultado = df.loc[mascara].copy()
+            if len(escuela) >= 5:
+                mascara |= valores.str.contains(escuela, regex=False, na=False)
+    for col in ("Nombre_Completo", "Nombre_Alumno", "Nombre del alumno"):
+        if col in df_clean.columns:
+            df_clean[col] = df_clean[col].astype(str).str.strip()
+    resultado = df_clean.loc[mascara].copy()
     if "ID_Alumno" in resultado.columns:
         return resultado.drop_duplicates(subset=["ID_Alumno"], keep="first")
     return resultado.drop_duplicates()

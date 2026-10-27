@@ -180,6 +180,62 @@ def distribuir_hallazgos_en_epp(area, texto, campos_actuales):
     return campos_nuevos
 
 
+def generar_texto_conclusion(doc):
+    """Genera una redacción integradora y pedagógicamente sólida para el apartado 7.1. Conclusión."""
+    partes = doc.get('partes', {})
+    
+    # Extraer síntesis y campos clave de cada área
+    cont_apr = partes.get('Aprendizaje', {}).get('contenido', {})
+    txt_apr = [str(v) for k, v in cont_apr.get('campos', {}).items() if str(v).strip()]
+    if cont_apr.get('sintesis'): txt_apr.append(str(cont_apr['sintesis']))
+    txt_apr_str = ' '.join(txt_apr).lower()
+    
+    cont_psi = partes.get('Psicología', {}).get('contenido', {})
+    txt_psi = [str(v) for k, v in cont_psi.get('campos', {}).items() if str(v).strip()]
+    if cont_psi.get('sintesis'): txt_psi.append(str(cont_psi['sintesis']))
+    txt_psi_str = ' '.join(txt_psi).lower()
+    
+    cont_com = partes.get('Comunicación', {}).get('contenido', {})
+    txt_com = [str(v) for k, v in cont_com.get('campos', {}).items() if str(v).strip()]
+    if cont_com.get('sintesis'): txt_com.append(str(cont_com['sintesis']))
+    txt_com_str = ' '.join(txt_com).lower()
+    
+    cont_ts = partes.get('Trabajo Social', {}).get('contenido', {})
+    txt_ts = [str(v) for k, v in cont_ts.get('campos', {}).items() if str(v).strip()]
+    if cont_ts.get('sintesis'): txt_ts.append(str(cont_ts['sintesis']))
+    txt_ts_str = ' '.join(txt_ts).lower()
+    
+    focos = []
+    if any(w in txt_apr_str for w in ('lectura', 'escritura', 'alfabético', 'matemática', 'cálculo', 'curricular', 'conteo')):
+        focos.append("la consolidación de competencias curriculares básicas (lectura, escritura y pensamiento matemático funcional)")
+    else:
+        focos.append("el acceso y progresión en los contenidos curriculares del grado")
+        
+    if any(w in txt_psi_str for w in ('atención', 'concentración', 'impulsiv', 'autorregulación', 'emocion', 'conducta')):
+        focos.append("procesos de atención sostenida y autorregulación socioemocional ante actividades estructuradas")
+    elif 'razonamiento' in txt_psi_str:
+        focos.append("el fortalecimiento del razonamiento lógico-concreto mediante mediación explícita")
+        
+    if any(w in txt_com_str for w in ('habla', 'articulación', 'fonol', 'lenguaje', 'expresiv', 'comunicación', 'saac')):
+        focos.append("el desarrollo de habilidades de comunicación y lenguaje funcional en entornos áulico y social")
+        
+    if any(w in txt_ts_str for w in ('familia', 'acompañamiento', 'hogar', 'asistencia', 'entorno', 'visita')):
+        focos.append("el acompañamiento sistemático y corresponsable desde el contexto sociofamiliar")
+
+    focos_texto = ", ".join(focos) if focos else "el desarrollo integral de sus habilidades conceptuales, prácticas y adaptativas"
+
+    return (
+        f"A partir de la evaluación psicopedagógica interdisciplinaria coordinada por el equipo de USAER, "
+        f"se determina que el/la alumno(a) manifiesta disposición al aprendizaje y fortalezas adaptativas que constituyen "
+        f"el punto de partida pedagógico. Los resultados integrados indican que requiere apoyos educativos específicos "
+        f"focalizados en {focos_texto}.\n\n"
+        f"En concordancia con el modelo social de la inclusión educativa, las barreras para el aprendizaje y la participación (BAP) "
+        f"identificadas corresponden a factores metodológicos y de organización áulica/escolar, las cuales deben atenderse prioritariamente "
+        f"mediante el Diseño Universal para el Aprendizaje (DUA), ajustes razonables pertinentes y trabajo colaborativo permanente "
+        f"entre los especialistas de USAER, los docentes de la escuela regular y la familia, garantizando el pleno ejercicio de su derecho a la educación."
+    )
+
+
 def proponer_nee_segey(doc):
     """Genera propuesta de Conclusión y NEE con fórmula oficial SEGEY a partir de aportaciones del equipo."""
     partes = doc.get('partes', {})
@@ -306,12 +362,7 @@ def proponer_nee_segey(doc):
         }
     ]
 
-    conclusion_txt = (
-        'A partir de la evaluación psicopedagógica interdisciplinaria, se determina que el alumno '
-        'manifiesta fortalezas importantes que constituyen el punto de partida pedagógico. Requiere apoyos '
-        'específicos para superar barreras en el aprendizaje y la participación (BAP) y consolidar las NEE acordadas '
-        'por el equipo de USAER en corresponsabilidad con el personal de la escuela regular y la familia.'
-    )
+    conclusion_txt = generar_texto_conclusion(doc)
 
     campos_conclusion = {
         '7.1. Conclusión': conclusion_txt,
@@ -555,19 +606,15 @@ def ensamblar_epp_completa_desde_documento(doc, texto, nombre_archivo='Documento
                 'Fecha o período': f"Ciclo escolar {doc.get('ciclo', '2026-2027')}"
             })
         cont_concl['nee'] = nuevas_nee
-    else:
-        propuesta = proponer_nee_segey(doc)
+    propuesta = proponer_nee_segey(doc)
+    if not cont_concl.get('nee'):
         cont_concl['nee'] = propuesta['nee']
-        if not cont_concl.get('bap'):
-            cont_concl['bap'] = propuesta['bap']
-        for k, v in propuesta['campos'].items():
-            if not str(cont_concl.get('campos', {}).get(k, '')).strip():
-                cont_concl['campos'][k] = v
-                campos_modificados_totales += 1
-
     if not cont_concl.get('bap'):
-        propuesta = proponer_nee_segey(doc)
         cont_concl['bap'] = propuesta['bap']
+    for k, v in propuesta['campos'].items():
+        if not str(cont_concl.get('campos', {}).get(k, '')).strip():
+            cont_concl.setdefault('campos', {})[k] = v
+            campos_modificados_totales += 1
 
     areas_ensambladas.append('Conclusión y NEE')
 

@@ -184,6 +184,19 @@ def _text(prefix, field, section=None, height=100):
     st.text_area(labels.get(field, field), value=text, key=key, height=height, on_change=_field, args=(prefix, key, section, field))
 
 
+def _puede_editar(field_name, section, target_area, actor_area, can_edit_concl, is_director, user_rol=''):
+    if is_director:
+        return True
+    rol_upper = str(user_rol).upper()
+    if section == 'generales':
+        return (actor_area in ('Trabajo Social', 'Aprendizaje') or 'TRABAJO' in rol_upper or 'APOYO' in rol_upper)
+    if field_name in ('4.1. Orientación temporal', '4.3. Coordinación motriz fina', '4.3. Coordinación motriz gruesa'):
+        return (actor_area in ('Aprendizaje', 'Comunicación') or 'APOYO' in rol_upper or 'COMUNICAC' in rol_upper)
+    if target_area == 'Conclusión':
+        return can_edit_concl
+    return (target_area == actor_area)
+
+
 def _render_field(doc, actor_area, can_edit_concl, is_director, target_area, field_name, section=None, height=95, prefix=''):
     """Renderiza un campo en el Formato Vivo:
     - Editable directamente si el usuario pertenece al área (o coordinadora en Conclusión / Director).
@@ -294,7 +307,11 @@ def epp_page():
         if not schools:
             st.info('No hay escuelas asignadas disponibles para consultar EPP.')
             return
-        school = st.selectbox('Escuela asignada', sorted(schools, key=lambda i: schools[i]), format_func=schools.get, key=prefix + '_escuela')
+        if len(schools) == 1:
+            school = next(iter(schools))
+            st.caption(f"🏫 **Escuela asignada:** {schools[school]}")
+        else:
+            school = st.selectbox('Escuela asignada', sorted(schools, key=lambda i: schools[i]), format_func=schools.get, key=prefix + '_escuela')
         ids = set(frame.loc[frame['ID_Escuela'].astype(str).eq(school), 'ID_Alumno'].astype(str))
         docs = [d for d in docs if d['alumno'] in ids and d['partes']['META']['estado'] != 'ELIMINADO']
         if not docs:

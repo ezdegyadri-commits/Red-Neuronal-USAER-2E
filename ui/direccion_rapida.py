@@ -13,7 +13,7 @@ from utils.text import normalizar_texto
 
 def _control_expedientes_director(df):
     """Vista de control de anexos vinculados; no modifica registros del padrón."""
-    st.divider()
+    st.write("")
     st.markdown("### Control de expedientes · solo Dirección")
     rol = st.session_state.get("rol", "")
     nombre = st.session_state.get("nombre", "")
@@ -177,7 +177,7 @@ def direccion_page_rapida(_df=None):
 
     oficios = st.session_state.get("control_oficios_usaer")
     if oficios is not None:
-        st.divider()
+        st.write("")
         st.markdown("### Control de oficios de comisión")
         if oficios.empty:
             st.info("Aún no se han generado oficios de comisión.")

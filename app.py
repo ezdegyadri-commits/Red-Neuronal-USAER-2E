@@ -9,22 +9,8 @@ from ui.mobile_install import install_metadata, installation_help
 from ui.passkeys import configure_passkey
 from ui.escritura import activar_revision
 from ui.auth import login, logout
-from ui.pages import inicio, expedientes_page, alta_page, bap_page, eventos_page, documentos_page, direccion_page, visitas_page, derivacion_page
-from ui.oficios import oficios_comision_page
-from ui.direccion_oficios import configuracion_oficios_direccion
-from ui.direccion_rapida import direccion_page_rapida
-from ui.sugerencias import anexo4_page
-from ui.estadisticas import estadisticas_page
-from ui.cronogramas import cronogramas_page, cronogramas_direccion
-from ui.horarios_apoyo import horarios_apoyo_page, horarios_apoyo_direccion
-from ui.calendario_eventos import eventos_direccion, calendario_page
-from ui.tramites import tramites_page
 from services.tramites import gestor as gestor_tramites, puede_solicitar
-from ui.planeacion import planeacion_page, direccion_panel
-from ui.epp_acceso import epp_page
-from ui.novedades_supervision import novedades_page
 from ui.sidebar import TITULOS_SIMPLIFICADOS
-from ui.hub import pagina_central_hub
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="collapsed")
 inject()
@@ -132,33 +118,65 @@ if page != "Inicio":
         )
 
 if page=="Inicio":
+    from ui.hub import pagina_central_hub
     pagina_central_hub(authorized, menu, rol, st.session_state.get("nombre", ""))
-elif page=="Expedientes": expedientes_page(authorized)
-elif page=="Anexo III BAP": bap_page(authorized)
-elif page=="Anexo IV Hoja de sugerencias": anexo4_page(authorized)
-elif page=="Anexo V Eventos significativos": eventos_page(authorized)
-elif page=="Estadística": estadisticas_page(authorized)
-elif page=="Documentos": documentos_page(authorized)
-elif page=="Calendario de actividades": calendario_page()
-elif page=="Cronograma mensual": cronogramas_page()
-elif page=="Horarios de apoyo": horarios_apoyo_page()
-elif page=="Trámites": tramites_page()
-elif page=="Planeación e intervención": planeacion_page()
-elif page=="EPP": epp_page()
+elif page=="Expedientes":
+    from ui.pages import expedientes_page
+    expedientes_page(authorized)
+elif page=="Anexo III BAP":
+    from ui.pages import bap_page
+    bap_page(authorized)
+elif page=="Anexo IV Hoja de sugerencias":
+    from ui.sugerencias import anexo4_page
+    anexo4_page(authorized)
+elif page=="Anexo V Eventos significativos":
+    from ui.pages import eventos_page
+    eventos_page(authorized)
+elif page=="Estadística":
+    from ui.estadisticas import estadisticas_page
+    estadisticas_page(authorized)
+elif page=="Documentos":
+    from ui.pages import documentos_page
+    documentos_page(authorized)
+elif page=="Calendario de actividades":
+    from ui.calendario_eventos import calendario_page
+    calendario_page()
+elif page=="Cronograma mensual":
+    from ui.cronogramas import cronogramas_page
+    cronogramas_page()
+elif page=="Horarios de apoyo":
+    from ui.horarios_apoyo import horarios_apoyo_page
+    horarios_apoyo_page()
+elif page=="Trámites":
+    from ui.tramites import tramites_page
+    tramites_page()
+elif page=="Planeación e intervención":
+    from ui.planeacion import planeacion_page
+    planeacion_page()
+elif page=="EPP":
+    from ui.epp_acceso import epp_page
+    epp_page()
 elif page=="Metas personales":
     from ui.metas_personales import page as metas_page
     metas_page()
 elif page=="Juntas académicas":
     from ui.juntas_academicas import page as juntas_page
     juntas_page()
-elif page=="Novedades de supervisión": novedades_page()
+elif page=="Novedades de supervisión":
+    from ui.novedades_supervision import novedades_page
+    novedades_page()
 elif page=="Panel de Dirección":
+    from ui.direccion_rapida import direccion_page_rapida
+    from ui.horarios_apoyo import horarios_apoyo_direccion
+    from ui.direccion_oficios import configuracion_oficios_direccion
     direccion_page_rapida(authorized)
     with st.expander("Novedades de supervisión · ATP"):
         if st.checkbox("Consultar documentos y novedades",key="consultar_novedades_director"):
+            from ui.novedades_supervision import novedades_page
             novedades_page()
     with st.expander("Planes de intervención y planeaciones del equipo"):
         if st.checkbox("Consultar entregas y revisar",key="consultar_planeaciones_director"):
+            from ui.planeacion import direccion_panel
             direccion_panel()
     horarios_apoyo_direccion()
     st.divider()
@@ -178,15 +196,26 @@ elif page=="Panel de Dirección":
             st.rerun()
         elaborar, consulta, actividades = st.tabs(["Mi cronograma de Dirección", "Revisar cronogramas del equipo", "Actividades para todos"])
         with consulta:
+            from ui.cronogramas import cronogramas_direccion
             cronogramas_direccion()
         with elaborar:
+            from ui.cronogramas import cronogramas_page
             cronogramas_page()
         with actividades:
+            from ui.calendario_eventos import eventos_direccion
             eventos_direccion()
 elif page=="Maestros de primaria":
     from ui.docentes_regulares_form import vista_docentes_regulares_admin
     vista_docentes_regulares_admin()
-elif page=="Constancias de visita": visitas_page(authorized)
-elif page=="Alta de alumnos": alta_page(authorized)
-elif page=="Oficios de comisión": oficios_comision_page()
-elif page=="Anexo VII Derivación": derivacion_page(authorized)
+elif page=="Constancias de visita":
+    from ui.pages import visitas_page
+    visitas_page(authorized)
+elif page=="Alta de alumnos":
+    from ui.pages import alta_page
+    alta_page(authorized)
+elif page=="Oficios de comisión":
+    from ui.oficios import oficios_comision_page
+    oficios_comision_page()
+elif page=="Anexo VII Derivación":
+    from ui.pages import derivacion_page
+    derivacion_page(authorized)

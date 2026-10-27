@@ -295,7 +295,7 @@ def _expediente_individual(df):
         else:
             for _,r in tl.sort_values("Fecha",ascending=False).iterrows():
                 st.markdown(f"**{r.get('Fecha','')} · {r.get('Tipo','')}** — {r.get('Titulo','')}\n\n{r.get('Descripcion','')}")
-                st.divider()
+                st.write("")
 
 
 def alta_page(df):
@@ -554,7 +554,7 @@ def alta_page(df):
 
         st.success(f"Expediente creado: {expediente_id(id_a)}")
 
-    st.divider()
+    st.write("")
     st.markdown("### Subir Excel a la base central de alumnos")
     st.caption(
         "Las altas nuevas se agregan al padrón central. Las CURP ya existentes "
@@ -1335,7 +1335,7 @@ def bap_page(df):
     last = st.session_state.get("last_anexo4")
 
     if last:
-        st.divider()
+        st.write("")
         st.markdown("### Convertir la sugerencia en acción")
         st.info(
             "Este es el punto de conexión entre Anexo 4 y Anexo 5: "
@@ -2635,7 +2635,7 @@ def direccion_page(df):
             hide_index=True,
         )
 
-    st.divider()
+    st.write("")
     st.markdown("### Reportes oficiales para supervisión")
     st.caption(
         "Los formatos se crean con la información vigente de alumnos, "
@@ -2700,7 +2700,7 @@ def direccion_page(df):
                 st.error(f"No se pudo generar el formato de personal: {ex}")
 
 
-    st.divider()
+    st.write("")
     st.markdown("### Control de oficios de comisión")
     st.caption(
         "Registro central de los oficios emitidos por maestras y maestros de apoyo. "

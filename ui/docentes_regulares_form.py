@@ -110,7 +110,7 @@ def formulario_publico_docentes():
                 st.error(f"Error al guardar: {e}")
 
     # Lista de los ya registrados en esa escuela para que vean lo que ya se capturó
-    st.markdown("---")
+    st.write("")
     registrados = listar_docentes_regulares(escuela=escuela)
     if registrados:
         st.markdown(f"**Maestros registrados en {escuela}:**")

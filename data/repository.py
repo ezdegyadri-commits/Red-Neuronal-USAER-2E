@@ -25,8 +25,11 @@ INTEGRATED_HEADERS={
 'Relaciones_Expediente':['ID_Relacion','ID_Expediente','ID_Alumno','Tipo_Registro','ID_Registro','Fecha','Estado'],
 'Linea_Tiempo':['ID_Evento_Timeline','ID_Expediente','ID_Alumno','Fecha','Tipo','Titulo','Descripcion','Usuario']}
 
+import streamlit as st
+
 def read(name): return df_sheet(name)
-def alumnos():
+@st.cache_data(ttl=120, show_spinner=False)
+def _alumnos_operativos():
  """Lee solo la base interna vigente y omite columnas duplicadas heredadas."""
  frame = read('Alumnos')
  columnas = [col for col in BASE_HEADERS['Alumnos'] if col in frame.columns]
@@ -58,6 +61,16 @@ def alumnos():
   from utils.escolar import grado_canonico
   frame=frame.copy();frame['Grado']=frame['Grado'].map(grado_canonico)
  return frame
+ 
+def clear_alumnos_cache():
+ try:
+  _alumnos_operativos.clear()
+ except Exception:
+  pass
+
+def alumnos():
+ """Lee la base interna vigente con caché operativa en memoria."""
+ return _alumnos_operativos().copy()
 
 def update_alumno(id_alumno, cambios, allowed_ids):
  """Actualiza campos permitidos de un alumno en la hoja central.

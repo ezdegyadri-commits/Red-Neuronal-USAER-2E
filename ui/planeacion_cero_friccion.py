@@ -342,10 +342,8 @@ def hoja(prefix, volver=None):
             """, unsafe_allow_html=True)
             
         st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
-        guardar = st.form_submit_button('Guardar Planeación', type='primary', use_container_width=True)
-        migrar = st.form_submit_button('Guardar y abrir la hoja de edición directa', use_container_width=True)
-        guardar = guardar or migrar
-        if migrar:accion = 'Solo guardar'
+        guardar = st.form_submit_button('💾 Guardar Planeación Completa', type='primary', use_container_width=True)
+        migrar = False
         
     if guardar:
         try:
@@ -411,9 +409,15 @@ def hoja(prefix, volver=None):
                 boton([a['ID_Alumno'] for a in snapshot['datos']['Alumnos']], 'Plan de intervención' if doc['formato'] == 'XXI' else 'Planeación del servicio', pdf, 'planeacion-'+doc['id']+'.pdf', prefix+'_captura_archivo', doc['id'], doc['datos']['Curso escolar'], disabled=bool(st.session_state.get(prefix+'_pending')))
             except Exception:
                 st.caption('La descarga PDF no está disponible ahora. Tu captura se conserva.')
-        if st.button('Regresar al inicio del módulo', key=prefix+'_captura_volver', use_container_width=True):
-            if volver:
-                volver()
-            else:
-                st.session_state[raiz(prefix)+'_viva_entrada'] = True
-            st.rerun()
+        c_nav1, c_nav2 = st.columns(2)
+        with c_nav1:
+            if st.button('✏️ Cambiar a editor por apartados', key=prefix+'_captura_migrar', use_container_width=True):
+                st.session_state[prefix+'_editor_directo'] = True
+                st.rerun()
+        with c_nav2:
+            if st.button('Regresar al inicio del módulo', key=prefix+'_captura_volver', use_container_width=True):
+                if volver:
+                    volver()
+                else:
+                    st.session_state[raiz(prefix)+'_viva_entrada'] = True
+                st.rerun()

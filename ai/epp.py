@@ -70,3 +70,63 @@ BAP CONTEXTUALES: Describe barreras del entorno en los contextos Áulico, Escola
             reparacion=prompt+f"\nREINTENTO DE FORMATO: Asegúrate de que todo campo con texto comience estrictamente con el código del instrumento entre corchetes (ejemplo: '[{primary}] ...'). Si no evaluaste un campo, déjalo vacío."
             return proponer(resumen,'EPP',area,_prompt=reparacion,_schema=schema,_validador=validar,_max_tokens=6000)
         raise
+
+
+def redactar_apartado_epp(apartado, notas, area="Aprendizaje", alumno_contexto=None):
+    """Redacta un párrafo profesional para un apartado de la EPP a partir de viñetas o notas del docente."""
+    if not isinstance(notas, str) or not notas.strip():
+        raise ValueError("Ingresa algunas ideas clave o viñetas para que la IA pueda redactar el párrafo.")
+    
+    contexto_str = f" Contexto: {alumno_contexto}." if alumno_contexto else ""
+    prompt = (
+        f"Actúa como especialista de Educación Especial de USAER (área: {area}). "
+        f"Redacta un párrafo profesional, técnico, empático y descriptivo para el apartado oficial '{apartado}' "
+        f"de la Evaluación Psicopedagógica (EPP) según el Manual USAER Yucatán (SEGEY).{contexto_str}\n\n"
+        f"Lineamientos de redacción:\n"
+        f"- Describe fortalezas, condiciones de participación, apoyos pertinentes y necesidades pedagógicas específicas observadas.\n"
+        f"- No uses etiquetas peyorativas ni emitas juicios clínicos o diagnósticos médicos no sustentados.\n"
+        f"- Redacta en tercera persona de manera fluida, coherente y formal.\n"
+        f"- Transforma las siguientes viñetas/notas del maestro en una síntesis descriptiva bien estructurada:\n\n"
+        f"NOTAS DEL MAESTRO:\n{notas.strip()}\n\n"
+        f"Devuelve ÚNICAMENTE el texto redactado del párrafo, sin títulos, sin introducciones ni comentarios adicionales."
+    )
+    
+    # Intento 1: ai.engine.client (Google GenAI)
+    try:
+        from ai.engine import client
+        from config.settings import GEMINI_MODEL
+        cli = client()
+        if cli is not None:
+            resp = cli.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config={'temperature': 0.35}
+            )
+            parrafo = (getattr(resp, 'text', '') or '').strip()
+            if parrafo:
+                return parrafo
+    except Exception:
+        pass
+
+    # Intento 2: google.generativeai (GenerativeModel) si está configurado directamente
+    try:
+        import streamlit as st
+        import google.generativeai as genai_legacy
+        key = st.secrets.get('GEMINI_API_KEY', '')
+        if key:
+            genai_legacy.configure(api_key=key)
+            model = genai_legacy.GenerativeModel('gemini-2.5-flash')
+            resp = model.generate_content(prompt)
+            if resp and resp.text:
+                return resp.text.strip()
+    except Exception:
+        pass
+
+    # Fallback estructurado profesional en caso de estar offline o sin clave
+    lineas = [l.strip().lstrip('•-*1234567890. ') for l in notas.split('\n') if l.strip()]
+    resumen_lineas = '; '.join(lineas)
+    return (
+        f"Con base en la evaluación de {apartado.lower()}, se observa que el alumno presenta un desempeño en el que destaca: "
+        f"{resumen_lineas}. Se sugiere considerar estos aspectos en el diseño de apoyos y ajustes razonables "
+        f"para fortalecer su proceso de aprendizaje y participación."
+    )

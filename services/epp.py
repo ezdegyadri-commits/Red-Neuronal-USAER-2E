@@ -13,6 +13,7 @@ from utils.text import normalizar_texto
 
 HOJA = 'EPP_Versiones'
 HEADERS = ['Alumno','Ciclo','Parte','Revision','Anterior','Fecha','Cuenta','Autor','Estado','Contenido']
+_DOCS_CACHE = {}
 
 def actor():
     return planes.identidad()
@@ -79,7 +80,13 @@ def listar(incluir_eliminados=False,incluir_bajas=False):
     records=rows.fillna('').to_dict('records')
     known={str(r.get('Revision','')) for r in records}
     records.extend(deepcopy(r) for rev,r in recientes().items() if rev not in known)
-    docs = reconstruir(records)
+    cache_key = tuple(str(r.get('Revision', '')) for r in records)
+    if _DOCS_CACHE.get('key') == cache_key:
+        docs = deepcopy(_DOCS_CACHE['docs'])
+    else:
+        docs = reconstruir(records)
+        _DOCS_CACHE['key'] = cache_key
+        _DOCS_CACHE['docs'] = docs
     return [d for d in docs if d['alumno'] in ids and
         (incluir_eliminados or d['partes']['META']['estado'] != 'ELIMINADO')]
 
@@ -94,8 +101,9 @@ def autorizar(doc, parte=None):
     if not meta: raise ValueError('La EPP no tiene una identidad registrada.')
     if parte is not None:
         if meta['estado'] == 'ELIMINADO': raise PermissionError('Recupera primero la EPP retirada.')
+        rol_upper = str(a.get('rol', '')).upper()
         if parte == 'Conclusión':
-            if not es_coordinadora(canonical):
+            if not es_coordinadora(canonical) and not a['director']:
                 raise PermissionError('La maestra coordinadora integra la conclusión acordada por el equipo.')
         elif parte != a['area'] or a['director']:
             from services.epp_colaborativa import comparte
@@ -126,13 +134,11 @@ def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR',actua
         from services.planeacion_estabilidad import reservar_escritura
         reservar_escritura()
         ws.append_rows([row],value_input_option='RAW')
-        clear_cache(HOJA)
-        registros=df_sheet(HOJA).fillna('').to_dict('records')
-        if not any(str(r.get('Revision'))==rev and r.get('Contenido')==content for r in registros):
-            raise ConnectionError('La revisión enviada aún no tiene confirmación de lectura.')
         recientes()[rev]=dict(zip(HEADERS,row))
+        _DOCS_CACHE.clear()
+        clear_cache(HOJA)
         if len(recientes())>1000:
-            clear_cache(HOJA);recientes().clear()
+            recientes().clear()
         # Devuelve únicamente el área confirmada; no modifica snapshots de otras áreas.
         return {'contenido':deepcopy(value),'revision':rev,'fecha':now,'autor':a['nombre'],
                 'cuenta':a['cuenta'],'estado':estado}

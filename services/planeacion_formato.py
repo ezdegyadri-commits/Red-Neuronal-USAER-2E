@@ -25,6 +25,34 @@ def nueva_fila(doc,tabla,indice=None):
     if type(indice) is not int or not 0<=indice<=len(doc['tablas'][tabla]):raise ValueError('Elige una posición de fila válida.')
     result=deepcopy(doc);result['tablas'][tabla].insert(indice,dict.fromkeys(headers,''));return result
 
+def insertar_fila(doc,tabla,indice):
+    formato = doc.get('formato')
+    headers = None
+    if formato and formato in FORMATOS:
+        headers = FORMATOS[formato]['tablas'].get(tabla)
+    if headers is None:
+        for fmt in FORMATOS.values():
+            if tabla in fmt.get('tablas', {}):
+                headers = fmt['tablas'][tabla]
+                break
+    target_key = 'tablas' if 'tablas' in doc else 'datos'
+    if headers is None:
+        current_rows = doc.get(target_key, {}).get(tabla, [])
+        if current_rows and isinstance(current_rows, list) and isinstance(current_rows[0], dict):
+            headers = list(current_rows[0].keys())
+        else:
+            headers = ['Acciones', 'Objetivo', 'Fecha']
+    result=deepcopy(doc)
+    if target_key not in result:
+        result[target_key] = {}
+    if tabla not in result[target_key]:
+        result[target_key][tabla] = []
+    if len(result[target_key][tabla])>=100:
+        raise ValueError('Revisa las filas existentes antes de añadir otra.')
+    indice=max(0,min(indice,len(result[target_key][tabla])))
+    result[target_key][tabla].insert(indice,dict.fromkeys(headers,''))
+    return result
+
 def quitar_fila(doc,tabla,indice):
     if tabla not in FORMATOS[doc['formato']]['tablas']:raise ValueError('Tabla fuera del formato.')
     if not 0<=indice<len(doc['tablas'][tabla]):raise ValueError('La fila cambió.')

@@ -200,8 +200,19 @@ def clear_cache(name=None):
     """
     if name is None:
         read_sheet.clear()
+        try:
+            from data.repository import clear_alumnos_cache
+            clear_alumnos_cache()
+        except Exception:
+            pass
     else:
         read_sheet.clear(name)
+        if name == 'Alumnos':
+            try:
+                from data.repository import clear_alumnos_cache
+                clear_alumnos_cache()
+            except Exception:
+                pass
 
 @st.cache_resource(ttl=300,show_spinner=False)
 def _worksheet_cached(name,book_id,_book):

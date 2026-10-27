@@ -140,7 +140,7 @@ def _procesar_openai(ruta, prompt, progreso):
 
 
 def generador_relatorias_director():
-    st.divider()
+    st.write("")
     st.markdown("### Generador de relatorías del CTE")
     st.caption("Genera, revisa y descarga la relatoría en PDF carta con membrete, sello y hoja de firmas.")
     st.warning("El audio se enviará al proveedor de IA seleccionado. Evita incluir datos sensibles de alumnos y confirma que tienes autorización.")

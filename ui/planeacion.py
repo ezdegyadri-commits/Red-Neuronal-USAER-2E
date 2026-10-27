@@ -755,35 +755,60 @@ def _planeacion_page_clasica():
         if prefix+'_doc' not in st.session_state and mis_recientes:
             with st.container(border=True):
                 st.markdown('##### 📂 Continuar donde me quedé')
-                st.caption('Borradores guardados para este ciclo y modalidad:')
-                c_sel,c_btn=st.columns([3,1])
-                rec_idx=c_sel.selectbox('Mis borradores',range(len(mis_recientes)),
-                    format_func=lambda idx:f"{mis_recientes[idx]['datos']['Escuela regular']} · Anexo {mis_recientes[idx]['formato']} · {mis_recientes[idx]['datos'].get('Periodo','')} ({mis_recientes[idx]['estado']})",
-                    key=prefix+'_quick_open_sel',label_visibility='collapsed')
-                if c_btn.button('Abrir borrador',key=prefix+'_quick_open_btn',type='primary'):
-                    _open(prefix,mis_recientes[rec_idx]);st.rerun()
+                if len(mis_recientes) == 1:
+                    b_doc = mis_recientes[0]
+                    label_btn = f"Continuar: {b_doc['datos'].get('Escuela regular', '')} · Anexo {b_doc['formato']} · {b_doc['datos'].get('Periodo', '')} ({b_doc.get('estado', 'BORRADOR')})"
+                    if st.button(f'▶️ {label_btn}', key=prefix+'_quick_open_single', type='primary', use_container_width=True):
+                        _open(prefix, b_doc)
+                        st.rerun()
+                else:
+                    st.caption('Borradores guardados para este ciclo y modalidad:')
+                    c_sel, c_btn = st.columns([3, 1])
+                    rec_idx = c_sel.selectbox(
+                        'Mis borradores',
+                        range(len(mis_recientes)),
+                        format_func=lambda idx: f"{mis_recientes[idx]['datos']['Escuela regular']} · Anexo {mis_recientes[idx]['formato']} · {mis_recientes[idx]['datos'].get('Periodo','')} ({mis_recientes[idx]['estado']})",
+                        key=prefix+'_quick_open_sel',
+                        label_visibility='collapsed'
+                    )
+                    if c_btn.button('Abrir borrador', key=prefix+'_quick_open_btn', type='primary', use_container_width=True):
+                        _open(prefix, mis_recientes[rec_idx])
+                        st.rerun()
 
-        with st.expander('Crear documento',expanded=prefix+'_doc' not in st.session_state):
-            frame=servicio.padron_autorizado()
+        with st.expander('Crear documento', expanded=prefix+'_doc' not in st.session_state):
+            frame = servicio.padron_autorizado()
             from services.planeacion_modalidad import filtrar
-            incluir=False
-            if modalidad=='grupal':incluir=st.checkbox('Incluir alumnos de atención individual en esta sesión grupal',key=prefix+'_incluir_individuales')
-            frame=filtrar(frame,modalidad,incluir)
-            if frame.empty:st.info('No hay alumnos asignados disponibles.');return
-            schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
-            si=st.selectbox('Escuela asignada',range(len(schools)),format_func=lambda i:schools[i]['Nombre_Escuela'],key=prefix+'_newschool')
-            options=frame.loc[frame['ID_Escuela'].astype(str)==str(schools[si]['ID_Escuela'])].to_dict('records')
-            labels={str(a['ID_Alumno']):str(a['Nombre_Completo'])+' · '+str(a.get('Grado',''))+' '+str(a.get('Grupo','')) for a in options}
-            formatos=['XXV' if actor['area']=='Trabajo Social' else 'XXIII']
-            if modalidad=='individual' and actor['area']=='Aprendizaje' and not actor['director']:formatos.append('XXI')
-            formato=st.selectbox('Documento',formatos,format_func=lambda f:FORMATOS[f]['titulo'],key=prefix+'_newformat')
-            guias_area={
-                'Aprendizaje': '📌 Maestra de Apoyo: Anexo XXIII (Planeación trimestral) o Anexo XXI (Plan de intervención individual con IEPP).',
-                'Psicología': '📌 Psicología: Anexo XXIII (Competencias socioemocionales de Zona 001 y convivencia escolar).',
-                'Comunicación': '📌 Comunicación: Anexo XXIII (Habilidades comunicativas, SAAC y participación en aula).',
-                'Trabajo Social': '📌 Trabajo Social: Anexo XXV (Barreras escolares/familiares y redes de apoyo institucional).'
-            }
-            if actor['area'] in guias_area:st.caption(guias_area[actor['area']])
+            incluir = False
+            if modalidad == 'grupal':
+                incluir = st.checkbox('Incluir alumnos de atención individual en esta sesión grupal', key=prefix+'_incluir_individuales')
+            frame = filtrar(frame, modalidad, incluir)
+            if frame.empty:
+                st.info('No hay alumnos asignados disponibles.')
+                return
+            schools = frame[['ID_Escuela', 'Nombre_Escuela']].drop_duplicates().to_dict('records')
+            if len(schools) == 1:
+                si = 0
+                st.markdown(f"🏫 **Escuela asignada:** {schools[0]['Nombre_Escuela']}")
+            else:
+                si = st.selectbox('Escuela asignada', range(len(schools)), format_func=lambda i: schools[i]['Nombre_Escuela'], key=prefix+'_newschool')
+            options = frame.loc[frame['ID_Escuela'].astype(str) == str(schools[si]['ID_Escuela'])].to_dict('records')
+            labels = {str(a['ID_Alumno']): str(a['Nombre_Completo']) + ' · ' + str(a.get('Grado', '')) + ' ' + str(a.get('Grupo', '')) for a in options}
+            formatos = ['XXV' if actor['area'] == 'Trabajo Social' else 'XXIII']
+            if modalidad == 'individual' and actor['area'] == 'Aprendizaje' and not actor['director']:
+                formatos.append('XXI')
+            if len(formatos) == 1:
+                formato = formatos[0]
+                st.caption(f"📄 **Documento deducido por tu área ({actor['area']}):** {FORMATOS[formato]['titulo']}")
+            else:
+                formato = st.selectbox('Documento', formatos, format_func=lambda f: FORMATOS[f]['titulo'], key=prefix+'_newformat')
+                guias_area = {
+                    'Aprendizaje': '📌 Maestra de Apoyo: Anexo XXIII (Planeación trimestral) o Anexo XXI (Plan de intervención individual con IEPP).',
+                    'Psicología': '📌 Psicología: Anexo XXIII (Competencias socioemocionales de Zona 001 y convivencia escolar).',
+                    'Comunicación': '📌 Comunicación: Anexo XXIII (Habilidades comunicativas, SAAC y participación en aula).',
+                    'Trabajo Social': '📌 Trabajo Social: Anexo XXV (Barreras escolares/familiares y redes de apoyo institucional).'
+                }
+                if actor['area'] in guias_area:
+                    st.caption(guias_area[actor['area']])
 
             if modalidad=='individual':
                 elegido=st.selectbox('Alumno en atención individual',list(labels),format_func=labels.get,index=None,key=prefix+'_newid')

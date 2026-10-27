@@ -14,7 +14,7 @@ def configuracion_oficios_direccion():
     if not es_direccion(st.session_state.get("rol", "")):
         st.error("La configuración y emisión de oficios está reservada a Dirección.")
         return
-    st.divider()
+    st.write("")
     st.markdown("### Configuración de oficios de comisión")
     st.caption(
         "Define una sola vez la fecha, el destino y el horario. Las maestras y "
@@ -77,7 +77,7 @@ def configuracion_oficios_direccion():
         except Exception as ex:
             st.error(f"No fue posible guardar la configuración: {ex}")
 
-    st.divider()
+    st.write("")
     st.markdown("### Generador de oficios de comisión")
     st.caption("La numeración automática inicia en 022. Los folios 001–021 quedan reservados para registrar oficios previos manualmente.")
     try:

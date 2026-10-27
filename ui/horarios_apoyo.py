@@ -1114,13 +1114,17 @@ def horarios_apoyo_page():
 
     st.title("Horarios de apoyo")
     st.caption("Organiza tus sesiones, consulta referencias de la escuela y recibe aquí los cronogramas del equipo especialista.")
-    escuela = st.selectbox("Escuela asignada", escuelas, key="horario_apoyo_escuela")
+    if len(escuelas) == 1:
+        escuela = escuelas[0]
+        st.markdown(f"🏫 **Escuela asignada:** {escuela}")
+    else:
+        escuela = st.selectbox("Escuela asignada", escuelas, key="horario_apoyo_escuela")
     clave_identidad = f"{normalizar_texto(nombre)}_{normalizar_texto(escuela)}"
     if st.button("↻ Actualizar horarios guardados", key=f"actualizar_horarios_{clave_identidad}"):
         cargar_restricciones.clear()
         cargar_horarios_apoyo.clear()
         st.rerun()
-    st.divider()
+    st.write("")
 
     try:
         restricciones = cargar_restricciones(escuela)

@@ -79,7 +79,13 @@ def padron_autorizado():
         frame=frame.loc[~frame['Estatus'].fillna('').map(normalizar_texto).isin({'BAJA','INACTIVO','RETIRADO','ELIMINADO'})].copy()
     if actor['perfil'] and not actor['director'] and not frame.empty:
         permitidas = {normalizar_texto(e) for e in actor['perfil']['escuelas']}
-        frame = frame.loc[frame['Nombre_Escuela'].map(normalizar_texto).isin(permitidas)].copy()
+        for e in list(permitidas):
+            c = clave_escuela(e)
+            if c:
+                permitidas.add(normalizar_texto(c))
+                permitidas.add(c)
+        escuelas_frame = frame['Nombre_Escuela'].fillna('').astype(str).str.strip().str.upper().map(normalizar_texto)
+        frame = frame.loc[escuelas_frame.isin(permitidas) | frame['ID_Escuela'].map(clave_escuela).isin(permitidas)].copy()
     if hasattr(st, 'session_state'):
         st.session_state[cache_key] = frame
         st.session_state[cache_key+'_leido_en']=ahora
@@ -148,7 +154,7 @@ def autorizar(doc, escribir=False, incluir_bajas=False, frame=None):
     actor = identidad()
     if doc.get('formato') not in FORMATOS or doc.get('estado') not in ESTADOS:
         raise ValueError('Documento no válido.')
-    ids = [texto(r.get('ID_Alumno')) for r in doc['datos']['Alumnos']]
+    ids = [texto(r.get('ID_Alumno')).strip() for r in doc['datos']['Alumnos']]
     if not ids or len(set(ids))!=len(ids):
         raise ValueError('Selección de alumnos no válida.')
     if frame is None:
@@ -157,9 +163,17 @@ def autorizar(doc, escribir=False, incluir_bajas=False, frame=None):
             from services.padron_movimientos import visibles
             frame=visibles()
         else:frame = padron_autorizado()
-    faltantes=set(ids)-(set(frame['ID_Alumno'].astype(str)) if 'ID_Alumno' in frame else set())
-    actuales = frame.loc[frame['ID_Alumno'].astype(str).isin(ids)]
-    ajenos={str(r['ID_Alumno']) for r in actuales.to_dict('records') if clave_escuela(r['ID_Escuela'])!=clave_escuela(doc['datos']['ID_Escuela'])}
+    frame_ids = set(frame['ID_Alumno'].fillna('').astype(str).str.strip()) if 'ID_Alumno' in frame else set()
+    faltantes = set(ids) - frame_ids
+    actuales = frame.loc[frame['ID_Alumno'].fillna('').astype(str).str.strip().isin(ids)]
+    if faltantes and 'Nombre_Completo' in frame.columns:
+        nombres_doc = {texto(r.get('Nombre del alumno', r.get('Nombre_Completo', ''))).strip().upper() for r in doc['datos']['Alumnos']}
+        frame_nombres = frame['Nombre_Completo'].fillna('').astype(str).str.strip().str.upper()
+        por_nombre = frame.loc[frame_nombres.isin(nombres_doc)]
+        if not por_nombre.empty:
+            actuales = pd.concat([actuales, por_nombre], ignore_index=True).drop_duplicates(subset=['ID_Alumno'] if 'ID_Alumno' in frame.columns else None)
+            faltantes = set(ids) - set(actuales['ID_Alumno'].fillna('').astype(str).str.strip())
+    ajenos={str(r['ID_Alumno']).strip() for r in actuales.to_dict('records') if clave_escuela(r['ID_Escuela'])!=clave_escuela(doc['datos']['ID_Escuela'])}
     if incluir_bajas and (faltantes or ajenos):
         from services.planeacion_compartida import lectura_grupal_historica
         if lectura_grupal_historica(doc,frame,actor,faltantes|ajenos):return actor
@@ -169,11 +183,19 @@ def autorizar(doc, escribir=False, incluir_bajas=False, frame=None):
             try:
                 escuela_doc = clave_escuela(doc['datos']['ID_Escuela'])
                 df_alumnos = repo.alumnos()
-                en_escuela = df_alumnos.loc[df_alumnos['ID_Escuela'].map(clave_escuela) == escuela_doc]
-                ids_en_escuela = set(en_escuela['ID_Alumno'].astype(str)) if 'ID_Alumno' in en_escuela.columns else set()
+                df_escuelas = df_alumnos['ID_Escuela'].fillna('').astype(str).str.strip().str.upper().map(clave_escuela)
+                en_escuela = df_alumnos.loc[df_escuelas == escuela_doc]
+                ids_en_escuela = set(en_escuela['ID_Alumno'].fillna('').astype(str).str.strip()) if 'ID_Alumno' in en_escuela.columns else set()
                 if faltantes.issubset(ids_en_escuela):
                     faltantes = set()
-                    actuales = pd.concat([actuales, en_escuela.loc[en_escuela['ID_Alumno'].astype(str).isin(ids)]], ignore_index=True).drop_duplicates(subset=['ID_Alumno'])
+                    actuales = pd.concat([actuales, en_escuela.loc[en_escuela['ID_Alumno'].fillna('').astype(str).str.strip().isin(ids)]], ignore_index=True).drop_duplicates(subset=['ID_Alumno'])
+                else:
+                    nombres_doc = {texto(r.get('Nombre del alumno', r.get('Nombre_Completo', ''))).strip().upper() for r in doc['datos']['Alumnos']}
+                    en_escuela_nom = en_escuela['Nombre_Completo'].fillna('').astype(str).str.strip().str.upper()
+                    por_nom = en_escuela.loc[en_escuela_nom.isin(nombres_doc)]
+                    if not por_nom.empty:
+                        faltantes = set()
+                        actuales = pd.concat([actuales, por_nom], ignore_index=True).drop_duplicates(subset=['ID_Alumno'])
             except Exception:
                 pass
         if faltantes:raise PermissionError('Este documento contiene alumnos fuera de tu asignación actual.')

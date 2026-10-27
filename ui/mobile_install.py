@@ -61,7 +61,9 @@ def installation_help():
 
 
 def install_metadata():
-    # Initialize metadata on every connection, including installed app launches.
+    # Initialize metadata on connection without re-injecting the iframe on every interaction.
     # No private data or credentials are passed to JavaScript.
-    import streamlit.components.v1 as components
-    components.html(installation_html(), height=0, scrolling=False)
+    if not st.session_state.get('_mobile_install_meta_init'):
+        import streamlit.components.v1 as components
+        components.html(installation_html(), height=0, scrolling=False)
+        st.session_state['_mobile_install_meta_init'] = True

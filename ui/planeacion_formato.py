@@ -97,10 +97,22 @@ def _tabla(prefix,tabla,persist,abrir):
                             st.session_state[prefix+'_doc'] = f.editar_celda(st.session_state[prefix+'_doc'], tabla, i, campo, c_sel)
                             st.session_state.pop(prefix+'_pdf', None)
                             persist(prefix, automatic=True)
-                            st.rerun()
-            confirmar=st.checkbox('Confirmar retiro de esta fila',key=f'{prefix}_{gen}_{tabla}_{i}_retirar_confirm')
-            if st.button('Retirar fila '+str(i+1),key=f'{prefix}_{gen}_{tabla}_{i}_retirar',disabled=not confirmar):
-                abrir(prefix,f.quitar_fila(st.session_state[prefix+'_doc'],tabla,i));persist(prefix);st.rerun()
+            c_act1, c_act2, c_act3 = st.columns([1, 1, 1])
+            with c_act1:
+                if st.button('⬆️ Insertar arriba', key=f'{prefix}_{gen}_{tabla}_{i}_ins_arriba', help='Insertar una fila vacía arriba de esta'):
+                    abrir(prefix, f.insertar_fila(st.session_state[prefix+'_doc'], tabla, i))
+                    persist(prefix, automatic=True)
+                    st.rerun()
+            with c_act2:
+                if st.button('⬇️ Insertar abajo', key=f'{prefix}_{gen}_{tabla}_{i}_ins_abajo', help='Insertar una fila vacía debajo de esta'):
+                    abrir(prefix, f.insertar_fila(st.session_state[prefix+'_doc'], tabla, i + 1))
+                    persist(prefix, automatic=True)
+                    st.rerun()
+            with c_act3:
+                if st.button('🗑️ Eliminar fila', key=f'{prefix}_{gen}_{tabla}_{i}_eliminar', help='Eliminar esta fila de la planeación'):
+                    abrir(prefix, f.quitar_fila(st.session_state[prefix+'_doc'], tabla, i))
+                    persist(prefix, automatic=True)
+                    st.rerun()
     if not doc['tablas'][tabla]:st.caption('Sin contenido todavía. Redacta o solicita una propuesta a partir de evidencia documentada.')
     if st.button('Añadir fila · '+f.TITULOS[tabla],key=f'{prefix}_{gen}_{tabla}_add'):
         abrir(prefix,f.nueva_fila(st.session_state[prefix+'_doc'],tabla));persist(prefix);st.rerun()

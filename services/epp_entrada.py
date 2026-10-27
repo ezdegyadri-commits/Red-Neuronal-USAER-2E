@@ -34,6 +34,37 @@ def datos_registrados(alumno):
         except ValueError: pass
     if 'Edad' not in result and texto(alumno.get('Edad_1_Septiembre')):
         result['Edad']=texto(alumno['Edad_1_Septiembre'])+' años (referencia del padrón al 1 de septiembre; confirmar ciclo)'
+
+    # Extracción de la base de datos de Entrevista de Trabajo Social / Derivación
+    try:
+        from data import repository as repo
+        df_anexo7 = repo.anexo7()
+        if df_anexo7 is not None and not df_anexo7.empty and 'ID_Alumno' in df_anexo7.columns:
+            aid = str(alumno.get('ID_Alumno', '')).strip()
+            coincidencias = df_anexo7.loc[df_anexo7['ID_Alumno'].fillna('').astype(str).str.strip() == aid]
+            if not coincidencias.empty:
+                ultimo = coincidencias.iloc[-1].to_dict()
+                if not result.get('Fecha de nacimiento') and texto(ultimo.get('Fecha_Nacimiento')):
+                    result['Fecha de nacimiento'] = texto(ultimo['Fecha_Nacimiento'])
+                if not result.get('Nombre del maestro/a') and texto(ultimo.get('Docente_Regular')):
+                    result['Nombre del maestro/a'] = texto(ultimo['Docente_Regular'])
+                if not result.get('Motivo de evaluación') and texto(ultimo.get('Aspecto_Relevante')):
+                    result['Motivo de evaluación'] = texto(ultimo['Aspecto_Relevante'])
+                r_json = ultimo.get('Respuestas_JSON')
+                if r_json:
+                    try:
+                        resp_data = json.loads(r_json) if isinstance(r_json, str) else r_json
+                        if isinstance(resp_data, dict):
+                            for g_field in ('Domicilio', 'Nombre de la madre', 'Nombre del padre',
+                                           'Escolaridad de la madre', 'Escolaridad del padre',
+                                           'Ocupación de la madre', 'Ocupación del padre'):
+                                if not result.get(g_field) and texto(resp_data.get(g_field)):
+                                    result[g_field] = texto(resp_data[g_field])
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
     return result
 
 def datos_entrevista(doc):
