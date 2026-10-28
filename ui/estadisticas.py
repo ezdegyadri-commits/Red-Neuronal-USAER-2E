@@ -67,6 +67,8 @@ def estadisticas_page(df):
     )
     nombre = st.session_state.get("nombre", "")
     rol = st.session_state.get("rol", "")
+    from ui.padron_integridad import panel as integridad
+    integridad()
     from ui.padron_movimientos import recuperar
     recuperar()
     asignadas = escuelas_asignadas(nombre, rol)
@@ -151,7 +153,7 @@ def estadisticas_page(df):
                 "ID_Alumno": st.column_config.TextColumn("ID Alumno", disabled=True, width="small"),
                 "Alumno": st.column_config.TextColumn("Nombre del Alumno", width="large"),
                 "Grado": st.column_config.SelectboxColumn("Grado", options=["1°", "2°", "3°", "4°", "5°", "6°"], width="small"),
-                "Grupo": st.column_config.TextColumn("Grupo", width="small"),
+                "Grupo": st.column_config.SelectboxColumn("Grupo", options=list(dict.fromkeys(['',*'ABCDEFGHIJKLMNOPQRSTUVWXYZ','ÚNICO',*df_editor.get('Grupo',pd.Series(dtype=str)).tolist()])), width="small"),
                 "Condición": st.column_config.SelectboxColumn("Condición", options=condiciones_lista, width="medium"),
                 "Atención": st.column_config.SelectboxColumn("Atención", options=["Individual", "Grupal"], width="small"),
                 "Estatus": st.column_config.SelectboxColumn("Estatus", options=["ACTIVO", "BAJA", "PENDIENTE"], width="small"),

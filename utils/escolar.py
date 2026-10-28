@@ -22,6 +22,20 @@ def grupo_canonico(valor):
     return normalizar_texto(valor).strip()
 
 
+def separar_grado_grupo(grado, grupo=''):
+    """Separa etiquetas completas 2A/2º A sin inferir grado de otro dato."""
+    g=normalizar_texto(grado).strip();s=grupo_canonico(grupo)
+    patron=r'0?([1-6])\s*[°ºO.]?\s*([A-Z])'
+    mg=re.fullmatch(patron,g);ms=re.fullmatch(patron,s)
+    grados=[grado_canonico(m[1]) for m in (mg,ms) if m]
+    canon=grado_canonico(grado) if not mg else grados[0]
+    if grados and canon and canon!=grados[0]:raise ValueError('El grado y el grupo indican grados diferentes.')
+    if len(set(grados))>1:raise ValueError('El grado y el grupo indican grados diferentes.')
+    letra=ms[2] if ms else s or (mg[2] if mg else '')
+    if mg and letra and letra!=mg[2]:raise ValueError('El grupo contradice la letra incluida en el grado.')
+    return canon or (grados[0] if grados else ''),letra
+
+
 def edad_septiembre(nacimiento,ciclo):
     if not isinstance(nacimiento,date):nacimiento=date.fromisoformat(str(nacimiento))
     corte=date(int(ciclo),9,1)
