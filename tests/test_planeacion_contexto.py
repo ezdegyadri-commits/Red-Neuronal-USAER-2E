@@ -17,7 +17,7 @@ class ContextoTests(unittest.TestCase):
         a2={**ALUMNO,'ID_Alumno':'A2','Nombre_Completo':'Otro alumno ficticio'}
         d=crear_plantilla('XXIII',['A1','A2'],[ALUMNO,a2],autor='Docente ficticia',funcion='Aprendizaje');d.update(id='actual',cuenta='prueba')
         bap=pd.DataFrame([{'ID_Alumno':'GRUPO-E1-3-A','ID_Anexo3':'B1','Fecha':'2026-10-01','BAP_Pedagogicas':'Apoyo visual registrado'}])
-        with patch.object(s,'autorizar'),patch.object(s,'padron_autorizado',return_value=pd.DataFrame([ALUMNO,a2])),patch.object(s.repo,'alumnos',return_value=pd.DataFrame([ALUMNO,a2])),patch.object(s.repo,'anexo3',return_value=bap),patch.object(s.repo,'anexo4',return_value=pd.DataFrame()),patch.object(s.repo,'anexo5',return_value=pd.DataFrame()),patch.object(s.repo,'visitas',return_value=pd.DataFrame()),patch.object(s.repo,'eventos_alumno',return_value=pd.DataFrame()),patch.object(s,'df_sheet',return_value=pd.DataFrame()),patch.object(s,'versiones_actuales',return_value=[]):
+        with patch.object(s,'autorizar'),patch.object(s,'padron_autorizado',return_value=pd.DataFrame([ALUMNO,a2])),patch.object(s.repo,'alumnos',return_value=pd.DataFrame([ALUMNO,a2])),patch.object(s.repo,'anexo3',return_value=bap),patch.object(s.repo,'anexo4',return_value=pd.DataFrame()),patch.object(s.repo,'anexo5',return_value=pd.DataFrame()),patch.object(s.repo,'visitas',return_value=pd.DataFrame()),patch.object(s.repo,'eventos_alumno',return_value=pd.DataFrame()),patch.object(s,'df_sheet',return_value=pd.DataFrame()),patch.object(s,'versiones_actuales',return_value=[]),patch('services.documentos_sintesis.fuentes_documentales',return_value=[]):
             sources,failed=s.evidencias(d)
         self.assertEqual(sources,[])
         self.assertEqual(failed,[])

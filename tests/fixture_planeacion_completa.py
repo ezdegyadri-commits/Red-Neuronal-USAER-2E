@@ -36,8 +36,20 @@ def aportar(doc,filas,observaciones):
 s.guardar_aportacion=aportar
 def generar(resumen,formato,area,contexto,ajustes,aliases,evidencias):
     st.session_state.llamadas_ficticias+=1
-    return resultado({'contexto':contexto,'aliases':aliases,'evidencias':evidencias},area)
+    st.session_state.ultima_solicitud_ficticia={'resumen':resumen,'contexto':deepcopy(contexto),'ajustes':deepcopy(ajustes),'aliases':aliases,'evidencias':evidencias}
+    propuesta=resultado({'contexto':contexto,'aliases':aliases,'evidencias':evidencias},area,n=contexto.get('actividades_solicitadas',6))
+    if contexto.get('contextos_solicitados'):
+        for i,row in enumerate(propuesta['unidades']):row['contexto']=contexto['contextos_solicitados'][i%len(contexto['contextos_solicitados'])]
+    return propuesta
 generador.generar_completa=generar
+from ui import planeacion_tareas as tareas
+from concurrent.futures import Future
+from services.planeacion_edicion import huella
+def iniciar_ficticio(prefix,solicitud,doc):
+    future=Future()
+    future.set_result(generar(solicitud['resumen'],doc['formato'],doc['datos']['Función'],solicitud['contexto'],solicitud['ajustes'],solicitud['aliases'],solicitud['evidencias']))
+    st.session_state[prefix+'_ia_trabajo']={'future':future,'solicitud':solicitud,'cuenta':actor['cuenta'],'documento':doc['id'],'huella':huella(st.session_state[prefix+'_doc']),'revision':doc.get('revision','')}
+tareas.iniciar=iniciar_ficticio
 from ui import planeacion as u
 st.session_state[u._prefix()+'_submodulo'] = 'revision' if actor['director'] else 'propio'
 planeacion_page()

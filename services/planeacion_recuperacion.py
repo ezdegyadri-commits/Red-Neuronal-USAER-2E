@@ -66,7 +66,7 @@ def detalle_tarjeta(doc):
     datos=doc['datos'];n=actividades_redactadas(doc)
     estado={'BORRADOR':'Borrador editable','ENVIADO':'Enviado a Dirección','VALIDADO':'Validado','CON_OBSERVACIONES':'Con observaciones'}.get(doc.get('estado'),doc.get('estado',''))
     return ' · '.join(filter(None,[datos.get('Escuela regular'),datos.get('Curso escolar'),
-        'Trimestre '+str(datos.get('Trimestre','')), _fecha_corta(doc.get('guardado_en')),
+        ('Anual' if doc['metadatos'].get('periodicidad')=='anual' else 'Trimestre '+str(datos.get('Trimestre',''))), _fecha_corta(doc.get('guardado_en')),
         datos.get('Función'),estado,str(n)+' actividades redactadas' if n else 'Con trabajo redactado' if tiene_trabajo(doc) else 'Sin actividades redactadas']))
 
 

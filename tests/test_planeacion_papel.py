@@ -132,7 +132,7 @@ class PapelUITests(unittest.TestCase):
                 self.assertFalse(papel.hoja(d)['grupal'])
                 self.assertEqual(app.session_state.llamadas_ficticias,0)
                 texto=_extraer_texto_pdf(generar_pdf(d))
-                for a in d['datos']['Alumnos']:self.assertIn(a['Nombre del alumno'],texto)
+                for a in d['datos']['Alumnos']:self.assertIn(a['Nombre del alumno'],' '.join(texto.split()))
                 app.run();self.assertFalse(app.exception)
                 self.assertEqual(app.session_state.versiones_ficticias[-1]['id'],d['id'])
 

@@ -105,7 +105,7 @@ class FormularioTests(TestCase):
             app.session_state['test_area']=area;app.run()
             self.assertFalse(app.exception,area)
             self.assertNotIn('guardados',app.session_state)
-            maestros=[b for b in app.button if b.label=='Guardar Planeación']
+            maestros=[b for b in app.button if b.label=='💾 Guardar Planeación Completa']
             self.assertEqual(len(maestros),1)
             label='Apoyos y/o ajustes razonables' if area=='Trabajo Social' else 'Descriptor de logro'
             next(t for t in app.text_area if t.label==label).set_value('Cambio docente')
@@ -118,7 +118,7 @@ class FormularioTests(TestCase):
     def test_fallo_no_borra_captura_enviada(self):
         app=AppTest.from_string(APP,default_timeout=30);app.session_state['test_exito']=False;app.run()
         next(t for t in app.text_area if t.label=='Descriptor de logro').set_value('Conservar este texto')
-        next(b for b in app.button if b.label=='Guardar Planeación').click().run()
+        next(b for b in app.button if b.label=='💾 Guardar Planeación Completa').click().run()
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state['p_doc']['tablas']['aprendizajes'][0]['Descriptor de logro'],'Conservar este texto')
         self.assertTrue(app.session_state['p_pending'])
@@ -126,11 +126,11 @@ class FormularioTests(TestCase):
     def test_propuesta_local_se_revisa_y_se_integra_sin_otra_botonera(self):
         app=AppTest.from_string(APP,default_timeout=30).run()
         next(w for w in app.selectbox if w.label=='Al guardar quiero').set_value('Proponer actividades sin IA')
-        next(b for b in app.button if b.label=='Guardar Planeación').click().run()
+        next(b for b in app.button if b.label=='💾 Guardar Planeación Completa').click().run()
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state['p_captura_preview']['tipo'],'local')
         next(c for c in app.checkbox if c.label.startswith('Revisé las propuestas locales')).check()
-        next(b for b in app.button if b.label=='Guardar Planeación').click().run()
+        next(b for b in app.button if b.label=='💾 Guardar Planeación Completa').click().run()
         self.assertFalse(app.exception)
         self.assertTrue(app.session_state['p_doc']['tablas']['dosificacion'])
         self.assertTrue(any('Inicio:' in r.get('Actividades','') for r in app.session_state['p_doc']['tablas']['dosificacion']))
@@ -146,9 +146,9 @@ class FormularioTests(TestCase):
         with patch.object(g,'preparar_solicitud',return_value=solicitud),patch.object(g,'ensamblar',side_effect=ensamblar),patch('ai.planeacion_completa.generar_completa',return_value={'unidades':[{}]}) as ia,patch('ai.planeacion.modelo_configurado',return_value='motor-ficticio'):
             app=AppTest.from_string(APP,default_timeout=30).run()
             next(w for w in app.selectbox if w.label=='Al guardar quiero').set_value('Proponer actividades con IA')
-            next(b for b in app.button if b.label=='Guardar Planeación').click().run()
+            next(b for b in app.button if b.label=='💾 Guardar Planeación Completa').click().run()
             self.assertFalse(app.exception);ia.assert_not_called()
             next(c for c in app.checkbox if c.label.startswith('Revisé este resumen')).check()
-            next(b for b in app.button if b.label=='Guardar Planeación').click().run()
+            next(b for b in app.button if b.label=='💾 Guardar Planeación Completa').click().run()
             self.assertFalse(app.exception);ia.assert_called_once()
             self.assertEqual(app.session_state['p_doc']['tablas']['dosificacion'][-1]['Actividades'],'Actividad propuesta y editable')

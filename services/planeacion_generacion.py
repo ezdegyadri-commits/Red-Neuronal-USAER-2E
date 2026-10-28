@@ -292,6 +292,7 @@ def preparar_solicitud(doc,ajustes):
     if ajustes.get('actividades_solicitadas') is not None:
         cantidad=ajustes['actividades_solicitadas']
         if type(cantidad) is not int or not 1<=cantidad<=24:raise ValueError('Elige de una a 24 actividades distintas por propuesta.')
+        if cantidad>len(fechas_sesiones(doc,ajustes)):raise ValueError('Solicitaste más actividades que sesiones disponibles. Reduce la cantidad o amplía las sesiones y el periodo antes de solicitar IA.')
         contexto['actividades_solicitadas']=cantidad
     contexto['huella_evidencias']=hashlib.sha256(json.dumps(fuentes,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
     # El contexto institucional no debe perderse al recuperar el expediente.
@@ -318,8 +319,9 @@ def preparar_solicitud(doc,ajustes):
     for i,b in enumerate(intervenciones(doc) if aplica(doc) else [],1):
         if b['alumno'] not in reversa or not str(b['campos'].get('NEE','')).strip():continue
         ref='NEE-SELECCIONADA-'+str(i);evidencias[ref]=[reversa[b['alumno']]]
-        texto='\n'.join(k+': '+str(b['campos'].get(k,'')) for k in ('NEE','Apoyos','Ajustes razonables','Contextos') if b['campos'].get(k))
-        bloques.append({'referencia':ref+' · '+reversa[b['alumno']],'alcance':'NEE seleccionada para intervención; no diagnóstico','texto':texto[:1200]})
+        automaticos=doc['metadatos'].get('generacion_completa',{}).get('intervenciones_generadas',{}).get(b['id'],{})
+        texto='\n'.join(k+': '+str(b['campos'].get(k,'')) for k in ('NEE','Aprendizaje y/u objetivo','Descriptor de logro','Apoyos','Ajustes razonables','Contextos','Temporalidad','Recursos','Evaluación y seguimiento') if b['campos'].get(k) and b['campos'][k]!=automaticos.get(k))
+        bloques.append({'referencia':ref+' · '+reversa[b['alumno']],'alcance':'NEE y decisiones docentes confirmadas para intervención; no diagnóstico','texto':texto[:4500]})
     if bloques:resumen=resumen_previo(doc,bloques)[:5000]+'\n\n'+resumen
     safe=deepcopy(ajustes)
     for campo in ('enfoque','apoyos'):
@@ -327,14 +329,18 @@ def preparar_solicitud(doc,ajustes):
     if contexto.get('contextualizacion_docente'):
         # Visible en el resumen que la persona revisa, y parte de la huella/caché.
         resumen=resumen[:7800]+'\n\n'+contexto['contextualizacion_docente']
-    previas=[str(r.get('Actividades','')) for r in doc['tablas'].get('dosificacion',[]) if str(r.get('Actividades','')).strip()]
-    previas.extend(str(r.get('actividad','')) for r in doc['metadatos'].get('equipo',{}).get('sesiones',[]) if r.get('actividad'))
-    previas.extend(str(r.get('campos',{}).get('Actividades','')) for r in doc['metadatos'].get('intervenciones_nee',[]) if r.get('campos',{}).get('Actividades'))
+    anterior=doc['metadatos'].get('generacion_completa',{})
+    auto=anterior.get('filas_generadas',{}).get('dosificacion',[])
+    previas=[str(r.get('Actividades','')) for r in doc['tablas'].get('dosificacion',[]) if str(r.get('Actividades','')).strip() and r not in auto and not r.get('_sesion_equipo')]
+    previas.extend(str(r.get('actividad','')) for r in doc['metadatos'].get('equipo',{}).get('sesiones',[]) if r.get('actividad') and r not in anterior.get('sesiones_generadas',[]))
+    previas.extend(str(r.get('campos',{}).get('Actividades','')) for r in doc['metadatos'].get('intervenciones_nee',[]) if r.get('campos',{}).get('Actividades') and r['campos']['Actividades']!=anterior.get('intervenciones_generadas',{}).get(r['id'],{}).get('Actividades'))
     previas=list(dict.fromkeys(previas))
     # El mismo anonimizado que el resumen; nunca enviar la tabla nominal.
     contexto['actividades_previas']=[resumen_previo(doc,[{'referencia':'ACTIVIDAD-PREVIA','alcance':'propuesta registrada, no logro','texto':t}]).split('\n\n',1)[-1][:1000] for t in previas[-30:]]
     if contexto['actividades_previas']:
         resumen=resumen[:7000]+'\n\nActividades previas para evitar repetición:\n'+'\n'.join(contexto['actividades_previas'])[:4500]
+    from services.planeacion import anonimizar_texto
+    resumen=anonimizar_texto(doc,resumen)
     firma=huella_completa(resumen,doc['formato'],doc['datos']['Función'],contexto,safe,aliases,evidencias)
     alcance=hashlib.sha256(json.dumps({'documento':doc.get('id',''),'cuenta':doc.get('cuenta',''),'alumnos':sorted(aliases.values()),'escuela':doc['datos']['ID_Escuela'],'formato':doc['formato']},sort_keys=True).encode()).hexdigest()
     return {'resumen':resumen,'contexto':contexto,'ajustes':safe,'configuracion_original':deepcopy(ajustes),'aliases':aliases,'evidencias':evidencias,'huella':firma,'alcance':alcance}
@@ -391,6 +397,7 @@ def ensamblar(doc,respuesta,solicitud):
             grupos[n]=grupo
     # Las secuencias se dosifican en las sesiones configuradas. Cada fecha es una
     # propuesta de trabajo, no un registro de asistencia ni una reserva de horario.
+    filas_por_unidad={};sesiones_por_unidad={}
     for i,(fecha,u) in enumerate(zip(fechas,unidades)):
         n=i
         actividad=u['actividad']
@@ -403,10 +410,45 @@ def ensamblar(doc,respuesta,solicitud):
                 nuevas_sesiones.append(deepcopy(bases[i]))
             elif nueva['id'] not in ids_conservados:
                 e['sesiones'].append(nueva);nuevas_sesiones.append(deepcopy(nueva))
+                sesiones_por_unidad[i]=nueva['id']
         else:
             row={'Contextos':u['contexto'],'Actividades':actividad,'Temporalidad':fecha+' · '+str(solicitud['ajustes']['duracion'])+' minutos','Recursos':u['recursos']}
             row['_alumnos_planeacion']=[aliases[a] for a in u['destinatarios']]
             result['tablas']['dosificacion'].append(row);generadas.setdefault('dosificacion',[]).append(row)
+            filas_por_unidad[i]=row
+    # Reutilizar el enlace explícito que devolvió la IA, nunca adivinar por nombre
+    # ni repartir actividades entre NEE por posición. Conservar campos docentes.
+    from services.planeacion_intervenciones_nee import aplica,bloques
+    if aplica(result):
+        intervenciones=bloques(result);previas=anterior.get('intervenciones_generadas',{})
+        generadas_nee={};ubicadas=set()
+        for i,b in enumerate(intervenciones,1):
+            alias=next((a for a,aid in aliases.items() if aid==b['alumno']),None)
+            asociadas=[(n,u) for n,u in enumerate(unidades) if 'NEE-SELECCIONADA-'+str(i) in u['evidencias'] and alias in u['destinatarios']]
+            if not asociadas:continue
+            valores={'Actividades':'\n\n'.join(u['actividad'] for _,u in asociadas),
+                'Apoyos':'\n'.join(dict.fromkeys(u['apoyos'] for _,u in asociadas)),
+                'Contextos':'\n'.join(dict.fromkeys(u['contexto'] for _,u in asociadas)),
+                'Recursos':'\n'.join(dict.fromkeys(u['recursos'] for _,u in asociadas)),
+                'Temporalidad':'\n'.join(fechas[n]+' · '+str(solicitud['ajustes']['duracion'])+' minutos' for n,_ in asociadas if n<len(fechas)),
+                'Evaluación y seguimiento':'\n'.join(dict.fromkeys(u['evaluacion'] for _,u in asociadas))}
+            for campo,value in valores.items():
+                actual=b['campos'].get(campo,'')
+                if not actual or actual==previas.get(b['id'],{}).get(campo):
+                    b['campos'][campo]=value;generadas_nee.setdefault(b['id'],{})[campo]=value
+                    if campo=='Actividades':ubicadas.update(n for n,_ in asociadas)
+        # Una sola representación editable de cada actividad nueva. Las tablas
+        # históricas y sesiones protegidas no se retiran ni se transforman.
+        if ubicadas:
+            retirar=[filas_por_unidad[n] for n in ubicadas if n in filas_por_unidad]
+            result['tablas']['dosificacion']=[r for r in result['tablas']['dosificacion'] if not any(r is x for x in retirar)]
+            if 'dosificacion' in generadas:generadas['dosificacion']=[r for r in generadas['dosificacion'] if not any(r is x for x in retirar)]
+            if es_equipo:
+                retirar_ids={sesiones_por_unidad[n] for n in ubicadas if n in sesiones_por_unidad}
+                e['sesiones']=[r for r in e['sesiones'] if r['id'] not in retirar_ids]
+                nuevas_sesiones=[r for r in nuevas_sesiones if r['id'] not in retirar_ids]
+        result['metadatos']['intervenciones_nee']=intervenciones
+    else:generadas_nee={}
     if formato=='XXIII':
         previo=anterior.get('evaluacion_generada','')
         valor='\n\n'.join(dict.fromkeys(evaluaciones))
@@ -435,6 +477,7 @@ def ensamblar(doc,respuesta,solicitud):
     meta['generacion_completa']={'huella':solicitud['huella'],'alcance':solicitud['alcance'],'ajustes':deepcopy(solicitud['ajustes']),
        'resultado':deepcopy(respuesta),'configuracion_original':deepcopy(solicitud['configuracion_original']),'filas_generadas':deepcopy(generadas),'evaluacion_generada':valor,'pendientes':respuesta['faltantes'],
        'requiere_revision_docente':True}
+    meta['generacion_completa']['intervenciones_generadas']=generadas_nee
     if es_equipo:
         meta['generacion_completa']['sesiones_generadas']=nuevas_sesiones
         meta['generacion_completa']['sesiones_protegidas']=len(protegidas)

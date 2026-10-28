@@ -34,7 +34,7 @@ def solicitud_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias)
        'actividades_previas_para_no_repetir':contexto.get('actividades_previas',[]),
        'configuracion':{k:ajustes[k] for k in ('duracion','sesiones','dias','enfoque','apoyos') if k in ajustes},
        'contextos_admitidos':contexto.get('contextos_solicitados',FORMATOS[formato]['contextos'])}
-    reglas='''Prepara el borrador completo de planeación trimestral basándote ESTRICTAMENTE en los antecedentes clínicos y pedagógicos del alumno.
+    reglas='''Prepara propuestas pedagógicas basadas en los hallazgos documentados y las decisiones confirmadas del especialista.
 Devuelve las unidades o secuencias solicitadas (hasta 20 actividades progresivas), para dosificar localmente en las
 sesiones configuradas del trimestre. Identifica destinatarios solo con los alias.
 Cita al menos una evidencia educativa y una fuente normativa incluidas por unidad.
@@ -44,25 +44,25 @@ alumnos requiere evidencia proporcionada para cada uno. No extrapoles ni atribuy
 a otro alumno la evidencia individual de alguien más.
 
 REGLAS DE ORO Y BLINDAJE PEDAGÓGICO:
-1. ANCLAJE OBLIGATORIO A LOS ANTECEDENTES Y DIAGNÓSTICO:
-   - Analiza el diagnóstico (ej. TEA, TDAH, Dificultades Severas de Aprendizaje) y la fase/grado del alumno.
-   - Si el alumno está en una etapa inicial (ej. presilábico o conteo básico hasta 50), las NEE y actividades deben enfocarse en adquirir lectura/escritura y concepto de número.
-   - Si está en un nivel intermedio, enfocar en sílabas inversas/complejas o valor posicional hasta unidades de millar.
-   - Si está avanzado, enfocar en fluidez, comprensión y resolución de problemas de suma/resta.
+1. ANCLAJE OBLIGATORIO AL NIVEL REAL DOCUMENTADO:
+   - Relaciona NEE seleccionada, PDA confirmado, descriptor, fortalezas, dificultades, BAP, comunicación, apoyos e intereses documentados.
+   - Nunca deduzcas dominio curricular por edad, grado o diagnóstico. No atribuyas una NEE sólo por una condición diagnóstica.
+   - Un alumno de tercero que aún no reconoce sílabas requiere partir de ese desempeño; no presupongas lectura de textos.
+   - Si faltan datos para graduar la dificultad, decláralos en faltantes. Conserva el objetivo y descriptor confirmados.
+   - Trabaja en la ZONA DE DESARROLLO PRÓXIMO: distingue lo que hace solo y con ayuda. NO infantilices los materiales; respeta su edad e intereses aunque el aprendizaje sea inicial.
 
 2. PROHIBICIÓN ESTRICTA DE TEXTOS GENÉRICOS (ANTI-PLANTILLAS):
    - Queda ESTRICTAMENTE PROHIBIDO usar frases de relleno como "participa en una actividad vinculada al antecedente" o "el alumno realiza la acción propuesta por un medio accesible".
-   - Cada PDA ('objetivo') debe corresponder al programa sintético de la NEM alineado a la Fase real del alumno (Fase 3, 4 o 5).
-   - Los Descriptores de Logro ('descriptor') deben ser acciones observables y medibles, estructuradas como rúbricas (ej. "Lee y escribe su nombre con apoyo de sílabas móviles", "Resuelve situaciones problemáticas utilizando conteo con fichas").
+   - Usa literalmente los PDA oficiales proporcionados. Si no hay fuente verificable, marca la propuesta como contextualizada y pendiente de confirmación; nunca inventes un PDA oficial.
+   - Los descriptores siguen alias del alumno + verbo en presente + complemento observable, con condiciones y evidencia de avance. El sistema sustituye el alias por su nombre al ensamblar localmente.
 
 3. ESTRUCTURACIÓN DE ACTIVIDADES TANGIBLES Y MATERIAL CONCRETO:
-   - Las actividades deben dividirse claramente por contexto (Aula regular, Aula de apoyo).
+   - Usa sólo los contextos elegidos: aula de apoyo, aula regular, escuela o familia, según la función y la solicitud.
    - Deben incluir el uso explícito de recursos didácticos físicos adaptados a la NEE (ej. sílabas móviles, bloques base diez, fichas de conteo, tarjetas de imágenes, tableros ARASAAC).
    - La redacción de la actividad debe mostrar el andamiaje del docente (ej. "El docente modela el procedimiento...", "El alumno manipula el material...", "El alumno explica oralmente o muestra su resolución..."):
-     • Inicio (5-10 min): activación visual, modelado o anticipación con material concreto.
-     • Desarrollo (20-25 min): andamiaje docente escalonado paso a paso con ajuste razonable.
-     • Cierre (10 min): demostración práctica y observable del avance formativo.
-     • Variante multinivel: apoyo ante dificultad y reto si consolida rápido.
+     Explica qué harán docente y alumno, cómo se desarrolla la tarea, materiales accesibles, apoyos y qué se observará.
+     Usa actividades ordenadas, secuencias o proyectos cuando corresponda. No impongas siempre inicio, desarrollo y cierre.
+     Ajusta el tiempo a la duración elegida. Incluye colaboración con docente regular o familia sólo si es pertinente y viable.
 
 4. CONTINUIDAD PEDAGÓGICA Y VARIEDAD:
    - No copies ni reformules superficialmente las actividades previas suministradas.
@@ -71,6 +71,7 @@ REGLAS DE ORO Y BLINDAJE PEDAGÓGICO:
    - No repitas mecánicamente lo ya superado ni des saltos curriculares descontextualizados.
 
 Si hay PDA elegidos, vincula identificadores suministrados; no inventes otros.
+Si hay evidencias NEE-SELECCIONADA, cita la referencia de la NEE concreta que atiende cada actividad; respeta su PDA y descriptor confirmados.
 Las evidencias indican qué se registró, no que el alumno logró un objetivo futuro.
 No conviertas BAP en diagnósticos. No rellenes resultados, situación final, firmas,
 aprobaciones, entregas a familias o acuerdos que no ocurrieron.
@@ -101,8 +102,8 @@ destinatarios y competencias. competencias queda vacía fuera de Psicología.
     if contexto.get('actividades_solicitadas'):
         reglas+='Devuelve exactamente '+str(limite)+' actividades diferentes, una por unidad, sin reutilizar la misma secuencia en distintas fechas. '
     reglas+='Cada actividad debe responder a una necesidad documentada de sus destinatarios, sus apoyos y contexto reales. Varía la tarea central, materiales y respuesta observable; cambiar solo el título o los nombres no crea otra actividad. No fuerces competencias o contextos que no se hayan solicitado. '
-    reglas+='Distribuye inicio, desarrollo y cierre dentro de los '+str(ajustes.get('duracion',45))+' minutos elegidos. Usa únicamente los contextos admitidos; explica la adaptación individual cuando intervengan varios alumnos. '
-    reglas+='Sé conciso y directo: actividad entre 300 y 650 caracteres (Inicio 5 min, Desarrollo con mediación/andamiaje, Cierre observable) y los demás textos entre 80 y 250 caracteres cada uno. No repitas antecedentes completos ni tablas normativas; usa sus identificadores.\n'
+    reglas+='Ajusta el desarrollo a los '+str(ajustes.get('duracion',45))+' minutos elegidos. Usa únicamente los contextos admitidos; explica la adaptación individual cuando intervengan varios alumnos. '
+    reglas+='Sé conciso y directo: actividad entre 300 y 650 caracteres, con mediación y evidencia observable; los demás textos entre 80 y 250 caracteres cada uno. No repitas antecedentes completos ni tablas normativas; usa sus identificadores.\n'
     reglas+='REGLAS ESTRICTAS DE DESTINATARIOS Y EVIDENCIAS:\n• Asigna a cada unidad únicamente los destinatarios que cuenten con su propia evidencia citada en esa misma unidad.\n• Si citas solo la evidencia de un alumno, coloca solo a ese alumno en destinatarios.\n'
     return INSTRUCCIONES.split('Devuelve solo JSON')[0]+'\n'+reglas+'\nDATOS DE CONSULTA:\n'+json.dumps(datos,ensure_ascii=False,sort_keys=True)
 
@@ -170,7 +171,8 @@ def generar_completa(resumen,formato,area,contexto,ajustes,aliases,evidencias):
         return proponer(resumen,formato,area,curriculo=contexto,_prompt=prompt,_schema=schema,
             _max_tokens=6000,_validador=validar)
     except RuntimeError:
-        from ai.planeacion import st,notificar_progreso
+        from ai.planeacion import st,notificar_progreso,en_trabajo
+        if en_trabajo():raise  # El transporte acotado ya intentó validar los motores autorizados.
         diagnostico=st.session_state.get('planeacion_ia_diagnostico',{})
         motivo=diagnostico.get('motivo')
         corregibles={'JSONInvalido','SalidaCortada','CamposIncompletos','EstructuraInvalida',

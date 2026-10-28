@@ -64,6 +64,18 @@ def panel(base,docs,abrir):
                     if st.button('Continuar esta planeación',type='primary',key=key+'_abrir_'+doc['id'],use_container_width=True):
                         try:abrir(base,doc);st.rerun()
                         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+                    izquierda,derecha=st.columns(2)
+                    with izquierda:
+                        from services.planeacion_compartida import es_guia
+                        accion='Añadir alumnos' if es_guia(doc) else 'Duplicar'
+                        if st.button(accion,key=key+'_duplicar_'+doc['id'],help='La guía compartida conserva una sola hoja. Otros formatos permiten revisar destinatarios y periodo antes de crear una copia.'):
+                            try:
+                                prefijo=abrir(base,doc)
+                                st.session_state[prefijo+'_papel_panel']='alumnos';st.rerun()
+                            except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+                    with derecha:
+                        from ui.planeacion_borradores import eliminar_directo
+                        eliminar_directo(key+'_'+doc['id'],doc,lambda:None)
                     with st.expander('Respaldo y opciones del documento'):
                         opciones=key+'_opciones_'+doc['id']
                         if st.button('Ver respaldos y opciones',key=opciones+'_mostrar'):st.session_state[opciones]=True

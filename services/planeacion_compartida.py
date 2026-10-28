@@ -32,7 +32,7 @@ def etiqueta(doc):
     from services.planeacion_ambito import etiqueta as etiqueta_grupo
     fecha = _fecha_corta(doc.get('guardado_en') or doc['datos'].get('Fecha de elaboración',''))
     return ' · '.join(filter(None, [doc['datos']['Escuela regular'],etiqueta_grupo(doc),
-        doc['datos']['Curso escolar'],'T'+str(doc['datos']['Trimestre']),
+        doc['datos']['Curso escolar'],('Anual' if doc['metadatos'].get('periodicidad')=='anual' else 'T'+str(doc['datos']['Trimestre'])),
         fecha,
         doc['datos']['Función'],doc['metadatos'].get('modalidad_planeacion','Por confirmar'),
         str(len(doc['datos']['Alumnos']))+' alumno(s)']))
@@ -42,7 +42,7 @@ def etiqueta_selector(doc):
     """La etiqueta de navegación no cambia cuando otra persona guarda."""
     from services.planeacion_ambito import etiqueta as etiqueta_grupo
     return ' · '.join([doc['datos']['Escuela regular'],etiqueta_grupo(doc),
-        'Trimestre '+str(doc['datos']['Trimestre']),doc['datos']['Curso escolar']])
+        ('Anual' if doc['metadatos'].get('periodicidad')=='anual' else 'Trimestre '+str(doc['datos']['Trimestre'])),doc['datos']['Curso escolar']])
 
 
 def actualizar_lectura(doc,reciente,area):

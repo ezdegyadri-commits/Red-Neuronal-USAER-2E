@@ -5,7 +5,7 @@ from streamlit.testing.v1 import AppTest
 
 class PlaneacionUITests(unittest.TestCase):
     def test_creacion_guardado_pdf_y_revision(self):
-        at=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_panel.py'))).run(timeout=30)
+        at=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_panel.py')),default_timeout=30).run()
         self.assertFalse(at.exception)
         next(s for s in at.selectbox if s.label=='Alumno en atención individual').set_value('A1').run()
         next(b for b in at.button if b.label=='Crear y guardar borrador').click().run()
@@ -21,7 +21,7 @@ class PlaneacionUITests(unittest.TestCase):
         self.assertFalse(at.exception)
         self.assertTrue(any(b.label=='Devolver con observaciones' for b in at.button))
     def test_social_tiene_anexo_xxv(self):
-        at=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_panel.py'))).run(timeout=30)
+        at=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_panel.py')),default_timeout=30).run()
         at.selectbox[0].set_value('Trabajo Social').run()
         next(s for s in at.selectbox if s.label=='Alumno en atención individual').set_value('A1').run()
         next(b for b in at.button if b.label=='Crear y guardar borrador').click().run()

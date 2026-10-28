@@ -4,6 +4,23 @@ import streamlit as st
 from services import planeacion as s
 
 
+def eliminar_directo(key,doc,al_eliminar):
+    try:actor=s.identidad()
+    except PermissionError:return
+    if doc['estado']!='BORRADOR' or doc['cuenta']!=actor['cuenta']:return
+    if st.button('Eliminar borrador',key=key+'_eliminar_directo'):st.session_state[key+'_confirmar_directo']=True
+    if st.session_state.get(key+'_confirmar_directo'):
+        st.caption('Se enviará a la papelera. Las versiones y aportes guardados se conservarán.')
+        a,b=st.columns(2)
+        if a.button('Confirmar eliminación',key=key+'_si_directo'):
+            try:
+                s.eliminar_borrador(doc);st.session_state.pop(key+'_confirmar_directo',None)
+                al_eliminar();st.rerun()
+            except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+        if b.button('Conservar',key=key+'_no_directo'):
+            st.session_state.pop(key+'_confirmar_directo',None);st.rerun()
+
+
 def controles(key,doc,pdf_provider,al_eliminar):
     from copy import deepcopy
     copia=deepcopy(doc)

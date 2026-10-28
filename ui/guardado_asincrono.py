@@ -39,7 +39,9 @@ def persistir(prefix, estado=None, automatic=False, aporte=False):
                 state.pop(prefix+suffix,None)
             if igual:
                 state.pop(prefix+'_estado_pendiente',None)
-                if job['nonce']:state[prefix+('_ack' if aporte else '_papel_aceptado')]=job['nonce']
+                if job['nonce']:
+                    state[prefix+('_ack' if aporte else '_papel_aceptado')]=job['nonce']
+                    if not aporte:state[prefix+'_papel_legacy']=True
                 return True
             # El acuse anterior no confirma la escritura posterior del usuario.
             return False

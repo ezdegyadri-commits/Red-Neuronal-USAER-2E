@@ -18,6 +18,27 @@ MODELOS_HEREDADOS = {'gemini-2.5-flash','gemini-2.5-flash-preview-09-2025',
                     'gemini-3.1-flash-lite-preview'}
 logger = logging.getLogger(__name__)
 _progreso = ContextVar('planeacion_ia_progreso', default=None)
+_conexion = ContextVar('planeacion_ia_conexion', default=None)
+
+
+@contextmanager
+def conexion_trabajo(config):
+    token=_conexion.set(config)
+    try:yield
+    finally:_conexion.reset(token)
+
+
+def en_trabajo():return _conexion.get() is not None
+
+
+def configuracion_trabajo():
+    from ai.epp_contextual import configuracion
+    config=configuracion()
+    preferido=st.session_state.get('planeacion_modelo_preferido')
+    if preferido:config['modelos']=list(dict.fromkeys([preferido,*config['modelos']]))
+    config['openai']=st.session_state.get('planeacion_openai_key') or st.session_state.get('OPENAI_API_KEY') or config['openai']
+    if st.session_state.get('planeacion_motor')=='ChatGPT (OpenAI)':config['gemini']=''
+    return config
 
 
 @contextmanager
@@ -108,6 +129,10 @@ def _proponer_openai(prompt, schema=None, max_tokens=4000):
 
 def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=None, _schema=None, _validador=None, _max_tokens=4000):
     prompt = _prompt or solicitud(resumen, formato, area, revisar, curriculo)
+    if _conexion.get() is not None:
+        if _schema is None or _validador is None:raise ValueError('La tarea requiere esquema y validación explícitos.')
+        from ai.documento_json import generar
+        return generar(prompt,_schema,_validador,_conexion.get(),_max_tokens)
     modelo_config = modelo_configurado()
     preferido = st.session_state.get('planeacion_modelo_preferido')
     modelo = preferido or modelo_config
@@ -122,7 +147,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
                 raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw_openai.strip())
                 return _validador(json.loads(raw)) if _validador else validar_respuesta(json.loads(raw), curriculo)
         except Exception as exc:
-            logger.warning('openai_planeacion_error: %s', exc)
+            logger.warning('openai_planeacion_error tipo=%s', type(exc).__name__)
 
     if time.monotonic() < st.session_state.get('planeacion_ia_reintentar_desde', 0):
         raise RuntimeError('Espera unos 30 segundos antes de volver a solicitar IA. Puedes seguir editando tu borrador.')

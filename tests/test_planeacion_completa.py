@@ -18,15 +18,33 @@ def documento(area='Aprendizaje',dos=False):
     doc['metadatos'].update(resumen_educativo='Lectura y participación con apoyos documentados.',necesidades_confirmadas='',referente_curricular='')
     return doc
 
-def resultado(req,area):
-    unidades=[];n=6 if area=='Psicología' else 2
+def resultado(req,area,n=None):
+    unidades=[];n=n if n is not None else 6 if area=='Psicología' else 2
     actividades=[
         'Inicio: observar tarjetas. Desarrollo: elegir un apoyo y explicar su uso. Cierre: compartir la elección.',
         'Inicio: escuchar una historia breve. Desarrollo: representar con títeres una alternativa de participación. Cierre: expresar un acuerdo.',
         'Inicio: reconocer una señal corporal. Desarrollo: ensayar una pausa y respiración con modelado. Cierre: elegir cuándo usarla.',
         'Inicio: explorar una meta cotidiana. Desarrollo: organizar un plan visual de pasos para intentarla. Cierre: revisar el plan.',
         'Inicio: recordar turnos de conversación. Desarrollo: practicar peticiones en parejas con apoyos. Cierre: dar retroalimentación respetuosa.',
-        'Inicio: identificar un reto del aula. Desarrollo: construir en equipo alternativas para resolverlo. Cierre: acordar una prueba posterior.'
+        'Inicio: identificar un reto del aula. Desarrollo: construir en equipo alternativas para resolverlo. Cierre: acordar una prueba posterior.',
+        'Ordenar fotografías de la jornada escolar sobre una tira de cartón y anticipar qué sucede después con acompañamiento docente.',
+        'Armar un rompecabezas colaborativo solicitando piezas a un compañero mediante el tablero de comunicación y registrar las peticiones.',
+        'Preparar una lista ilustrada de materiales para una tarea y comprobar en la mochila cuáles están disponibles.',
+        'Clasificar objetos del salón por su utilidad, justificar la elección señalando imágenes y comprobar agrupaciones con ayuda.',
+        'Dibujar un recorrido seguro hasta la biblioteca sobre un croquis sencillo y explicar las señales utilizadas.',
+        'Escoger personajes de un cuento e inventar un diálogo corto usando títeres, gestos o tarjetas según el apoyo requerido.',
+        'Comparar colecciones de fichas emparejando objetos uno a uno; mostrar dónde sobran y registrar la estrategia empleada.',
+        'Construir un menú de opciones para el recreo con imágenes y expresar preferencias respetando decisiones de compañeros.',
+        'Practicar la entrega de mensajes breves entre compañeros, cotejar su comprensión y ofrecer una pista cuando se necesite.',
+        'Crear un cartel de acuerdos con dibujos propios, explicar su significado y elegir dónde colocarlo en el aula.',
+        'Localizar objetos a partir de pistas espaciales, comunicar su ubicación y verificar el recorrido realizado.',
+        'Organizar un pequeño préstamo de libros registrando con símbolos la entrega y devolución; observar iniciativa comunicativa.',
+        'Identificar semejanzas entre imágenes de animales, armar parejas por un atributo y explicar el criterio con apoyos.',
+        'Representar una compra con envases vacíos y monedas de juguete, pedir lo necesario y comprobar intercambios.',
+        'Elaborar una secuencia visual para lavarse las manos y practicarla utilizando el apoyo únicamente cuando haga falta.',
+        'Reconocer sonidos cotidianos grabados por el docente, asociarlos con imágenes y comentar situaciones en que se escuchan.',
+        'Construir una historia colectiva eligiendo ilustraciones por turnos y verificar que cada aportación mantenga el tema.',
+        'Diseñar una invitación ilustrada para un compañero, incluir lugar y momento, y comprobar que el destinatario entiende el mensaje.'
     ]
     for i in range(n):
         unidades.append({'necesidad':'Necesidad educativa documentada para participar.','objetivo':'El alumno identifica apoyos para participar.','descriptor':'El alumno elige un apoyo y explica su elección.',

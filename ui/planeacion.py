@@ -67,21 +67,31 @@ def _actualizar_materiales(prefix,current):
     _open(prefix,current);_persist(prefix);st.rerun()
 
 
-def _materiales(prefix,doc):
+def _materiales(prefix,doc,instancia="principal"):
+    # Una identidad de documento e instancia estable, separada del estado del borrador.
+    identidad=hashlib.sha256((str(doc["id"])+":"+instancia).encode()).hexdigest()[:16]
+    widget=prefix+"_material_ui_"+identidad
+    legado=prefix+'_archivos_previos_'+str(doc['id'])
+    previos=st.session_state.get(prefix+'_material_upload')
+    if previos and legado not in st.session_state:st.session_state[legado]=list(previos)
     with st.expander('Añadir documentos o imágenes a mi planeación'):
         st.caption('Hasta 32 MB por archivo y PDF de hasta 1 000 páginas. Lectura local, sin enviar originales a IA. Puedes elegir páginas; hasta diez páginas escaneadas por lectura y 100 000 caracteres de transcripción. Incorpora solo el texto pertinente a esta planeación.')
         limite={'max_upload_size':32} if 'max_upload_size' in inspect.signature(st.file_uploader).parameters else {}
-        archivos=st.file_uploader('Materiales de apoyo',type=TIPOS,accept_multiple_files=True,key=prefix+'_material_upload',**limite)
+        archivos=st.file_uploader('Materiales de apoyo',type=TIPOS,accept_multiple_files=True,key=widget+'_material_upload',**limite)
+        if st.session_state.get(legado) and not archivos:
+            st.caption('Hay archivos seleccionados antes de la actualización. Se conservaron para que compruebes a qué alumno o grupo corresponden antes de usarlos.')
+            if st.checkbox('Revisar los archivos anteriores en este documento',key=widget+'_recuperar_archivos'):
+                archivos=st.session_state[legado]
         desde,hasta=1,0
         if archivos and any(a.name.lower().endswith(('.pdf','.tif','.tiff')) for a in archivos):
             col1,col2=st.columns(2)
-            desde=col1.number_input('Leer desde la página',min_value=1,max_value=1000,value=1,key=prefix+'_material_from')
-            hasta=col2.number_input('Hasta la página (0: todas)',min_value=0,max_value=1000,value=0,key=prefix+'_material_to')
+            desde=col1.number_input('Leer desde la página',min_value=1,max_value=1000,value=1,key=widget+'_material_from')
+            hasta=col2.number_input('Hasta la página (0: todas)',min_value=0,max_value=1000,value=0,key=widget+'_material_to')
             st.caption('El intervalo se aplica a los PDF e imágenes multipágina. Cambia las páginas y vuelve a transcribir para continuar un documento largo.')
         def clave_lectura(a):
             intervalo=f':{desde}:{hasta}' if a.name.lower().endswith(('.pdf','.tif','.tiff')) else ''
             return hashlib.sha256(a.getvalue()+intervalo.encode()).hexdigest()
-        if archivos and st.button('Transcribir archivos',key=prefix+'_material_read'):
+        if archivos and st.button('Transcribir archivos',key=widget+'_material_read'):
             leidos=st.session_state.setdefault(prefix+'_material_readings',{})
             for archivo in archivos:
                 digest=clave_lectura(archivo)
@@ -101,20 +111,20 @@ def _materiales(prefix,doc):
             with st.expander('Revisar lectura · '+material['nombre'],expanded=True):
                 for aviso in material['avisos']:st.caption(aviso)
                 from ui.documento_sintesis import vista
-                texto=vista(material['texto'],prefix+'_material_text_'+digest)['resumen']
+                texto=vista(material['texto'],widget+'_material_text_'+digest)['resumen']
                 st.caption('El material se vincula solo a esta planeación. Confirma qué información corresponde al alumno o al grupo. Para IA se preparan extractos que revisarás en el resumen educativo.')
-                revisado=st.checkbox('Revisé el texto y su pertinencia',key=prefix+'_material_review_'+digest)
+                revisado=st.checkbox('Revisé el texto y su pertinencia',key=widget+'_material_review_'+digest)
                 nombres={a['ID_Alumno']:a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
-                asignados=st.multiselect('Si es un registro individual, ¿a qué alumnos corresponde? Deja vacío para material general.',list(nombres),format_func=nombres.get,key=prefix+'_material_alumnos_'+digest)
-                if st.button('Incorporar texto revisado',disabled=not revisado or not texto.strip(),key=prefix+'_material_apply_'+digest):
+                asignados=st.multiselect('Si es un registro individual, ¿a qué alumnos corresponde? Deja vacío para material general.',list(nombres),format_func=nombres.get,key=widget+'_material_alumnos_'+digest)
+                if st.button('Incorporar texto revisado',disabled=not revisado or not texto.strip(),key=widget+'_material_apply_'+digest):
                     try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],{**material,'alumnos':asignados},texto))
                     except (ValueError,PermissionError) as exc:st.info(str(exc))
         for material in doc['metadatos'].get('materiales',[]):
             with st.expander('Material incorporado · '+material['nombre']):
                 from ui.documento_sintesis import vista
-                texto=vista(material['texto'],f"{prefix}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")['resumen']
+                texto=vista(material['texto'],f"{widget}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")['resumen']
                 st.caption('Guardar esta síntesis reemplaza solo el extracto de trabajo de la planeación; no el original del expediente.')
-                if st.button('Guardar cambios del material',key=prefix+'_material_update_'+material['id']):
+                if st.button('Guardar cambios del material',key=widget+'_material_update_'+material['id']):
                     try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],material,texto))
                     except (ValueError,PermissionError) as exc:st.info(str(exc))
 

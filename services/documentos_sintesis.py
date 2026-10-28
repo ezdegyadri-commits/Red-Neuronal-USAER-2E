@@ -127,7 +127,7 @@ def fuentes_documentales(ids, ciclo):
                         'texto': json.dumps({'Documento': d['Tipo'], 'Síntesis': r['resumen'],
                             **({'NEE': ([{'NEE': n['texto'],'ID_NEE':n['id'],'Fundamento':n['fundamento'],
                                 'Página':n['pagina'],'Área':n['area'],'Estado':n['estado'],
-                                'Validada_En':n['validada_en'],'Validada_Por':n['validada_por']}
+                                'Validada_En':n['validada_en'],'Validada_Por':n['validada_por'],'Prioridad':n.get('prioridad','')}
                                 for n in r['nee_registros'] if n['estado']=='Validada'] if 'nee_registros' in r
                                 else [{'NEE': n} for n in r['necesidades']])} if epp else {})}, ensure_ascii=False),
                         'alcance': 'Síntesis revisada contra el original; '+('individual' if len(destinatarios)==1 else 'colectiva, no atribuible a un solo alumno')+

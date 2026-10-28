@@ -83,7 +83,7 @@ def archivado(did, row, data, key):
         import pandas as pd
         from services.nee_documentales import ESTADOS
         st.caption('Revisa cada propuesta: corrige su redacción y fundamento, añade omitidas o marca Descartada. Solo Validada alimenta el selector del alumno; no se infieren necesidades de un diagnóstico.')
-        cols=['id','texto','fundamento','pagina','area','estado','origen']
+        cols=['id','texto','fundamento','pagina','area','estado','prioridad','origen']
         rows=st.session_state.get(k+'_registros',[])
         if not rows:st.info('No se detectaron NEE suficientemente explícitas en la lectura disponible. Puedes añadirlas con su fundamento tras revisar el original, o continuar la planeación manualmente. No se completarán con suposiciones.')
         frame=pd.DataFrame([{c:r.get(c,'') for c in cols} for r in rows],columns=cols)
@@ -94,8 +94,20 @@ def archivado(did, row, data, key):
                 'pagina':st.column_config.TextColumn('Página / sección',max_chars=40),
                 'area':st.column_config.TextColumn('Área pedagógica',max_chars=100),
                 'estado':st.column_config.SelectboxColumn('Estado',options=list(ESTADOS),default='Detectada',required=True),
+                'prioridad':st.column_config.SelectboxColumn('Prioridad',options=['Alta','Media','Baja']),
                 'origen':st.column_config.TextColumn('Origen')})
         value['nee_registros']=edit.fillna('').to_dict('records')
+        with st.expander('Unir necesidades relacionadas sin perder sus fundamentos'):
+            disponibles={r['id']:r for r in value['nee_registros'] if r.get('id') and r.get('estado')!='Descartada'}
+            seleccion=st.multiselect('NEE que deseas unir (de dos a cinco)',list(disponibles),format_func=lambda i:disponibles[i]['texto'],max_selections=5,key=k+'_fusion_ids')
+            texto_fusion=st.text_area('Redacción propuesta para la NEE unificada',max_chars=600,key=k+'_fusion_texto')
+            if st.button('Preparar fusión para revisión',disabled=len(seleccion)<2 or not texto_fusion.strip(),key=k+'_fusionar'):
+                try:
+                    from services.nee_documentales import fusionar
+                    st.session_state[k+'_registros']=fusionar(value['nee_registros'],seleccion,texto_fusion,did,row.get('SHA256',''))
+                    st.session_state[k+'_edicion']=str(st.session_state.get(k+'_edicion',''))+'f'
+                    st.rerun()
+                except ValueError as exc:st.warning(str(exc))
         st.download_button('Respaldar mi revisión de NEE',json.dumps(value,ensure_ascii=False,indent=2),file_name='revision-nee.json',mime='application/json',key=k+'_respaldo')
     review=st.checkbox('Revisé la síntesis y las NEE seleccionadas contra el original y corresponden a este alumno o contexto',key=k+'_revisada')
     if st.button('Guardar síntesis y vincular las NEE seleccionadas' if unica else 'Guardar síntesis revisada',

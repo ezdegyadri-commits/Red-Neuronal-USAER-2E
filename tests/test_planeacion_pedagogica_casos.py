@@ -57,7 +57,7 @@ class CasosPedagogicosTests(unittest.TestCase):
         """Caso 1: Alumno de 5.° grado con habilidades iniciales de lectoescritura."""
         doc = self.crear_caso(
             'AL-5P',
-            'Estudiante Quinto Presilábico',
+            'Estudiante Ficticio Quinto',
             5,
             'Nivel de conceptualización de la lectoescritura: Presilábico. Identifica vocales aisladas con tarjetas ilustradas. '
             'Requiere mediación visual con letras móviles y objetos concretos para correspondencia grafofonética.'
