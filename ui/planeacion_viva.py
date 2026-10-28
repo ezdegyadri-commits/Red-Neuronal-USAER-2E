@@ -199,7 +199,7 @@ def _ficha(prefix,grupal):
             try:
                 s.refrescar_evidencias();u._open(prefix,s.preparar_contexto(st.session_state[prefix+'_doc']));u._persist(prefix);st.rerun()
             except Exception:st.warning('No se confirmó la actualización. Tu edición se conserva.')
-        if st.toggle('Añadir documento o imagen',key=prefix+'_viva_documentos'):u._materiales(prefix,st.session_state[prefix+'_doc'])
+        if st.toggle('Añadir documento o imagen',key=prefix+'_viva_documentos'):u._materiales(prefix,st.session_state[prefix+'_doc'],instancia='viva_ficha')
     if grupal:
         filas=guia_grupal(st.session_state[prefix+'_doc'])['filas'];indice=next(i for i,r in enumerate(filas) if r['ID_Alumno']==aid)
         with st.expander('Escribir con más espacio en la fila de este alumno'):

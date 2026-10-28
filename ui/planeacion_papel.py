@@ -147,7 +147,7 @@ def hoja(prefix,volver=None):
         c_tool1, c_tool2 = st.columns(2)
         with c_tool1:
             if st.toggle('Subir imágenes o evidencias a mi planeación', key=prefix+'_toggle_img'):
-                u._materiales(prefix, doc)
+                u._materiales(prefix, doc,instancia="papel_herramientas")
         from services.planeacion_compartida import es_guia
         if es_guia(doc):
             with c_tool2:
@@ -272,7 +272,7 @@ def _contenido_conexiones(prefix):
                     st.caption('Las copias para otro alumno o periodo conservan el documento previo y su historial.')
                     panel(prefix)
             elif action=='materiales':
-                u._materiales(prefix,current)
+                u._materiales(prefix,current,instancia="papel_conexiones")
             elif action=='detalle':
                 if current['formato']=='XXI':
                     u._text(prefix,'metadatos','fuente_iepp','Referencia del IEPP: fecha, folio o ubicación del informe')
