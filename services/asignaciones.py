@@ -93,7 +93,7 @@ def puede_dar_alta_alumnos(nombre, rol):
         return False
     identidad = normalizar_texto(nombre)
     identidad = re.sub(
-        r"^(?:(?:MTRA|MAESTRA|PSIC|PSICOLOGA|PSICOLOGO)\.?\s*)+",
+        r"^(?:(?:MTRA|MTRO|MAESTRA|MAESTRO|PSIC|PSICOLOGA|PSICOLOGO)\.?\s*)+",
         "",
         identidad,
     )

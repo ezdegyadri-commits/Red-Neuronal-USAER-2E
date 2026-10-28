@@ -24,6 +24,13 @@ class AltaPermissionsTest(unittest.TestCase):
         self.assertTrue(puede_dar_alta_alumnos("Edgar Adrián Yam Briceño", "Director"))
         self.assertTrue(puede_dar_alta_alumnos("Psic. Edgar Adrián Yam Briceño MD", "Director"))
 
+    def test_restituye_acceso_al_apoyo_autorizado_con_tratamiento_masculino(self):
+        for prefijo in ("Mtro.", "Mtro", "Maestro"):
+            with self.subTest(prefijo=prefijo):
+                self.assertTrue(puede_dar_alta_alumnos(prefijo+" Luis Jorge García Herrera", "Apoyo"))
+                self.assertFalse(puede_dar_alta_alumnos(prefijo+" Pedro Manuel Torres May", "Apoyo"))
+                self.assertFalse(puede_dar_alta_alumnos(prefijo+" Luis Jorge García Herrera", "Comunicación"))
+
     def test_bloquea_especialistas_y_apoyos_no_autorizados(self):
         no_autorizados = [
             ("María José Cupul Realpozo", "Psicología"),
