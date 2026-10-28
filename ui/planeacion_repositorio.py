@@ -76,10 +76,10 @@ def panel(base,docs,abrir):
                     with derecha:
                         from ui.planeacion_borradores import eliminar_directo
                         eliminar_directo(key+'_'+doc['id'],doc,lambda:None)
-                    with st.expander('Respaldo y opciones del documento'):
-                        opciones=key+'_opciones_'+doc['id']
-                        if st.button('Ver respaldos y opciones',key=opciones+'_mostrar'):st.session_state[opciones]=True
-                        if st.session_state.get(opciones):
+                    opciones=key+'_opciones_'+doc['id']
+                    respaldo=st.expander('Respaldo y opciones del documento',key=opciones,on_change='rerun')
+                    if respaldo.open:
+                        with respaldo:
                             from ui.planeacion_borradores import controles
                             from documents.planeacion_papel import generar_pdf
                             controles(key+'_'+doc['id'],doc,generar_pdf,lambda:None)

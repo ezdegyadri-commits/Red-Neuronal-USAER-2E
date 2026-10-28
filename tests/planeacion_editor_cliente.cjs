@@ -316,3 +316,39 @@ console.log('Editor: escritura no bloqueante, sincronización por área, respald
   f.render(hoja('Borrador protegido','nueva'),{aceptado_nonce:first.nonce,guardado:'confirmado'});
   assert.equal(save.disabled,false);assert.equal(f.cache.size,0);
 }
+
+// El silencio del servidor no produce reenvíos infinitos ni un botón congelado.
+{
+  const f=fixture();f.render(hoja());f.input('Borrador desconectado');
+  const save=f.tools.children.find(b=>b.textContent==='Guardar planeación');save.click();
+  const first=f.events()[0];f.tick(15000);f.tick(30000);f.tick(60000);
+  assert.equal(f.events().length,3);assert.equal(save.disabled,false);
+  assert.match(f.status.textContent,/cambios conservados/);assert.ok(f.cache.size);
+  for(let i=0;i<10;i++){f.tick(15000);f.tick(30000);f.tick(60000)}
+  assert.equal(f.events().length,3);
+  save.click();assert.equal(f.events().at(-1).nonce,first.nonce);
+  assert.equal(save.disabled,true);
+  f.render(hoja('Borrador desconectado','nueva'),{aceptado_nonce:first.nonce,guardado:'confirmado'});
+  assert.equal(save.disabled,false);assert.equal(f.cache.size,0);
+}
+// Un error del servidor también detiene el watchdog; el reintento es explícito.
+{
+  const f=fixture();f.render(hoja());f.input('Sin conexión');f.tick(4000);
+  const nonce=f.events()[0].nonce;
+  f.render(hoja(),{error_guardado_nonce:nonce,error_guardado:'Servicio no disponible'});
+  f.tick(15000);f.tick(30000);f.tick(60000);
+  assert.equal(f.events().length,1);assert.ok(f.cache.size);
+}
+
+// Offline real del navegador: pausa envíos, conserva texto y reutiliza nonce online.
+{
+  const f=fixture();f.render(hoja());f.input('Captura antes del corte');f.tick(4000);
+  const nonce=f.events()[0].nonce;f.listeners.offline();
+  assert.match(f.status.textContent,/Sin conexión/);assert.ok(f.cache.size);
+  f.tick(15000);assert.equal(f.events().length,1);
+  f.input('Captura durante el corte');f.tick(4000);assert.equal(f.events().length,1);
+  f.listeners.online();assert.equal(f.events().at(-1).nonce,nonce);
+  f.render(hoja('Captura antes del corte','r2'),{aceptado_nonce:nonce,guardado:'confirmado'});
+  assert.equal(f.nodes.get('celda-c0').innerText,'Captura durante el corte');
+  f.tick(4000);assert.equal(f.events().at(-1).cambios.c0,'Captura durante el corte');
+}

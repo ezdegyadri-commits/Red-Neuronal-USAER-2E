@@ -1,5 +1,6 @@
 import json, random, time
 import threading
+import logging
 from requests.exceptions import Timeout
 import gspread
 import streamlit as st
@@ -127,12 +128,17 @@ def retry_google(operation, attempts=3):
         if espera_cuota > 0:
             raise GoogleTemporal('La conexión de Google Sheets está ocupada. Reintenta en '+str(int(espera_cuota)+1)+' segundos; no cierres una captura pendiente.',espera=int(espera_cuota)+1,cuota=True)
         try:
-            return operation()
+            inicio=time.monotonic()
+            resultado=operation()
+            logging.getLogger(__name__).info('google_operacion intento=%d duracion_ms=%.0f resultado=ok',attempt+1,(time.monotonic()-inicio)*1000)
+            return resultado
         except Exception as exc:
             last = exc
             message = str(exc).lower()
             response = getattr(exc, "response", None)
             status = getattr(response, "status_code", None)
+            logging.getLogger(__name__).warning('google_operacion intento=%d duracion_ms=%.0f resultado=error tipo=%s estado_http=%s',
+                attempt+1,(time.monotonic()-inicio)*1000,type(exc).__name__,status)
             is_quota = (
                 status == 429
                 or "429" in message

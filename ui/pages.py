@@ -15,6 +15,7 @@ from ai.engine import analizar_atencion, fallback, generar_sugerencias
 from documents.anexos import anexo3_html, anexo3_pdf, anexo4_html, anexo4_pdf, anexo5_html, anexo5_pdf, anexo7_pdf, header_b64
 from documents.reportes import generar_formato_personal, generar_padron_usaer
 from documents.oficios import generar_oficio_comision
+from documents.descarga_diferida import preparar as descarga_diferida
 from ui.components import hero, card
 from documents.visitas import visita_pdf
 from utils.ids import expediente_id
@@ -262,7 +263,7 @@ def _expediente_individual(df):
                 st.html(anexo5_html(a, exp["anexo5"]))
             st.download_button(
                 "Descargar Anexo V en PDF carta",
-                anexo5_pdf(a, exp["anexo5"]),
+                descarga_diferida(anexo5_pdf,a,exp["anexo5"]),
                 f"Anexo_V_{id_alumno}.pdf",
                 "application/pdf",
                 width="stretch",
@@ -1422,7 +1423,7 @@ def eventos_page(df):
     with descargas[0]:
         st.download_button(
             f"Descargar Anexo V en PDF ({mes_filtro})",
-            anexo5_pdf(datos, vista_filtrada),
+            descarga_diferida(anexo5_pdf,datos,vista_filtrada),
             f"Anexo_V_{id_alumno}{sufijo_archivo}.pdf",
             "application/pdf",
             width="stretch",
@@ -1522,7 +1523,7 @@ def eventos_page(df):
     cambiar_contexto(st.session_state,id_alumno)
     st.download_button(
         "Descargar Anexo V en PDF carta",
-        anexo5_pdf(datos, documento_actualizado),
+        descarga_diferida(anexo5_pdf,datos,documento_actualizado),
         f"Anexo_V_{id_alumno}.pdf",
         "application/pdf",
         use_container_width=True,
@@ -1978,7 +1979,7 @@ def documentos_page(df):
                 st.html(vista_anexo5)
             st.download_button(
                 "Descargar Anexo V en PDF carta",
-                anexo5_pdf(alumno_documento, a5),
+                descarga_diferida(anexo5_pdf,alumno_documento,a5),
                 f"Anexo_V_{archivo_base}.pdf",
                 "application/pdf",
                 width="stretch",
@@ -2346,7 +2347,7 @@ def direccion_page(df):
             st.info("Aún no hay alumnos registrados para generar el padrón.")
         else:
             try:
-                padron = generar_padron_usaer(alumnos, escuelas)
+                padron = descarga_diferida(generar_padron_usaer,alumnos,escuelas)
                 st.download_button(
                     "Generar y descargar padrón",
                     data=padron,
@@ -2368,9 +2369,7 @@ def direccion_page(df):
             st.info("Aún no hay personal registrado para generar el formato.")
         else:
             try:
-                formato = generar_formato_personal(
-                    personal, escuelas, alumnos, asignaciones
-                )
+                formato = descarga_diferida(generar_formato_personal,personal,escuelas,alumnos,asignaciones)
                 st.download_button(
                     "Generar y descargar formato de personal",
                     data=formato,
