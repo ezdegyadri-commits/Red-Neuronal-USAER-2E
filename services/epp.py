@@ -79,14 +79,15 @@ def listar(incluir_eliminados=False,incluir_bajas=False):
     if 'Alumno' in rows:rows=rows.loc[rows['Alumno'].astype(str).isin(ids)]
     records=rows.fillna('').to_dict('records')
     known={str(r.get('Revision','')) for r in records}
-    records.extend(deepcopy(r) for rev,r in recientes().items() if rev not in known)
+    with control():
+        records.extend(deepcopy(r) for rev,r in recientes().items() if rev not in known and str(r.get('Alumno','')) in ids)
     cache_key = tuple(str(r.get('Revision', '')) for r in records)
-    if _DOCS_CACHE.get('key') == cache_key:
-        docs = deepcopy(_DOCS_CACHE['docs'])
-    else:
+    with control():
+        docs=deepcopy(_DOCS_CACHE['docs']) if _DOCS_CACHE.get('key')==cache_key else None
+    if docs is None:
         docs = reconstruir(records)
-        _DOCS_CACHE['key'] = cache_key
-        _DOCS_CACHE['docs'] = docs
+        with control():
+            _DOCS_CACHE.update(key=cache_key,docs=docs)
     return [d for d in docs if d['alumno'] in ids and
         (incluir_eliminados or d['partes']['META']['estado'] != 'ELIMINADO')]
 
@@ -114,7 +115,7 @@ def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR',actua
     a = actor()
     content = json.dumps(value, ensure_ascii=False, sort_keys=True)
     if len(content) > 36000: raise ValueError('Contenido demasiado extenso para el respaldo.')
-    with control():
+    with planes.candado('epp:'+clave(str(id_alumno),ciclo)):
         ws = hoja()
         if actual_confirmado is None:clear_cache(HOJA)
         current = actual_confirmado if actual_confirmado is not None else _actual(id_alumno,ciclo)
@@ -134,11 +135,12 @@ def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR',actua
         from services.planeacion_estabilidad import reservar_escritura
         reservar_escritura()
         ws.append_rows([row],value_input_option='RAW')
-        recientes()[rev]=dict(zip(HEADERS,row))
-        _DOCS_CACHE.clear()
+        with control():
+            recientes()[rev]=dict(zip(HEADERS,row))
+            _DOCS_CACHE.clear()
+            if len(recientes())>1000:
+                recientes().clear()
         clear_cache(HOJA)
-        if len(recientes())>1000:
-            recientes().clear()
         # Devuelve únicamente el área confirmada; no modifica snapshots de otras áreas.
         return {'contenido':deepcopy(value),'revision':rev,'fecha':now,'autor':a['nombre'],
                 'cuenta':a['cuenta'],'estado':estado}
@@ -177,7 +179,7 @@ def combinar(base, local, remoto):
 def guardar_cambios(doc, parte, base, value, revision):
     """Reintentos de una misma área no bloquean aportaciones independientes."""
     autorizar(doc,parte)
-    with control():
+    with planes.candado('epp:'+doc['id']):
         clear_cache(HOJA)
         actual=_actual(doc['alumno'],doc['ciclo'])
         latest=actual['partes'].get(parte,{})

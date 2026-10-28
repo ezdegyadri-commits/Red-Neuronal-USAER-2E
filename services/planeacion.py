@@ -416,8 +416,11 @@ def _conciliar_otros_intentos(documento,clave):
         revision=intentos()[key]['saved']['revision']
         confirmado=next((v for v in versiones if v['revision']==revision),None)
         if confirmado is None:
-            from services.planeacion_estabilidad import GuardadoPendiente
-            raise GuardadoPendiente(60)
+            # El candado del documento ya excluye una escritura en vuelo en
+            # este proceso. Recuperar la misma revisión conserva el aporte del
+            # profesional ausente; esperar su sesión indefinidamente no lo hace.
+            _resolver_intento(key,intentos()[key]['firma'])
+            continue
         _confirmar(confirmado)
         del intentos()[key]
 
@@ -455,7 +458,19 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
     firma=_firma_guardado(doc,estado,observaciones)
     with candado(doc['id']):
         _conciliar_otros_intentos(doc['id'],clave)
-        confirmado=_resolver_intento(clave,firma)
+        pendiente=intentos().get(clave)
+        if (pendiente and pendiente['firma']!=firma and pendiente.get('enviado') is not None
+                and actor.get('origen_editor') and pendiente.get('origen_editor')==actor['origen_editor']):
+            # La respuesta perdida no es otro editor. Primero confirmar/repetir
+            # la revisión estable y después unir únicamente la captura posterior.
+            base=deepcopy(pendiente['enviado'])
+            confirmado=_resolver_intento(clave,pendiente['firma'])
+            from services.planeacion_compartida import _tres_vias
+            doc=_tres_vias(base,doc,confirmado)
+            firma=_firma_guardado(doc,estado,observaciones)
+            confirmado=None
+        else:
+            confirmado=_resolver_intento(clave,firma)
         if confirmado is not None:return confirmado
         instantanea=versiones_actuales()
         versiones=[v for v in instantanea if v['id']==doc['id']]
@@ -553,7 +568,8 @@ def _guardar_version(doc,actor,estado='BORRADOR',observaciones=None,aportacion=F
                saved['datos']['ID_Escuela'],json.dumps([a['ID_Alumno'] for a in saved['datos']['Alumnos']]),
                saved['formato'],estado,str(i),str(len(partes)),digest,p] for i,p in enumerate(partes)]
         reservar_escritura()
-        intentos()[clave]={'firma':firma,'saved':deepcopy(saved),'rows':rows}
+        intentos()[clave]={'firma':firma,'saved':deepcopy(saved),'rows':rows,'enviado':deepcopy(doc),
+                          'origen_editor':actor.get('origen_editor')}
         # No retry_google para append: los fallos ambiguos se reconcilian por
         # revisión estable en _resolver_intento, sin crear otro UUID.
         _hoja().append_rows(rows,value_input_option='RAW')

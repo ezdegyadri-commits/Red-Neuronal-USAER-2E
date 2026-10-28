@@ -4,6 +4,8 @@ El límite reserva margen para otros módulos. No es un bloqueo distribuido:
 la operación de producción sigue requiriendo una única instancia escritora.
 """
 from collections import deque
+from contextlib import contextmanager
+import logging
 import threading
 import time
 import streamlit as st
@@ -41,10 +43,20 @@ def coordinacion():
     return threading.RLock(), {}, {}
 
 
-def candado(documento):
+@contextmanager
+def candado(documento, espera_maxima=2):
     lock, locks, _ = coordinacion()
     with lock:
-        return locks.setdefault(documento, threading.RLock())
+        documento_lock=locks.setdefault(documento, threading.RLock())
+    inicio=time.monotonic()
+    adquirido=documento_lock.acquire(timeout=espera_maxima)
+    logging.getLogger(__name__).info('documento_candado espera_ms=%.0f resultado=%s',
+        (time.monotonic()-inicio)*1000,'admitido' if adquirido else 'diferido')
+    if not adquirido:raise GuardadoPendiente(5)
+    try:
+        yield
+    finally:
+        documento_lock.release()
 
 
 def intentos():

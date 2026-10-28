@@ -20,7 +20,7 @@ def conservar(prefix,base):
     """Protege la edición antes de reutilizar su espacio para otro documento."""
     payload={s:deepcopy(st.session_state[prefix+s]) for s in
              ('_doc','_filas','_filas_retiradas','_obs','_pending','_error','_retry_at','_last_attempt','_estado_pendiente',
-              '_intento','_intervalo','_papel_nonce','_papel_aceptado','_guardado_diagnostico')
+              '_intento','_intervalo','_papel_nonce','_papel_aceptado','_guardado_diagnostico','_origen_io','_fallos_io')
              if prefix+s in st.session_state}
     firma=hashlib.sha256(json.dumps(payload,ensure_ascii=False,sort_keys=True,default=str).encode()).hexdigest()[:24]
     destino=base+'_envio_'+firma

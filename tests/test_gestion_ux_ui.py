@@ -5,9 +5,11 @@ from streamlit.testing.v1 import AppTest
 class GestionUITests(TestCase):
     def app(self):return AppTest.from_file(str(Path(__file__).parent/'fixtures/gestion_ux_app.py'),default_timeout=30).run()
 
-    def test_padron_busqueda_paginacion_baja_y_reactivacion(self):
+    def test_padron_editor_baja_y_reactivacion(self):
         app=self.app();self.assertFalse(app.exception)
-        self.assertTrue(any(w.label=='Buscar en la tabla' for w in app.text_input))
+        # La tabla paginada fue sustituida por el editor directo antes de esta
+        # intervención. Mantener el recorrido de baja/reactivación sobre esa UI.
+        self.assertTrue(any(w.key and w.key.startswith('padron_directo_editor_') for w in app.dataframe))
         next(w for w in app.radio if w.label=='Acción').set_value('Baja recuperable').run()
         next(w for w in app.text_input if w.label=='Motivo del movimiento').set_value('Baja sintética de prueba').run()
         next(w for w in app.checkbox if w.label.startswith('Revisé el alumno')).check().run()

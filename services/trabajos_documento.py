@@ -36,13 +36,19 @@ def enviar(actor, escuelas, operacion, *args):
     except BaseException:
         _capacidad.release()
         raise
+    encolado=time.monotonic()
     def ejecutar():
         inicio = time.monotonic()
+        resultado='error'
         try:
             with como(identidad, escuelas):
-                return operacion(*copia)
+                valor=operacion(*copia)
+                resultado='ok'
+                return valor
         finally:
-            logging.getLogger(__name__).info('documento_io duracion_ms=%.0f', (time.monotonic()-inicio)*1000)
+            # Sin argumentos, identificadores, nombres ni mensajes del proveedor.
+            logging.getLogger(__name__).info('documento_io cola_ms=%.0f duracion_ms=%.0f resultado=%s',
+                (inicio-encolado)*1000,(time.monotonic()-inicio)*1000,resultado)
     try:
         future = _pool.submit(ejecutar)
     except BaseException:

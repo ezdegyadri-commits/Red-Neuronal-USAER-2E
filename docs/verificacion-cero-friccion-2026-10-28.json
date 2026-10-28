@@ -1,0 +1,532 @@
+{
+  "fecha": "2026-10-28",
+  "base": "6bf34c1597ed20cb08b9f4e7dcca46ec207ac547",
+  "rama": "feat/operacion-cero-friccion",
+  "alcance": "Pruebas locales con datos ficticios y red simulada. Sin escrituras de producción. No mide Streamlit Cloud.",
+  "modulos": 77,
+  "ejecuciones": 843,
+  "fallos": 0,
+  "cliente_js": "Contrato DOM/reloj ficticios aprobado, incluyendo retransmisión acotada y offline/online",
+  "medicion_antes": [
+    {
+      "usuarios_ficticios": 15,
+      "workers": 4,
+      "escritura_simulada_ms": 30,
+      "total_ms": 786.11,
+      "media_guardado_ms": 190.65,
+      "p95_guardado_ms": 219.06,
+      "versiones_verificadas": 30
+    },
+    {
+      "usuarios_ficticios": 20,
+      "workers": 4,
+      "escritura_simulada_ms": 30,
+      "total_ms": 1059.41,
+      "media_guardado_ms": 197.88,
+      "p95_guardado_ms": 219.51,
+      "versiones_verificadas": 40
+    },
+    {
+      "usuarios_ficticios": 25,
+      "workers": 4,
+      "escritura_simulada_ms": 30,
+      "total_ms": 1294.7,
+      "media_guardado_ms": 195.77,
+      "p95_guardado_ms": 217.39,
+      "versiones_verificadas": 50
+    }
+  ],
+  "medicion_despues": [
+    {
+      "usuarios_ficticios": 15,
+      "workers": 4,
+      "escritura_simulada_ms": 30,
+      "total_ms": 400.51,
+      "media_guardado_ms": 98.83,
+      "p95_guardado_ms": 121.39,
+      "versiones_verificadas": 30
+    },
+    {
+      "usuarios_ficticios": 20,
+      "workers": 4,
+      "escritura_simulada_ms": 30,
+      "total_ms": 551.81,
+      "media_guardado_ms": 104.96,
+      "p95_guardado_ms": 127.53,
+      "versiones_verificadas": 40
+    },
+    {
+      "usuarios_ficticios": 25,
+      "workers": 4,
+      "escritura_simulada_ms": 30,
+      "total_ms": 737.99,
+      "media_guardado_ms": 113.41,
+      "p95_guardado_ms": 141.98,
+      "versiones_verificadas": 50
+    }
+  ],
+  "resultados": [
+    {
+      "modulo": "test_integracion_epp_planeacion_nee",
+      "correcto": true,
+      "pruebas": 15,
+      "segundos": 1.69
+    },
+    {
+      "modulo": "test_intervencion_integridad",
+      "correcto": true,
+      "pruebas": 8,
+      "segundos": 3.56
+    },
+    {
+      "modulo": "test_intervencion_recorridos",
+      "correcto": true,
+      "pruebas": 29,
+      "segundos": 9.46
+    },
+    {
+      "modulo": "test_nee_documentales",
+      "correcto": true,
+      "pruebas": 17,
+      "segundos": 3.78
+    },
+    {
+      "modulo": "test_padron_archivo_ux",
+      "correcto": true,
+      "pruebas": 23,
+      "segundos": 5.98
+    },
+    {
+      "modulo": "test_padron_importacion",
+      "correcto": true,
+      "pruebas": 11,
+      "segundos": 4.54
+    },
+    {
+      "modulo": "test_planeacion_acceso_equipo",
+      "correcto": true,
+      "pruebas": 9,
+      "segundos": 11.43
+    },
+    {
+      "modulo": "test_planeacion_accesos",
+      "correcto": true,
+      "pruebas": 5,
+      "segundos": 8.53
+    },
+    {
+      "modulo": "test_planeacion_alumnos",
+      "correcto": true,
+      "pruebas": 23,
+      "segundos": 9.76
+    },
+    {
+      "modulo": "test_planeacion_anual_calidad",
+      "correcto": true,
+      "pruebas": 6,
+      "segundos": 4.73
+    },
+    {
+      "modulo": "test_planeacion_apartados",
+      "correcto": true,
+      "pruebas": 9,
+      "segundos": 8.43
+    },
+    {
+      "modulo": "test_planeacion_cero_friccion",
+      "correcto": true,
+      "pruebas": 10,
+      "segundos": 13.0
+    },
+    {
+      "modulo": "test_planeacion_chat",
+      "correcto": true,
+      "pruebas": 4,
+      "segundos": 3.15
+    },
+    {
+      "modulo": "test_planeacion_clara",
+      "correcto": true,
+      "pruebas": 7,
+      "segundos": 4.41
+    },
+    {
+      "modulo": "test_planeacion_cola_pendientes",
+      "correcto": true,
+      "pruebas": 13,
+      "segundos": 6.41
+    },
+    {
+      "modulo": "test_planeacion_compartida",
+      "correcto": true,
+      "pruebas": 38,
+      "segundos": 7.68
+    },
+    {
+      "modulo": "test_planeacion_completa",
+      "correcto": true,
+      "pruebas": 13,
+      "segundos": 3.92
+    },
+    {
+      "modulo": "test_planeacion_completa_ui",
+      "correcto": true,
+      "pruebas": 4,
+      "segundos": 29.6
+    },
+    {
+      "modulo": "test_planeacion_contexto",
+      "correcto": true,
+      "pruebas": 6,
+      "segundos": 5.24
+    },
+    {
+      "modulo": "test_planeacion_continuidad",
+      "correcto": true,
+      "pruebas": 26,
+      "segundos": 7.23
+    },
+    {
+      "modulo": "test_planeacion_documento_directo",
+      "correcto": true,
+      "pruebas": 7,
+      "segundos": 7.73
+    },
+    {
+      "modulo": "test_planeacion_edicion",
+      "correcto": true,
+      "pruebas": 18,
+      "segundos": 20.26
+    },
+    {
+      "modulo": "test_planeacion_epp_mejoras",
+      "correcto": true,
+      "pruebas": 12,
+      "segundos": 8.22
+    },
+    {
+      "modulo": "test_planeacion_equipo",
+      "correcto": true,
+      "pruebas": 13,
+      "segundos": 6.26
+    },
+    {
+      "modulo": "test_planeacion_equipo_ui",
+      "correcto": true,
+      "pruebas": 1,
+      "segundos": 23.14
+    },
+    {
+      "modulo": "test_planeacion_estabilidad",
+      "correcto": true,
+      "pruebas": 17,
+      "segundos": 5.94
+    },
+    {
+      "modulo": "test_planeacion_formato",
+      "correcto": true,
+      "pruebas": 5,
+      "segundos": 24.41
+    },
+    {
+      "modulo": "test_planeacion_generacion_resiliente",
+      "correcto": true,
+      "pruebas": 4,
+      "segundos": 1.39
+    },
+    {
+      "modulo": "test_planeacion_grupo_unico",
+      "correcto": true,
+      "pruebas": 40,
+      "segundos": 7.93
+    },
+    {
+      "modulo": "test_planeacion_guardado_editor",
+      "correcto": true,
+      "pruebas": 7,
+      "segundos": 10.14
+    },
+    {
+      "modulo": "test_planeacion_heredada",
+      "correcto": true,
+      "pruebas": 18,
+      "segundos": 8.89
+    },
+    {
+      "modulo": "test_planeacion_intervenciones_nee",
+      "correcto": true,
+      "pruebas": 14,
+      "segundos": 5.97
+    },
+    {
+      "modulo": "test_planeacion_listado_automatico",
+      "correcto": true,
+      "pruebas": 3,
+      "segundos": 5.62
+    },
+    {
+      "modulo": "test_planeacion_local",
+      "correcto": true,
+      "pruebas": 14,
+      "segundos": 15.2
+    },
+    {
+      "modulo": "test_planeacion_materiales_claves",
+      "correcto": true,
+      "pruebas": 2,
+      "segundos": 5.27
+    },
+    {
+      "modulo": "test_planeacion_matricula",
+      "correcto": true,
+      "pruebas": 7,
+      "segundos": 9.91
+    },
+    {
+      "modulo": "test_planeacion_modalidad_estable",
+      "correcto": true,
+      "pruebas": 2,
+      "segundos": 3.35
+    },
+    {
+      "modulo": "test_planeacion_modelo",
+      "correcto": true,
+      "pruebas": 11,
+      "segundos": 1.45
+    },
+    {
+      "modulo": "test_planeacion_motor",
+      "correcto": true,
+      "pruebas": 13,
+      "segundos": 2.94
+    },
+    {
+      "modulo": "test_planeacion_nee",
+      "correcto": true,
+      "pruebas": 8,
+      "segundos": 10.88
+    },
+    {
+      "modulo": "test_planeacion_panel",
+      "correcto": true,
+      "pruebas": 12,
+      "segundos": 6.23
+    },
+    {
+      "modulo": "test_planeacion_papel",
+      "correcto": true,
+      "pruebas": 17,
+      "segundos": 17.97
+    },
+    {
+      "modulo": "test_planeacion_paradocente_viva",
+      "correcto": true,
+      "pruebas": 8,
+      "segundos": 4.3
+    },
+    {
+      "modulo": "test_planeacion_pedagogica_casos",
+      "correcto": true,
+      "pruebas": 6,
+      "segundos": 3.64
+    },
+    {
+      "modulo": "test_planeacion_propuestas",
+      "correcto": true,
+      "pruebas": 4,
+      "segundos": 5.03
+    },
+    {
+      "modulo": "test_planeacion_proteccion_datos",
+      "correcto": true,
+      "pruebas": 32,
+      "segundos": 7.0
+    },
+    {
+      "modulo": "test_planeacion_rapida",
+      "correcto": true,
+      "pruebas": 11,
+      "segundos": 5.79
+    },
+    {
+      "modulo": "test_planeacion_recuperacion",
+      "correcto": true,
+      "pruebas": 5,
+      "segundos": 3.91
+    },
+    {
+      "modulo": "test_planeacion_render_estable",
+      "correcto": true,
+      "pruebas": 7,
+      "segundos": 5.7
+    },
+    {
+      "modulo": "test_planeacion_repositorio",
+      "correcto": true,
+      "pruebas": 4,
+      "segundos": 6.72
+    },
+    {
+      "modulo": "test_planeacion_respaldo",
+      "correcto": true,
+      "pruebas": 9,
+      "segundos": 20.07
+    },
+    {
+      "modulo": "test_planeacion_simple",
+      "correcto": true,
+      "pruebas": 15,
+      "segundos": 28.7
+    },
+    {
+      "modulo": "test_planeacion_sincronizacion",
+      "correcto": true,
+      "pruebas": 7,
+      "segundos": 3.35
+    },
+    {
+      "modulo": "test_planeacion_todos_grupos",
+      "correcto": true,
+      "pruebas": 34,
+      "segundos": 9.87
+    },
+    {
+      "modulo": "test_planeacion_ui",
+      "correcto": true,
+      "pruebas": 2,
+      "segundos": 11.39
+    },
+    {
+      "modulo": "test_planeacion_visibilidad",
+      "correcto": true,
+      "pruebas": 8,
+      "segundos": 4.73
+    },
+    {
+      "modulo": "test_planeacion_viva",
+      "correcto": true,
+      "pruebas": 12,
+      "segundos": 25.42
+    },
+    {
+      "modulo": "test_operacion_cero_friccion",
+      "correcto": true,
+      "pruebas": 9,
+      "segundos": 12.86
+    },
+    {
+      "modulo": "test_guardado_asincrono",
+      "correcto": true,
+      "pruebas": 36,
+      "segundos": 7.25
+    },
+    {
+      "modulo": "test_google_retry",
+      "correcto": true,
+      "pruebas": 7,
+      "segundos": 2.67
+    },
+    {
+      "modulo": "test_rendimiento_clics",
+      "correcto": true,
+      "pruebas": 3,
+      "segundos": 2.96
+    },
+    {
+      "modulo": "test_epp",
+      "correcto": true,
+      "pruebas": 26,
+      "segundos": 5.08
+    },
+    {
+      "modulo": "test_epp_colaborativa",
+      "correcto": true,
+      "pruebas": 7,
+      "segundos": 5.03
+    },
+    {
+      "modulo": "test_epp_actualizacion",
+      "correcto": true,
+      "pruebas": 3,
+      "segundos": 0.31
+    },
+    {
+      "modulo": "test_epp_acceso",
+      "correcto": true,
+      "pruebas": 3,
+      "segundos": 0.31
+    },
+    {
+      "modulo": "test_continuidad_integracion",
+      "correcto": true,
+      "pruebas": 24,
+      "segundos": 2.75
+    },
+    {
+      "modulo": "test_continuidad_interfaz",
+      "correcto": true,
+      "pruebas": 2,
+      "segundos": 4.48
+    },
+    {
+      "modulo": "test_passkey_session",
+      "correcto": true,
+      "pruebas": 2,
+      "segundos": 3.1
+    },
+    {
+      "modulo": "test_capacidad_textos_actas_eventos",
+      "correcto": true,
+      "pruebas": 2,
+      "segundos": 2.16
+    },
+    {
+      "modulo": "test_visitas_historial",
+      "correcto": true,
+      "pruebas": 10,
+      "segundos": 4.5
+    },
+    {
+      "modulo": "test_cronograma_respaldo",
+      "correcto": true,
+      "pruebas": 8,
+      "segundos": 8.83
+    },
+    {
+      "modulo": "test_horarios_edicion",
+      "correcto": true,
+      "pruebas": 5,
+      "segundos": 2.36
+    },
+    {
+      "modulo": "test_horarios_edicion_ui",
+      "correcto": true,
+      "pruebas": 1,
+      "segundos": 4.74
+    },
+    {
+      "modulo": "test_referencias_edicion",
+      "correcto": true,
+      "pruebas": 5,
+      "segundos": 2.87
+    },
+    {
+      "modulo": "test_referencias_edicion_ui",
+      "correcto": true,
+      "pruebas": 1,
+      "segundos": 4.47
+    },
+    {
+      "modulo": "test_gestion_ux_ui",
+      "correcto": true,
+      "pruebas": 3,
+      "segundos": 13.05
+    },
+    {
+      "modulo": "test_sintesis_documento_ui",
+      "correcto": true,
+      "pruebas": 1,
+      "segundos": 3.81
+    }
+  ]
+}

@@ -1,24 +1,27 @@
 """Acuses de Planeación: actualizar la UI solo desde el hilo de su sesión."""
 from copy import deepcopy
 import time
+from uuid import uuid4
 import streamlit as st
 from services import planeacion as s
 from services.trabajos_documento import enviar
 from services.planeacion_guardado_estado import diagnostico
+from services.reintentos_edicion import programar
 
 
 def _fallo(prefix, exc):
     st.session_state[prefix+'_pending']=True
-    detalle=diagnostico(exc)
+    detalle=programar(st.session_state,prefix,diagnostico(exc))
     st.session_state[prefix+'_guardado_diagnostico']=detalle
     st.session_state[prefix+'_error']=detalle['causa']
     st.session_state[prefix+'_io_error_nonce']=st.session_state.get(prefix+'_papel_nonce',st.session_state.get(prefix+'_nonce',''))
-    st.session_state[prefix+'_retry_at']=time.monotonic()+max(15,detalle['espera']) if detalle['espera'] else float('inf')
     st.toast('No se confirmó el envío. Tu edición sigue disponible; consulta el aviso de guardado.',icon='⚠️')
 
 
 def persistir(prefix, estado=None, automatic=False, aporte=False):
-    state=st.session_state;actor=s.identidad();doc=state[prefix+'_doc']
+    state=st.session_state
+    actor={**s.identidad(),'origen_editor':state.setdefault(prefix+'_origen_io',uuid4().hex)}
+    doc=state[prefix+'_doc']
     key=prefix+'_trabajo_io';job=state.get(key)
     if job:
         if (job['cuenta'],job['documento'])!=(actor['cuenta'],doc['id']):
@@ -35,7 +38,7 @@ def persistir(prefix, estado=None, automatic=False, aporte=False):
                 igual=doc==job['enviado'] and state.get(prefix+'_estado_pendiente',job['estado'])==job['estado']
                 state[prefix+'_doc']=saved if igual else _tres_vias(job['enviado'],doc,saved)
             state[prefix+'_pending']=not igual
-            for suffix in ('_error','_guardado_diagnostico','_retry_at','_pdf','_io_error_nonce'):
+            for suffix in ('_error','_guardado_diagnostico','_retry_at','_pdf','_io_error_nonce','_fallos_io'):
                 state.pop(prefix+suffix,None)
             if igual:
                 state.pop(prefix+'_estado_pendiente',None)
@@ -50,6 +53,7 @@ def persistir(prefix, estado=None, automatic=False, aporte=False):
     state[prefix+'_pending']=True
     intervalo=15 if aporte or doc['metadatos'].get('vista_formato')=='guia' else 60
     if automatic and (time.monotonic()<state.get(prefix+'_retry_at',0) or time.monotonic()-state.get(prefix+'_last_attempt',0)<intervalo):return False
+    if not automatic:state.pop(prefix+'_fallos_io',None)
     estado=estado or state.get(prefix+'_estado_pendiente') or doc.get('estado','BORRADOR')
     snapshot=deepcopy(doc)
     job={'cuenta':actor['cuenta'],'documento':doc['id'],'enviado':snapshot,'estado':estado,

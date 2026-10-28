@@ -5,6 +5,7 @@ import streamlit as st
 from services import epp as s, epp_papel as papel
 from services.trabajos_documento import enviar
 from services.planeacion_guardado_estado import diagnostico
+from services.reintentos_edicion import programar
 
 
 def _escribir(doc, cola):
@@ -34,7 +35,7 @@ def guardar(p,manual=False):
                 if local==sent:cola.pop(area,None)
                 else:cola[area]={'base':deepcopy(saved['contenido']),'revision':saved['revision']}
             if error:raise error
-            state.pop(p+'_diagnostico',None);state.pop(p+'_reintentar_en',None);state.pop(p+'_io_error_nonce',None)
+            state.pop(p+'_diagnostico',None);state.pop(p+'_reintentar_en',None);state.pop(p+'_io_error_nonce',None);state.pop(p+'_fallos_io',None)
             state[p+'_pending']=bool(cola)
             if not cola:
                 state.pop(p+'_huella_pendiente',None)
@@ -43,22 +44,21 @@ def guardar(p,manual=False):
                 return True
             return False
         except Exception as exc:
-            detalle=diagnostico(exc);state[p+'_diagnostico']=detalle
+            detalle=programar(state,p,diagnostico(exc),fecha='_reintentar_en');state[p+'_diagnostico']=detalle
             state[p+'_io_error_nonce']=state.get(p+'_nonce','')
-            state[p+'_reintentar_en']=time.monotonic()+max(15,detalle['espera']) if detalle['espera'] else float('inf')
             state[p+'_pending']=bool(cola)
             st.toast('No se confirmó toda la EPP. Tu captura se conserva; consulta el aviso.',icon='⚠️')
             return False
     if not cola:return True
     if state.get(p+'_cuenta',cuenta)!=cuenta:raise PermissionError('La captura EPP pertenece a otra cuenta.')
     if not manual and time.monotonic()<max(state.get(p+'_reintentar_en',0),state.get(p+'_agrupar_hasta',0)):return False
+    if manual:state.pop(p+'_fallos_io',None)
     try:
         future=enviar(s.actor(),state.get('escuelas_permitidas',''),_escribir,doc,cola)
         state[key]={'cuenta':cuenta,'documento':doc['id'],'enviado':deepcopy(doc),'future':future,'nonce':state.get(p+'_nonce','')}
     except Exception as exc:
-        state[p+'_diagnostico']=diagnostico(exc)
+        state[p+'_diagnostico']=programar(state,p,diagnostico(exc),fecha='_reintentar_en')
         state[p+'_io_error_nonce']=state.get(p+'_nonce','')
-        state[p+'_reintentar_en']=time.monotonic()+15
     return False
 
 

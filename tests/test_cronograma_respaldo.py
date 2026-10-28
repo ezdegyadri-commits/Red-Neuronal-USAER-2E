@@ -93,11 +93,17 @@ class CronogramaRespaldoTest(unittest.TestCase):
         ws.append_rows.assert_not_called()
 
     def test_quota_cooldown_not_immediate_repeated_attempts(self):
-        from data.google import retry_google
-        op = Mock(side_effect=[RuntimeError("429 quota exceeded"), RuntimeError("429 quota exceeded"), "ok"])
-        with patch("data.google.time.sleep") as sleep, patch("data.google.random.uniform", return_value=0):
-            self.assertEqual(retry_google(op), "ok")
-        self.assertEqual([c.args[0] for c in sleep.call_args_list], [8, 16])
+        from data import google as g
+        op = Mock(side_effect=[RuntimeError("429 quota exceeded"), "ok"])
+        with patch.object(g,'_cuota_hasta',0),patch.object(g.time,'sleep') as sleep:
+            with patch.object(g.time,'monotonic',return_value=100):
+                with self.assertRaises(g.GoogleTemporal):g.retry_google(op)
+                with self.assertRaises(g.GoogleTemporal):g.retry_google(op)
+                self.assertEqual(op.call_count,1)
+            with patch.object(g.time,'monotonic',return_value=161):
+                self.assertEqual(g.retry_google(op),'ok')
+            self.assertEqual(op.call_count,2)
+            sleep.assert_not_called()
 
 
 if __name__ == "__main__":
