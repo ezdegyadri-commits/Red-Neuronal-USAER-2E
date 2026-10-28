@@ -19,7 +19,7 @@ def clave(doc):
     grado,grupo=scope
     # Sin letra significa planeación de ese grado; no se equipara a A/B/etc.
     return (clave_escuela(doc['datos']['ID_Escuela']),str(doc['datos']['Curso escolar']).replace('–','-'),
-            str(doc['datos']['Trimestre']),grado,grupo)
+            'ANUAL' if doc.get('metadatos',{}).get('periodicidad')=='anual' else str(doc['datos']['Trimestre']),grado,grupo)
 
 
 def identificador(doc):

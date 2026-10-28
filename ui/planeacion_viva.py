@@ -9,6 +9,14 @@ from services.planeacion_modalidad import GUIA_XIX, guia_grupal
 from ui.planeacion_pendientes import raiz
 
 
+def _conservar_modalidad(key, opciones, inicial):
+    actual=st.session_state.get(key)
+    anterior=st.session_state.get(key+'_elegida',inicial)
+    elegida=actual if actual in opciones else anterior if anterior in opciones else inicial
+    st.session_state[key]=elegida
+    st.session_state[key+'_elegida']=elegida
+
+
 def _abrir(base,doc):
     from ui import planeacion as u
     from ui.planeacion_simple import _abrir as abrir
@@ -77,19 +85,26 @@ def _entrada(base,actor):
 
         especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
         modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
-        modo=c_modo.segmented_control('Modalidad de planeación',modos,default='Mi intervención' if especialista else 'Grupal',key=base+'_viva_modalidad_v3') or modos[0]
+        modo_key=base+'_viva_modalidad_v3'
+        inicial='Mi intervención' if especialista else 'Grupal'
+        _conservar_modalidad(modo_key,modos,inicial)
+        modo=c_modo.segmented_control('Modalidad de planeación',modos,key=modo_key,
+            on_change=_conservar_modalidad,args=(modo_key,modos,inicial))
         tipo='individual' if modo=='Individual' else 'grupal'
         presentacion=None
         if tipo=='grupal' and actor['area']=='Aprendizaje':
             elegido=st.selectbox('Formato para trabajar',['Guía grupal horizontal por alumno y área · Anexo XIX','Planeación trimestral para el subgrupo · Anexo XXIII'],key=base+'_papel_formato_v2')
             presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
         ciclo,trimestre=periodo_actual()
+        anual=presentacion=='guia'
+        if anual:st.caption('Planeación grupal anual: una misma hoja editable durante el ciclo. Los documentos trimestrales anteriores se conservan en su repositorio.')
         incluir=(modo=='Por grado' or not especialista)
 
         with st.expander('Ajustar ciclo escolar o trimestre',expanded=False):
             c_c,c_t=st.columns(2)
             ciclo=c_c.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
-            trimestre=c_t.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
+            if not anual:trimestre=c_t.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
+            else:trimestre=1
             if tipo=='grupal' and modo!='Por grado' and presentacion!='guia':
                 incluir=st.checkbox('Reunir alumnos de atención grupal e individual en este formato',value=not especialista,key=base+'_viva_incluir_v2')
         if presentacion=='guia':
@@ -120,7 +135,8 @@ def _entrada(base,actor):
         selection_key=f'{base}_viva_alumnos_{school["ID_Escuela"]}_{tipo}_{grado}_{grupo}_{incluir}'
         if tipo=='individual':selection_key+='_multiple'
         label='Seleccionar todos los alumnos individuales' if tipo=='individual' else 'Seleccionar alumnos del grado' if modo=='Por grado' else 'Seleccionar todo este grupo'
-        if st.button(label,key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
+        if presentacion=='guia' and selection_key not in st.session_state:st.session_state[selection_key]=list(nombres)
+        if presentacion!='guia' and st.button(label,key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
         ids=st.multiselect('Alumnos de mi formato',list(nombres),format_func=nombres.get,key=selection_key)
         if tipo=='individual':st.caption('Se reúnen los antecedentes propios de cada alumno seleccionado.')
 
@@ -145,7 +161,7 @@ def _entrada(base,actor):
                 elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
                 if presentacion=='guia' and elegidos['Grado'].nunique()!=1:
                     raise ValueError('Elige un grado para el Anexo XIX. En Grupo puedes dejar «Todos» para reunir a sus alumnos en una sola hoja.')
-                crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente,todos_grupos=presentacion=='guia' and grupo=='Todos');st.rerun()
+                crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente,todos_grupos=presentacion=='guia' and grupo=='Todos',anual=anual);st.rerun()
             except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
 
 

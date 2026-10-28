@@ -20,15 +20,16 @@ if 'f_docs' not in st.session_state:
     st.session_state['f_docs']=[d]
 s.identidad=lambda:actor
 s.autorizar=lambda *a,**k:actor
-s.compartidos=lambda documento=None:deepcopy(st.session_state['f_docs'])
+documentos_ficticios=st.session_state['f_docs']
+s.compartidos=lambda documento=None:deepcopy(documentos_ficticios)
 s.padron_autorizado=lambda:pd.DataFrame([ALUMNO])
 s.listar=lambda *a:[]
 s.refrescar=lambda:None
 def guardar(doc,filas,obs):
     if fallo:raise RuntimeError('Fallo simulado: tu aportación sigue pendiente.')
-    nuevo=aportar(st.session_state['f_docs'][0],actor,filas,obs)
+    nuevo=aportar(documentos_ficticios[0],actor,filas,obs)
     nuevo['guardado_en']='guardado-ficticio-confirmado'
-    st.session_state['f_docs']=[nuevo]
+    documentos_ficticios[:]=[nuevo]
     return deepcopy(nuevo)
 s.guardar_aportacion=guardar
 from ui import planeacion as u

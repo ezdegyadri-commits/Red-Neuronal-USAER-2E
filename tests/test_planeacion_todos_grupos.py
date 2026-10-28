@@ -158,7 +158,7 @@ class RecorridoTodosTests(TestCase):
         app=AppTest.from_file(str(Path(__file__).with_name('fixture_planeacion_todos_grupos.py')),default_timeout=30).run()
         self.assertFalse(app.exception)
         next(w for w in app.selectbox if w.label=='Grado').set_value('1°').run()
-        next(b for b in app.button if b.label=='Seleccionar todo este grupo').click().run()
+        # La nueva entrada precarga los alumnos elegibles del grupo sin otro clic.
         self.assertEqual(len(next(w for w in app.multiselect if w.label=='Alumnos de mi formato').value),3)
         next(b for b in app.button if b.label=='Abrir formato con mis alumnos').click().run()
         self.assertFalse(app.exception)

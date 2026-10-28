@@ -80,7 +80,9 @@ class IntercambioTests(unittest.TestCase):
                 'huella':huella(doc),'cambios':{},'accion':'agregar','tabla':'dosificacion'}
             app.run();self.assertFalse(app.exception)
             self.assertEqual(calls[-1]['aceptado_nonce'],'envio-ficticio-1')
-            self.assertTrue(calls[-1]['aceptado']) # Compatibilidad con pestañas previas.
+            # El acuse de guardado asíncrono puede provocar otra pasada dentro
+            # de run(). La compatibilidad se entrega una vez; el nonce persiste.
+            self.assertTrue(any(c.get('aceptado') for c in calls))
             total=len(app.session_state.versiones_ficticias)
             app.run();self.assertFalse(app.exception)
             self.assertEqual(calls[-1]['aceptado_nonce'],'envio-ficticio-1')

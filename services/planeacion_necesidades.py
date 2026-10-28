@@ -27,11 +27,11 @@ def opciones(doc):
             vistos.add(key)
             result.append({'id':r.get('ID_NEE') or identificar(f.get('documento_origen',f.get('registro','')),aid,i),
                            'texto': need, 'alumno': aid, 'referencia': f.get('referencia', ''),
-                           'fundamento':r.get('Fundamento',''),'pagina':r.get('Página',''),
+                           'fundamento':r.get('Fundamento',''),'pagina':r.get('Página',''),'prioridad':r.get('Prioridad',''),
                            'validada_en':r.get('Validada_En',f.get('fecha','')),
                            'documento': f.get('documento_origen', f.get('registro', '')),
                            'revision': f.get('revision', ''), 'fecha': f.get('fecha', ''), 'tipo': f['tipo']})
-    return result
+    return sorted(result,key=lambda r:{'Alta':0,'Media':1,'Baja':2}.get(r.get('prioridad'),3))
 
 
 def actualizar_catalogo(doc):

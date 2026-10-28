@@ -103,7 +103,7 @@ def _padron_actor(actor,escuelas):
     return frame.copy()
 
 
-def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individuales=False,vista_formato=None,todos_grupos=False):
+def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individuales=False,vista_formato=None,todos_grupos=False,anual=False):
     actor = identidad()
     if modalidad=='grupal' and actor['area']=='Aprendizaje' and vista_formato!='trimestral':
         incluir_individuales=False
@@ -133,6 +133,10 @@ def nueva(formato, ids, ciclo=2026, trimestre=1, modalidad=None, incluir_individ
         doc['metadatos']['individuales_en_sesion_grupal']=bool(incluir_individuales and modalidad=='grupal')
     if vista_formato:doc['metadatos']['vista_formato']=vista_formato
     from services.planeacion_compartida import es_guia
+    if anual:
+        if not es_guia(doc):raise ValueError('La hoja anual compartida se inicia desde la guía grupal del equipo.')
+        from services.planeacion_periodo import anual as preparar_anual
+        doc=preparar_anual(doc)
     if es_guia(doc):
         if todos_grupos:
             from utils.escolar import grado_canonico
@@ -811,6 +815,11 @@ def resumen_previo(doc,fuentes):
         if grado:grados.add(int(grado[1]))
     contexto='Alumnos seleccionados: '+str(len(doc['datos']['Alumnos']))+'. Grados registrados: '+(', '.join(str(g)+'°' for g in sorted(grados)) or 'de la escuela')+'.'
     value=(contexto+'\n\n'+'\n\n'.join(partes))[:12000]
+    return anonimizar_texto(doc,value)
+
+
+def anonimizar_texto(doc,value):
+    """Minimización local común, también para payloads estructurados completos."""
     tokens=[doc['datos'].get('Nombre del especialista',''),doc['datos'].get('Escuela regular',''),doc['datos'].get('CCT',''),doc['datos'].get('ID_Escuela','')]
     for alumno in doc['datos']['Alumnos']:
         tokens.extend([alumno.get('ID_Alumno',''),alumno.get('Nombre del alumno',''),alumno.get('Maestro de apoyo','')])

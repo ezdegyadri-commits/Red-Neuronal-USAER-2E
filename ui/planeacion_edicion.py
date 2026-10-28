@@ -118,25 +118,52 @@ def panel(prefix):
             _ia(prefix,doc)
 
 
+def _redactar_en_segundo_plano(doc,peticion,resumen,config,actor,escuelas):
+    from services.trabajos_documento import como
+    from ai.planeacion import conexion_trabajo
+    with como(actor,escuelas),conexion_trabajo(config):
+        return e.generar_revision(doc,peticion,resumen)
+
+
+@st.fragment(run_every=2)
+def _estado_redaccion(prefix):
+    job=st.session_state.get(prefix+'_editar_ia_trabajo')
+    if not job:return
+    if job['cuenta']!=s.identidad()['cuenta']:return
+    if job['future'].done():st.rerun(scope='app')
+    st.status('Preparando la redacción solicitada… Puedes continuar editando.',state='running')
+
+
 def _ia(prefix,doc):
     disponibles=e.actividades(doc)
     if not disponibles:st.caption('Añade primero una actividad al formato. También puedes continuar editando sin IA.');return
     refs=st.multiselect('Actividades por reformular (hasta tres)',list(disponibles),max_selections=3,
         format_func=lambda k:k.split(':')[0]+' · fila '+str(disponibles[k]['indice']+1)+' · '+disponibles[k]['texto'][:70],key=prefix+'_editar_ia_refs')
     if not refs:return
-    try:peticion=e.preparar_revision(doc,refs)
+    accion=st.selectbox('Cómo te ayudo con esta redacción',e.ACCIONES_REDACCION,key=prefix+'_editar_ia_accion')
+    try:peticion=e.preparar_revision(doc,refs,accion)
     except (ValueError,PermissionError) as exc:st.info(str(exc));return
     generation=e.huella(peticion)[:16]
     resumen=st.text_area('Resumen sin identificadores que analizará la IA',value=peticion['resumen'],max_chars=12000,height=180,key=f'{prefix}_{generation}_editar_ia_resumen')
     confirmar=st.checkbox('Revisé este resumen: no identifica personas. Solicitar solo la reformulación de las actividades elegidas.',key=f'{prefix}_{generation}_editar_ia_confirm')
-    if st.button('Preparar reformulación de actividades',disabled=not confirmar,key=prefix+'_editar_ia_generar'):
+    if st.button('Preparar reformulación de actividades',disabled=not confirmar or prefix+'_editar_ia_trabajo' in st.session_state,key=prefix+'_editar_ia_generar'):
         try:
-            with st.spinner('Revisando únicamente las actividades elegidas…'):
-                st.session_state[prefix+'_editar_ia_propuesta']=e.generar_revision(doc,peticion,resumen)
+            from ai.documento_json import enviar
+            from ai.planeacion import configuracion_trabajo
+            actor=s.identidad()
+            st.session_state[prefix+'_editar_ia_trabajo']={'future':enviar(_redactar_en_segundo_plano,doc,peticion,resumen,configuracion_trabajo(),actor,st.session_state.get('escuelas_permitidas','')),'cuenta':actor['cuenta']}
         except (ValueError,RuntimeError,PermissionError) as exc:st.info(str(exc))
+    job=st.session_state.get(prefix+'_editar_ia_trabajo')
+    if job and job['cuenta']==s.identidad()['cuenta'] and job['future'].done():
+        st.session_state.pop(prefix+'_editar_ia_trabajo',None)
+        try:st.session_state[prefix+'_editar_ia_propuesta']=job['future'].result()
+        except Exception:st.warning('No se completó la redacción. Tu documento se conserva; reintenta más tarde o continúa editando.')
+    _estado_redaccion(prefix)
     propuesta=st.session_state.get(prefix+'_editar_ia_propuesta')
     if not propuesta:return
-    if propuesta['huella']!=e.huella(doc) or propuesta['refs']!=refs:
+    if st.button('Descartar propuesta y conservar mi texto',key=prefix+'_editar_ia_descartar'):
+        st.session_state.pop(prefix+'_editar_ia_propuesta',None);st.rerun()
+    if propuesta['huella']!=e.huella(doc) or propuesta['refs']!=refs or propuesta.get('accion','Mejorar redacción')!=accion:
         st.caption('La edición o la selección cambió. La propuesta anterior no se aplicará sobre tu trabajo.');return
     for row in propuesta['cambios']:
         st.markdown('**Actividad actual**');st.write(disponibles[row['referencia']]['texto'])

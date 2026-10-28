@@ -456,7 +456,7 @@ def _abrir(base,prefix,doc):
     return prefix
 
 
-def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None,proponer_apartados=False,nuevo_independiente=False,todos_grupos=False):
+def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=None,proponer_apartados=False,nuevo_independiente=False,todos_grupos=False,anual=False):
     """Las dos vistas comparten creación, protección de pendientes y contexto."""
     from ui import planeacion as u
     if tipo in ('individual','especialista') and not nuevo_independiente:
@@ -471,7 +471,8 @@ def crear_borrador(base,fmt,ids,ciclo,trimestre,tipo,incluir=False,presentacion=
             return _abrir(base,base+'_'+tipo,existentes[0])
     with st.spinner('Reuniendo la información que ya registró el equipo…'):
         solicitud='especialista' if tipo=='grupal' and s.identidad()['area'] in ('Comunicación','Psicología','Trabajo Social') else tipo
-        doc=s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=solicitud,incluir_individuales=incluir,vista_formato=presentacion,todos_grupos=todos_grupos)
+        parametros={'anual':True} if anual else {}
+        doc=s.nueva(fmt,ids,int(ciclo),trimestre,modalidad=solicitud,incluir_individuales=incluir,vista_formato=presentacion,todos_grupos=todos_grupos,**parametros)
         existente=bool(doc.get('revision'))
         if not existente or doc['metadatos'].pop('contexto_matricula_pendiente',False):doc=s.preparar_contexto(doc)
         if equipo.aplica(doc) and not doc['metadatos'].get('equipo',{}).get('subgrupos'):

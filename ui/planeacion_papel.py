@@ -97,7 +97,8 @@ def lectura_equipo(base,did,background=False):
     st.session_state[base+'_lectura_equipo']=now
     if background:
         from ui.lecturas_documento import consultar
-        docs=consultar(base+'_consulta_io_'+did,s.compartidos,did)
+        firma=st.session_state.get(base+'_doc',{}).get('revision','')
+        docs=consultar(base+'_consulta_io_'+did,s.compartidos,did,firma=firma)
         return next((d for d in docs if d['id']==did),None) if docs is not None else None
     return next((d for d in s.compartidos(documento=did) if d['id']==did),None)
 
@@ -317,6 +318,8 @@ def presentar(prefix,volver=None):
         from ui.planeacion_cero_friccion import hoja as captura
         return captura(prefix,volver)
     hoja(prefix,volver)
+    from ui.planeacion_calidad import panel as revision_pedagogica
+    revision_pedagogica(prefix)
     conexiones(prefix)
     from ui.guardado_asincrono import acuses
     acuses(prefix)

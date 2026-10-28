@@ -101,6 +101,7 @@ class RecorridoCompartidoTests(TestCase):
             # Otro integrante guarda 3°; cambia el orden de la lista y actualiza
             # apoyo en 2°. Ninguna sesión debe cambiar el documento seleccionado.
             uno['metadatos']['guia_grupal_manual']={'filas':[{'ID_Alumno':'A1','Aprendizaje':'Nuevo aporte de apoyo'}]}
+            uno['revision']='ficticia-actualizada'
             otro['guardado_en']='2099-01-01'
             for i,app in enumerate(apps):
                 app.session_state['f_docs']=[deepcopy(otro),deepcopy(uno)]
@@ -140,6 +141,9 @@ class RecorridoCompartidoTests(TestCase):
                 actual=app.session_state['qa_spec']
                 app.session_state['qa_event']={'documento':actual['documento'],'huella':actual['huella'],'nonce':'reintento-manual','accion':'guardar','cambios':{}}
                 app.run()
+                job=app.session_state._state.filtered_state.get(base+'_trabajo_io')
+                if job:
+                    job['future'].result(timeout=5);app.run()
                 self.assertFalse(app.exception)
                 self.assertFalse(app.session_state[base+'_pending'])
                 self.assertEqual(app.session_state[base+'_ack'],'reintento-manual')

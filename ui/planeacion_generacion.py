@@ -45,7 +45,8 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     if doc['formato'] not in ('XXIII','XXV'):return
     integradas=st.session_state.pop(prefix+'_actividades_integradas',None)
     if integradas:
-        st.success(f'{integradas} propuesta(s) ya están en el borrador, en «Organización de las actividades de aprendizaje» → columna «Actividades». No tienes que copiarlas: edítalas ahí y guarda la hoja.')
+        destino='los apartados «Actividades y evaluación» de cada NEE' if doc['metadatos'].get('intervenciones_nee') else '«Organización de las actividades de aprendizaje» → columna «Actividades»'
+        st.success(f'{integradas} propuesta(s) ya están en el borrador, en {destino}. No tienes que copiarlas: edítalas ahí y guarda la hoja.')
     if not compact:st.markdown('#### Generar mi planeación trimestral')
     conexion=configuracion_modelo()
     if not compact:st.caption('Motor de IA: '+conexion['efectivo']+'. Solo se solicita al pulsar Generar; editar o ver el PDF no consume IA.')
@@ -140,7 +141,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
         campo=derecha.selectbox('Campo para fundamentar las actividades',list(g.CAMPOS),index=list(g.CAMPOS).index(ajustes.get('campo_referencia','Lenguajes')),key=campo_key,on_change=_ajuste,args=(prefix,campo_key,'campo_referencia',persist))
         st.caption('El sistema propone referentes exactos del catálogo por tema y grado elegido. Puedes cambiar a un grado anterior sin modificar el padrón. Los referentes sugeridos requieren revisión y siguen siendo editables.')
         st.caption('Las fechas evitan fines de semana, CTE y suspensiones del calendario cargado. Son propuestas: no reservan espacios ni sustituyen la revisión de tu horario o cronograma.')
-    ajustes={**ajustes,'inicio':inicio.isoformat(),'duracion':duracion,'sesiones':sesiones,'actividades_solicitadas':actividades_solicitadas if 'actividades_solicitadas' in locals() else ajustes.get('actividades_solicitadas', 12),'dias':dias,'enfoque':enfoque,'apoyos':apoyos,'grado_referencia':grado,'campo_referencia':campo}
+    ajustes={**ajustes,'inicio':inicio.isoformat(),'duracion':duracion,'sesiones':sesiones,'actividades_solicitadas':actividades_solicitadas if 'actividades_solicitadas' in locals() else ajustes.get('actividades_solicitadas',min(12,int(sesiones))),'dias':dias,'enfoque':enfoque,'apoyos':apoyos,'grado_referencia':grado,'campo_referencia':campo}
     # Los servicios existentes ya admiten un enfoque educativo. Sin cambiar su
     # contrato, presentar las prioridades opcionales como orientación, no hallazgos.
     orientaciones=[]
@@ -165,32 +166,39 @@ def panel_generacion(prefix,persist,abrir,compact=False):
         consentimiento=st.checkbox('Revisé el resumen y los ajustes: no identifican a las personas. Solicitar propuestas educativas con IA.',key=base+'_consent')
     else:consentimiento=False
     previo=doc['metadatos'].get('generacion_completa',{})
+    from ui import planeacion_tareas as tareas
+    from services.planeacion_edicion import huella
     coincide=bool(solicitud and previo.get('huella')==solicitud['huella'] and previo.get('motor')==modelo_configurado())
     etiqueta='Generar e integrar actividades al formato' if compact else 'Generar mi planeación trimestral con IA'
     if coincide:st.caption('La generación para esta información ya está guardada. Puedes recuperar el resultado sin hacer otra solicitud de IA.')
-    if st.button('Recuperar la generación guardada' if coincide else etiqueta,type='primary',disabled=not consentimiento or not solicitud,key=base+'_button',use_container_width=True):
+    recuperada=None
+    if st.button('Recuperar la generación guardada' if coincide else etiqueta,type='primary',disabled=not consentimiento or not solicitud or prefix+'_ia_trabajo' in st.session_state,key=base+'_button',use_container_width=True):
         try:
             actual=deepcopy(st.session_state[prefix+'_doc'])
             actual['metadatos']['configuracion_generacion']=deepcopy(ajustes)
             solicitud=g.preparar_solicitud(actual,ajustes_solicitud)
-            if coincide:respuesta=previo['resultado']
-            else:
-                from ui.planeacion_progreso import generar
-                respuesta=generar(solicitud,actual,generador=generar_completa)
+            if coincide:recuperada={'respuesta':previo['resultado'],'solicitud':solicitud,'huella':huella(actual),'revision':actual.get('revision','')}
+            else:tareas.iniciar(prefix,solicitud,actual)
+        except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+    try:
+        lista=recuperada or tareas.recoger(prefix,st.session_state[prefix+'_doc'])
+        if lista:
+            respuesta=lista['respuesta'];solicitud=lista['solicitud'];actual=deepcopy(st.session_state[prefix+'_doc'])
             if not respuesta['unidades']:
                 st.info(respuesta['observaciones'] or 'Falta información para sostener actividades.')
                 for pregunta in respuesta['faltantes']:st.caption(pregunta)
             else:
-                generado=g.ensamblar(actual,respuesta,solicitud)
-                generado['metadatos']['generacion_completa']['motor']=modelo_configurado()
-                if previo:
-                    st.session_state[prefix+'_propuesta_pendiente']={'respuesta':respuesta,'solicitud':solicitud,'revision':actual.get('revision','')}
+                if previo or lista['huella']!=huella(actual):
+                    st.session_state[prefix+'_propuesta_pendiente']={'respuesta':respuesta,'solicitud':solicitud,'revision':lista['revision'],'huella':lista['huella']}
                     st.rerun()
                 else:
+                    generado=g.ensamblar(actual,respuesta,solicitud)
+                    generado['metadatos']['generacion_completa']['motor']=modelo_configurado()
                     generado['metadatos']['configuracion_generacion']=deepcopy(ajustes)
                     st.session_state[prefix+'_actividades_integradas']=len(respuesta['unidades'])
                     abrir(prefix,generado);persist(prefix);_revision(prefix,compact);st.rerun()
-        except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+    except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+    tareas.estado(prefix)
     pendiente=st.session_state.get(prefix+'_propuesta_pendiente')
     if pendiente:
         st.markdown('##### Revisar antes de actualizar el borrador')
@@ -223,6 +231,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
             try:
                 actual=st.session_state[prefix+'_doc']
                 if actual.get('revision','')!=pendiente['revision']:raise ValueError('Cambió el borrador. Revisa o genera una nueva propuesta antes de aplicar.')
+                if pendiente.get('huella') and pendiente['huella']!=huella(actual):raise ValueError('Editaste el documento durante la generación. Tu texto se conserva; genera otra propuesta con la información actual.')
                 seleccionadas=[u for i,u in enumerate(unidades_disponibles) if st.session_state.get(f'{base}_inc_unidad_{i}',True)]
                 if not seleccionadas:raise ValueError('Selecciona al menos una propuesta para integrar al formato, o pulsa «Conservar mi borrador».')
                 resp_filtrada=deepcopy(pendiente['respuesta'])

@@ -40,7 +40,7 @@ class AccesosTests(TestCase):
                 selector=next(w for w in app.selectbox if w.label.startswith('Documento compartido'))
                 self.assertEqual(len(selector.options),1)
                 self.assertNotIn('origen',selector.options[0]);self.assertNotIn('copia',selector.options[0])
-                next(w for w in app.button if w.label=='Abrir Anexo XIX compartido').click().run()
+                next(w for w in app.button if w.label.startswith('Abrir Anexo XIX compartido')).click().run()
                 self.assertFalse(app.exception)
                 texto=str(app.session_state['qa_union']['tables'])
                 self.assertIn('Texto de apoyo',texto);self.assertIn('Actividad de comunicación',texto)

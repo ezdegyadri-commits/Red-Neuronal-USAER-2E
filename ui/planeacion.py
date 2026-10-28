@@ -71,10 +71,17 @@ def _materiales(prefix,doc,instancia="principal"):
     # Una identidad de documento e instancia estable, separada del estado del borrador.
     identidad=hashlib.sha256((str(doc["id"])+":"+instancia).encode()).hexdigest()[:16]
     widget=prefix+"_material_ui_"+identidad
+    legado=prefix+'_archivos_previos_'+str(doc['id'])
+    previos=st.session_state.get(prefix+'_material_upload')
+    if previos and legado not in st.session_state:st.session_state[legado]=list(previos)
     with st.expander('Añadir documentos o imágenes a mi planeación'):
         st.caption('Hasta 32 MB por archivo y PDF de hasta 1 000 páginas. Lectura local, sin enviar originales a IA. Puedes elegir páginas; hasta diez páginas escaneadas por lectura y 100 000 caracteres de transcripción. Incorpora solo el texto pertinente a esta planeación.')
         limite={'max_upload_size':32} if 'max_upload_size' in inspect.signature(st.file_uploader).parameters else {}
         archivos=st.file_uploader('Materiales de apoyo',type=TIPOS,accept_multiple_files=True,key=widget+'_material_upload',**limite)
+        if st.session_state.get(legado) and not archivos:
+            st.caption('Hay archivos seleccionados antes de la actualización. Se conservaron para que compruebes a qué alumno o grupo corresponden antes de usarlos.')
+            if st.checkbox('Revisar los archivos anteriores en este documento',key=widget+'_recuperar_archivos'):
+                archivos=st.session_state[legado]
         desde,hasta=1,0
         if archivos and any(a.name.lower().endswith(('.pdf','.tif','.tiff')) for a in archivos):
             col1,col2=st.columns(2)

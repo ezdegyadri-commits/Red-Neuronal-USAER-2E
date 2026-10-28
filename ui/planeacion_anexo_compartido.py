@@ -40,6 +40,9 @@ def panel(prefix,doc):
     from ui.planeacion_papel import editor,refrescar_editor,lectura_equipo
     from ui.planeacion_colaboracion import _guardar
     actor=s.identidad();base=prefix+'_'+doc['id']+'_'+actor['area']
+    existente=st.session_state.get(base+'_doc')
+    if existente and doc.get('guardado_en','')<existente.get('guardado_en',''):
+        doc=existente  # El listado puede seguir en caché después de un guardado.
     if base+'_doc' not in st.session_state or (not st.session_state.get(base+'_pending') and doc.get('revision')!=st.session_state.get(base+'_doc',{}).get('revision')):
         previo=doc['metadatos'].get('aportaciones_equipo',{}).get(actor['area'],{})
         st.session_state[base+'_doc']=deepcopy(doc)

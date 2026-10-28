@@ -3,6 +3,23 @@ from streamlit.testing.v1 import AppTest
 
 
 class MaterialesClavesTests(unittest.TestCase):
+    def test_archivo_ya_seleccionado_permanece_disponible_sin_asignacion_automatica(self):
+        source='''
+import streamlit as st
+from io import BytesIO
+from ui.planeacion import _materiales
+st.session_state.setdefault('p_material_upload',[BytesIO(b'Contenido ficticio sin datos personales')])
+doc={'id':'documento-ficticio','datos':{'Alumnos':[]},'metadatos':{'materiales':[]}}
+_materiales('p',doc,instancia='herramientas')
+'''
+        app=AppTest.from_string(source).run(timeout=30)
+        self.assertFalse(app.exception)
+        key='p_archivos_previos_documento-ficticio'
+        self.assertEqual(app.session_state[key][0].getvalue(),b'Contenido ficticio sin datos personales')
+        control=next(c for c in app.checkbox if 'archivos anteriores' in c.label)
+        self.assertFalse(control.value)
+        app.run(timeout=30);self.assertEqual(app.session_state[key][0].getvalue(),b'Contenido ficticio sin datos personales')
+
     def test_dos_instancias_conservan_identidad_en_rerun(self):
         source='''
 import streamlit as st
