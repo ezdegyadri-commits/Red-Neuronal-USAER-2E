@@ -168,7 +168,7 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
         firma=hashlib.sha256(json.dumps(contrato,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
     from services.planeacion_firmas import resolver_firmas_planeacion
     firmas = resolver_firmas_planeacion(doc)
-    return {'documento':doc['id'],'huella':firma,'titulo':'Guía de Planeación Grupal' if grupal else FORMATOS[doc['formato']]['titulo'],
+    return {'chat_contextual':doc.get('metadatos',{}).get('modalidad_planeacion')=='individual','documento':doc['id'],'huella':firma,'titulo':'Guía de Planeación Grupal' if grupal else FORMATOS[doc['formato']]['titulo'],
         'nee_intervenciones':[{**r,'alumno_nombre':nombres.get(r['alumno_id'],r['alumno_id'])} for r in intervenciones.catalogo(doc)] if intervenciones.aplica(doc) and not colaborativa and not para_impresion else [],
         'header':header,'tables':tables,'textos':textos,'cells':cells,'grupal':grupal,'colaborativa':colaborativa,
         'cache_id':hashlib.sha256((actor.get('cuenta','')+'|'+actor.get('area','')+'|'+doc['id']).encode()).hexdigest(),
@@ -250,6 +250,8 @@ def aplicar(doc,event):
     elif action=='apartados':
         from services.planeacion_apartados import proponer
         result=proponer(result)
+    elif action=='chat':
+        if not spec.get('chat_contextual'):raise PermissionError('El chat contextual corresponde a la planeación individual.')
     elif action=='corregir':
         if event.get('panel') not in {a['panel'] for a in spec['pendientes']}:raise ValueError('Destino de corrección no válido.')
     elif action not in ('guardar','autoguardar','pdf','enviar','antecedentes','referentes','dua','ia','alumnos','detalle','inicio','equipo','opciones'):raise ValueError('Acción no reconocida.')

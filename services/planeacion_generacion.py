@@ -146,9 +146,7 @@ def construir_payload_estructurado_xml(doc, aliases, reversa):
     <ediciones_manuales_docente>: Estado actual de tablas y campos definidos manualmente.
     """
     fuentes = fuentes_pertinentes(doc)
-    if not fuentes and doc.get('metadatos', {}).get('fuentes'):
-        ids = {a['ID_Alumno'] for a in doc.get('datos', {}).get('Alumnos', [])}
-        fuentes = [f for f in doc['metadatos']['fuentes'] if f.get('texto') and (not f.get('alumno') or set(str(f['alumno']).split(',')) <= ids)]
+
     
     # 1. EVALUACIÓN PSICOPEDAGÓGICA (EPP)
     epp_items = []
@@ -252,8 +250,8 @@ def construir_payload_estructurado_xml(doc, aliases, reversa):
     if ediciones_items:
         xml_ediciones = (
             "<ediciones_manuales_docente>\n"
-            "VERDAD ABSOLUTA Y PRIORIDAD TOTAL: El docente ya definió los siguientes campos en pantalla. "
-            "Subordina al 100% las actividades, apoyos DUA y descriptores a estos elementos manuales, descartando cualquier propuesta previa por defecto:\n\n"
+            "DECISIONES DOCENTES A CONSERVAR: El docente definió los siguientes campos en pantalla. "
+            "Consérvalos sin sobrescribirlos. Contrástalos con evidencia individual y referentes oficiales; señala contradicciones sin inventar una conclusión:\n\n"
             + "\n\n".join(ediciones_items)
             + "\n</ediciones_manuales_docente>"
         )
@@ -331,8 +329,8 @@ def preparar_solicitud(doc,ajustes):
         resumen=resumen[:7800]+'\n\n'+contexto['contextualizacion_docente']
     anterior=doc['metadatos'].get('generacion_completa',{})
     auto=anterior.get('filas_generadas',{}).get('dosificacion',[])
-    previas=[str(r.get('Actividades','')) for r in doc['tablas'].get('dosificacion',[]) if str(r.get('Actividades','')).strip() and r not in auto and not r.get('_sesion_equipo')]
-    previas.extend(str(r.get('actividad','')) for r in doc['metadatos'].get('equipo',{}).get('sesiones',[]) if r.get('actividad') and r not in anterior.get('sesiones_generadas',[]))
+    previas=[str(r.get('Actividades','')) for r in doc['tablas'].get('dosificacion',[]) if str(r.get('Actividades','')).strip() and not r.get('_sesion_equipo')]
+    previas.extend(str(r.get('actividad','')) for r in doc['metadatos'].get('equipo',{}).get('sesiones',[]) if r.get('actividad'))
     previas.extend(str(r.get('campos',{}).get('Actividades','')) for r in doc['metadatos'].get('intervenciones_nee',[]) if r.get('campos',{}).get('Actividades') and r['campos']['Actividades']!=anterior.get('intervenciones_generadas',{}).get(r['id'],{}).get('Actividades'))
     previas=list(dict.fromkeys(previas))
     # El mismo anonimizado que el resumen; nunca enviar la tabla nominal.
@@ -340,6 +338,29 @@ def preparar_solicitud(doc,ajustes):
     if contexto['actividades_previas']:
         resumen=resumen[:7000]+'\n\nActividades previas para evitar repetición:\n'+'\n'.join(contexto['actividades_previas'])[:4500]
     from services.planeacion import anonimizar_texto
+    if doc.get('metadatos',{}).get('modalidad_planeacion')=='individual':
+        from services import memoria_pedagogica as memoria
+        needs=[str(b.get('campos',{}).get('NEE','')) for b in doc['metadatos'].get('intervenciones_nee',[])]
+        mem=memoria.construir(doc,necesidades=needs)
+        if any(not c['resuelta'] for c in mem['conflictos']):
+            raise ValueError('Hay registros contradictorios. Confirma cuál refleja el desempeño actual en «Memoria del alumno» antes de generar.')
+        contextual=memoria.para_ia(doc,mem,aliases)
+        contexto['memoria_pedagogica']=contextual
+        indices={r['referencia'] for r in mem['hechos'] if re.fullmatch(r'E[0-9]+',r.get('referencia',''))}
+        evidencias={k:v for k,v in evidencias.items() if k in indices or k.startswith('NEE-SELECCIONADA-') or k=='DOCENTE'}
+        for row in contextual['hechos']:evidencias[row['id']]=row['destinatarios']
+        # Solo las actividades previas acotadas se usan para evitar repeticiones.
+        contexto['actividades_previas']=list(dict.fromkeys(contexto['actividades_previas']+[
+            r['texto'] for r in mem['hechos'] if r['caracter']=='propuesta_anterior']))[-30:]
+        resumen=json.dumps({'memoria_del_alumno':contextual,'nee_y_decisiones_seleccionadas':[{**b,'texto':b['texto'][:700]} for b in bloques],
+            'orientacion_docente':safe.get('enfoque',''),'ajustes_solicitados':safe.get('apoyos','')},ensure_ascii=False)
+        resumen=resumen[:50000]
+        if str(doc['metadatos'].get('resumen_ia_completo','')).strip():
+            # Una corrección de privacidad del resumen también elimina el texto
+            # de la segunda vía contextual enviada al proveedor.
+            contexto['memoria_control_local']=deepcopy(contextual['hechos'])
+            contexto['memoria_pedagogica']={**contextual,'hechos':[{k:v for k,v in h.items() if k!='texto'} for h in contextual['hechos']]}
+            resumen=str(doc['metadatos']['resumen_ia_completo']).strip()[:50000]
     resumen=anonimizar_texto(doc,resumen)
     firma=huella_completa(resumen,doc['formato'],doc['datos']['Función'],contexto,safe,aliases,evidencias)
     alcance=hashlib.sha256(json.dumps({'documento':doc.get('id',''),'cuenta':doc.get('cuenta',''),'alumnos':sorted(aliases.values()),'escuela':doc['datos']['ID_Escuela'],'formato':doc['formato']},sort_keys=True).encode()).hexdigest()
@@ -426,7 +447,14 @@ def ensamblar(doc,respuesta,solicitud):
             alias=next((a for a,aid in aliases.items() if aid==b['alumno']),None)
             asociadas=[(n,u) for n,u in enumerate(unidades) if 'NEE-SELECCIONADA-'+str(i) in u['evidencias'] and alias in u['destinatarios']]
             if not asociadas:continue
-            valores={'Actividades':'\n\n'.join(u['actividad'] for _,u in asociadas),
+            nombre=next((a.get('Nombre del alumno','') for a in result['datos']['Alumnos'] if a['ID_Alumno']==b['alumno']),'')
+            def descriptor_real(text):
+                text=re.sub(r'^Alumno\s*\d+\s*', '',text,flags=re.I).strip()
+                return (nombre+' '+text).strip() if nombre and not text.startswith(nombre) else text
+            valores={'Aprendizaje y/u objetivo':'\n'.join(dict.fromkeys(u['objetivo'] for _,u in asociadas)),
+                'Descriptor de logro':'\n'.join(dict.fromkeys(descriptor_real(u['descriptor']) for _,u in asociadas)),
+                'Ajustes razonables':'\n'.join(dict.fromkeys(u['apoyos'] for _,u in asociadas)),
+                'Actividades':'\n\n'.join(u['actividad'] for _,u in asociadas),
                 'Apoyos':'\n'.join(dict.fromkeys(u['apoyos'] for _,u in asociadas)),
                 'Contextos':'\n'.join(dict.fromkeys(u['contexto'] for _,u in asociadas)),
                 'Recursos':'\n'.join(dict.fromkeys(u['recursos'] for _,u in asociadas)),
@@ -477,6 +505,9 @@ def ensamblar(doc,respuesta,solicitud):
     meta['generacion_completa']={'huella':solicitud['huella'],'alcance':solicitud['alcance'],'ajustes':deepcopy(solicitud['ajustes']),
        'resultado':deepcopy(respuesta),'configuracion_original':deepcopy(solicitud['configuracion_original']),'filas_generadas':deepcopy(generadas),'evaluacion_generada':valor,'pendientes':respuesta['faltantes'],
        'requiere_revision_docente':True}
+    contexto_memoria=solicitud.get('contexto',{}).get('memoria_pedagogica',{})
+    meta['generacion_completa']['provisional']=bool(contexto_memoria.get('provisional'))
+    meta['generacion_completa']['faltantes_contexto']=deepcopy(contexto_memoria.get('faltantes',[]))
     meta['generacion_completa']['intervenciones_generadas']=generadas_nee
     if es_equipo:
         meta['generacion_completa']['sesiones_generadas']=nuevas_sesiones

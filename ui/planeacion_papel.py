@@ -212,7 +212,7 @@ def hoja(prefix,volver=None):
             if not st.session_state.get(prefix+'_pending'):
                 st.session_state[prefix+'_papel_aceptado']=event['nonce']
                 st.session_state[prefix+'_papel_legacy']=True
-            if action in ('pdf','antecedentes','referentes','dua','ia','alumnos','materiales','detalle','opciones','corregir'):
+            if action in ('chat','pdf','antecedentes','referentes','dua','ia','alumnos','materiales','detalle','opciones','corregir'):
                 st.rerun(scope='app')
             refrescar_editor()
         except (ValueError,PermissionError,RuntimeError) as exc:
@@ -250,6 +250,9 @@ def _contenido_conexiones(prefix):
                 viva._ficha(prefix,False)
                 from ui.planeacion_social import panel as panel_social
                 panel_social(prefix,u._persist,u._open)
+            elif action=='chat':
+                from ui.planeacion_chat import render_asistente_dialogo
+                render_asistente_dialogo(prefix,u._persist)
             elif action=='referentes':u._curriculo(prefix,current)
             elif action=='dua':
                 from ui.planeacion_generacion import _ajuste
@@ -300,6 +303,13 @@ def _contenido_conexiones(prefix):
 
 
 def conexiones(prefix):
+    if st.session_state.get(prefix+'_papel_panel')=='chat':
+        if st.button('Cerrar asistente y seguir en mi documento',key=prefix+'_chat_cerrar'):
+            st.session_state.pop(prefix+'_papel_panel',None);st.rerun(scope='app')
+        from ui.planeacion_chat import render_asistente_dialogo
+        from ui import planeacion as u
+        render_asistente_dialogo(prefix,u._persist)
+        return
     if not st.session_state.get(prefix+'_papel_panel') and not st.session_state.get(prefix+'_mostrar_pdf'):return
     def cerrar():
         st.session_state.pop(prefix+'_papel_panel',None)
@@ -317,10 +327,20 @@ def presentar(prefix,volver=None):
     if not st.session_state.get(prefix+'_editor_directo') and any(str(k).startswith(old) for k in st.session_state):
         from ui.planeacion_cero_friccion import hoja as captura
         return captura(prefix,volver)
-    hoja(prefix,volver)
+    generado=doc.get('metadatos',{}).get('generacion_completa',{})
+    if generado.get('provisional'):
+        st.info('Propuesta provisional: confirma los antecedentes pendientes antes de cerrar la planeación.')
+        with st.expander('Datos por confirmar'):
+            for falta in generado.get('faltantes_contexto',[]):st.write(falta)
+    chat_abierto=st.session_state.get(prefix+'_papel_panel')=='chat'
+    if chat_abierto:
+        asistente,documento=st.columns([1,2.4],gap='medium')
+        with asistente:conexiones(prefix)
+        with documento:hoja(prefix,volver)
+    else:hoja(prefix,volver)
     from ui.planeacion_calidad import panel as revision_pedagogica
     revision_pedagogica(prefix)
-    conexiones(prefix)
+    if not chat_abierto:conexiones(prefix)
     from ui.guardado_asincrono import acuses
     acuses(prefix)
 

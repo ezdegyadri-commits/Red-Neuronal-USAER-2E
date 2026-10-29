@@ -678,6 +678,8 @@ def evidencias(doc):
     try:
         ultimas={d['id']:d for d in versiones_actuales()}
         for plan in ultimas.values():
+            try:autorizar(plan)
+            except PermissionError:continue
             ids_plan={a['ID_Alumno'] for a in plan['datos']['Alumnos']}
             if plan['id']==doc['id'] or clave_escuela(plan['datos']['ID_Escuela'])!=clave_escuela(doc['datos']['ID_Escuela']) or not ids_plan or not ids_plan.issubset(elegidos):continue
             if plan['estado'] not in {'ENVIADO','VALIDADO'}:continue

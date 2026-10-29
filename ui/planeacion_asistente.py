@@ -22,6 +22,11 @@ def panel(prefix):
     defaults = estado['defaults']
     
     st.subheader('Actividades para esta planeación')
+    if doc.get('metadatos',{}).get('modalidad_planeacion')=='individual':
+        from ui.planeacion_memoria import actualizar,panel as panel_memoria
+        if not actualizar(prefix):return
+        doc=st.session_state[prefix+'_doc']
+        for alumno in doc['datos']['Alumnos']:panel_memoria(prefix,str(alumno['ID_Alumno']),u._persist)
     
     # ── METÁFORA DEL AUTOMÓVIL: TABLERO DE CONDUCCIÓN PEDAGÓGICA ──
     alumnos_nombres = ', '.join(a.get('Nombre del alumno', 'Alumno') for a in doc['datos'].get('Alumnos', [])) or 'Alumno asignado'
@@ -32,7 +37,7 @@ def panel(prefix):
         <div style="display: flex; align-items: center; justify-content: space-between;">
             <div>
                 <span style="font-weight: 700; color: #166534; font-size: 0.95rem;">🚗 Conducción Pedagógica USAER 2E · Zona 001</span>
-                <span style="background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; margin-left: 8px;">Nivel 3 Satisfactorio</span>
+                <span style="background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; margin-left: 8px;">Propuesta para revisión docente</span>
             </div>
             <div style="font-size: 0.8rem; color: #0369a1; font-weight: 500;">
                 {ctx_total} contextos oficiales
@@ -64,7 +69,7 @@ def panel(prefix):
     with st.expander('⚙️ Ajustes opcionales de conducción', expanded=False):
         st.caption('Los parámetros ya están preconfigurados con los antecedentes del alumno. Modifícalos solo si lo deseas.')
         c1, c2 = st.columns(2)
-        cantidad = c1.selectbox('Cantidad de actividades', list(range(1, 9)), index=min(3, len(list(range(1, 9)))-1), key=widgets+'_cantidad')
+        cantidad = c1.selectbox('Cantidad de actividades', list(range(1, 9)), index=min(2, len(list(range(1, 9)))-1), key=widgets+'_cantidad')
         selecciones['duracion'] = c2.selectbox('Minutos por actividad', [15, 20, 30, 45, 60], index=[15, 20, 30, 45, 60].index(defaults['duracion']), key=widgets+'_duracion')
         selecciones['contextos'] = st.multiselect('Contextos de intervención', FORMATOS[doc['formato']]['contextos'], default=defaults['contextos'], key=widgets+'_contextos')
         selecciones['tematica'] = st.text_input('Temática o interés del alumno (opcional)', value=defaults['tematica'], max_chars=300, placeholder='Se utilizarán sus necesidades y antecedentes si lo dejas vacío', key=widgets+'_tematica')

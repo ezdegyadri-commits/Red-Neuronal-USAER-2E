@@ -161,7 +161,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
         with st.expander('Ver qué se envía' if compact else 'Revisar la información que analizará la IA'):
             st.caption('Este es el resumen educativo, no los archivos originales. Corrige nombres o datos que puedan identificar a alguien. Los referentes oficiales y ajustes revisados se envían por separado; nunca el padrón.')
             key=base+'_resumen'
-            st.text_area('Resumen educativo que analizará la IA',value=solicitud['resumen'],height=180,max_chars=12000,key=key,on_change=_resumen,args=(prefix,key,persist))
+            st.text_area('Resumen educativo que analizará la IA',value=solicitud['resumen'],height=180,max_chars=60000,key=key,on_change=_resumen,args=(prefix,key,persist))
             st.caption('Evidencias vinculadas: '+', '.join(solicitud['evidencias']))
         consentimiento=st.checkbox('Revisé el resumen y los ajustes: no identifican a las personas. Solicitar propuestas educativas con IA.',key=base+'_consent')
     else:consentimiento=False

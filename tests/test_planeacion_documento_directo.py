@@ -66,7 +66,7 @@ def guardar(*a,**k):
     st.session_state['guardados']=st.session_state.get('guardados',0)+1
     st.session_state['p_pending']=False
     return True
-with patch.object(s,'autorizar',return_value=ACTOR),patch.object(g,'configuracion',return_value={}),patch.object(u,'_persist',side_effect=guardar):
+with patch('ui.planeacion_memoria.actualizar',return_value=True),patch.object(s,'autorizar',return_value=ACTOR),patch.object(g,'configuracion',return_value={}),patch.object(u,'_persist',side_effect=guardar):
     ui.panel('p')
 '''
 
