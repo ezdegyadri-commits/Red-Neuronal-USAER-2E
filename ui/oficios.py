@@ -129,5 +129,5 @@ def oficios_comision_page():
             file_name=f"Oficio_Comision_{int(folio):03d}.pdf" if folio else "Oficio_Comision.pdf",
             mime="application/pdf",
             type="primary",
-            use_container_width=True,
+            width='stretch',
         )

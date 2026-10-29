@@ -3,7 +3,26 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
+from pathlib import Path
 from threading import BoundedSemaphore
+import importlib
+import logging
+import sys
+import time
+
+_ROOT_DIR = str(Path(__file__).resolve().parents[1])
+if _ROOT_DIR not in sys.path:
+    sys.path.append(_ROOT_DIR)
+
+_PAQUETES_RAIZ = ('config', 'data', 'services', 'ui', 'documents', 'ai', 'utils')
+
+
+def _asegurar_paquetes():
+    if _ROOT_DIR not in sys.path:
+        sys.path.append(_ROOT_DIR)
+    for nombre in _PAQUETES_RAIZ:
+        if nombre not in sys.modules:
+            importlib.import_module(nombre)
 import logging
 import time
 
@@ -41,6 +60,7 @@ def enviar(actor, escuelas, operacion, *args):
         inicio = time.monotonic()
         resultado='error'
         try:
+            _asegurar_paquetes()
             with como(identidad, escuelas):
                 valor=operacion(*copia)
                 resultado='ok'

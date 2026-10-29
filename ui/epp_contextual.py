@@ -150,7 +150,7 @@ def barra(key,get_doc,apply):
     st.caption('Redacta los apartados vacíos de tu función con los resultados del equipo. Los campos escritos, los permisos y las marcas «No se requiere» se conservan. La coordinación integra conclusión, NEE y BAP.')
     consent=st.checkbox('Autorizo usar los hallazgos anonimizados de esta EPP en los motores de IA configurados',key=key+'_consent')
     busy=key+'_job' in st.session_state
-    if st.button('✨ Redactar EPP Automáticamente',type='primary',use_container_width=True,key=key+'_global',disabled=busy or not consent):
+    if st.button('✨ Redactar EPP Automáticamente',type='primary',width='stretch',key=key+'_global',disabled=busy or not consent):
         try:iniciar(key,get_doc());st.rerun()
         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
     estado(key,get_doc,apply)
@@ -183,7 +183,7 @@ def instrumentos(doc,area,key,get_value,save_value):
         codes=[c for c,v in DEFINICIONES.items() if v['area']==area]
         cols=st.columns(2)
         for i,code in enumerate(codes):
-            if cols[i%2].button(DEFINICIONES[code]['nombre'],key=key+'_rapido_'+code,use_container_width=True):
+            if cols[i%2].button(DEFINICIONES[code]['nombre'],key=key+'_rapido_'+code,width='stretch'):
                 st.session_state[key+'_digital_activo']=code
         if not codes:st.caption('Registra los resultados de la evaluación externa mediante Subir Instrumentos.')
         active=st.session_state.get(key+'_digital_activo')

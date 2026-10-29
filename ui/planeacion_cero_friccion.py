@@ -342,7 +342,7 @@ def hoja(prefix, volver=None):
             """, unsafe_allow_html=True)
             
         st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
-        guardar = st.form_submit_button('💾 Guardar Planeación Completa', type='primary', use_container_width=True)
+        guardar = st.form_submit_button('💾 Guardar Planeación Completa', type='primary', width='stretch')
         migrar = False
         
     if guardar:
@@ -400,22 +400,22 @@ def hoja(prefix, volver=None):
         snapshot = st.session_state[prefix+'_doc']
         c_d1, c_d2 = st.columns(2)
         with c_d1:
-            st.download_button('Descargar respaldo editable', json.dumps(snapshot, ensure_ascii=False, indent=2), file_name='planeacion-'+doc['id']+'.json', mime='application/json', key=prefix+'_captura_respaldo', use_container_width=True)
+            st.download_button('Descargar respaldo editable', json.dumps(snapshot, ensure_ascii=False, indent=2), file_name='planeacion-'+doc['id']+'.json', mime='application/json', key=prefix+'_captura_respaldo', width='stretch')
         with c_d2:
             try:
                 pdf = u._pdf_sesion(prefix, snapshot, provider=generar_pdf)
-                st.download_button('Descargar PDF', pdf, file_name='planeacion-'+doc['id']+'.pdf', mime='application/pdf', key=prefix+'_captura_pdf', use_container_width=True)
+                st.download_button('Descargar PDF', pdf, file_name='planeacion-'+doc['id']+'.pdf', mime='application/pdf', key=prefix+'_captura_pdf', width='stretch')
                 from ui.archivo_expediente import boton
                 boton([a['ID_Alumno'] for a in snapshot['datos']['Alumnos']], 'Plan de intervención' if doc['formato'] == 'XXI' else 'Planeación del servicio', pdf, 'planeacion-'+doc['id']+'.pdf', prefix+'_captura_archivo', doc['id'], doc['datos']['Curso escolar'], disabled=bool(st.session_state.get(prefix+'_pending')))
             except Exception:
                 st.caption('La descarga PDF no está disponible ahora. Tu captura se conserva.')
         c_nav1, c_nav2 = st.columns(2)
         with c_nav1:
-            if st.button('✏️ Cambiar a editor por apartados', key=prefix+'_captura_migrar', use_container_width=True):
+            if st.button('✏️ Cambiar a editor por apartados', key=prefix+'_captura_migrar', width='stretch'):
                 st.session_state[prefix+'_editor_directo'] = True
                 st.rerun()
         with c_nav2:
-            if st.button('Regresar al inicio del módulo', key=prefix+'_captura_volver', use_container_width=True):
+            if st.button('Regresar al inicio del módulo', key=prefix+'_captura_volver', width='stretch'):
                 if volver:
                     volver()
                 else:

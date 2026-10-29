@@ -1,4 +1,19 @@
-import streamlit as st
+import os
+import sys
+from pathlib import Path
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+import ai  # noqa: E402,F401
+import config  # noqa: E402,F401
+import data  # noqa: E402,F401
+import documents  # noqa: E402,F401
+import services  # noqa: E402,F401
+import ui  # noqa: E402,F401
+import utils  # noqa: E402,F401
+import streamlit as st  # noqa: E402
 from config.settings import PAGE_TITLE
 from data import repository as repo
 from services.expedientes import alumnos_visibles
@@ -68,7 +83,7 @@ with cabecera_der:
             if st.toggle('Instalación y acceso con huella',key='abrir_herramientas_acceso'):
                 configure_passkey()
                 installation_help()
-            st.link_button("◈ Suite TEA", "https://deeply-howler-8m5y7.ship.place/", use_container_width=True)
+            st.link_button("◈ Suite TEA", "https://deeply-howler-8m5y7.ship.place/", width='stretch')
     with c_logout:
         logout("cerrar_sesion_principal")
 

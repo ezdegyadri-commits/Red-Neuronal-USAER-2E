@@ -183,7 +183,7 @@ def _crear(base,actor,docs=None):
             nuevo_independiente=st.checkbox('Necesito crear otro borrador independiente; conservar el anterior',key=base+'_viva_otro_borrador')
     if presentacion=='guia':st.caption('Un único documento por escuela, grado y alcance elegido. «Todos» reúne A, B y alumnos sin letra en la misma hoja; si ya existe, se continúa sin crear otra copia.')
 
-    if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear',use_container_width=True):
+    if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear',width='stretch'):
         try:
             elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
             if presentacion=='guia' and elegidos['Grado'].nunique()!=1:
@@ -218,7 +218,7 @@ def _matriz(prefix):
     base=st.session_state[bk];editables=viva.campos_guia(doc)
     st.data_editor(pd.DataFrame(base,columns=['ID_Alumno',*GUIA_XIX]).drop(columns='ID_Alumno'),
         column_order=GUIA_XIX,hide_index=True,num_rows='fixed',row_height=100,
-        height=min(520,70+100*len(base)),use_container_width=True,
+        height=min(520,70+100*len(base)),width='stretch',
         column_config={c:st.column_config.TextColumn(c,width={'Nombre alumno':180,'Discapacidad o condición':170,'Fecha derivación':140,'Situación inicial':130,'Situación final':130}.get(c,140)) for c in GUIA_XIX},
         disabled=[c for c in GUIA_XIX if c not in editables],key=key,on_change=_matriz_cambio,args=(prefix,key,base))
     if doc['metadatos'].get('guia_compartida'):st.caption('Guía vinculada: cada profesional edita su aportación en Trabajo colaborativo.')
@@ -348,7 +348,7 @@ def hoja(prefix):
             with st.expander('Datos del grupo y complemento de aptitudes sobresalientes'):
                 from ui.planeacion_simple import _guia_adicional
                 _guia_adicional(prefix,st.session_state[prefix+'_doc'])
-        else:st.dataframe(pd.DataFrame(datos['Alumnos'])[['Nombre del alumno','Grado','Grupo','Condición']],hide_index=True,use_container_width=True)
+        else:st.dataframe(pd.DataFrame(datos['Alumnos'])[['Nombre del alumno','Grado','Grupo','Condición']],hide_index=True,width='stretch')
         _ficha(prefix,grupal)
         _referentes(prefix)
         _ayuda(prefix)

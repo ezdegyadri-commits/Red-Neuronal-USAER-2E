@@ -175,7 +175,7 @@ def _grid(prefix, name, headers, disabled_cols=None):
         df,
         num_rows='dynamic',
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         key=key,
         column_config=col_cfg if col_cfg else None,
         on_change=_table,
@@ -249,7 +249,7 @@ def _tabla_instrumentos_especialistas(doc, prefix, actor_area, can_edit_concl, i
         df_inst,
         column_config=column_config,
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         key=key_editor,
         on_change=_guardar_instrumentos_tabla
     )
@@ -670,7 +670,7 @@ def epp_page():
                     fam_rows = doc.get('partes', {}).get('Trabajo Social', {}).get('contenido', {}).get('familia', [])
                     if fam_rows:
                         df_fam = pd.DataFrame(fam_rows, columns=FAMILIA_OFICIAL).fillna('')
-                        st.dataframe(df_fam, hide_index=True, use_container_width=True)
+                        st.dataframe(df_fam, hide_index=True, width='stretch')
                     else:
                         st.caption("*(Información de composición familiar pendiente de aportar por Trabajo Social)*")
 
@@ -713,7 +713,7 @@ def epp_page():
                 if any(any(str(r.get(k, '')).strip() for k in NEE) for r in nees):
                     cols_show = [c for c in NEE_TABLA_OFICIAL if c in pd.DataFrame(nees).columns] or NEE[:3]
                     df_nee = pd.DataFrame(nees)[cols_show].fillna('')
-                    st.dataframe(df_nee, hide_index=True, use_container_width=True)
+                    st.dataframe(df_nee, hide_index=True, width='stretch')
                 else:
                     st.caption("*(La maestra de apoyo integrará las NEE acordadas por el equipo)*")
 
@@ -728,7 +728,7 @@ def epp_page():
                 if any(any(str(r.get(k, '')).strip() for k in BAP) for r in baps):
                     cols_bap = [c for c in BAP_TABLA_OFICIAL if c in pd.DataFrame(baps).columns] or BAP[:2]
                     df_bap = pd.DataFrame(baps)[cols_bap].fillna('')
-                    st.dataframe(df_bap, hide_index=True, use_container_width=True)
+                    st.dataframe(df_bap, hide_index=True, width='stretch')
                 else:
                     st.caption("*(BAP pendientes de integración)*")
 
@@ -742,7 +742,7 @@ def epp_page():
                     {'Nombre': doc['partes'].get('Trabajo Social', {}).get('autor', '') or 'Por asignar', 'Función': 'Trabajadora Social', 'Estado': '✅ Validada' if doc['partes'].get('Trabajo Social', {}).get('contenido', {}).get('validada') else '✏️ Borrador'},
                     {'Nombre': 'Psic. Edgar Adrián Yam Briceño MD', 'Función': 'Director de la USAER 02-E', 'Estado': 'Firma y Sello Oficial'}
                 ]
-                st.dataframe(pd.DataFrame(filas_firmas), hide_index=True, use_container_width=True)
+                st.dataframe(pd.DataFrame(filas_firmas), hide_index=True, width='stretch')
 
     # -------------------------------------------------------------------------
     # INSTRUMENTOS Y SÍNTESIS DE MI ÁREA
@@ -837,7 +837,7 @@ def epp_page():
     act_col1, act_col2, act_col3, act_col4 = st.columns([0.25, 0.25, 0.25, 0.25])
 
     with act_col1:
-        if user_work_area and st.button("💾 Guardar borrador", key=prefix + '_main_save', use_container_width=True):
+        if user_work_area and st.button("💾 Guardar borrador", key=prefix + '_main_save', width='stretch'):
             targets={user_work_area}|set(st.session_state.get(prefix+'_ia_areas_pendientes_'+doc['id'],[]))
             if can_edit_concl:targets.add('Conclusión')
             for area in targets:
@@ -852,14 +852,14 @@ def epp_page():
         if user_work_area:
             val_actual = st.session_state[edit_active_prefix + '_value'].get('validada', False)
             btn_txt = "✅ Área validada" if val_actual else "Confirmar revisión de mi área"
-            if st.button(btn_txt, key=prefix + '_main_validate', use_container_width=True):
+            if st.button(btn_txt, key=prefix + '_main_validate', width='stretch'):
                 st.session_state[edit_active_prefix + '_value']['validada'] = True
                 _save(edit_active_prefix, manual=True)
                 st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
                 st.success(f"Área {user_work_area} confirmada y validada.")
                 st.rerun()
         elif can_edit_concl:
-            if st.button("✅ Validar conclusión acordada", key=prefix + '_concl_validate', use_container_width=True):
+            if st.button("✅ Validar conclusión acordada", key=prefix + '_concl_validate', width='stretch'):
                 st.session_state[prefix + '_edit_' + doc['id'] + '_Conclusión_value']['validada'] = True
                 _save(prefix + '_edit_' + doc['id'] + '_Conclusión')
                 st.session_state.pop(prefix + '_pdf_bytes_' + doc['id'], None)
@@ -876,10 +876,10 @@ def epp_page():
                 disabled=True,
                 key=prefix + '_btn_prep_pdf_locked',
                 help="La descarga se desbloqueará automáticamente al concluir y validar todas las áreas y la conclusión.",
-                use_container_width=True
+                width='stretch'
             )
         elif not pdf_bytes:
-            if st.button("📄 Generar PDF oficial", key=prefix + '_btn_prep_pdf', use_container_width=True):
+            if st.button("📄 Generar PDF oficial", key=prefix + '_btn_prep_pdf', width='stretch'):
                 try:
                     with st.spinner("Construyendo PDF oficial con firmas y sello..."):
                         pdf_bytes = generar_pdf(doc, student)
@@ -895,7 +895,7 @@ def epp_page():
                 mime="application/pdf",
                 key=prefix + '_main_pdf_download',
                 help="Descarga el Informe Oficial de Evaluación Psicopedagógica (Anexos XVII y XVIII) con firmas del equipo, firma de Dirección y sello oficial de USAER 02-E.",
-                use_container_width=True
+                width='stretch'
             )
 
     with act_col4:
@@ -1011,7 +1011,7 @@ def _pagina_guiada():
         ' · CCT '+str(student.get('CCT_Escuela',''))+' · condición registrada: '+str(student.get('Condicion_Discapacidad','Por confirmar')))
     status=[{'Área':area,'Profesional':doc['partes'].get(area,{}).get('autor','Por aportar'),
         'Estado':'Revisada' if doc['partes'].get(area,{}).get('contenido',{}).get('validada') else 'Borrador / pendiente'} for area in AREAS]
-    st.dataframe(pd.DataFrame(status),hide_index=True,use_container_width=True)
+    st.dataframe(pd.DataFrame(status),hide_index=True,width='stretch')
     editable=[a['area']] if a['area'] in AREAS and not a['director'] else []
     if s.es_coordinadora(doc):editable.append('Conclusión')
     work,preview=st.columns([1.1,1],gap='large')

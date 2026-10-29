@@ -150,7 +150,7 @@ def direccion_page_rapida(_df=None):
         )
         st.dataframe(
             st.session_state.get("padron_usaer_vista"),
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
         )
         st.download_button(
@@ -190,7 +190,7 @@ def direccion_page_rapida(_df=None):
             control = oficios[disponibles].copy()
             if "Fecha_Emision" in control.columns:
                 control = control.sort_values("Fecha_Emision", ascending=False)
-            st.dataframe(control, use_container_width=True, hide_index=True)
+            st.dataframe(control, width='stretch', hide_index=True)
             st.download_button(
                 "Descargar concentrado de oficios (CSV)",
                 data=control.to_csv(index=False).encode("utf-8-sig"),

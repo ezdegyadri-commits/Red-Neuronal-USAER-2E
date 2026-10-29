@@ -551,7 +551,7 @@ with st.sidebar:
     st.write(f"**Usuario:** {st.session_state.get('nombre', 'Docente')}")
     st.markdown("---")
     
-    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+    if st.button("🚪 Cerrar Sesión", width='stretch'):
         # Limpiamos el estado de autenticación
         st.session_state.autenticado = False
         st.session_state.pop("nombre", None)
@@ -2429,7 +2429,7 @@ if idx_dir != -1:
                 # Lectura de la base de datos de visitas
                 df_visitas_dir = cargar_hoja("Registro_Visitas")
                 if not df_visitas_dir.empty:
-                    st.dataframe(df_visitas_dir, use_container_width=True)
+                    st.dataframe(df_visitas_dir, width='stretch')
                 else:
                     st.info("No hay constancias de visita registradas aún en esta semana.")
             except Exception:

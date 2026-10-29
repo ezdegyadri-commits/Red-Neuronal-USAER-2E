@@ -262,7 +262,7 @@ def render_hub_card(modulo_key):
             key=f"hub_goto_{modulo_key}",
             on_click=_ir_a_modulo,
             args=(modulo_key,),
-            use_container_width=True,
+            width='stretch',
         )
 
 
@@ -308,7 +308,7 @@ def _pagina_modulos(df_alumnos, menu_permitido, rol, nombre_usuario):
                     help=f"{info['titulo']}: {info.get('desc', '')}",
                     on_click=_ir_a_modulo,
                     args=(mod,),
-                    use_container_width=True,
+                    width='stretch',
                 ):
                     pass
 
@@ -386,4 +386,4 @@ def _pagina_modulos(df_alumnos, menu_permitido, rol, nombre_usuario):
             )
         with c_tea2:
             st.write("")
-            st.link_button("Abrir Suite TEA ◈", "https://deeply-howler-8m5y7.ship.place/", type="primary", use_container_width=True)
+            st.link_button("Abrir Suite TEA ◈", "https://deeply-howler-8m5y7.ship.place/", type="primary", width='stretch')

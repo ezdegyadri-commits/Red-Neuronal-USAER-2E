@@ -92,7 +92,7 @@ def render_sidebar_navigation(menu_permitido):
                     key=f"nav_btn_{item}",
                     on_click=_navegar_a,
                     args=(item,),
-                    use_container_width=True,
+                    width='stretch',
                     type="primary" if es_activo else "secondary",
                 )
 

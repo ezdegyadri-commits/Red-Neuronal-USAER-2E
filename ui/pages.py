@@ -169,7 +169,7 @@ def inicio(df):
         )
     with c_tea2:
         st.write("")
-        st.link_button("Abrir Suite TEA ◈", "https://deeply-howler-8m5y7.ship.place/", type="primary", use_container_width=True)
+        st.link_button("Abrir Suite TEA ◈", "https://deeply-howler-8m5y7.ship.place/", type="primary", width='stretch')
 
 
 def expedientes_page(df):
@@ -1094,7 +1094,7 @@ def seguimiento_page(df):
     a=alumno(df,id_a)
     e=expediente(id_a)
     if e["anexo4"].empty: st.info("No hay sugerencias para convertir en seguimiento."); return
-    st.dataframe(e["anexo4"][[c for c in ["ID_Anexo4","Fecha_Elaboracion","Sugerencias","Nivel_Cumplimiento_Resultados"] if c in e["anexo4"].columns]],use_container_width=True,hide_index=True)
+    st.dataframe(e["anexo4"][[c for c in ["ID_Anexo4","Fecha_Elaboracion","Sugerencias","Nivel_Cumplimiento_Resultados"] if c in e["anexo4"].columns]],width='stretch',hide_index=True)
     with st.form("evento"):
         fecha=st.date_input("Fecha",date.today())
         evento=st.text_area("Evento / resultado observado",height=180)
@@ -1419,10 +1419,10 @@ def eventos_page(df):
         f"Mostrando {len(vista_filtrada)} evento(s) ({mes_filtro}). "
         "Las anotaciones permanecen ordenadas cronológicamente."
     )
-    components.html(
+    st.iframe(
         anexo5_html(datos, vista_filtrada),
         height=690,
-        scrolling=True,
+
     )
 
     descargas = st.columns(2)
@@ -1532,7 +1532,7 @@ def eventos_page(df):
         descarga_diferida(anexo5_pdf,datos,documento_actualizado),
         f"Anexo_V_{id_alumno}.pdf",
         "application/pdf",
-        use_container_width=True,
+        width='stretch',
         key=f"imprimir_anexo5_pdf_{id_alumno}",
     )
     st.download_button(
@@ -1540,7 +1540,7 @@ def eventos_page(df):
         anexo5_html(datos, documento_actualizado),
         f"Anexo_V_{id_alumno}.html",
         "text/html",
-        use_container_width=True,
+        width='stretch',
         key=f"imprimir_anexo5_html_{id_alumno}",
     )
 
@@ -1892,7 +1892,7 @@ def documentos_page(df):
                 data=anexo4_pdf(alumno_documento, a4),
                 file_name=f"Anexo_IV_Hoja_de_sugerencias_{archivo_base}.pdf",
                 mime="application/pdf",
-                use_container_width=True,
+                width='stretch',
                 type="primary",
                 key=f"descargar_a4_{archivo_base}",
             )
@@ -1904,7 +1904,7 @@ def documentos_page(df):
                 data=vista_anexo4,
                 file_name=f"Anexo_IV_Hoja_de_sugerencias_{archivo_base}.html",
                 mime="text/html",
-                use_container_width=True,
+                width='stretch',
                 key=f"descargar_a4_html_{archivo_base}",
             )
 
@@ -2173,7 +2173,7 @@ def oficios_comision_page():
                 file_name=f"Oficio_Comision_{int(registro['Folio']):03d}.pdf",
                 mime="application/pdf",
                 type="primary",
-                use_container_width=True,
+                width='stretch',
             )
         except Exception as ex:
             st.error(f"No fue posible generar el PDF: {ex}")
@@ -2296,7 +2296,7 @@ def derivacion_page(df):
             data=pdf_generado,
             file_name=f"Anexo_VII_{nombre_archivo}.pdf",
             mime="application/pdf",
-            use_container_width=True,
+            width='stretch',
             type="primary",
         )
 
@@ -2326,7 +2326,7 @@ def direccion_page(df):
             .value_counts()
             .rename_axis("Estado")
             .reset_index(name="Cantidad"),
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
         )
 
@@ -2363,7 +2363,7 @@ def direccion_page(df):
                         "application/vnd.openxmlformats-officedocument."
                         "spreadsheetml.sheet"
                     ),
-                    use_container_width=True,
+                    width='stretch',
                     type="primary",
                     key="descargar_padron_usaer",
                 )
@@ -2385,7 +2385,7 @@ def direccion_page(df):
                         "application/vnd.openxmlformats-officedocument."
                         "spreadsheetml.sheet"
                     ),
-                    use_container_width=True,
+                    width='stretch',
                     type="primary",
                     key="descargar_personal_usaer",
                 )
@@ -2410,13 +2410,13 @@ def direccion_page(df):
         control = oficios[disponibles].copy()
         if "Fecha_Emision" in control.columns:
             control = control.sort_values("Fecha_Emision", ascending=False)
-        st.dataframe(control, use_container_width=True, hide_index=True)
+        st.dataframe(control, width='stretch', hide_index=True)
         st.download_button(
             "Descargar concentrado de oficios (CSV)",
             data=control.to_csv(index=False).encode("utf-8-sig"),
             file_name="Control_oficios_comision_USAER_02E.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
         )
 
 def _visitas_visibles(registros, nombre, rol, escuelas):
@@ -2717,7 +2717,7 @@ def visitas_page(df):
         generar_acta = st.form_submit_button(
             "🖨️ Generar Constancia Oficial",
             type="primary",
-            use_container_width=True
+            width='stretch'
         )
 
     if generar_acta:
@@ -3261,7 +3261,7 @@ Otros: {detalle("Otros")}<br>
             f"{re.sub(r'[^A-Za-z0-9_-]', '_', str(id_visita))}.pdf"
         ),
         mime="application/pdf",
-        use_container_width=True,
+        width='stretch',
     )
 
     st.caption("Registro_Visitas conserva el historial; descargar no añade ni modifica filas.")

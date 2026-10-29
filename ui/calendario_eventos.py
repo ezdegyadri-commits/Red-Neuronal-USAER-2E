@@ -66,9 +66,9 @@ def selector_mes(mes,clave,label='Mes para consultar'):
     hoy=datetime.now(ZoneInfo('America/Mexico_City')).strftime('%Y-%m')
     opciones=sorted({desplazar_mes(hoy,i) for i in range(-12,25)}|{actual,mes})
     anterior,centro,siguiente=st.columns([1,3,1])
-    anterior.button('◀ Mes anterior',key=clave+'_anterior',on_click=_mover_mes,args=(key,-1),disabled=actual=='1900-01',use_container_width=True)
+    anterior.button('◀ Mes anterior',key=clave+'_anterior',on_click=_mover_mes,args=(key,-1),disabled=actual=='1900-01',width='stretch')
     centro.selectbox(label,opciones,key=key,format_func=_etiqueta)
-    siguiente.button('Mes siguiente ▶',key=clave+'_siguiente',on_click=_mover_mes,args=(key,1),disabled=actual=='2100-12',use_container_width=True)
+    siguiente.button('Mes siguiente ▶',key=clave+'_siguiente',on_click=_mover_mes,args=(key,1),disabled=actual=='2100-12',width='stretch')
     st.button('Volver al mes actual',key=clave+'_hoy',on_click=_mes_hoy,args=(key,))
     return st.session_state[key]
 

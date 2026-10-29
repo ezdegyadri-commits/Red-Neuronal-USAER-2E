@@ -6,6 +6,7 @@ import json
 import re
 import time
 import logging
+import uuid
 import pandas as pd
 import streamlit as st
 from services import planeacion as servicio
@@ -67,10 +68,39 @@ def _actualizar_materiales(prefix,current):
     _open(prefix,current);_persist(prefix);st.rerun()
 
 
+def _unique_widget_key(base_key: str) -> str:
+    """Garantiza llaves únicas por pasada de renderizado sin perder estabilidad en reruns."""
+    try:
+        from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+        ctx = get_script_run_ctx(suppress_warning=True)
+    except Exception:
+        ctx = None
+    if ctx is None:
+        return f"{base_key}_{uuid.uuid4().hex[:8]}"
+    counts = getattr(ctx, "_usaer_key_counts", None)
+    if counts is None:
+        counts = {}
+        try:
+            setattr(ctx, "_usaer_key_counts", counts)
+        except Exception:
+            return f"{base_key}_{uuid.uuid4().hex[:8]}"
+    idx = counts.get(base_key, 0)
+    counts[base_key] = idx + 1
+    return base_key if idx == 0 else f"{base_key}_{idx}_{uuid.uuid4().hex[:6]}"
+
+
+def _en_callback_fragmento() -> bool:
+    try:
+        from streamlit.runtime.scriptrunner_utils.script_run_context import ThreadState
+        return bool(ThreadState.get().in_fragment_callback)
+    except Exception:
+        return False
+
+
 def _materiales(prefix,doc,instancia="principal"):
     # Una identidad de documento e instancia estable, separada del estado del borrador.
     identidad=hashlib.sha256((str(doc["id"])+":"+instancia).encode()).hexdigest()[:16]
-    widget=prefix+"_material_ui_"+identidad
+    widget=_unique_widget_key(prefix+"_material_ui_"+identidad)
     legado=prefix+'_archivos_previos_'+str(doc['id'])
     previos=st.session_state.get(prefix+'_material_upload')
     if previos and legado not in st.session_state:st.session_state[legado]=list(previos)
@@ -119,12 +149,12 @@ def _materiales(prefix,doc,instancia="principal"):
                 if st.button('Incorporar texto revisado',disabled=not revisado or not texto.strip(),key=widget+'_material_apply_'+digest):
                     try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],{**material,'alumnos':asignados},texto))
                     except (ValueError,PermissionError) as exc:st.info(str(exc))
-        for material in doc['metadatos'].get('materiales',[]):
+        for idx_mat,material in enumerate(doc['metadatos'].get('materiales',[])):
             with st.expander('Material incorporado · '+material['nombre']):
                 from ui.documento_sintesis import vista
-                texto=vista(material['texto'],f"{widget}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}")['resumen']
+                texto=vista(material['texto'],_unique_widget_key(f"{widget}_{st.session_state.get(prefix+'_generation',0)}_saved_material_{material['id']}_{idx_mat}"))['resumen']
                 st.caption('Guardar esta síntesis reemplaza solo el extracto de trabajo de la planeación; no el original del expediente.')
-                if st.button('Guardar cambios del material',key=widget+'_material_update_'+material['id']):
+                if st.button('Guardar cambios del material',key=_unique_widget_key(f"{widget}_material_update_{material['id']}_{idx_mat}")):
                     try:_actualizar_materiales(prefix,incorporar(st.session_state[prefix+'_doc'],material,texto))
                     except (ValueError,PermissionError) as exc:st.info(str(exc))
 
@@ -188,7 +218,7 @@ def _preview(prefix,pdf):
             if st.session_state.get(prefix+'_preview_page',0)>=total:st.session_state[prefix+'_preview_page']=0
             page=st.selectbox('Página del documento',range(total),format_func=lambda i,n=total:f'{i+1} de {n}',key=prefix+'_preview_page')
             pixmap=pages[page].get_pixmap(matrix=pymupdf.Matrix(1.6,1.6))
-            st.image(pixmap.tobytes('png'),use_container_width=True)
+            st.image(pixmap.tobytes('png'),width='stretch')
         st.caption('Para corregir, modifica los campos anteriores y prepara de nuevo el PDF. Para imprimir, descarga el archivo y usa la opción Imprimir de tu lector PDF.')
     except ModuleNotFoundError:
         st.caption('Vista previa integrada no disponible en este entorno. Puedes descargar el documento PDF directamente.')
@@ -314,7 +344,10 @@ def _open(prefix,doc):
             from services.planeacion_necesidades import actualizar_catalogo
             limpio=actualizar_catalogo(limpio)
         except Exception:
-            st.warning('No se pudo actualizar el catálogo de NEE ahora. Tu planeación y el texto seleccionado se conservan; puedes trabajar manualmente y reintentar Actualizar antecedentes.')
+            if _en_callback_fragmento():
+                st.session_state[prefix+'_papel_aviso']='No se pudo actualizar el catálogo de NEE ahora. Tu planeación y el texto seleccionado se conservan; puedes trabajar manualmente y reintentar Actualizar antecedentes.'
+            else:
+                st.warning('No se pudo actualizar el catálogo de NEE ahora. Tu planeación y el texto seleccionado se conservan; puedes trabajar manualmente y reintentar Actualizar antecedentes.')
     st.session_state[prefix+'_doc']=prellenar(limpio)
     st.session_state[prefix+'_generation']=st.session_state.get(prefix+'_generation',0)+1
     for suffix in ('_error','_pdf','_fuentes','_ia'):
@@ -491,7 +524,7 @@ def _editor_contenido(prefix):
     fuentes_col.metric('Evidencias recuperadas',len(doc['metadatos'].get('fuentes',[])))
     estado_col.metric('Tu trabajo',{'BORRADOR':'Borrador','ENVIADO':'Enviado','VALIDADO':'Revisado','CON_OBSERVACIONES':'Por ajustar'}.get(doc['estado'],doc['estado']))
     with st.expander('Datos precargados de los alumnos'):
-        st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,use_container_width=True)
+        st.dataframe(pd.DataFrame(doc['datos']['Alumnos']),hide_index=True,width='stretch')
     st.caption('Tus cambios se conservan en esta sesión y se agrupan para guardar aproximadamente cada minuto. Antes de cerrar, pulsa Guardar borrador y confirma el guardado.')
     from ui.planeacion_generacion import panel_generacion
     panel_generacion(prefix,_persist,_open)
@@ -506,14 +539,14 @@ def _editor_contenido(prefix):
             if enlazada:st.caption('Guía anual compartida vinculada: edita las aportaciones en Trabajo colaborativo. Actualizar conexiones recupera su versión reciente sin crear otra guía independiente.')
             maestro=st.text_input('Maestro de grupo regular',value=guia['maestro_grupo'],key=prefix+'_guia_maestro',disabled=bool(enlazada))
             rows=st.data_editor(pd.DataFrame(guia['filas']).drop(columns=['ID_Alumno']),
-                column_order=GUIA_XIX,hide_index=True,use_container_width=True,
+                column_order=GUIA_XIX,hide_index=True,width='stretch',
                 disabled=True if enlazada else ['Nombre alumno','Discapacidad o condición'],key=prefix+'_guia_xix')
             st.caption('Los grados y grupos se conservan en los datos precargados de cada alumno. Si trabajas varios grupos, revisa que la guía corresponda al grupo regular elegido.')
             as_rows=guia['as']
             if st.checkbox('Incluir guía AS (Anexo XX): solo aptitudes documentadas',key=prefix+'_guia_as'):
                 st.caption('Marca aptitud y tipo de enriquecimiento únicamente cuando estén sustentados. No se asignan por IA ni por rendimiento supuesto.')
                 defaults=as_rows or [{'Nombre alumno':a['Nombre del alumno'],**{h:'' for h in GUIA_XX[1:]}} for a in doc['datos']['Alumnos']]
-                as_rows=st.data_editor(pd.DataFrame(defaults,columns=GUIA_XX),hide_index=True,use_container_width=True,disabled=True if enlazada else ['Nombre alumno'],key=prefix+'_guia_xx').fillna('').to_dict('records')
+                as_rows=st.data_editor(pd.DataFrame(defaults,columns=GUIA_XX),hide_index=True,width='stretch',disabled=True if enlazada else ['Nombre alumno'],key=prefix+'_guia_xx').fillna('').to_dict('records')
             if st.button('Guardar guía grupal',key=prefix+'_guia_save',disabled=bool(enlazada)):
                 current=deepcopy(st.session_state[prefix+'_doc'])
                 filas=rows.fillna('').to_dict('records')
@@ -583,7 +616,7 @@ def _editor_contenido(prefix):
             nombres={a['ID_Alumno']:a['Nombre del alumno'] for a in doc['datos']['Alumnos']}
             visibles=[{'Alumno':nombres.get(r['ID_Alumno'],''),**{k:v for k,v in r.items() if k!='ID_Alumno'}} for r in base]
             st.data_editor(pd.DataFrame(visibles).fillna(''),disabled=['Alumno'],num_rows='fixed',hide_index=True,
-                use_container_width=True,key=key,on_change=_grupal_zona,args=(prefix,key,base))
+                width='stretch',key=key,on_change=_grupal_zona,args=(prefix,key,base))
         st.caption('Empieza por una actividad posible en tu jornada: qué hará el alumno, qué apoyo necesita y cómo reconocerás su avance. Puedes escribirla tú o pedir hasta tres ideas al asistente.')
         with st.expander('Ideas adicionales y ayuda para redactar'):
             st.caption('Guía: el alumno identifica / relaciona / resuelve / explica… Evita verbos poco observables como “comprender”. Define evidencia y plazo.')
@@ -609,12 +642,12 @@ def _editor_contenido(prefix):
                 st.session_state[basekey]=deepcopy([r for r in st.session_state[prefix+'_doc']['tablas'][name] if not r.get('_sesion_equipo')])
             base=st.session_state[basekey]
             st.data_editor(pd.DataFrame(base,columns=headers).fillna(''),num_rows='dynamic',hide_index=True,
-                  use_container_width=True,key=key,on_change=_table,args=(prefix,key,name,base))
+                  width='stretch',key=key,on_change=_table,args=(prefix,key,name,base))
             if name=='dosificacion':
                 automaticas=[r for r in st.session_state[prefix+'_doc']['tablas'][name] if r.get('_sesion_equipo')]
                 if automaticas:
                     st.caption('Sesiones vinculadas: edítalas en Calendarizar y editar sesiones; no se duplican al guardar.')
-                    st.dataframe(pd.DataFrame(automaticas).drop(columns=['_sesion_equipo']),hide_index=True,use_container_width=True)
+                    st.dataframe(pd.DataFrame(automaticas).drop(columns=['_sesion_equipo']),hide_index=True,width='stretch')
     with revisar:
         st.caption('Completa las notas del formato y prepara el PDF para revisarlo. Puedes regresar a cualquiera de los pasos sin crear otro documento.')
         for field in doc['textos']:_text(prefix,'textos',field)
@@ -690,10 +723,10 @@ def _direccion_panel():
     from services.planeacion_equipo import tablas_salida, revisar as revisar_equipo
     for titulo,headers,rows in tablas_salida(doc):
         st.markdown('#### '+titulo)
-        st.dataframe(pd.DataFrame(rows,columns=headers),hide_index=True,use_container_width=True)
+        st.dataframe(pd.DataFrame(rows,columns=headers),hide_index=True,width='stretch')
     for pendiente in revisar_equipo(doc):st.caption('Acuerdos de zona: '+pendiente)
     for name,rows in doc['tablas'].items():
-        st.markdown('#### '+name.replace('_',' ').capitalize());st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
+        st.markdown('#### '+name.replace('_',' ').capitalize());st.dataframe(pd.DataFrame(rows),hide_index=True,width='stretch')
     for name,value in doc['textos'].items():st.write(name+': '+value)
     st.caption('La validación se registra como revisión de Dirección; no coloca una firma manuscrita automática.')
     with st.expander('Detectar áreas de mejora con IA'):
@@ -750,9 +783,9 @@ def _planeacion_page_clasica():
         if st.session_state.get(prefix+'_pending'):
             st.warning('Hay una edición pendiente. Descarga su respaldo antes de recuperar otra versión. Puedes conservar una copia adicional en esta sesión para conciliar; esa copia no sustituye el respaldo descargado.')
             conservar=st.checkbox('Conservar mi edición pendiente en esta sesión y abrir la versión que elija',key=prefix+'_resguardar_confirm')
-        for firma,resguardo in st.session_state.get(prefix+'_resguardos',{}).items():
-            st.download_button('Descargar edición conservada para conciliar',json.dumps(resguardo,ensure_ascii=False,indent=2),file_name='planeacion-conciliar-'+resguardo['id']+'.json',mime='application/json',key=prefix+'_resguardo_'+firma)
-        backup=st.file_uploader('Recuperar un respaldo editable (.json)',type=['json'],key=prefix+'_import')
+        for idx_res,(firma,resguardo) in enumerate(st.session_state.get(prefix+'_resguardos',{}).items()):
+            st.download_button('Descargar edición conservada para conciliar',json.dumps(resguardo,ensure_ascii=False,indent=2),file_name='planeacion-conciliar-'+resguardo['id']+'.json',mime='application/json',key=_unique_widget_key(f"{prefix}_resguardo_{firma}_{idx_res}"))
+        backup=st.file_uploader('Recuperar un respaldo editable (.json)',type=['json'],key=_unique_widget_key(prefix+'_import'))
         if backup and st.button('Recuperar este respaldo',key=prefix+'_restore'):
             try:
                 if backup.size>500000:raise ValueError('El respaldo es demasiado extenso.')
@@ -782,8 +815,8 @@ def _planeacion_page_clasica():
                     _open(prefix,docs[i]);st.rerun()
                 with st.expander('Versiones anteriores (consulta y respaldo)'):
                     histories=[d for d in servicio.listar(True) if d['id']==docs[i]['id']]
-                    for history in histories:
-                        st.download_button(history['guardado_en'][:19]+' · '+history['estado'],json.dumps(history,ensure_ascii=False),file_name=history['revision']+'.json',mime='application/json',key=prefix+'_history_'+history['revision'])
+                    for idx_hist,history in enumerate(histories):
+                        st.download_button(history['guardado_en'][:19]+' · '+history['estado'],json.dumps(history,ensure_ascii=False),file_name=history['revision']+'.json',mime='application/json',key=_unique_widget_key(f"{prefix}_history_{idx_hist}_{history['revision']}"))
             else:st.caption('Aún no tienes documentos guardados.')
         except Exception:st.info('No se pudieron recuperar los documentos. Tu edición actual se conserva.')
     with revisar:
@@ -806,7 +839,7 @@ def _planeacion_page_clasica():
                 if len(mis_recientes) == 1:
                     b_doc = mis_recientes[0]
                     label_btn = f"Continuar: {b_doc['datos'].get('Escuela regular', '')} · Anexo {b_doc['formato']} · {b_doc['datos'].get('Periodo', '')} ({b_doc.get('estado', 'BORRADOR')})"
-                    if st.button(f'▶️ {label_btn}', key=prefix+'_quick_open_single', type='primary', use_container_width=True):
+                    if st.button(f'▶️ {label_btn}', key=prefix+'_quick_open_single', type='primary', width='stretch'):
                         _open(prefix, b_doc)
                         st.rerun()
                 else:
@@ -819,7 +852,7 @@ def _planeacion_page_clasica():
                         key=prefix+'_quick_open_sel',
                         label_visibility='collapsed'
                     )
-                    if c_btn.button('Abrir borrador', key=prefix+'_quick_open_btn', type='primary', use_container_width=True):
+                    if c_btn.button('Abrir borrador', key=prefix+'_quick_open_btn', type='primary', width='stretch'):
                         _open(prefix, mis_recientes[rec_idx])
                         st.rerun()
 

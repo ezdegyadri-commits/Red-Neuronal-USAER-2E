@@ -15,7 +15,7 @@ def _ir(prefix, base, destino, sin_ia):
 def acceso(prefix, base, destino):
     st.caption('La IA es opcional. Puedes completar, guardar y descargar el mismo formato aunque no responda.')
     st.button('Continuar sin IA · abrir mi formato', key=prefix+'_continuar_sin_ia',
-              on_click=_ir, args=(prefix, base, destino, True), use_container_width=True)
+              on_click=_ir, args=(prefix, base, destino, True), width='stretch')
 
 
 def _autollenar(prefix):

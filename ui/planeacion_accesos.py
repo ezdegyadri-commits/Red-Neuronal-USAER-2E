@@ -22,6 +22,6 @@ def menu(base,actor):
             key=base+'_acceso_'+id
             st.html('<style>.st-key-'+key+' button{min-height:110px;font-size:1.15rem;font-weight:650;border:1px solid #72979d;border-radius:16px;box-shadow:0 5px 18px #173e4814;transition:transform .18s ease,box-shadow .18s ease;background:linear-gradient(135deg,#f0f8f7,#fff);color:#173e48}.st-key-'+key+' button:hover{transform:translateY(-3px);box-shadow:0 9px 23px #173e4826}.st-key-'+key+' button:active{transform:scale(.98)}.st-key-'+key+' button:focus-visible{outline:3px solid #147d88;outline-offset:3px}@media(prefers-reduced-motion:reduce){.st-key-'+key+' button{transition:none}.st-key-'+key+' button:hover,.st-key-'+key+' button:active{transform:none}}</style>')
             with st.container(key=key):
-                if st.button(titulo,icon=icono,use_container_width=True,key=key+'_abrir'):
+                if st.button(titulo,icon=icono,width='stretch',key=key+'_abrir'):
                     st.session_state[base+'_submodulo']=id;st.rerun()
             st.caption(detalle)

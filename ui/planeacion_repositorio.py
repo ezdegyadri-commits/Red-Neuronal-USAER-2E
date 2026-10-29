@@ -95,7 +95,7 @@ def panel(base,docs,abrir):
                     st.markdown(f"<div style='display:flex;gap:6px;align-items:center;margin-bottom:4px;'><span style='background:#F1F5F9;color:#334155;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;'>{badge_tipo}</span><span style='background:{bg_estado};color:{color_estado};padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;'>{estado}</span><span style='color:#64748B;font-size:0.75rem;'>📅 {fecha}</span></div>",unsafe_allow_html=True)
                     st.subheader(titulo_tarjeta(doc))
                     st.caption(detalle_tarjeta(doc))
-                    if st.button('Continuar esta planeación',type='primary',key=key+'_abrir_'+doc['id'],use_container_width=True):
+                    if st.button('Continuar esta planeación',type='primary',key=key+'_abrir_'+doc['id'],width='stretch'):
                         try:
                             st.query_params['doc_id']=doc['id']
                             abrir(base,doc);st.rerun()
@@ -119,7 +119,7 @@ def panel(base,docs,abrir):
                             from ui.planeacion_borradores import controles
                             from documents.planeacion_papel import generar_pdf
                             controles(key+'_'+doc['id'],doc,generar_pdf,lambda:None)
-                            if st.button('📋 Duplicar como nuevo borrador',key=key+'_duplicar_'+doc['id']):
+                            if st.button('📋 Duplicar como nuevo borrador',key=key+'_duplicar_copia_'+doc['id']):
                                 try:
                                     copia=deepcopy(doc)
                                     copia['id']=uuid4().hex

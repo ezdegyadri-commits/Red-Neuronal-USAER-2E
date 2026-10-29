@@ -56,7 +56,7 @@ def _show_distribution(frame, column, title, total):
     if frequencies.empty:
         st.info("Sin datos para este apartado.")
         return
-    st.dataframe(frequencies, hide_index=True, use_container_width=True)
+    st.dataframe(frequencies, hide_index=True, width='stretch')
     st.bar_chart(frequencies.set_index("Categoría")[["Alumnos"]])
 
 
@@ -166,13 +166,13 @@ def estadisticas_page(df):
                 df_editor,
                 column_config=column_config,
                 hide_index=True,
-                use_container_width=True,
+                width='stretch',
                 key=key_editor,
                 num_rows="fixed"
             )
             col_btn, _ = st.columns([0.35, 0.65])
             with col_btn:
-                guardar_directo = st.button("💾 Guardar cambios del padrón", type="primary", key=key_editor+"_btn_guardar", use_container_width=True)
+                guardar_directo = st.button("💾 Guardar cambios del padrón", type="primary", key=key_editor+"_btn_guardar", width='stretch')
             if guardar_directo:
                 map_cols = {'Alumno': 'Nombre_Completo', 'Condición': 'Condicion_Discapacidad', 'Atención': 'Tipo_Atencion', 'Edad': 'Edad_1_Septiembre', 'Grado': 'Grado', 'Grupo': 'Grupo', 'Estatus': 'Estatus', 'Sexo': 'Sexo'}
                 total_modificados = 0
@@ -373,7 +373,7 @@ def estadisticas_page(df):
             dtype="object",
         ).replace("", "(Sin dato)")
         escuelas = _tabla_frecuencias(escuela_values, total)
-        st.dataframe(escuelas, hide_index=True, use_container_width=True)
+        st.dataframe(escuelas, hide_index=True, width='stretch')
         st.bar_chart(escuelas.set_index("Categoría")[["Alumnos"]])
 
     st.markdown("### Edad")
@@ -382,7 +382,7 @@ def estadisticas_page(df):
         st.info("No hay edades capturadas para elaborar la distribución.")
     else:
         edad_frecuencias = _tabla_frecuencias(edades_frame["Edad"].astype(str), total)
-        st.dataframe(edad_frecuencias, hide_index=True, use_container_width=True)
+        st.dataframe(edad_frecuencias, hide_index=True, width='stretch')
         st.bar_chart(edad_frecuencias.set_index("Categoría")[["Alumnos"]])
 
     st.markdown("### Condiciones adicionales reportadas")
@@ -392,6 +392,6 @@ def estadisticas_page(df):
         if adicionales.empty:
             st.info("No hay condiciones adicionales capturadas.")
         else:
-            st.dataframe(_tabla_frecuencias(adicionales, total), hide_index=True, use_container_width=True)
+            st.dataframe(_tabla_frecuencias(adicionales, total), hide_index=True, width='stretch')
     else:
         st.info("La base central aún no tiene el campo de condiciones adicionales.")

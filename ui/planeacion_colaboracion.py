@@ -181,7 +181,7 @@ def panel(prefix):
         if filas:
             df_g = pd.DataFrame(filas)
             cols = [c for c in GUIA_XIX if c in df_g.columns]
-            st.dataframe(df_g[cols], hide_index=True, use_container_width=True)
+            st.dataframe(df_g[cols], hide_index=True, width='stretch')
             st.caption('ℹ️ Esta tabla refleja lo capturado por la Maestra de Apoyo (columna Aprendizaje, situación inicial, derivación) y las aportaciones de cada especialista.')
         with st.expander('👥 Gestión de alumnos en esta planeación grupal (individuales / grupales)'):
             st.caption('Si en este grado hay alumnos que se atenderán de forma individual (con diferentes necesidades y descriptores), puedes excluirlos de la planeación grupal de las áreas.')

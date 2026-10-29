@@ -57,7 +57,7 @@ def configure_passkey():
         st.caption("Actívalo solo en un dispositivo personal. El teléfono puede pedir huella, rostro o su código de desbloqueo.")
         with st.form("passkey_enroll"):
             password = st.text_input("Confirma tu contraseña para activar", type="password")
-            enroll = st.form_submit_button("Activar en este dispositivo", use_container_width=True)
+            enroll = st.form_submit_button("Activar en este dispositivo", width='stretch')
         if enroll:
             try:
                 with registry_lock():
@@ -79,9 +79,9 @@ def configure_passkey():
                     except Exception:
                         st.session_state.pop("passkey_pending", None)
                         st.info("No se guardó la activación. Puedes seguir usando tu contraseña.")
-        with st.popover("Desactivar mis llaves de acceso", use_container_width=True):
+        with st.popover("Desactivar mis llaves de acceso", width='stretch'):
             st.caption("Desactiva todas tus llaves en la plataforma. Tu contraseña y tus registros se conservan.")
-            if st.button("Confirmar desactivación", key="revoke_passkeys", use_container_width=True):
+            if st.button("Confirmar desactivación", key="revoke_passkeys", width='stretch'):
                 try:
                     with registry_lock():
                         GooglePasskeyStore().revoke_own(username)

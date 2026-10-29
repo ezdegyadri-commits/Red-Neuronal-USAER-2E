@@ -88,7 +88,7 @@ def formulario_publico_docentes():
             key="nombre_simple",
         )
 
-        guardar = st.form_submit_button("Guardar Maestro(a)", type="primary", use_container_width=True)
+        guardar = st.form_submit_button("Guardar Maestro(a)", type="primary", width='stretch')
 
     if guardar:
         if not nombre.strip():
@@ -116,7 +116,7 @@ def formulario_publico_docentes():
         st.markdown(f"**Maestros registrados en {escuela}:**")
         df = pd.DataFrame(registrados)[['Ciclo_Escolar',"Grado", "Grupo", "Nombre_Docente"]].copy()
         df.columns = ['Ciclo',"Grado", "Grupo", "Maestro(a)"]
-        st.dataframe(df, hide_index=True, use_container_width=True)
+        st.dataframe(df, hide_index=True, width='stretch')
         st.download_button('Descargar listado (CSV)',df.to_csv(index=False).encode('utf-8'),file_name='maestros-primaria.csv',mime='text/csv',key='descargar_docentes_asignados')
         with st.expander('Corregir un maestro registrado',expanded=False):
             porid={r['ID_Registro']:r for r in registrados}

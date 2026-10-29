@@ -172,7 +172,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
     etiqueta='Generar e integrar actividades al formato' if compact else 'Generar mi planeación trimestral con IA'
     if coincide:st.caption('La generación para esta información ya está guardada. Puedes recuperar el resultado sin hacer otra solicitud de IA.')
     recuperada=None
-    if st.button('Recuperar la generación guardada' if coincide else etiqueta,type='primary',disabled=not consentimiento or not solicitud or prefix+'_ia_trabajo' in st.session_state,key=base+'_button',use_container_width=True):
+    if st.button('Recuperar la generación guardada' if coincide else etiqueta,type='primary',disabled=not consentimiento or not solicitud or prefix+'_ia_trabajo' in st.session_state,key=base+'_button',width='stretch'):
         try:
             actual=deepcopy(st.session_state[prefix+'_doc'])
             actual['metadatos']['configuracion_generacion']=deepcopy(ajustes)

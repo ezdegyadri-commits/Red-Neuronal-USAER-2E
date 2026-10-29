@@ -43,7 +43,7 @@ def _login_content():
     with st.form("login"):
         user = st.text_input("Usuario", placeholder="Tu usuario institucional")
         password = st.text_input("Contraseña", type="password", placeholder="••••••••")
-        ok = st.form_submit_button("Ingresar a la plataforma", type="primary", use_container_width=True)
+        ok = st.form_submit_button("Ingresar a la plataforma", type="primary", width='stretch')
     if ok:
         try:df = usuarios()
         except Exception as exc:
@@ -87,7 +87,7 @@ def logout(key="cerrar_sesion"):
             st.caption(doc.get('datos',{}).get('Escuela regular','Planeación')+' · '+doc.get('formato',''))
             controles_guardado(p,key+'_'+p)
         salir=st.checkbox('Ya descargué mi respaldo; cerrar sin confirmación central',key=key+'_confirmar_pendientes')
-        if st.button('Guardar cambios y cerrar sesión',key=key+'_guardar',use_container_width=True):
+        if st.button('Guardar cambios y cerrar sesión',key=key+'_guardar',width='stretch'):
             from ui.planeacion import _guardar_edicion_pendiente
             claves=ediciones(prefix)
             if not claves:
@@ -103,7 +103,7 @@ def logout(key="cerrar_sesion"):
                 st.warning('No se cerró la sesión: hay guardados sin confirmar. Consulta la causa y descarga cada respaldo antes de salir.');return
             _cerrar();return
     etiqueta='Cerrar sesión con respaldo descargado' if pendientes and salir else 'Cerrar sesión'
-    if st.button(etiqueta, key=key, use_container_width=True,disabled=pendientes and not salir):
+    if st.button(etiqueta, key=key, width='stretch',disabled=pendientes and not salir):
         _cerrar()
 
 

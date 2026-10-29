@@ -955,7 +955,7 @@ def _editor(prefix,actor,paso):
         with st.expander('Añadir una necesidad documentada si hace falta evidencia'):
             u._text(prefix,'metadatos','necesidades_confirmadas','Necesidades y apoyos documentados (incluye la referencia de origen)')
         st.markdown('---')
-        if st.button('Continuar a mi formato para revisar y entregar ➡️', type='primary', key=prefix+'_ir_paso3', use_container_width=True):
+        if st.button('Continuar a mi formato para revisar y entregar ➡️', type='primary', key=prefix+'_ir_paso3', width='stretch'):
             st.session_state[raiz(prefix)+'_paso']=PASOS[2];st.rerun()
     else:
         st.subheader(PASOS[2]);st.caption('Edita directamente en tu formato. Los resultados finales se registran después de trabajar con el alumno.')

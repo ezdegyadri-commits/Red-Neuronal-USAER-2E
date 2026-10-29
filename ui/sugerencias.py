@@ -92,7 +92,7 @@ def _sugerencias_grupales(alumnos, escuelas, autor):
         filas = todos.loc[todos['Escuela'].map(normalizar_texto).eq(normalizar_texto(escuela)) & todos['Nombre_Alumno'].eq('Grupo ' + grupo)]
         if 'Estado' in filas:
             filas = filas.loc[~filas['Estado'].astype(str).str.upper().isin({'ANULADO', 'ELIMINADO', 'DUPLICADO', 'RETIRADO'})]
-        st.dataframe(filas, hide_index=True, use_container_width=True)
+        st.dataframe(filas, hide_index=True, width='stretch')
         if not filas.empty:
             st.download_button('Descargar sugerencias grupales PDF', anexo4_pdf({'Nombre_Completo': 'Grupo ' + grupo, 'Nombre_Escuela': escuela, 'Grado': grupo}, filas),
                                'Sugerencias_grupales.pdf', 'application/pdf', key=prefijo + '_pdf')
@@ -279,7 +279,7 @@ def anexo4_page(df):
     if activas.empty:
         st.info("Aún no hay sugerencias guardadas. Puedes generar la primera desde el BAP o añadirla aquí.")
     else:
-        st.dataframe(activas, use_container_width=True, hide_index=True)
+        st.dataframe(activas, width='stretch', hide_index=True)
 
     filas_vista = activas.copy()
     if hay_borrador:
@@ -290,7 +290,7 @@ def anexo4_page(df):
     st.markdown("### Vista previa oficial · Anexo IV SEGEY")
     if hay_borrador:
         st.caption("La vista incluye el borrador actual. Pulsa «Guardar nueva sugerencia» para incorporarlo a la base central.")
-    components.html(documento, height=860, scrolling=True)
+    st.iframe(documento, height=860)
     st.download_button(
         "Descargar PDF carta para imprimir",
         anexo4_pdf(alumno_vista, filas_vista),

@@ -78,7 +78,7 @@ def mostrar_maestro(prefix, doc, area, aplicar):
             else:
                 st.session_state['epp_motor'] = 'ChatGPT (OpenAI)'
         with c_top2:
-            if st.button('Volver al formato', key=key+'_cerrar_btn', use_container_width=True):
+            if st.button('Volver al formato', key=key+'_cerrar_btn', width='stretch'):
                 cerrar(); st.rerun(scope='app')
 
         campo = st.selectbox(

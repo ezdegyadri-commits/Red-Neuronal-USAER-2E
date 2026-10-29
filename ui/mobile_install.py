@@ -26,8 +26,8 @@ def installation_html():
 def install_controls():
     # The component may be sandboxed by a future Streamlit version. The visible
     # manual instructions remain usable when parent access is unavailable.
-    import streamlit.components.v1 as components
-    components.html(installation_html(), height=62, scrolling=False)
+    import streamlit as st
+    st.iframe(installation_html(), height=62)
 
 
 def installation_help():
@@ -37,18 +37,18 @@ def installation_help():
         payload = android_apk()
     except (OSError, ValueError):
         # A missing/bad local asset must not disable the rest of the platform.
-        st.link_button("Descargar APK para Android", APK_URL, use_container_width=True)
+        st.link_button("Descargar APK para Android", APK_URL, width='stretch')
     else:
         st.download_button("Descargar APK para Android", data=payload,
             file_name=APK_NAME, mime="application/vnd.android.package-archive",
-            key="usaer_android_apk", use_container_width=True, on_click="ignore")
-    with st.popover("Instalar en iPhone / iPad", use_container_width=True):
+            key="usaer_android_apk", width='stretch', on_click="ignore")
+    with st.popover("Instalar en iPhone / iPad", width='stretch'):
         st.markdown(
             "1. Abre la plataforma en **Safari**.\n"
             "2. Toca **Compartir → Añadir a pantalla de inicio**.\n"
             "3. Confirma **USAER 02E** y toca **Añadir**."
         )
-        st.link_button("Abrir enlace de la plataforma", PORTAL_URL, use_container_width=True)
+        st.link_button("Abrir enlace de la plataforma", PORTAL_URL, width='stretch')
         st.caption("En iPhone se instala desde Safari, sin archivo IPA ni perfiles adicionales.")
     st.caption("Sin pagos. Usa tu cuenta habitual y conexión a internet.")
     with st.expander("Ayuda de instalación", expanded=False):
@@ -67,6 +67,6 @@ def install_metadata():
     # Initialize metadata on connection without re-injecting the iframe on every interaction.
     # No private data or credentials are passed to JavaScript.
     if not st.session_state.get('_mobile_install_meta_init'):
-        import streamlit.components.v1 as components
-        components.html(installation_html(), height=0, scrolling=False)
+        import streamlit as st
+        st.iframe(installation_html(), height=1)
         st.session_state['_mobile_install_meta_init'] = True

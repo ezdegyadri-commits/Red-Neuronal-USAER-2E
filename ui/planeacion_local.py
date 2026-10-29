@@ -15,7 +15,7 @@ def panel(prefix):
         from services.planeacion_modelo import FORMATOS
         contextos=FORMATOS[doc['formato']]['contextos']
         contexto=st.selectbox('Contexto de las actividades sin IA',contextos,key=prefix+'_local_contexto')
-    if st.button('Preparar actividades con mis datos · sin IA',key=prefix+'_local_preparar',use_container_width=True):
+    if st.button('Preparar actividades con mis datos · sin IA',key=prefix+'_local_preparar',width='stretch'):
         try:
             enfoque=doc['metadatos'].get('configuracion_generacion',{}).get('enfoque','')
             st.session_state[prefix+'_local_propuesta']=local.preparar(doc,enfoque,contexto_actividad=contexto)

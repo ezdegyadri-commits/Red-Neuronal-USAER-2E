@@ -29,7 +29,7 @@ def mostrar(page,rol,escuelas,menu):
     if page != "Inicio":
         c_back, c_bc = st.columns([2.3, 7.7])
         with c_back:
-            st.button("← Centro de Control", key="btn_volver_al_hub", use_container_width=True,on_click=volver_al_inicio)
+            st.button("← Centro de Control", key="btn_volver_al_hub", width='stretch',on_click=volver_al_inicio)
         with c_bc:
             titulo_modulo = nombre_modulo(page)
             st.markdown(

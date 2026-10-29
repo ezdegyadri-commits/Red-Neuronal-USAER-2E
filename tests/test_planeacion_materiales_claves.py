@@ -41,5 +41,20 @@ _materiales('borrador',dict(doc,id='otro-documento'),instancia='herramientas')
         self.assertEqual(keys,[x.key for x in app.get('file_uploader')])
         self.assertEqual(app.session_state['borrador_material_readings']['lectura-previa']['texto'],'Lectura ficticia')
 
+    def test_misma_instancia_en_misma_pasada_asigna_sufijo_unico_y_no_colisiona(self):
+        source='''
+import streamlit as st
+from ui.planeacion import _materiales
+doc={'id':'documento-ficticio','datos':{'Alumnos':[]},'metadatos':{'materiales':[]}}
+st.session_state.setdefault('borrador_doc',doc)
+_materiales('borrador',doc)
+_materiales('borrador',doc)
+'''
+        app=AppTest.from_string(source).run(timeout=30)
+        self.assertFalse(app.exception)
+        keys=[x.key for x in app.get('file_uploader')]
+        self.assertEqual(len(keys),2)
+        self.assertEqual(len(set(keys)),2)
+
 
 if __name__=='__main__':unittest.main()

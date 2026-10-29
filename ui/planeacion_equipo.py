@@ -111,7 +111,7 @@ def panel(prefix,doc,persist,abrir,compact=False):
             key=base+'_competencias';bk=key+'_base'
             if bk not in st.session_state:st.session_state[bk]=deepcopy(e['competencias'])
             st.data_editor(pd.DataFrame(st.session_state[bk]),disabled=['Competencia'],hide_index=True,
-                key=key,on_change=_tabla,args=(prefix,key,'competencias',st.session_state[bk],persist),use_container_width=True)
+                key=key,on_change=_tabla,args=(prefix,key,'competencias',st.session_state[bk],persist),width='stretch')
     with st.expander('3. Calendarizar y editar sesiones',expanded=True):
         st.caption('Cada sesión se incorpora a la dosificación del formato. El texto que ya redactaste a mano se conserva.')
         if not e['subgrupos']:st.info('Guarda primero un subgrupo para preparar sesiones.')
@@ -173,8 +173,8 @@ def panel(prefix,doc,persist,abrir,compact=False):
         if bk not in st.session_state:st.session_state[bk]=[{**deepcopy(r),'Nombre del alumno':labels.get(r['ID_Alumno'],'')} for r in e['grupal']]
         st.data_editor(pd.DataFrame(st.session_state[bk]),disabled=['ID_Alumno','Nombre del alumno'],hide_index=True,key=key,
             column_config={'ID_Alumno':None},
-            on_change=_tabla,args=(prefix,key,'grupal',st.session_state[bk],persist),use_container_width=True)
-        st.dataframe(pd.DataFrame(equipo.tablas_salida(st.session_state[prefix+'_doc'])[-1][2]).drop(columns=['ID_Alumno'],errors='ignore'),hide_index=True,use_container_width=True)
+            on_change=_tabla,args=(prefix,key,'grupal',st.session_state[bk],persist),width='stretch')
+        st.dataframe(pd.DataFrame(equipo.tablas_salida(st.session_state[prefix+'_doc'])[-1][2]).drop(columns=['ID_Alumno'],errors='ignore'),hide_index=True,width='stretch')
     if area=='Psicología':
         key=base+'_familia'
         st.text_area('Sugerencia prevista para la familia y referencia de su hoja',value=e.get('sugerencia_familia',''),key=key,

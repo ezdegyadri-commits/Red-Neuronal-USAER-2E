@@ -19,6 +19,14 @@ def _escribir(doc, cola):
     return resultado,error
 
 
+def _en_callback_fragmento() -> bool:
+    try:
+        from streamlit.runtime.scriptrunner_utils.script_run_context import ThreadState
+        return bool(ThreadState.get().in_fragment_callback)
+    except Exception:
+        return False
+
+
 def guardar(p,manual=False):
     state=st.session_state;cuenta=s.actor()['cuenta'];key=p+'_trabajo_io'
     cola=state.get(p+'_cola',{});doc=state[p+'_doc'];job=state.get(key)
@@ -47,7 +55,10 @@ def guardar(p,manual=False):
             detalle=programar(state,p,diagnostico(exc),fecha='_reintentar_en');state[p+'_diagnostico']=detalle
             state[p+'_io_error_nonce']=state.get(p+'_nonce','')
             state[p+'_pending']=bool(cola)
-            st.toast('No se confirmó toda la EPP. Tu captura se conserva; consulta el aviso.',icon='⚠️')
+            if _en_callback_fragmento():
+                state[p+'_toast_pendiente']='No se confirmó toda la EPP. Tu captura se conserva; consulta el aviso.'
+            else:
+                st.toast('No se confirmó toda la EPP. Tu captura se conserva; consulta el aviso.',icon='⚠️')
             return False
     if not cola:return True
     if state.get(p+'_cuenta',cuenta)!=cuenta:raise PermissionError('La captura EPP pertenece a otra cuenta.')
@@ -64,6 +75,8 @@ def guardar(p,manual=False):
 
 @st.fragment(run_every=1)
 def acuses(p):
+    if st.session_state.get(p+'_toast_pendiente') and not _en_callback_fragmento():
+        st.toast(st.session_state.pop(p+'_toast_pendiente'),icon='⚠️')
     if p+'_trabajo_io' not in st.session_state:return
     guardar(p)
     if p+'_trabajo_io' not in st.session_state:st.rerun(scope='app')

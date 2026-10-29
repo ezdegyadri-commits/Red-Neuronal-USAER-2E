@@ -9,13 +9,24 @@ from services.planeacion_guardado_estado import diagnostico
 from services.reintentos_edicion import programar
 
 
+def _en_callback_fragmento() -> bool:
+    try:
+        from streamlit.runtime.scriptrunner_utils.script_run_context import ThreadState
+        return bool(ThreadState.get().in_fragment_callback)
+    except Exception:
+        return False
+
+
 def _fallo(prefix, exc):
     st.session_state[prefix+'_pending']=True
     detalle=programar(st.session_state,prefix,diagnostico(exc))
     st.session_state[prefix+'_guardado_diagnostico']=detalle
     st.session_state[prefix+'_error']=detalle['causa']
     st.session_state[prefix+'_io_error_nonce']=st.session_state.get(prefix+'_papel_nonce',st.session_state.get(prefix+'_nonce',''))
-    st.toast('No se confirmó el envío. Tu edición sigue disponible; consulta el aviso de guardado.',icon='⚠️')
+    if _en_callback_fragmento():
+        st.session_state[prefix+'_toast_pendiente']='No se confirmó el envío. Tu edición sigue disponible; consulta el aviso de guardado.'
+    else:
+        st.toast('No se confirmó el envío. Tu edición sigue disponible; consulta el aviso de guardado.',icon='⚠️')
 
 
 def persistir(prefix, estado=None, automatic=False, aporte=False):
@@ -74,6 +85,8 @@ def persistir(prefix, estado=None, automatic=False, aporte=False):
 @st.fragment(run_every=1)
 def acuses(prefix, aporte=False):
     """Solo consulta un Future local; ningún tick hace lecturas de Sheets."""
+    if st.session_state.get(prefix+'_toast_pendiente') and not _en_callback_fragmento():
+        st.toast(st.session_state.pop(prefix+'_toast_pendiente'),icon='⚠️')
     if prefix+'_trabajo_io' not in st.session_state:return
     persistir(prefix,automatic=True,aporte=aporte)
     if prefix+'_trabajo_io' not in st.session_state:

@@ -514,7 +514,7 @@ def update_usaer_platform():
         )\r
     with c_tea2:\r
         st.write("")\r
-        st.link_button("Abrir Suite TEA ◈", "https://deeply-howler-8m5y7.ship.place/", type="primary", use_container_width=True)"""
+        st.link_button("Abrir Suite TEA ◈", "https://deeply-howler-8m5y7.ship.place/", type="primary", width='stretch')"""
 
     if old_route in content:
         content = content.replace(old_route, new_route, 1)
