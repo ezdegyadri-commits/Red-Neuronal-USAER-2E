@@ -2,6 +2,7 @@
 from copy import deepcopy
 import json
 import pandas as pd
+NAV_VERSION='2026-10-28-documentos-v1'
 import streamlit as st
 from services import planeacion as s, planeacion_viva as viva
 from services.planeacion_modelo import FORMATOS

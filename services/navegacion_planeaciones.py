@@ -9,7 +9,7 @@ from utils.text import normalizar_texto
 
 
 def habilitada():
-    return os.environ.get('USAER_NAVEGACION_DOCUMENTOS','0').lower() not in {'0','false','off'}
+    return os.environ.get('USAER_NAVEGACION_DOCUMENTOS','1').lower() not in {'0','false','off'}
 
 
 def enlace_id(documento):
@@ -57,6 +57,8 @@ def resolver(token,locales=()):
 
 
 def ruta(doc,actor):
+    if (not actor['director'] and actor.get('area') in ('Psicología','Comunicación','Trabajo Social')
+            and compartible(doc) and doc['datos'].get('Función')!=actor['area']):return 'compartido'
     if doc['cuenta']==actor['cuenta']:return 'propio'
     if actor['director']:return 'lectura'
     if compartible(doc):return 'compartido'

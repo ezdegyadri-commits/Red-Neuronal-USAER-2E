@@ -4,6 +4,7 @@ Proporciona una experiencia de navegación fluida, ágil e interactiva,
 con dock de accesos rápidos, vista previa dinámica al pasar el cursor (hover)
 y filtrado inmediato por categorías.
 """
+NAV_VERSION='2026-10-28-documentos-v1'
 import streamlit as st
 from data import repository as repo
 

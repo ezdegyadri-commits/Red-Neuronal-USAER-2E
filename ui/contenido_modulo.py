@@ -1,4 +1,5 @@
 """Cada módulo actualiza su contenido sin reconstruir la cabecera global."""
+NAV_VERSION='2026-10-28-documentos-v1'
 import streamlit as st
 from services.expedientes import alumnos_visibles
 from ui.sidebar import titulo_modulo as nombre_modulo

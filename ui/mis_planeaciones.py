@@ -17,6 +17,7 @@ def volver(base):
     st.session_state.pop(base+'_crear_documento',None)
     st.session_state[base+'_viva_entrada']=True
     st.query_params.pop('plan',None)
+    st.query_params.pop('doc_id',None)
     st.session_state.pop(base+'_url_resuelta',None)
 
 
@@ -34,6 +35,7 @@ def abrir(base,doc,desde_inicio=False):
         st.session_state[prefix+'_abierto']=doc['id']
     st.session_state[base+'_documento_contexto']={**nav.contexto(doc,actor),'ruta':ruta,'prefix':prefix}
     st.session_state[base+'_viva_entrada']=False
+    st.query_params.pop('doc_id',None)
     st.query_params['plan']=nav.enlace_id(doc['id'])
     st.session_state[base+'_url_resuelta']=st.query_params['plan']
     if desde_inicio:st.session_state['navegacion_principal']='Planeación e intervención'
@@ -145,6 +147,16 @@ def pagina(render_hoja=None):
     from ui.planeacion_pendientes import panel as envios
     envios(base)
     token=st.query_params.get('plan','')
+    anterior=st.query_params.get('doc_id','')
+    if anterior and not token:
+        try:
+            doc=next((d for d in nav.indice([d for _,d in _locales(base)]) if d['id']==anterior),None)
+            if doc is None:raise PermissionError('Documento fuera de tu asignación')
+            abrir(base,doc)
+            token=st.query_params.get('plan','')
+        except (ValueError,PermissionError,RuntimeError):
+            st.warning('El enlace anterior no está disponible en tu cuenta. No se abrió otro documento.')
+            volver(base)
     if not token and st.session_state.get(base+'_url_resuelta'):volver(base)
     if token and token!=st.session_state.get(base+'_url_resuelta'):
         try:abrir(base,nav.resolver(token))

@@ -87,6 +87,10 @@ class IndiceTests(unittest.TestCase):
         self.assertFalse(view['tables'][0]['add'])
         self.assertTrue(spec['cells']['c1']['editable'])
 
+    def test_guia_con_cuenta_reutilizada_abre_aporte_no_editor_de_apoyo(self):
+        doc=compartido();doc['cuenta']=ACTOR['cuenta']
+        self.assertEqual(nav.ruta(doc,{**ACTOR,'area':'Comunicación'}),'compartido')
+
     def test_modalidad_y_ruta_se_derivan_del_documento_no_del_filtro(self):
         self.assertEqual(nav.ruta(self.own,ACTOR),'propio')
         self.assertEqual(nav.ruta(self.shared,ACTOR),'compartido')
@@ -146,6 +150,14 @@ class ListaUITests(unittest.TestCase):
         fresh.query_params['plan']=token;fresh.run()
         self.assertFalse(fresh.exception)
         self.assertEqual(fresh.session_state['planeacion_qa_documento_contexto']['documento'],'ficticio-1')
+
+    def test_enlace_anterior_se_convierte_sin_cambiar_documento(self):
+        app=AppTest.from_file(str(Path(__file__).parent/'fixtures/mis_planeaciones_app.py'),default_timeout=30)
+        app.query_params['doc_id']='ficticio-1';app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state['planeacion_qa_documento_contexto']['documento'],'ficticio-1')
+        self.assertNotIn('doc_id',app.query_params)
+        self.assertEqual(len(app.query_params['plan']),64)
 
     def test_buscar_filtra_sin_solicitar_selecciones_previas(self):
         app=self.app()
@@ -220,6 +232,23 @@ class SeleccionTests(unittest.TestCase):
     def test_reversion_sin_modificar_datos(self):
         with patch.dict('os.environ',{'USAER_NAVEGACION_DOCUMENTOS':'0'}):self.assertFalse(nav.habilitada())
         with patch.dict('os.environ',{'USAER_NAVEGACION_DOCUMENTOS':'1'}):self.assertTrue(nav.habilitada())
+
+
+class ActualizacionTests(unittest.TestCase):
+    def test_actualiza_una_vez_y_no_vacia_estado(self):
+        from types import SimpleNamespace
+        from ui import navegacion_actualizacion as ui
+        entradas={n:SimpleNamespace(NAV_VERSION='anterior') for n in ui._ENTRADAS}
+        def recargar(module):module.NAV_VERSION=ui.VERSION;return module
+        with patch.dict(ui.sys.modules,entradas),patch.object(ui.importlib,'reload',side_effect=recargar) as reload:
+            ui.preparar_entrada();cantidad=reload.call_count
+            self.assertGreater(cantidad,0)
+            ui.preparar_entrada();self.assertEqual(reload.call_count,cantidad)
+
+    def test_desactivada_no_recarga_interfaces(self):
+        from ui import navegacion_actualizacion as ui
+        with patch.dict('os.environ',{'USAER_NAVEGACION_DOCUMENTOS':'0'}),patch.object(ui.importlib,'reload') as reload:
+            ui.preparar_entrada();reload.assert_not_called()
 
 
 if __name__=='__main__':unittest.main()

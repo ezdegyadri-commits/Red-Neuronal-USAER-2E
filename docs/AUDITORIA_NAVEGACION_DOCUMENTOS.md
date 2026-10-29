@@ -1,12 +1,12 @@
 # USAER 2E — Navegación orientada a documentos
 
-Fecha: 28 de octubre de 2026. Rama local: `feat/navegacion-documentos`.
+Fecha: 28 de octubre de 2026. Rama: `feat/navegacion-documentos`.
 
 ## Estado de la entrega
 
-Implementación local para revisión. No se publicó, no se reinició Streamlit y no se modificaron datos de producción. No se añadieron tablas, migraciones ni dependencias de base de datos.
+Publicación autorizada por Dirección después de la revisión local. Esta revisión activa la navegación nueva sin modificar datos de producción ni reiniciar manualmente Streamlit. No se añadieron tablas, migraciones ni dependencias de base de datos.
 
-La nueva experiencia es de activación gradual: `USAER_NAVEGACION_DOCUMENTOS=1`. Por defecto se conserva la navegación anterior. Para revertir: establecer `USAER_NAVEGACION_DOCUMENTOS=0`, o usar «Ayuda, recuperación y navegación anterior → Usar navegación anterior» en la nueva entrada. Revertir no elimina documentos ni limpia el estado de edición.
+La nueva experiencia se activa por defecto (`USAER_NAVEGACION_DOCUMENTOS=1`). La actualización de interfaces importadas se realiza una sola vez, sin vaciar sesiones. Los enlaces anteriores `doc_id` se validan y convierten al identificador opaco `plan`. Para revertir: establecer `USAER_NAVEGACION_DOCUMENTOS=0`, o usar «Ayuda, recuperación y navegación anterior → Usar navegación anterior» en la nueva entrada. Revertir no elimina documentos ni limpia el estado de edición.
 
 ## Auditoría previa: puntos de entrada y estado
 
@@ -85,4 +85,8 @@ El enlace permite recuperar el documento y su contexto después de autenticarse 
 
 ## Revisión antes de una publicación futura
 
-La etapa local queda disponible para revisión. Antes de activar globalmente: comprobar cuentas reales de apoyo, especialistas y Dirección en un entorno autorizado, verificar una reconexión de cada perfil y medir el tiempo de apertura con el volumen real. No se autoriza una publicación mediante este informe.
+Comprobaciones adicionales con cuentas reales después de la publicación: comprobar cuentas reales de apoyo, especialistas y Dirección en un entorno autorizado, verificar una reconexión de cada perfil y medir el tiempo de apertura con el volumen real. La autorización posterior de Dirección permite la publicación de esta entrega.
+
+## Verificación de publicación autorizada
+
+Se integró la revisión publicada `90b1f03`, conservando las mejoras de firmas y guía oficial. Resultado posterior a la integración: 27 pruebas de navegación/activación/enlaces, 16 pruebas de firmas/guía/navegación anterior y 20 pruebas de guardado/cola pendientes, todas aprobadas, más el contrato JavaScript. No se modificaron registros de producción.
