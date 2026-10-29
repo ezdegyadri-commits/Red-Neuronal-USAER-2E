@@ -51,6 +51,7 @@ if(args.puede_editar){const help=button('Antecedentes y evaluaciones',()=>emit('
 if(args.puede_editar)toolbar.append(button('Ir a mis apartados',()=>{const c=Object.values(args.cells).find(c=>c.editable);const e=c&&document.getElementById('celda-'+c.id);if(e){e.scrollIntoView({behavior:'smooth',block:'center'});e.focus({preventScroll:true})}}));
 toolbar.append(button('Descargar informe',()=>emit('pdf')));
 }else{
+if(args.chat_contextual)toolbar.append(button('Indica qué necesitas ajustar…',()=>emit('chat')));
 if(!args.colaborativa){const help=button('Generar actividades',()=>emit('ia'));help.className='primary';toolbar.append(help)}
 toolbar.append(button('Guardar planeación',()=>emit('guardar')));
 if(args.grupal&&!args.colaborativa)toolbar.append(button('Añadir alumno',()=>emit('alumnos')));
