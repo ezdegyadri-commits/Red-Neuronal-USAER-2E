@@ -41,6 +41,28 @@ def descriptor(nombre,verbo,complemento):
     return nombre+' '+verbo+' '+complemento.rstrip('.')+'.'
 
 
+def resumen_zona_001(doc):
+    """Diagnóstico sintético del cumplimiento de los 14 indicadores y coherencia interna."""
+    rows = revisar(doc)
+    cumplidos = sum(1 for r in rows if r['Comprobación estructural'] == 'Datos presentes; revisar pertinencia')
+    tablas = doc.get('tablas', {})
+    dosi = tablas.get('dosificacion', [])
+    bloques = doc.get('metadatos', {}).get('intervenciones_nee', [])
+    all_contextos = [str(r.get('Contextos', '')).lower() for r in dosi] + [str(b.get('campos', {}).get('Contextos', '')).lower() for b in bloques]
+    ctx_apoyo = any('apoyo' in c for c in all_contextos)
+    ctx_regular = any('regular' in c for c in all_contextos)
+    ctx_escuela = any('escuela' in c for c in all_contextos)
+    ctx_familia = any('familia' in c for c in all_contextos)
+    nivel = 3 if cumplidos >= 10 and ctx_regular and ctx_familia else (2 if cumplidos >= 7 else 1)
+    return {
+        'cumplidos': cumplidos,
+        'total': 14,
+        'contextos': {'apoyo': ctx_apoyo, 'regular': ctx_regular, 'escuela': ctx_escuela, 'familia': ctx_familia},
+        'nivel_sugerido': nivel,
+        'etiqueta_nivel': 'Nivel 3: Satisfactorio' if nivel == 3 else ('Nivel 2: Suficiente' if nivel == 2 else 'Nivel 1: En desarrollo')
+    }
+
+
 def alertas_coherencia(doc):
     """Señales orientativas por vocabulario; nunca equivalen a una valoración."""
     familias={'lectura':r'lectur|letras|silab|palabras|fonolog',

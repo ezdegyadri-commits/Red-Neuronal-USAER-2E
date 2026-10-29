@@ -194,7 +194,7 @@ class PapelUITests(unittest.TestCase):
             states=app._tree.get_widget_states()
             states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':agregar}))
             app._run(states);self.assertFalse(app.exception)
-            for k,v in app.session_state.items():
+            for k,v in getattr(app.session_state._state,'filtered_state',{}).items():
                 if k.endswith('_trabajo_io'):v['future'].result(timeout=3)
             app.run();self.assertFalse(app.exception)
             antes=len(app.session_state.versiones_ficticias)
@@ -205,7 +205,7 @@ class PapelUITests(unittest.TestCase):
         states.widgets.add(id=component.proto.id,json_value=json.dumps({'evento':event}))
         app._run(states)
         self.assertFalse(app.exception)
-        for k,v in app.session_state.items():
+        for k,v in getattr(app.session_state._state,'filtered_state',{}).items():
             if k.endswith('_trabajo_io'):v['future'].result(timeout=3)
         app.run();self.assertFalse(app.exception)
         self.assertEqual(len(app.session_state.versiones_ficticias),antes+1)

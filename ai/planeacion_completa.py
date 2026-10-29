@@ -51,18 +51,22 @@ REGLAS DE ORO Y BLINDAJE PEDAGÓGICO:
    - Si faltan datos para graduar la dificultad, decláralos en faltantes. Conserva el objetivo y descriptor confirmados.
    - Trabaja en la ZONA DE DESARROLLO PRÓXIMO: distingue lo que hace solo y con ayuda. NO infantilices los materiales; respeta su edad e intereses aunque el aprendizaje sea inicial.
 
-2. PROHIBICIÓN ESTRICTA DE TEXTOS GENÉRICOS (ANTI-PLANTILLAS):
+2. PROHIBICIÓN ESTRICTA DE TEXTOS GENÉRICOS (ANTI-PLANTILLAS) Y FÓRMULA CANÓNICA DEL DESCRIPTOR (INDICADOR 4):
    - Queda ESTRICTAMENTE PROHIBIDO usar frases de relleno como "participa en una actividad vinculada al antecedente" o "el alumno realiza la acción propuesta por un medio accesible".
    - Usa literalmente los PDA oficiales proporcionados. Si no hay fuente verificable, marca la propuesta como contextualizada y pendiente de confirmación; nunca inventes un PDA oficial.
-   - Los descriptores siguen alias del alumno + verbo en presente + complemento observable, con condiciones y evidencia de avance. El sistema sustituye el alias por su nombre al ensamblar localmente.
+   - Los descriptores siguen obligatoriamente la fórmula canónica de Zona 001: [alias del alumno] + [verbo en presente observable] + [complemento con apoyos y material concreto].
+     Verbos observables requeridos: identifica, reconoce, clasifica, forma, expresa, ordena, mantiene, sigue, compara, resuelve, solicita, participa, lee, escribe.
+     PROHIBIDO verbos vagos: comprender, concientizar, interiorizar, reflexionar, trabajar. El sistema sustituye el alias por su nombre al ensamblar localmente.
 
-3. ESTRUCTURACIÓN DE ACTIVIDADES TANGIBLES Y MATERIAL CONCRETO:
-   - Usa sólo los contextos elegidos: aula de apoyo, aula regular, escuela o familia, según la función y la solicitud.
-   - Deben incluir el uso explícito de recursos didácticos físicos adaptados a la NEE (ej. sílabas móviles, bloques base diez, fichas de conteo, tarjetas de imágenes, tableros ARASAAC).
-   - La redacción de la actividad debe mostrar el andamiaje del docente (ej. "El docente modela el procedimiento...", "El alumno manipula el material...", "El alumno explica oralmente o muestra su resolución..."):
-     Explica qué harán docente y alumno, cómo se desarrolla la tarea, materiales accesibles, apoyos y qué se observará.
-     Usa actividades ordenadas, secuencias o proyectos cuando corresponda. No impongas siempre inicio, desarrollo y cierre.
-     Ajusta el tiempo a la duración elegida. Incluye colaboración con docente regular o familia sólo si es pertinente y viable.
+3. ESTRUCTURACIÓN DE ACTIVIDADES TANGIBLES Y BALANCE EN LOS 4 CONTEXTOS USAER (INDICADORES 6, 7, 10, 11, 12, 13 Y 14):
+   - Distribuye las actividades entre los contextos admitidos:
+     • Aula de apoyo: intervención especializada directa, con andamiaje DUA y material concreto manipulativo tangible (bloques, fichas, palitos, letras móviles, caja tiendita, loterías, libros de texto).
+     • Aula regular: co-docencia y vinculación con docente de grupo, adecuaciones de acceso a proyectos de aula, apoyos entre pares.
+     • Escuela: acciones institucionales y comunitarias escolares (sensibilización, recreo inclusivo, lectura en comunidad).
+     • Familia: acciones viables, respetuosas y lúdicas en casa (juegos con dados, clasificación cotidiana), sin juzgar ni sobrecargar.
+   - Temporalidad explícita en cada unidad (ej. "Semana 1 y 2 de noviembre - Sesión de 45 min", "Quincenal").
+   - Recursos manipulativos concretos tangibles especificados en cada unidad.
+   - Evaluación formativa clara con instrumento específico (rúbrica, lista de cotejo, escala estimativa) y evidencia observable esperada.
 
 4. CONTINUIDAD PEDAGÓGICA Y VARIEDAD:
    - No copies ni reformules superficialmente las actividades previas suministradas.
