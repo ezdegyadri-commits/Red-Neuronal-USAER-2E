@@ -120,11 +120,16 @@ def generar_pdf(doc):
             story.append(p(fuente['titulo']+' · '+fuente['edicion']))
     if doc.get('observaciones_director'):
         story.extend([p('Observaciones de Dirección',styles['Heading2']),p(doc['observaciones_director'])])
+    from services.planeacion_firmas import resolver_firmas_planeacion
+    firmas_info = resolver_firmas_planeacion(doc)
     firmas=[]
     for firmante in FORMATOS[doc['formato']]['firmantes']:
-        nombre=doc['datos']['Nombre del especialista'] if firmante in {'Especialista','Trabajador Social'} else ''
-        if firmante.startswith('Vo.'):
-            nombre=meta.get('firma_aprobada_por','')
+        if firmante in {'Especialista','Trabajador Social','Personas implicadas'}:
+            nombre = firmas_info['especialista_nombre']
+        elif firmante.startswith('Vo.') or 'Director del Servicio' in firmante:
+            nombre = firmas_info['director_nombre']
+        else:
+            nombre = ''
         firmas.append([p(firmante),Spacer(1,18 if es_equipo else 30),p('_______________________________'),p(nombre)])
     bloque=Table([firmas],colWidths=[available/len(firmas)]*len(firmas))
     bloque.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP')]))

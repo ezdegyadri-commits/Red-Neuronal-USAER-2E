@@ -105,7 +105,9 @@ def _generar_pdf(doc,spec):
         widths=[ancho*n/sum(section['widths']) for n in section['widths']] if section['widths'] else [ancho/len(section['headers'])]*len(section['headers'])
         story.extend([tabla(rows,widths),Spacer(1,12)])
     for c in spec['textos']:story.extend([tabla([[p(c['label'])],[p(c['value'])]],[ancho]),Spacer(1,12)])
-    story.extend([Spacer(1,24),tabla([[p('____________________________\n'+spec['firma']),p('____________________________\n'+spec['vobo'])]],[ancho/2]*2)])
+    firma_html = spec['firma'].replace('\n', '<br/>')
+    vobo_html = spec['vobo'].replace('\n', '<br/>')
+    story.extend([Spacer(1,24),tabla([[p('____________________________<br/>'+firma_html),p('____________________________<br/>'+vobo_html)]],[ancho/2]*2)])
     # Los fundamentos se conservan, sin copiar otra vez todo el formato.
     from services.planeacion_generacion import fuentes_pertinentes
     fuentes=fuentes_pertinentes(doc)
