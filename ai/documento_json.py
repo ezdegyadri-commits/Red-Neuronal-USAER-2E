@@ -6,8 +6,10 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from threading import BoundedSemaphore
 
-_pool=ThreadPoolExecutor(max_workers=2,thread_name_prefix='usaer-propuestas')
-_slots=BoundedSemaphore(8)
+if '_pool' not in globals():
+    _pool=ThreadPoolExecutor(max_workers=2,thread_name_prefix='usaer-propuestas')
+if '_slots' not in globals():
+    _slots=BoundedSemaphore(8)
 log=logging.getLogger(__name__)
 
 
@@ -29,13 +31,14 @@ def generar(prompt,schema,validar,config,max_tokens=6000):
         return validar(json.loads(raw))
     if config.get('gemini'):
         from google import genai
+        from ai.modelos_gemini import generar as generar_disponible
         from google.genai import types
         cli=genai.Client(api_key=config['gemini'],http_options=types.HttpOptions(timeout=30000,retry_options=types.HttpRetryOptions(attempts=1)))
         try:
             for model in config.get('modelos',[])[:2]:
                 if time.monotonic()-inicio>45:break
                 try:
-                    r=cli.models.generate_content(model=model,contents=prompt,config={'temperature':0.2,'response_mime_type':'application/json','response_schema':schema,'max_output_tokens':max_tokens})
+                    r=generar_disponible(cli,model=model,api_key=config['gemini'],contents=prompt,config={'temperature':0.2,'response_mime_type':'application/json','response_schema':schema,'max_output_tokens':max_tokens})
                     return parse(r.text or '')
                 except Exception as exc:
                     code=getattr(exc,'code',None)

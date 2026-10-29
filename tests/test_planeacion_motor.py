@@ -107,7 +107,7 @@ class MotorTests(unittest.TestCase):
         self.assertIn("FILTRO DE NIVEL REAL DE DESARROLLO", INSTRUCCIONES)
         self.assertIn("TRAZABILIDAD Y SUSTENTO DOCUMENTAL", INSTRUCCIONES)
         self.assertIn("SUBORDINACIÓN ESTRICTA A EDICIONES MANUALES DEL DOCENTE", INSTRUCCIONES)
-        self.assertIn("MARCO DUA Y ACTIVIDADES DIVERSIFICADAS", INSTRUCCIONES)
+        self.assertIn("andamiaje DUA", INSTRUCCIONES)
 
     def test_payload_xml_estructurado_y_subordinacion(self):
         from services.planeacion_generacion import construir_payload_estructurado_xml
@@ -119,8 +119,8 @@ class MotorTests(unittest.TestCase):
             },
             'metadatos': {
                 'fuentes': [
-                    {'tipo': 'EPP', 'referencia': 'E1', 'alumno': 'ALU-100', 'fecha': '2026-09-15', 'texto': 'Nivel presilábico, conteo hasta 5 con material concreto.'},
-                    {'tipo': 'SEGUIMIENTO', 'referencia': 'E2', 'alumno': 'ALU-100', 'fecha': '2026-10-02', 'texto': 'NEE detectada: Requiere andamiaje uno a uno en conteo.'}
+                    {'vinculo_verificado': True, 'tipo': 'EPP', 'referencia': 'E1', 'alumno': 'ALU-100', 'fecha': '2026-09-15', 'texto': 'Nivel presilábico, conteo hasta 5 con material concreto.'},
+                    {'vinculo_verificado': True, 'tipo': 'SEGUIMIENTO', 'referencia': 'E2', 'alumno': 'ALU-100', 'fecha': '2026-10-02', 'texto': 'NEE detectada: Requiere andamiaje uno a uno en conteo.'}
                 ],
                 'intervenciones_nee': [
                     {'alumno': 'ALU-100', 'campos': {'NEE': 'Consolidar correspondencia grafofonética', 'Apoyos': 'Tarjetas ARASAAC'}}
@@ -144,7 +144,8 @@ class MotorTests(unittest.TestCase):
         self.assertIn('<contexto_documentado>', xml)
         self.assertIn('NEE detectada: Requiere andamiaje', xml)
         self.assertIn('<ediciones_manuales_docente>', xml)
-        self.assertIn('VERDAD ABSOLUTA Y PRIORIDAD TOTAL', xml)
+        self.assertIn('DECISIONES DOCENTES A CONSERVAR', xml)
+        self.assertNotIn('VERDAD ABSOLUTA', xml)
         self.assertIn('Conciencia fonológica', xml)
         self.assertIn('Tarjetas ARASAAC', xml)
 
