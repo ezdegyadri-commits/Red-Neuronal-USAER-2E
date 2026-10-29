@@ -41,7 +41,7 @@ def _componente_editor():
     with _COMPONENT_LOCK:
         if registro not in _COMPONENTES:
             html,css,js=_definicion_editor()
-            _COMPONENTES[registro]=components.component('usaer_formato_vivo_integrado_v1',html=html,css=css,js=js,isolate_styles=True)
+            _COMPONENTES[registro]=components.component('usaer_formato_vivo_integrado_v2',html=html,css=css,js=js,isolate_styles=True)
         return _COMPONENTES[registro]
 
 

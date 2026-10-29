@@ -35,6 +35,9 @@ if not st.session_state.get("autenticado"):
     login()
     st.stop()
 
+from ui.memoria_actualizacion import preparar_entrada as preparar_memoria
+preparar_memoria('2026-10-29-memoria-v1')
+
 from ui.navegacion_actualizacion import preparar_entrada as preparar_navegacion
 preparar_navegacion()
 
