@@ -50,6 +50,11 @@ def _seleccionar_alumno(df, etiqueta, key):
     if opciones.empty:
         return "", None
     ids = opciones["ID_Alumno"].tolist()
+    if len(ids) == 1:
+        id_alumno = ids[0]
+        st.session_state[key] = id_alumno
+        st.caption(f"👤 **{etiqueta}:** {opciones.loc[opciones['ID_Alumno'].eq(id_alumno), '_etiqueta'].iloc[0]}")
+        return id_alumno, opciones.loc[opciones["ID_Alumno"].eq(id_alumno)].iloc[0]
     # Migrate old widget state, which stored a name instead of the student ID.
     if key in st.session_state and str(st.session_state[key]) not in ids:
         st.session_state.pop(key, None)

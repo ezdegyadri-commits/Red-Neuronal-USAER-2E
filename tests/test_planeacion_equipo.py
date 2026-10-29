@@ -131,7 +131,8 @@ class EquipoTests(unittest.TestCase):
             self.assertIn('Planeación del Servicio de Apoyo de Educación Especial', p1_text)
             self.assertIn('Organización de las actividades de aprendizaje', p1_text)
             self.assertIn('Observaciones', p2_text)
-            self.assertIn('Nombre y firma del Especialista', p2_text)
+            self.assertIn('Psic. María José Cupul Realpozo', p2_text)
+            self.assertIn('Psic. Edgar Adrián Yam Briceño MD', p2_text)
             self.assertIn('Director del Servicio de Apoyo', p2_text)
 
 if __name__=='__main__':unittest.main()

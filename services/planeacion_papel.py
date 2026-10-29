@@ -166,12 +166,14 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
             [a['ID_Alumno'] for a in alumnos],
             [(k,c['target'],c['value']) for k,c in cells.items() if c['editable']]]
         firma=hashlib.sha256(json.dumps(contrato,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    from services.planeacion_firmas import resolver_firmas_planeacion
+    firmas = resolver_firmas_planeacion(doc)
     return {'documento':doc['id'],'huella':firma,'titulo':'Guía de Planeación Grupal' if grupal else FORMATOS[doc['formato']]['titulo'],
         'nee_intervenciones':[{**r,'alumno_nombre':nombres.get(r['alumno_id'],r['alumno_id'])} for r in intervenciones.catalogo(doc)] if intervenciones.aplica(doc) and not colaborativa and not para_impresion else [],
         'header':header,'tables':tables,'textos':textos,'cells':cells,'grupal':grupal,'colaborativa':colaborativa,
         'cache_id':hashlib.sha256((actor.get('cuenta','')+'|'+actor.get('area','')+'|'+doc['id']).encode()).hexdigest(),
         'pendientes':avisos,
-        'firma':datos['Nombre del especialista']+'\nTrabajo Social' if doc['formato']=='XXV' else 'Nombre y firma del Especialista','vobo':'Vo. Bo. Director del Servicio de Apoyo'}
+        'firma':firmas['firma'],'vobo':firmas['vobo']}
 
 
 def aplicar(doc,event):

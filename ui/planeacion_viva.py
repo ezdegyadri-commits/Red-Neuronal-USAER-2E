@@ -21,6 +21,17 @@ def _abrir(base,doc):
     from ui import planeacion as u
     from ui.planeacion_simple import _abrir as abrir
     from services.planeacion_modalidad import modalidad_documento
+    from services.planeacion_compartida import es_guia
+    actor=s.identidad()
+    try:
+        st.query_params['doc_id']=doc['id']
+    except Exception:
+        pass
+    if es_guia(doc) and actor['area'] in ('Psicología','Comunicación','Trabajo Social'):
+        st.session_state[base+'_colaboracion_abierto']=doc['id']
+        st.session_state[base+'_submodulo']='equipo'
+        st.session_state[base+'_viva_entrada']=False
+        return base+'_colaboracion'
     prefix=base+'_'+modalidad_documento(doc,s.padron_autorizado())
     prefix=abrir(base,prefix,doc)
     if st.session_state.get(prefix+'_pending'):return prefix
@@ -33,7 +44,7 @@ def _entrada(base,actor):
     from ui import planeacion as u
     from ui.planeacion_simple import periodo_actual,crear_borrador
     from ui.planeacion_borradores import papelera
-    tab_continuar,tab_nueva=st.tabs(['📂 Continuar planeación','➕ Nueva planeación'])
+    tab_continuar,tab_nueva=st.tabs(['📂 Mis planeaciones','➕ Nueva planeación'])
 
     with tab_continuar:
         from ui.planeacion_repositorio import listado
@@ -391,13 +402,36 @@ def pagina(render_hoja=None):
         st.title('Planeación · '+actor['area'])
         st.caption('Cero burocracia · Tu información conectada y lista para trabajar.')
 
+    # Recuperación directa de contexto vía identificador en URL (Google Docs / Drive)
+    try:
+        url_doc_id=st.query_params.get('doc_id')
+    except Exception:
+        url_doc_id=None
+    if url_doc_id and not st.session_state.get(base+'_submodulo') and (base+'_activa' not in st.session_state or st.session_state.get(base+'_viva_entrada')):
+        try:
+            candidatos=[d for d in s.listar() if d.get('id')==url_doc_id]
+            if not candidatos:
+                candidatos=[d for d in s.compartidos() if d.get('id')==url_doc_id]
+            if candidatos:
+                doc_url=candidatos[0]
+                s.autorizar(doc_url,True if actor['cuenta']==doc_url.get('cuenta') else False)
+                _abrir(base,doc_url)
+        except Exception:
+            try:st.query_params.pop('doc_id',None)
+            except Exception:pass
+
     vista=st.session_state.get(base+'_submodulo')
     if actor['director'] or vista=='revision':
         u.direccion_panel();return
 
     if vista=='equipo':
         if st.button('← Volver a mis planeaciones',key=base+'_colab_volver'):
-            st.session_state.pop(base+'_submodulo',None);st.rerun()
+            try:st.query_params.pop('doc_id',None)
+            except Exception:pass
+            st.session_state.pop(base+'_submodulo',None)
+            st.session_state.pop(base+'_colaboracion_abierto',None)
+            st.session_state[base+'_viva_entrada']=True
+            st.rerun()
         from ui.planeacion_colaboracion import panel as panel_colab
         panel_colab(base+'_colaboracion')
         return
@@ -411,6 +445,8 @@ def pagina(render_hoja=None):
     if activo and activo+'_doc' in st.session_state and not st.session_state.get(base+'_viva_entrada'):
         c_ret,_=st.columns([1,4])
         if c_ret.button('← Volver a mis planeaciones',key=base+'_viva_volver_hub'):
+            try:st.query_params.pop('doc_id',None)
+            except Exception:pass
             st.session_state[base+'_viva_entrada']=True;st.rerun()
         (render_hoja or hoja)(activo)
     else:

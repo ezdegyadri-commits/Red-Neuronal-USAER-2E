@@ -115,27 +115,56 @@ def panel(prefix):
     nombres={clave_escuela(r['ID_Escuela']):str(r.get('Nombre_Escuela',r['ID_Escuela'])) for r in frame.to_dict('records')}
     escuelas=list(nombres)
     if not escuelas:st.info('No hay escuelas con alumnos dentro de tu asignación actual.');return
-    escuela=st.selectbox('Escuela del trabajo compartido',escuelas,format_func=nombres.get,key=prefix+'_escuela')
+    if len(escuelas)>1:
+        escuela=st.selectbox('Escuela del trabajo compartido',escuelas,format_func=nombres.get,key=prefix+'_escuela')
+    else:
+        escuela=escuelas[0]
+        st.session_state[prefix+'_escuela']=escuela
+        st.caption(f"🏫 **Escuela:** {nombres.get(escuela,escuela)}")
     docs=[d for d in docs if clave_escuela(d['datos']['ID_Escuela'])==escuela]
     from services.planeacion_compartida import etiqueta,etiqueta_selector,es_guia
-    tipo=st.radio('Formato compartido',['Planeación grupal · Anexo XIX','Plan de intervención · Anexo XXI'],horizontal=True,key=prefix+'_tipo_compartido')
+    tipos_opciones=[]
+    if any(es_guia(d) for d in docs):tipos_opciones.append('Planeación grupal · Anexo XIX')
+    if any(d['formato']=='XXI' for d in docs):tipos_opciones.append('Plan de intervención · Anexo XXI')
+    if not tipos_opciones:
+        st.info('No hay formatos de este tipo disponibles en esta escuela. Si apoyo acaba de iniciar uno, confirma su guardado y pulsa «Actualizar planeaciones del equipo». No es necesario crear una copia ni enviarlo a Dirección para colaborar.');return
+    if len(tipos_opciones)>1:
+        tipo=st.radio('Formato compartido',tipos_opciones,horizontal=True,key=prefix+'_tipo_compartido')
+    else:
+        tipo=tipos_opciones[0]
+        st.session_state[prefix+'_tipo_compartido']=tipo
+        st.caption(f"📋 **Formato:** {tipo}")
     docs=[d for d in docs if es_guia(d)] if tipo.startswith('Planeación grupal') else [d for d in docs if d['formato']=='XXI']
     if not docs:
         st.info('No hay formatos de este tipo disponibles en esta escuela. Si apoyo acaba de iniciar uno, confirma su guardado y pulsa «Actualizar planeaciones del equipo». No es necesario crear una copia ni enviarlo a Dirección para colaborar.');return
     from utils.escolar import grado_canonico,grupo_canonico
     from services.planeacion_ambito import etiqueta as grupos
-    grados=['Todos']+sorted({grupos(d) for d in docs})
-    grupo=st.selectbox('Grado y grupo',grados,key=prefix+'_grado_grupo')
-    if grupo!='Todos':docs=[d for d in docs if grupos(d)==grupo]
+    grupos_unicos=sorted({grupos(d) for d in docs})
+    if len(grupos_unicos)>1:
+        grados=['Todos']+grupos_unicos
+        grupo=st.selectbox('Grado y grupo',grados,key=prefix+'_grado_grupo')
+        if grupo!='Todos':docs=[d for d in docs if grupos(d)==grupo]
+    else:
+        grupo=grupos_unicos[0] if grupos_unicos else 'Todos'
+        st.session_state[prefix+'_grado_grupo']=grupo
+        st.caption(f"👥 **Grado y grupo:** {grupo}")
+        if grupo!='Todos':docs=[d for d in docs if grupos(d)==grupo]
     docs=sorted(docs,key=lambda d:d.get('guardado_en',''),reverse=True)
-    st.caption(str(len(docs))+' formato(s) disponible(s). Se muestran también los borradores guardados por apoyo.')
     por_id={d['id']:d for d in docs}
     elegido=st.session_state.get(prefix+'_id')
     if elegido and elegido not in por_id:
         raiz=next((d['id'] for d in docs if elegido in d['metadatos'].get('unificacion_grupal',{}).get('fuentes',{})),None)
         if raiz:st.session_state[prefix+'_id']=raiz
     orden=sorted(por_id,key=lambda i:(grupos(por_id[i]),por_id[i]['datos']['Curso escolar'],str(por_id[i]['datos']['Trimestre'])))
-    did=st.selectbox('Documento compartido · grado y periodo',orden,format_func=lambda i:etiqueta_selector(por_id[i]),key=prefix+'_id')
+    if not orden:
+        st.info('No hay documentos disponibles en este grupo.');return
+    if len(orden)>1:
+        st.caption(str(len(docs))+' formato(s) disponible(s). Se muestran también los borradores guardados por apoyo.')
+        did=st.selectbox('Documento compartido · grado y periodo',orden,format_func=lambda i:etiqueta_selector(por_id[i]),key=prefix+'_id')
+    else:
+        did=orden[0]
+        st.session_state[prefix+'_id']=did
+        st.caption(f"📄 **Documento:** {etiqueta_selector(por_id[did])}")
     doc=por_id[did]
     if doc['metadatos'].get('unificacion_grupal',{}).get('fuentes'):
         st.caption('Documento único del grupo: reúne el trabajo previo sin borrar sus documentos de origen. Todos los integrantes abren esta misma hoja.')

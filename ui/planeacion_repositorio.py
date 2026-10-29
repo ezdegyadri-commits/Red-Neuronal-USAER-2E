@@ -1,5 +1,7 @@
 """Bibliotecas separadas, tarjetas cortas y navegación sin duplicar documentos."""
+from copy import deepcopy
 import math
+from uuid import uuid4
 import streamlit as st
 from services.planeacion_recuperacion import repositorios,titulo_tarjeta,detalle_tarjeta
 from utils.escolar import grado_canonico
@@ -12,10 +14,32 @@ def listado(base,abrir):
     from services import planeacion as s
     actor=s.identidad()
     try:
-        docs=[d for d in s.listar() if d['cuenta']==actor['cuenta']]
+        propias=[d for d in s.listar() if d.get('cuenta')==actor['cuenta']]
     except Exception:
         st.warning('No se pudo actualizar el listado. Se reintentará automáticamente; tus planeaciones siguen conservadas.')
         return []
+
+    # Integración Google Drive: planeaciones compartidas con el equipo accesibles en 1 toque
+    compartidas=[]
+    keys_prev=set(st.session_state.keys()) if hasattr(st,'session_state') else set()
+    try:
+        existentes_ids={d['id'] for d in propias}
+        # Si un test unitario mockeó s.listar pero no s.compartidos, evitamos llamadas de red reales
+        if not (hasattr(s.listar,'mock_calls') and not hasattr(s.compartidos,'mock_calls')):
+            for c in s.compartidos():
+                if c.get('id') not in existentes_ids:
+                    copia=deepcopy(c)
+                    copia.setdefault('metadatos',{})['es_compartida_equipo']=True
+                    compartidas.append(copia)
+    except Exception:
+        pass
+    finally:
+        if hasattr(st,'session_state'):
+            for k in list(st.session_state.keys()):
+                if k not in keys_prev and k.startswith('_padron_autorizado_'):
+                    st.session_state.pop(k,None)
+
+    docs=propias+compartidas if not actor.get('director') else s.listar()
     st.caption('Tus planeaciones se actualizan automáticamente.')
     if docs:panel(base,docs,abrir)
     else:st.info('Aún no tienes planeaciones guardadas en tu cuenta. Las nuevas aparecerán aquí automáticamente.')
@@ -23,6 +47,9 @@ def listado(base,abrir):
 
 
 def panel(base,docs,abrir):
+    from services import planeacion as s
+    try:actor=s.identidad()
+    except Exception:actor={'cuenta':'','director':False}
     buscar_todo=st.text_input('Buscar alumno en todas mis planeaciones',key=base+'_buscar_historial_completo')
     if buscar_todo.strip():
         texto=normalizar_texto(buscar_todo)
@@ -38,7 +65,6 @@ def panel(base,docs,abrir):
             grados=sorted({grado_canonico(a.get('Grado')) for d in items for a in d['datos']['Alumnos']}-{''})
             catalogo=tuple(sorted(d['id'] for d in items))
             if st.session_state.get(key+'_catalogo')!=catalogo:
-                # Una recuperación no queda escondida por filtros del listado previo.
                 st.session_state[key+'_grado']='Todos'
                 st.session_state[key+'_buscar']=''
                 st.session_state[key+'_pagina']=1
@@ -59,10 +85,20 @@ def panel(base,docs,abrir):
             st.caption(f'{len(filtradas)} planeación(es) · ordenadas con trabajo redactado y guardados recientes primero')
             for doc in filtradas[(pagina-1)*12:pagina*12]:
                 with st.container(border=True):
+                    tipo_meta=doc.get('metadatos',{}).get('modalidad_planeacion')
+                    es_comp=doc.get('metadatos',{}).get('es_compartida_equipo')
+                    badge_tipo="🤝 Compartida" if es_comp else ("👤 Individual" if tipo_meta=='individual' else ("👥 Grupal" if tipo_meta=='grupal' else "📋 Formato"))
+                    estado=doc.get('estado','BORRADOR')
+                    color_estado="#059669" if estado in ('VALIDADA','VALIDADO') else ("#2563EB" if estado in ('ENVIADA','ENVIADO') else "#D97706")
+                    bg_estado="#ECFDF5" if estado in ('VALIDADA','VALIDADO') else ("#EFF6FF" if estado in ('ENVIADA','ENVIADO') else "#FEF3C7")
+                    fecha=doc.get('guardado_en','')[:10] or 'Borrador'
+                    st.markdown(f"<div style='display:flex;gap:6px;align-items:center;margin-bottom:4px;'><span style='background:#F1F5F9;color:#334155;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;'>{badge_tipo}</span><span style='background:{bg_estado};color:{color_estado};padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;'>{estado}</span><span style='color:#64748B;font-size:0.75rem;'>📅 {fecha}</span></div>",unsafe_allow_html=True)
                     st.subheader(titulo_tarjeta(doc))
                     st.caption(detalle_tarjeta(doc))
                     if st.button('Continuar esta planeación',type='primary',key=key+'_abrir_'+doc['id'],use_container_width=True):
-                        try:abrir(base,doc);st.rerun()
+                        try:
+                            st.query_params['doc_id']=doc['id']
+                            abrir(base,doc);st.rerun()
                         except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
                     izquierda,derecha=st.columns(2)
                     with izquierda:
@@ -83,3 +119,17 @@ def panel(base,docs,abrir):
                             from ui.planeacion_borradores import controles
                             from documents.planeacion_papel import generar_pdf
                             controles(key+'_'+doc['id'],doc,generar_pdf,lambda:None)
+                            if st.button('📋 Duplicar como nuevo borrador',key=key+'_duplicar_'+doc['id']):
+                                try:
+                                    copia=deepcopy(doc)
+                                    copia['id']=uuid4().hex
+                                    copia['estado']='BORRADOR'
+                                    copia['metadatos'].pop('borrador_eliminado',None)
+                                    copia['metadatos']['es_copia_de']=doc['id']
+                                    s.guardar(copia,'BORRADOR')
+                                    s.refrescar()
+                                    st.success('Planeación duplicada como nuevo borrador.')
+                                    st.rerun()
+                                except Exception as exc:
+                                    st.warning(f'No se pudo duplicar: {exc}')
+

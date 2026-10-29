@@ -82,7 +82,7 @@ def estado(doc):
     if not isinstance(guardado,dict):guardado={}
     defaults={'prioridades':list(dict.fromkeys(candidatas))[:2] or [permitidas[0]],
        'apoyos':['pasos','respuesta'] if area!='Trabajo Social' else ['respuesta'],
-       'metodo':'secuencia','contextos':['Escuela' if area=='Trabajo Social' else 'Aula regular'],
+       'metodo':'secuencia','contextos':list(FORMATOS[doc['formato']]['contextos']),
        'duracion':30,'frecuencia':FRECUENCIAS[0],'acuerdos':[],'completar':False,'tematica':''}
     for key in defaults:
         if key in guardado and type(guardado[key]) is type(defaults[key]):defaults[key]=deepcopy(guardado[key])
