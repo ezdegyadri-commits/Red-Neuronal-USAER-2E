@@ -88,6 +88,13 @@ if "navegacion_principal" not in st.session_state or st.session_state["navegacio
     st.session_state["navegacion_principal"] = "Inicio"
 
 page = st.session_state["navegacion_principal"]
+from services.navegacion_planeaciones import habilitada as navegacion_documentos
+token_plan=st.query_params.get('plan','')
+entrada_plan=(st.session_state.get('usuario',''),token_plan)
+if token_plan and navegacion_documentos() and 'Planeación e intervención' in menu and st.session_state.get('_entrada_enlace_plan')!=entrada_plan:
+    st.session_state['_entrada_enlace_plan']=entrada_plan
+    st.session_state['navegacion_principal']='Planeación e intervención'
+    page='Planeación e intervención'
 
 # El punto de entrada sí se ejecuta tras el despliegue de Cloud. Una entrada
 # EPP importada anteriormente puede conservar su propio marcador antiguo.

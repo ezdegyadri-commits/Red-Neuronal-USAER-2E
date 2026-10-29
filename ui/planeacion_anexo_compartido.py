@@ -103,7 +103,9 @@ def panel(prefix,doc):
             st.session_state.pop(base+'_rechazado',None)
             st.session_state.pop(base+'_error_hoja',None)
             if event.get('accion')=='inicio':
-                if not st.session_state.get(base+'_pending'):
+                from services.navegacion_planeaciones import habilitada
+                if not st.session_state.get(base+'_pending') or habilitada():
+                    # El parche ya está en la cola por ID; navegar no lo descarta.
                     st.session_state.pop(prefix+'_abierto',None)
                     st.rerun(scope='app')
             refrescar_editor()

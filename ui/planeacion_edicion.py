@@ -46,7 +46,9 @@ def _abrir_copia(prefix,doc):
 
 def panel(prefix):
     doc=st.session_state[prefix+'_doc']
-    with st.expander('Editar planeación · opciones'):
+    desde_lista=st.session_state.pop(prefix+'_duplicar_desde_lista',False)
+    if desde_lista:st.session_state[prefix+'_editar_opcion']='Alumnos o periodo · copia adaptada'
+    with st.expander('Editar planeación · opciones',expanded=desde_lista):
         st.caption('Trabaja sobre el mismo formato. Al guardar modificaciones se crea una versión en borrador; el historial anterior se conserva.')
         from services.planeacion_compartida import es_guia
         opciones=['Elige una opción']+(['Añadir alumnos a esta planeación'] if es_guia(doc) else [])+['Actividades y orden','Alumnos o periodo · copia adaptada','Referentes oficiales','Reformular actividades con IA','Recuperar una versión anterior']

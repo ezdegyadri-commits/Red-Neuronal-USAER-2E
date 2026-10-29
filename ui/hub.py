@@ -266,6 +266,18 @@ def render_hub_card(modulo_key):
 
 
 def pagina_central_hub(df_alumnos, menu_permitido, rol, nombre_usuario):
+    from services.navegacion_planeaciones import habilitada
+    if 'Planeación e intervención' in menu_permitido and habilitada() and not st.session_state.get('_navegacion_documentos_anterior'):
+        from ui.mis_planeaciones import inicio
+        inicio()
+        otros=st.expander('Todos los módulos',key='inicio_todos_modulos',on_change='rerun')
+        if otros.open:
+            with otros:_pagina_modulos(df_alumnos,menu_permitido,rol,nombre_usuario)
+        return
+    _pagina_modulos(df_alumnos,menu_permitido,rol,nombre_usuario)
+
+
+def _pagina_modulos(df_alumnos, menu_permitido, rol, nombre_usuario):
     """Página Central / Launchpad: Centro de navegación fluido y visual."""
     total_alumnos = len(df_alumnos) if df_alumnos is not None else 0
 

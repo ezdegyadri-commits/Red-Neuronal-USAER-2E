@@ -1,5 +1,6 @@
 """Una misma acción de archivo para documentos generados y escaneados."""
 import streamlit as st
+from ui.seleccion_contextual import elegir
 from config.settings import SCHOOL_YEAR
 from services import archivo_expediente as archivo
 
@@ -48,7 +49,7 @@ def panel(ids,prefix,grupal=False):
         import pandas as pd
         tabla_paginada(pd.DataFrame(docs)[['Tipo','Nombre','Ciclo','Fecha']],prefix+'_tabla')
         porid={r['ID_Documento']:r for r in docs}
-        elegido=st.selectbox('Documento para recuperar',list(porid),format_func=lambda k:porid[k]['Tipo']+' · '+porid[k]['Nombre']+' · '+porid[k]['Fecha'][:16],key=prefix+'_doc')
+        elegido=elegir('Documento para recuperar',list(porid),format_func=lambda k:porid[k]['Tipo']+' · '+porid[k]['Nombre']+' · '+porid[k]['Fecha'][:16],key=prefix+'_doc')
         with st.expander('Vista previa · síntesis del documento precargado'):
             from ui.documento_sintesis import archivado
             archivado(elegido,porid[elegido],lambda:archivo.descargar(elegido)[1],prefix+'_preview')
@@ -72,7 +73,7 @@ def panel(ids,prefix,grupal=False):
                     st.dataframe(vista[[c for c in ('Fecha_Documento','Fecha','Seccion','Tipo','Nombre','Estado','Origen_Vivo') if c in vista]],hide_index=True,width='stretch')
                     fuentes=sorted({r['Origen_Vivo'] for r in vivos})
                     if fuentes:
-                        origen=st.selectbox('Abrir módulo de origen',fuentes,key=prefix+'_origen_vivo')
+                        origen=elegir('Abrir módulo de origen',fuentes,key=prefix+'_origen_vivo')
                         if st.button('Ir al documento de origen',key=prefix+'_ir_origen'):
                             st.session_state['navegacion_principal']=origen;st.rerun()
                 else:st.info('No hay documentos vinculados por identificador para este expediente.')
@@ -135,7 +136,7 @@ def _conectados(ids,prefix,grupal=False):
         if candidatos:
             porid={d['id']:d for d in candidatos}
             from services.planeacion_compartida import etiqueta
-            did=st.selectbox('Planeación vinculada',list(porid),format_func=lambda k:etiqueta(porid[k]),key=prefix+'_plan')
+            did=elegir('Planeación vinculada',list(porid),format_func=lambda k:etiqueta(porid[k]),key=prefix+'_plan')
             if st.button('Preparar PDF de la planeación vinculada',key=prefix+'_plan_pdf'):
                 from documents.planeacion_papel import generar_pdf
                 d=porid[did];pdf=generar_pdf(d,archivo=True)
@@ -143,7 +144,7 @@ def _conectados(ids,prefix,grupal=False):
         informes=[] if grupal else [d for d in epp.listar(incluir_bajas=True) if d['alumno'] in set(ids)]
         if informes:
             porid={d['id']:d for d in informes}
-            eid=st.selectbox('EPP vinculada',list(porid),format_func=lambda k:porid[k]['ciclo']+' · '+k[-10:],key=prefix+'_epp')
+            eid=elegir('EPP vinculada',list(porid),format_func=lambda k:porid[k]['ciclo']+' · '+k[-10:],key=prefix+'_epp')
             with st.expander('Vista previa sintetizada de la EPP vinculada'):
                 from services.documento_sintesis import sintetizar
                 d=porid[eid]
@@ -168,10 +169,10 @@ def pagina_grupal(df):
     rows=df.fillna('').copy()
     if rows.empty:st.info('No hay grupos en tu asignación actual.');return
     escuelas=sorted(rows['Nombre_Escuela'].astype(str).unique())
-    escuela=st.selectbox('Escuela del expediente grupal',escuelas,key='archivo_grupal_escuela')
+    escuela=elegir('Escuela del expediente grupal',escuelas,key='archivo_grupal_escuela')
     rows=rows.loc[rows['Nombre_Escuela'].astype(str).eq(escuela)].copy()
     rows['_grupo']=[grado_canonico(r.get('Grado'))+' '+grupo_canonico(r.get('Grupo')) for r in rows.to_dict('records')]
-    grupo=st.selectbox('Grado y grupo del expediente',sorted(rows['_grupo'].unique()),key='archivo_grupal_grupo')
+    grupo=elegir('Grado y grupo del expediente',sorted(rows['_grupo'].unique()),key='archivo_grupal_grupo')
     rows=rows.loc[rows['_grupo'].eq(grupo)]
     st.caption(str(len(rows))+' alumnos vinculados. No se mezclan escuelas ni grados.')
     panel(rows['ID_Alumno'].astype(str).tolist(),'archivo_grupal_'+str(rows.iloc[0]['ID_Escuela'])+'_'+grupo,True)

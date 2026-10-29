@@ -53,7 +53,8 @@ def _seleccionar_alumno(df, etiqueta, key):
     # Migrate old widget state, which stored a name instead of the student ID.
     if key in st.session_state and str(st.session_state[key]) not in ids:
         st.session_state.pop(key, None)
-    id_alumno = st.selectbox(
+    from ui.seleccion_contextual import elegir
+    id_alumno = elegir(
         etiqueta,
         ids,
         format_func=lambda ident: opciones.loc[
@@ -1560,7 +1561,8 @@ def documentos_page(df):
         if not escuelas_documentos:
             st.error("No tienes escuelas asignadas para consultar documentos.")
             return
-        escuela_documentos = st.selectbox(
+        from ui.seleccion_contextual import elegir
+        escuela_documentos = elegir(
             "Escuela para consultar el expediente",
             escuelas_documentos,
             key="documentos_escuela_especialista",

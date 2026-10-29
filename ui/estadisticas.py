@@ -90,7 +90,8 @@ def estadisticas_page(df):
         seleccion = st.selectbox("Ámbito", opciones, key="estadisticas_ambito")
         muestra = df.copy() if seleccion == "Toda la USAER" else alumnos_de_escuela(df, seleccion)
     else:
-        seleccion = st.selectbox("Escuela asignada", asignadas, key="estadisticas_ambito")
+        from ui.seleccion_contextual import elegir
+        seleccion = elegir("Escuela asignada", asignadas, key="estadisticas_ambito")
         muestra = alumnos_de_escuela(df, seleccion)
     if "ID_Alumno" in muestra.columns:
         muestra = muestra.drop_duplicates(subset=["ID_Alumno"], keep="first")

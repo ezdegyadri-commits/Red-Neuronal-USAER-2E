@@ -1,4 +1,5 @@
 import streamlit as st
+from ui.seleccion_contextual import elegir
 from services.eventos_continuidad import hojas
 from data import repository as repo
 from config.settings import ESCUELAS_USAER
@@ -13,7 +14,7 @@ def recuperar(frame):
             st.warning('No se pudo leer el historial ahora. Los registros se conservan.');return
         if not opciones:st.info('No hay hojas vinculadas por ID en tu asignación.');return
         porid={r['id']:r for r in opciones}
-        elegido=st.selectbox('Hoja a continuar',list(porid),format_func=lambda k:porid[k]['etiqueta']+' · '+porid[k]['fecha']+' · '+str(porid[k]['cantidad'])+' registros',key='evento_recuperar_hoja')
+        elegido=elegir('Hoja a continuar',list(porid),format_func=lambda k:porid[k]['etiqueta']+' · '+porid[k]['fecha']+' · '+str(porid[k]['cantidad'])+' registros',key='evento_recuperar_hoja')
         if st.button('Continuar esta hoja',key='evento_recuperar_abrir'):
             # Los cambios de contexto se respaldan por separado antes de escribir.
             if elegido.startswith('GRUPO-'):

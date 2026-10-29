@@ -55,114 +55,129 @@ def _entrada(base,actor):
 
 
     with tab_nueva:
-        try:
-            from services.planeacion_matricula import preparar
-            frame=preparar(s.padron_autorizado())
-        except Exception:st.warning('No se pudo consultar la matrícula. Tus documentos se conservan.');return
-        if frame.empty:st.info('No hay alumnos disponibles en tu asignación.');return
+        _crear(base,actor,docs)
 
-        schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
-        por_escuela={str(e['ID_Escuela']):e for e in schools}
-        escuela_key=base+'_escuela_exacta'
-        if st.session_state.get(escuela_key) not in por_escuela:st.session_state[escuela_key]=next(iter(por_escuela))
 
-        c_esc,c_modo=st.columns([1,1])
-        if len(por_escuela)>1:
-            escuela=c_esc.selectbox('Escuela asignada',list(por_escuela),format_func=lambda i:por_escuela[i]['Nombre_Escuela'],key=escuela_key)
-        else:
-            escuela=list(por_escuela)[0]
-            c_esc.markdown(f"**🏫 Escuela:** {por_escuela[escuela]['Nombre_Escuela']}")
-        school=por_escuela[escuela]
-        from services.planeacion_modalidad import modalidad
-        escolar=frame.loc[frame['ID_Escuela']==school['ID_Escuela']]
-        conteos=[]
-        for grado_matricula, datos_grado in escolar.groupby('Grado',sort=True):
-            grupales=sum(modalidad(r)=='grupal' for r in datos_grado.to_dict('records'))
-            individuales=sum(modalidad(r)=='individual' for r in datos_grado.to_dict('records'))
-            conteos.append(f'{grado_matricula}: {len(datos_grado)} en matrícula · {grupales} grupales · {individuales} individuales')
-        with st.expander('Mi matrícula completa por grado · sin filtrar por modalidad'):
-            for cuenta_grado in conteos:st.caption(cuenta_grado)
+def _crear(base,actor,docs=None):
+    from ui.planeacion_simple import periodo_actual,crear_borrador
+    if docs is None:docs=s.listar()
+    try:
+        from services.planeacion_matricula import preparar
+        frame=preparar(s.padron_autorizado())
+    except Exception:st.warning('No se pudo consultar la matrícula. Tus documentos se conservan.');return
+    if frame.empty:st.info('No hay alumnos disponibles en tu asignación.');return
 
-        especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
-        modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
-        modo_key=base+'_viva_modalidad_v3'
-        inicial='Mi intervención' if especialista else 'Grupal'
-        _conservar_modalidad(modo_key,modos,inicial)
-        modo=c_modo.segmented_control('Modalidad de planeación',modos,key=modo_key,
-            on_change=_conservar_modalidad,args=(modo_key,modos,inicial))
-        tipo='individual' if modo=='Individual' else 'grupal'
-        presentacion=None
-        if tipo=='grupal' and actor['area']=='Aprendizaje':
-            elegido=st.selectbox('Formato para trabajar',['Guía grupal horizontal por alumno y área · Anexo XIX','Planeación trimestral para el subgrupo · Anexo XXIII'],key=base+'_papel_formato_v2')
-            presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
-        ciclo,trimestre=periodo_actual()
-        anual=presentacion=='guia'
-        if anual:st.caption('Planeación grupal anual: una misma hoja editable durante el ciclo. Los documentos trimestrales anteriores se conservan en su repositorio.')
-        incluir=(modo=='Por grado' or not especialista)
+    schools=frame[['ID_Escuela','Nombre_Escuela']].drop_duplicates().to_dict('records')
+    por_escuela={str(e['ID_Escuela']):e for e in schools}
+    escuela_key=base+'_escuela_exacta'
+    if st.session_state.get(escuela_key) not in por_escuela:st.session_state[escuela_key]=next(iter(por_escuela))
 
-        with st.expander('Ajustar ciclo escolar o trimestre',expanded=False):
-            c_c,c_t=st.columns(2)
-            ciclo=c_c.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
-            if not anual:trimestre=c_t.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
-            else:trimestre=1
-            if tipo=='grupal' and modo!='Por grado' and presentacion!='guia':
-                incluir=st.checkbox('Reunir alumnos de atención grupal e individual en este formato',value=not especialista,key=base+'_viva_incluir_v2')
+    c_esc,c_modo=st.columns([1,1])
+    if len(por_escuela)>1:
+        escuela=c_esc.selectbox('Escuela asignada',list(por_escuela),format_func=lambda i:por_escuela[i]['Nombre_Escuela'],key=escuela_key)
+    else:
+        escuela=list(por_escuela)[0]
+        c_esc.markdown(f"**🏫 Escuela:** {por_escuela[escuela]['Nombre_Escuela']}")
+    school=por_escuela[escuela]
+    from services.planeacion_modalidad import modalidad
+    escolar=frame.loc[frame['ID_Escuela']==school['ID_Escuela']]
+    conteos=[]
+    for grado_matricula, datos_grado in escolar.groupby('Grado',sort=True):
+        grupales=sum(modalidad(r)=='grupal' for r in datos_grado.to_dict('records'))
+        individuales=sum(modalidad(r)=='individual' for r in datos_grado.to_dict('records'))
+        conteos.append(f'{grado_matricula}: {len(datos_grado)} en matrícula · {grupales} grupales · {individuales} individuales')
+    with st.expander('Mi matrícula completa por grado · sin filtrar por modalidad'):
+        for cuenta_grado in conteos:st.caption(cuenta_grado)
+
+    especialista=actor['area'] in ('Psicología','Comunicación','Trabajo Social')
+    modos=['Individual','Mi intervención'] if especialista else ['Individual','Grupal','Por grado']
+    modo_key=base+'_viva_modalidad_v3'
+    inicial='Mi intervención' if especialista else 'Grupal'
+    _conservar_modalidad(modo_key,modos,inicial)
+    modo=c_modo.segmented_control('Modalidad de planeación',modos,key=modo_key,
+        on_change=_conservar_modalidad,args=(modo_key,modos,inicial))
+    tipo='individual' if modo=='Individual' else 'grupal'
+    presentacion=None
+    if tipo=='grupal' and actor['area']=='Aprendizaje':
+        elegido=st.selectbox('Formato para trabajar',['Guía grupal horizontal por alumno y área · Anexo XIX','Planeación trimestral para el subgrupo · Anexo XXIII'],key=base+'_papel_formato_v2')
+        presentacion='guia' if elegido.startswith('Guía') else 'trimestral'
+    ciclo,trimestre=periodo_actual()
+    anual=presentacion=='guia'
+    if anual:st.caption('Planeación grupal anual: una misma hoja editable durante el ciclo. Los documentos trimestrales anteriores se conservan en su repositorio.')
+    incluir=(modo=='Por grado' or not especialista)
+
+    with st.expander('Ajustar ciclo escolar o trimestre',expanded=False):
+        c_c,c_t=st.columns(2)
+        ciclo=c_c.number_input('Inicio del ciclo escolar',2020,2040,ciclo,key=base+'_viva_ciclo')
+        if not anual:trimestre=c_t.selectbox('Trimestre',[1,2,3],index=trimestre-1,key=base+'_viva_trim')
+        else:trimestre=1
+        if tipo=='grupal' and modo!='Por grado' and presentacion!='guia':
+            incluir=st.checkbox('Reunir alumnos de atención grupal e individual en este formato',value=not especialista,key=base+'_viva_incluir_v2')
+    if presentacion=='guia':
+        incluir=False
+        st.caption('El Anexo XIX reúne sólo atención grupal. Los alumnos individuales continúan en su planeación individual; sus versiones anteriores se conservan.')
+
+    rows=frame.loc[frame['ID_Escuela']==school['ID_Escuela']].copy() if especialista and modo=='Mi intervención' else viva.opciones_padron(frame,school['ID_Escuela'],tipo,incluir=incluir)
+    if rows.empty:st.info('No hay alumnos con esta modalidad registrada en esta escuela.');return
+
+    grado=grupo=''
+    if tipo=='grupal':
+        left,right=st.columns(2)
+        from services.navegacion_planeaciones import habilitada
+        from ui.seleccion_contextual import elegir
+        opciones_grado=sorted(set(rows['Grado'].astype(str)))
+        opciones_grado=opciones_grado if habilitada() and presentacion=='guia' else ['Todos']+opciones_grado
+        grado_key=base+'_viva_grado_'+school['ID_Escuela']
+        if st.session_state.get(grado_key) not in opciones_grado:st.session_state.pop(grado_key,None)
+        with left:grado=elegir('Grado',opciones_grado,key=grado_key)
+        grados=rows if grado=='Todos' else rows.loc[rows['Grado'].astype(str)==grado]
+        grupo=right.selectbox('Grupo',['Todos']+sorted(set(grados['Grupo'].astype(str))),format_func=lambda g:'Todos los grupos del grado' if g=='Todos' else g or 'Sin letra registrada',key=base+'_viva_grupo_'+school['ID_Escuela']+'_'+grado)
+        if especialista:
+            rows=grados if grupo=='Todos' else grados.loc[grados['Grupo'].astype(str)==grupo]
+        else:rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
+        completa=escolar if grado=='Todos' else escolar.loc[escolar['Grado'].astype(str).eq(grado)]
+        if grupo!='Todos':completa=completa.loc[completa['Grupo'].astype(str).eq(grupo)]
         if presentacion=='guia':
-            incluir=False
-            st.caption('El Anexo XIX reúne sólo atención grupal. Los alumnos individuales continúan en su planeación individual; sus versiones anteriores se conservan.')
+            individuales=sum(modalidad(r)=='individual' for r in completa.to_dict('records'))
+            st.info(f'{len(completa)} alumnos en la matrícula de este grado/grupo · {len(rows)} disponibles en la guía grupal · {individuales} de atención individual continúan en «Individual». No fueron eliminados del padrón.')
+        if modo=='Por grado' and grado=='Todos':
+            st.info('Elige el grado para reunir a sus alumnos. La modalidad registrada no cambia.');return
 
-        rows=frame.loc[frame['ID_Escuela']==school['ID_Escuela']].copy() if especialista and modo=='Mi intervención' else viva.opciones_padron(frame,school['ID_Escuela'],tipo,incluir=incluir)
-        if rows.empty:st.info('No hay alumnos con esta modalidad registrada en esta escuela.');return
+    nombres={str(a['ID_Alumno']):a['Nombre_Completo'] for a in rows.to_dict('records')}
+    selection_key=f'{base}_viva_alumnos_{school["ID_Escuela"]}_{tipo}_{grado}_{grupo}_{incluir}'
+    if tipo=='individual':selection_key+='_multiple'
+    label='Seleccionar todos los alumnos individuales' if tipo=='individual' else 'Seleccionar alumnos del grado' if modo=='Por grado' else 'Seleccionar todo este grupo'
+    if presentacion=='guia' and selection_key not in st.session_state:st.session_state[selection_key]=list(nombres)
+    if presentacion!='guia' and st.button(label,key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
+    from services.navegacion_planeaciones import habilitada
+    if habilitada() and len(nombres)==1:
+        ids=list(nombres);st.caption('Alumno del formato: '+nombres[ids[0]])
+    else:ids=st.multiselect('Alumnos de mi formato',list(nombres),format_func=nombres.get,key=selection_key)
+    if tipo=='individual':st.caption('Se reúnen los antecedentes propios de cada alumno seleccionado.')
 
-        grado=grupo=''
-        if tipo=='grupal':
-            left,right=st.columns(2)
-            grado=left.selectbox('Grado',['Todos']+sorted(set(rows['Grado'].astype(str))),key=base+'_viva_grado_'+school['ID_Escuela'])
-            grados=rows if grado=='Todos' else rows.loc[rows['Grado'].astype(str)==grado]
-            grupo=right.selectbox('Grupo',['Todos']+sorted(set(grados['Grupo'].astype(str))),format_func=lambda g:'Todos los grupos del grado' if g=='Todos' else g or 'Sin letra registrada',key=base+'_viva_grupo_'+school['ID_Escuela']+'_'+grado)
-            if especialista:
-                rows=grados if grupo=='Todos' else grados.loc[grados['Grupo'].astype(str)==grupo]
-            else:rows=viva.opciones_padron(frame,school['ID_Escuela'],tipo,'' if grado=='Todos' else grado,'' if grupo=='Todos' else grupo,incluir)
-            completa=escolar if grado=='Todos' else escolar.loc[escolar['Grado'].astype(str).eq(grado)]
-            if grupo!='Todos':completa=completa.loc[completa['Grupo'].astype(str).eq(grupo)]
-            if presentacion=='guia':
-                individuales=sum(modalidad(r)=='individual' for r in completa.to_dict('records'))
-                st.info(f'{len(completa)} alumnos en la matrícula de este grado/grupo · {len(rows)} disponibles en la guía grupal · {individuales} de atención individual continúan en «Individual». No fueron eliminados del padrón.')
-            if modo=='Por grado' and grado=='Todos':
-                st.info('Elige el grado para reunir a sus alumnos. La modalidad registrada no cambia.');return
+    fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
+    if tipo=='individual' and len(ids)<=1 and actor['area']=='Aprendizaje' and not actor['director']:
+        opcion=st.selectbox('Formato',['Planeación trimestral','Plan de intervención anual'],key=base+'_viva_tipo')
+        if opcion=='Plan de intervención anual':fmt='XXI'
+    elif tipo=='individual' and len(ids)>1 and actor['area']=='Aprendizaje':
+        st.caption('El Plan de intervención anual se elabora por alumno y conserva su IEPP; esta selección abre la planeación trimestral.')
 
-        nombres={str(a['ID_Alumno']):a['Nombre_Completo'] for a in rows.to_dict('records')}
-        selection_key=f'{base}_viva_alumnos_{school["ID_Escuela"]}_{tipo}_{grado}_{grupo}_{incluir}'
-        if tipo=='individual':selection_key+='_multiple'
-        label='Seleccionar todos los alumnos individuales' if tipo=='individual' else 'Seleccionar alumnos del grado' if modo=='Por grado' else 'Seleccionar todo este grupo'
-        if presentacion=='guia' and selection_key not in st.session_state:st.session_state[selection_key]=list(nombres)
-        if presentacion!='guia' and st.button(label,key=selection_key+'_todos'):st.session_state[selection_key]=list(nombres)
-        ids=st.multiselect('Alumnos de mi formato',list(nombres),format_func=nombres.get,key=selection_key)
-        if tipo=='individual':st.caption('Se reúnen los antecedentes propios de cada alumno seleccionado.')
+    nuevo_independiente=False
+    if ids and tipo=='individual':
+        from services.planeacion_recuperacion import equivalentes
+        existentes=equivalentes(docs,actor,fmt,ids,school['ID_Escuela'],ciclo,trimestre,tipo)
+        if existentes:
+            st.info('Ya tienes una planeación para estos alumnos y periodo. Al abrir el formato continuarás el documento guardado, sin crear otra plantilla.')
+            nuevo_independiente=st.checkbox('Necesito crear otro borrador independiente; conservar el anterior',key=base+'_viva_otro_borrador')
+    if presentacion=='guia':st.caption('Un único documento por escuela, grado y alcance elegido. «Todos» reúne A, B y alumnos sin letra en la misma hoja; si ya existe, se continúa sin crear otra copia.')
 
-        fmt='XXV' if actor['area']=='Trabajo Social' else 'XXIII'
-        if tipo=='individual' and len(ids)<=1 and actor['area']=='Aprendizaje' and not actor['director']:
-            opcion=st.selectbox('Formato',['Planeación trimestral','Plan de intervención anual'],key=base+'_viva_tipo')
-            if opcion=='Plan de intervención anual':fmt='XXI'
-        elif tipo=='individual' and len(ids)>1 and actor['area']=='Aprendizaje':
-            st.caption('El Plan de intervención anual se elabora por alumno y conserva su IEPP; esta selección abre la planeación trimestral.')
-
-        nuevo_independiente=False
-        if ids and tipo=='individual':
-            from services.planeacion_recuperacion import equivalentes
-            existentes=equivalentes(docs,actor,fmt,ids,school['ID_Escuela'],ciclo,trimestre,tipo)
-            if existentes:
-                st.info('Ya tienes una planeación para estos alumnos y periodo. Al abrir el formato continuarás el documento guardado, sin crear otra plantilla.')
-                nuevo_independiente=st.checkbox('Necesito crear otro borrador independiente; conservar el anterior',key=base+'_viva_otro_borrador')
-        if presentacion=='guia':st.caption('Un único documento por escuela, grado y alcance elegido. «Todos» reúne A, B y alumnos sin letra en la misma hoja; si ya existe, se continúa sin crear otra copia.')
-
-        if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear',use_container_width=True):
-            try:
-                elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
-                if presentacion=='guia' and elegidos['Grado'].nunique()!=1:
-                    raise ValueError('Elige un grado para el Anexo XIX. En Grupo puedes dejar «Todos» para reunir a sus alumnos en una sola hoja.')
-                crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente,todos_grupos=presentacion=='guia' and grupo=='Todos',anual=anual);st.rerun()
-            except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
+    if st.button('Abrir formato con mis alumnos',disabled=not ids,type='primary',key=base+'_viva_crear',use_container_width=True):
+        try:
+            elegidos=rows.loc[rows['ID_Alumno'].astype(str).isin(ids)]
+            if presentacion=='guia' and elegidos['Grado'].nunique()!=1:
+                raise ValueError('Elige un grado para el Anexo XIX. En Grupo puedes dejar «Todos» para reunir a sus alumnos en una sola hoja.')
+            crear_borrador(base,fmt,ids,int(ciclo),trimestre,'especialista' if especialista and modo=='Mi intervención' else tipo,incluir,presentacion,proponer_apartados=True,nuevo_independiente=nuevo_independiente,todos_grupos=presentacion=='guia' and grupo=='Todos',anual=anual);st.rerun()
+        except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
 
 
 
@@ -358,6 +373,10 @@ def hoja(prefix):
 
 
 def pagina(render_hoja=None):
+    from services.navegacion_planeaciones import habilitada
+    if habilitada() and not st.session_state.get('_navegacion_documentos_anterior'):
+        from ui.mis_planeaciones import pagina as documentos
+        return documentos(render_hoja)
     from ui import planeacion as u
     actor=s.identidad();base=u._prefix()
     from ui.planeacion_pendientes import panel as envios_pendientes
