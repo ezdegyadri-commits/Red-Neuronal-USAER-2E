@@ -35,8 +35,11 @@ if not st.session_state.get("autenticado"):
     login()
     st.stop()
 
-from ui.memoria_actualizacion import preparar_entrada as preparar_memoria
-preparar_memoria('2026-10-29-memoria-v1')
+from ui import memoria_actualizacion
+if getattr(memoria_actualizacion,'VERSION',None)!='2026-10-29-modelos-v2':
+    import importlib
+    importlib.reload(memoria_actualizacion)
+memoria_actualizacion.preparar_entrada('2026-10-29-modelos-v2')
 
 from ui.navegacion_actualizacion import preparar_entrada as preparar_navegacion
 preparar_navegacion()

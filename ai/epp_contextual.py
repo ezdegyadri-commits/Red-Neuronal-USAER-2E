@@ -6,8 +6,10 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import BoundedSemaphore
 from services.epp_modelo import NEE,BAP
 
-_pool=ThreadPoolExecutor(max_workers=2,thread_name_prefix='usaer-epp-ia')
-_slots=BoundedSemaphore(4)
+if '_pool' not in globals():
+    _pool=ThreadPoolExecutor(max_workers=2,thread_name_prefix='usaer-epp-ia')
+if '_slots' not in globals():
+    _slots=BoundedSemaphore(4)
 log=logging.getLogger(__name__)
 
 
@@ -18,7 +20,7 @@ def configuracion():
         try:return st.secrets.get(k,'')
         except Exception:return ''
     return {'gemini':secreto('GEMINI_API_KEY'),'openai':secreto('OPENAI_API_KEY') or st.session_state.get('relatoria_openai_key',''),
-        'modelos':list(dict.fromkeys([modelo_configurado(),'gemini-2.5-pro']))}
+        'modelos':[modelo_configurado()]}
 
 
 def enviar(solicitud,config):
@@ -45,6 +47,7 @@ def leer_visual(data,mime,config):
     """Lee resultados ya aplicados; nunca aplica baremos ni corrige reactivos."""
     if not config.get('gemini'):raise RuntimeError('La lectura visual requiere la conexión Gemini configurada.')
     from google import genai
+    from ai.modelos_gemini import generar as generar_disponible
     from google.genai import types
     cli=genai.Client(api_key=config['gemini'],http_options=types.HttpOptions(timeout=35000,retry_options=types.HttpRetryOptions(attempts=1)))
     prompt=('Transcribe y sintetiza únicamente los resultados y observaciones legibles de este informe de evaluación ya aplicado. '
@@ -55,7 +58,7 @@ def leer_visual(data,mime,config):
     try:
         for model in config['modelos'][:2]:
             try:
-                r=cli.models.generate_content(model=model,contents=[prompt,types.Part.from_bytes(data=data,mime_type=mime)],config={
+                r=generar_disponible(cli,model=model,api_key=config['gemini'],contents=[prompt,types.Part.from_bytes(data=data,mime_type=mime)],config={
                     'temperature':0,'response_mime_type':'application/json','response_schema':{'type':'object','required':['sintesis'],'properties':{'sintesis':{'type':'string'}}},'max_output_tokens':4500})
                 value=json.loads(r.text or '{}').get('sintesis')
                 if not isinstance(value,str) or not value.strip() or len(value)>12000:raise ValueError('Lectura incompleta.')
@@ -105,13 +108,14 @@ Usa menos de 700 caracteres por apartado y máximo 10 NEE y 8 BAP para una salid
         return validar(json.loads(raw),solicitud)
     if config.get('gemini'):
         from google import genai
+        from ai.modelos_gemini import generar as generar_disponible
         from google.genai import types
         cli=genai.Client(api_key=config['gemini'],http_options=types.HttpOptions(timeout=35000,retry_options=types.HttpRetryOptions(attempts=1)))
         try:
             for model in config['modelos'][:2]:
                 if time.monotonic()-inicio>65:break
                 try:
-                    response=cli.models.generate_content(model=model,contents=prompt,config={'temperature':0.2,'response_mime_type':'application/json','response_schema':schema,'max_output_tokens':12000})
+                    response=generar_disponible(cli,model=model,api_key=config['gemini'],contents=prompt,config={'temperature':0.2,'response_mime_type':'application/json','response_schema':schema,'max_output_tokens':12000})
                     return parse(response.text or '')
                 except Exception as exc:
                     code=getattr(exc,'code',None);errores.append(type(exc).__name__)

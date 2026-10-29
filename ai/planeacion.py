@@ -17,8 +17,10 @@ MODEL = os.environ.get('PLANEACION_GEMINI_MODEL', DEFAULT_MODEL)
 MODELOS_HEREDADOS = {'gemini-2.5-flash','gemini-2.5-flash-preview-09-2025',
                     'gemini-3.1-flash-lite-preview'}
 logger = logging.getLogger(__name__)
-_progreso = ContextVar('planeacion_ia_progreso', default=None)
-_conexion = ContextVar('planeacion_ia_conexion', default=None)
+if '_progreso' not in globals():
+    _progreso = ContextVar('planeacion_ia_progreso', default=None)
+if '_conexion' not in globals():
+    _conexion = ContextVar('planeacion_ia_conexion', default=None)
 
 
 @contextmanager
@@ -84,7 +86,7 @@ def _fallo(exc, modelo=None):
     if codigo in (401, 403):
         return 'La conexión de IA requiere revisión de Dirección. Tu borrador se conserva.'
     if codigo == 404:
-        return 'Google no encontró el modelo '+str(modelo or modelo_configurado())+' para esta conexión. No es un error del borrador; Dirección debe comprobar el acceso al modelo con la clave del proyecto.'
+        return 'No se encontró un modelo de redacción disponible para esta conexión, incluso al consultar el catálogo de Google. Tu borrador se conserva; puedes seguir editando. Dirección puede revisar la conexión.'
     if codigo in (500, 502, 503):
         return 'El servicio de IA está ocupado. Tu borrador se conserva.'
     if codigo == 504 or isinstance(exc, TimeoutError) or 'Timeout' in type(exc).__name__:
@@ -185,9 +187,6 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
             config['thinking_config'] = {'thinking_budget': 0}
 
         candidatos = [modelo]
-        for alt in ['gemini-2.5-pro', 'gemini-3.8-flash', 'gemini-3.5-flash-lite']:
-            if alt not in candidatos:
-                candidatos.append(alt)
 
         response = None
         ultimo_exc = None
@@ -197,7 +196,8 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
             for intento in range(2):
                 try:
                     notificar_progreso('solicitando' if not intento else 'reintento')
-                    response = cli.models.generate_content(model=mod_actual, contents=prompt, config=config)
+                    from ai.modelos_gemini import generar as generar_disponible
+                    response = generar_disponible(cli,model=mod_actual,api_key=key,contents=prompt,config=config)
                     ultimo_mod = mod_actual
                     break
                 except Exception as exc:
