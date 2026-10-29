@@ -352,3 +352,15 @@ console.log('Editor: escritura no bloqueante, sincronización por área, respald
   assert.equal(f.nodes.get('celda-c0').innerText,'Captura durante el corte');
   f.tick(4000);assert.equal(f.events().at(-1).cambios.c0,'Captura durante el corte');
 }
+
+
+// Volver a la lista antes del debounce entrega el texto, incluso en transporte nativo.
+for (const native of [false, true]) {
+  const f=fixture(undefined,undefined,native);f.render(hoja());f.input('Texto escrito justo antes de volver');
+  let stopped=false;
+  f.listeners.click({target:{closest:()=>({textContent:'← Mis planeaciones'})},preventDefault(){stopped=true},stopImmediatePropagation(){}});
+  assert.equal(stopped,true);assert.equal(f.events().length,1);
+  assert.equal(f.events()[0].accion,'inicio');
+  assert.equal(f.events()[0].cambios.c0,'Texto escrito justo antes de volver');
+  assert.ok(f.cache.size);
+}

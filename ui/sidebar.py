@@ -62,6 +62,13 @@ def obtener_bloques_menu(menu_permitido):
     return bloques
 
 
+def titulo_modulo(item):
+    from services.navegacion_planeaciones import habilitada
+    if item=='Planeación e intervención' and habilitada() and not st.session_state.get('_navegacion_documentos_anterior'):
+        return 'Mis planeaciones'
+    return TITULOS_SIMPLIFICADOS.get(item,item)
+
+
 def render_sidebar_navigation(menu_permitido):
     """Renderiza el menú lateral táctil, accesible y categorizado con 0 radio buttons."""
     if "navegacion_principal" not in st.session_state or st.session_state["navegacion_principal"] not in menu_permitido:
@@ -79,7 +86,7 @@ def render_sidebar_navigation(menu_permitido):
             for item in items_categoria:
                 es_activo = (item == pagina_actual)
                 ico = ICONOS_MENU.get(item, "◈")
-                titulo = TITULOS_SIMPLIFICADOS.get(item, item)
+                titulo = titulo_modulo(item)
                 st.button(
                     f"{ico}  {titulo}",
                     key=f"nav_btn_{item}",

@@ -61,7 +61,7 @@ def _estado(base):
 def panel(prefix):
     actor=s.identidad()
     st.subheader('Continuar la planeación del equipo')
-    st.caption('Elige tu escuela y grupo. Escribe en tu columna de la misma hoja iniciada por apoyo; las demás áreas conservan sus aportes.')
+    st.caption('Escribe en tu columna de la misma hoja iniciada por apoyo; las demás áreas conservan sus aportes.' if st.session_state.get(prefix+'_abierto') else 'Elige tu escuela y grupo. Escribe en tu columna de la misma hoja iniciada por apoyo; las demás áreas conservan sus aportes.')
     if st.button('Actualizar planeaciones del equipo',key=prefix+'_actualizar_lista'):
         s.refrescar()
     try:
@@ -94,6 +94,9 @@ def panel(prefix):
             hoja_compartida(prefix,doc)
             from ui.guardado_asincrono import acuses
             acuses(prefix+'_'+doc['id']+'_'+actor['area'],aporte=True)
+            return
+        if not es_guia(doc):
+            tabla_documento(prefix,doc)
             return
         if es_guia(doc) and actor['area']=='Aprendizaje':
             try:s.autorizar(doc,True)
@@ -211,6 +214,12 @@ def panel(prefix):
             if c_op1.button('Abrir Anexo XIX compartido en hoja completa',key=prefix+'_abrir'):
                 st.session_state[prefix+'_abierto']=did;st.rerun()
             c_op2.caption('O edita tus aportaciones directamente en la tabla ágil de abajo:')
+    tabla_documento(prefix,doc)
+
+
+def tabla_documento(prefix,doc):
+    actor=s.autorizar(doc)
+    did=doc['id']
     for area,aporte in doc['metadatos'].get('aportaciones_equipo',{}).items():
         with st.expander(area+' · '+aporte['autor']):
             st.dataframe(pd.DataFrame(aporte['filas']),hide_index=True)

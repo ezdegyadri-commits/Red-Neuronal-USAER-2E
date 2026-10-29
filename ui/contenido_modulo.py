@@ -1,7 +1,8 @@
 """Cada módulo actualiza su contenido sin reconstruir la cabecera global."""
+NAV_VERSION='2026-10-28-documentos-v1'
 import streamlit as st
 from services.expedientes import alumnos_visibles
-from ui.sidebar import TITULOS_SIMPLIFICADOS
+from ui.sidebar import titulo_modulo as nombre_modulo
 
 
 @st.fragment
@@ -30,7 +31,7 @@ def mostrar(page,rol,escuelas,menu):
         with c_back:
             st.button("← Centro de Control", key="btn_volver_al_hub", use_container_width=True,on_click=volver_al_inicio)
         with c_bc:
-            titulo_modulo = TITULOS_SIMPLIFICADOS.get(page, page)
+            titulo_modulo = nombre_modulo(page)
             st.markdown(
                 f"<div class='module-breadcrumb'>"
                 f"<span>USAER 02-E</span>"
