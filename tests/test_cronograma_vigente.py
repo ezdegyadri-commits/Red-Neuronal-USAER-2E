@@ -14,7 +14,6 @@ class CronogramaVigenteTest(unittest.TestCase):
     def test_month_save_has_no_drive_warning_and_renders_latest_pdf(self):
         app = AppTest.from_file(str(Path(__file__).parent / "fixtures" / "cronograma_guardar_app.py")).run()
         self.assertFalse(app.exception)
-        next(b for b in app.button if b.label == "Editar cronograma").click().run()
         next(b for b in app.button if b.label == "Guardar cambios y generar PDF").click().run()
         self.assertFalse(app.exception)
         self.assertTrue(app.success)
@@ -75,15 +74,13 @@ class CronogramaVigenteTest(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state["test_dias"], {})
 
-    def test_editing_is_enabled_with_one_button_for_entire_month(self):
+    def test_own_saved_month_is_editable_without_mode_switch(self):
         app = AppTest.from_file(str(Path(__file__).parent / "fixtures" / "cronograma_guardar_app.py")).run()
         fields = [w for w in app.selectbox if w.label == "Escuela o junta"]
-        self.assertTrue(all(w.disabled for w in fields))
-        self.assertEqual(len([b for b in app.button if b.label == "Editar cronograma"]), 1)
-        self.assertFalse(any(b.label == "Editar" for b in app.button))
-        next(b for b in app.button if b.label == "Editar cronograma").click().run()
-        self.assertFalse(app.exception)
-        self.assertTrue(all(not w.disabled for w in app.selectbox if w.label == "Escuela o junta"))
+        self.assertTrue(fields)
+        self.assertTrue(all(not w.disabled for w in fields))
+        self.assertFalse(any(b.label == "Editar cronograma" for b in app.button))
+        self.assertFalse(next(b for b in app.button if b.label == "Guardar cambios y generar PDF").disabled)
 
     def test_history_can_open_months_older_than_twelve_months(self):
         app = AppTest.from_file(str(Path(__file__).parent / "fixtures" / "cronograma_guardar_app.py")).run()

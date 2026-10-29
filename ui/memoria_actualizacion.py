@@ -3,14 +3,14 @@ import importlib
 import sys
 import threading
 
-VERSION='2026-10-29-modelos-v2'
+VERSION='2026-10-29-cronogramas-v3'
 _lock=threading.RLock()
 _aplicada=None
 _MODULOS=('ai.planeacion','ai.documento_json','ai.epp_contextual','services.planeacion','services.memoria_pedagogica','ai.planeacion_prompt',
           'ai.planeacion_completa','services.planeacion_generacion',
           'services.planeacion_chat_contextual','services.planeacion_papel',
           'ui.planeacion_memoria','ui.planeacion_chat','ui.planeacion_generacion',
-          'ui.planeacion_asistente','ui.planeacion_papel')
+          'ui.planeacion_asistente','ui.planeacion_papel','ui.cronogramas')
 
 
 def preparar_entrada(version):

@@ -494,12 +494,10 @@ def cronogramas_page():
 
     st.caption("Escuela y actividad en cada día. Rosa: inhábil · Amarillo: CTE.")
     clave_edicion = f"{editor_key}_editable"
-    if clave_edicion not in st.session_state:
-        st.session_state[clave_edicion] = not bool(agenda_guardada)
-    if st.button("Editar cronograma", key=f"{editor_key}_editar", type="primary",
-                 width="stretch", disabled=st.session_state[clave_edicion]):
-        st.session_state[clave_edicion] = True
-        st.rerun()
+    # Esta vista siempre corresponde al cronograma del perfil autorizado.
+    # Un mes publicado y una bandera antigua no convierten su agenda en lectura.
+    st.session_state[clave_edicion] = True
+    st.caption(f"Puedes editar directamente · {len(perfil['escuelas'])} escuelas disponibles. Los cambios se publican al guardar.")
     if st.button("Actualizar calendario sin perder mi borrador", key=f"{editor_key}_recargar"):
         cargar_agenda.clear()
         st.session_state.pop(clave_agenda, None)
