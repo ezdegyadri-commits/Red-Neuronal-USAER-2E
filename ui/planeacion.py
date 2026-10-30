@@ -333,7 +333,7 @@ def _open(prefix,doc):
         for suffix in ('_estado_pendiente','_retry_at','_last_attempt','_filas','_filas_retiradas','_obs',
                        '_guardado_diagnostico',
                        '_intento','_intervalo','_papel_nonce','_papel_aceptado',
-                       '_papel_rechazado','_papel_error','_papel_legacy'):
+                       '_papel_rechazado','_papel_error','_papel_legacy','_papel_recibido'):
             st.session_state.pop(prefix+suffix,None)
     from services.planeacion_generacion import prellenar
     from services.planeacion_limpieza import normalizar

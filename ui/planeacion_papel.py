@@ -75,6 +75,7 @@ def recibir_edicion(prefix,event):
         st.session_state[prefix+'_papel_nonce']=event['nonce']
         if nuevo!=doc:u._open(prefix,nuevo)
         if nuevo!=doc or event['accion']=='guardar':u._persist(prefix,automatic=event['accion']=='autoguardar',background=True)
+        st.session_state[prefix+'_papel_recibido']=event['nonce']
         if not st.session_state.get(prefix+'_pending'):
             st.session_state[prefix+'_papel_aceptado']=event['nonce']
         st.session_state.pop(prefix+'_papel_rechazado',None)
@@ -176,6 +177,7 @@ def hoja(prefix,volver=None):
     event=editor(hoja=papel.hoja(doc),guardado=doc.get('guardado_en','') if not st.session_state.get(prefix+'_pending') else '',
         aceptado=st.session_state.pop(prefix+'_papel_legacy',False),
         aceptado_nonce=st.session_state.get(prefix+'_papel_aceptado',''),
+        recibido_nonce=st.session_state.get(prefix+'_papel_recibido',''),
         rechazado=st.session_state.get(prefix+'_papel_rechazado',''),
         error=st.session_state.get(prefix+'_papel_error',''),key=prefix+'_papel_'+doc['id'],default=None,
         error_guardado_nonce=st.session_state.get(prefix+'_io_error_nonce',''),
@@ -189,6 +191,7 @@ def hoja(prefix,volver=None):
             estado='ENVIADO' if action=='enviar' and not u.servicio.revisar(nuevo) else 'BORRADOR'
             if nuevo!=doc:
                 u._open(prefix,nuevo);u._persist(prefix,estado,automatic=action=='autoguardar',background=True)
+            st.session_state[prefix+'_papel_recibido']=event['nonce']
             st.session_state.pop(prefix+'_papel_rechazado',None)
             st.session_state.pop(prefix+'_papel_error',None)
             if action not in ('guardar','autoguardar','pdf','enviar','agregar','retirar','apartados','incorporar_nee','inicio','equipo'):st.session_state[prefix+'_papel_panel']=action

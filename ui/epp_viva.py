@@ -76,6 +76,7 @@ def recibir(p,event):
         st.session_state[p+'_nonce']=nonce
         st.session_state.pop(p+'_rechazado',None)
         if guardar(p,manual=event['accion']!='autoguardar',background=True):st.session_state[p+'_aceptado']=nonce
+        st.session_state[p+'_recibido']=nonce
         action=event['accion']
         if action=='inicio':st.session_state[p+'_volver']=True
         elif action in ('antecedentes','ia','opciones','pdf'):st.session_state[p+'_panel']=action
@@ -120,6 +121,7 @@ def hoja(p):
     event=editor(key=p+'_papel',hoja=spec,on_edicion=lambda e:recibir(p,e),
         guardado='' if st.session_state.get(p+'_pending') else max((r.get('fecha','') for r in doc['partes'].values()),default=''),
         aceptado_nonce=st.session_state.get(p+'_aceptado',''),rechazado=st.session_state.get(p+'_rechazado',''),error=d.get('causa',''),
+        recibido_nonce=st.session_state.get(p+'_recibido',''),
         error_guardado_nonce=st.session_state.get(p+'_io_error_nonce',''),error_guardado=d.get('causa',''))
     if event and event.get('nonce')!=st.session_state.get(p+'_nonce'):
         recibir(p,event)
