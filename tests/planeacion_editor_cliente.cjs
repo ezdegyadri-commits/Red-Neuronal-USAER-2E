@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '../ui/planeacion_papel_component/index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
-function fixture(backup, referrer='https://usaer.test/', native=false) {
+function fixture(backup, referrer='https://usaer.test/', native=false, source=script) {
   const nodes = new Map(), listeners = {}, timers = new Map(), messages = [], targets = [], cache = new Map(backup || []);
   let sequence = 0;
   class Element {
@@ -45,10 +45,10 @@ function fixture(backup, referrer='https://usaer.test/', native=false) {
     host={querySelector: selector=>nodes.get(selector.slice(1)),activeElement:null};
     component={parentElement:host,data:{},setStateValue:(name,value)=>messages.push({type:'streamlit:setComponentValue',value})};
     const adapter=fs.readFileSync(path.join(__dirname,'../ui/planeacion_papel_component/native.js'),'utf8')
-      .replace('export default function mount','function mount').replace('/* USAER_RENDERER */',script);
+      .replace('export default function mount','function mount').replace('/* USAER_RENDERER */',source);
     vm.runInNewContext(adapter+'\nthis.mountNative=mount;',context);
     cleanup=context.mountNative(component);cleanups.push(cleanup);
-  }else vm.runInNewContext(script, context);
+  }else vm.runInNewContext(source, context);
   function render(hoja, extra = {}, source = parent, origin='https://usaer.test') {
     if(native){component.data={hoja,...extra};cleanup=context.mountNative(component);cleanups.push(cleanup)}
     else listeners.message({source, origin, data:{type:'streamlit:render', args:{hoja,...extra}}});
@@ -197,9 +197,9 @@ for(const referrer of ['', 'https://contenedor.distinto.test/']) {
 {
   const f=fixture();f.render(hoja());f.input('Antes de salir');
   f.tools.children.find(b=>b.textContent==='Regresar al inicio del módulo').click();
-  assert.equal(f.events()[0].accion,'inicio');
+  assert.equal(f.events()[0].accion,'guardar');
   assert.equal(f.events()[0].cambios.c0,'Antes de salir');
-  assert.equal(f.nodes.get('celda-c0').contentEditable,'false');
+  assert.equal(f.nodes.get('celda-c0').contentEditable,'true');
   f.tick(15000);assert.equal(f.events()[1].nonce,f.events()[0].nonce);
   assert.ok(f.cache.has('usaer-hoja:ficticio'));
 }
@@ -360,7 +360,36 @@ for (const native of [false, true]) {
   let stopped=false;
   f.listeners.click({target:{closest:()=>({textContent:'← Mis planeaciones'})},preventDefault(){stopped=true},stopImmediatePropagation(){}});
   assert.equal(stopped,true);assert.equal(f.events().length,1);
-  assert.equal(f.events()[0].accion,'inicio');
+  assert.equal(f.events()[0].accion,'guardar');
   assert.equal(f.events()[0].cambios.c0,'Texto escrito justo antes de volver');
   assert.ok(f.cache.size);
 }
+
+// Un recibo libera el transporte, pero no declara persistencia ni borra el respaldo.
+for (const native of [false, true]) {
+  const f=fixture(undefined,undefined,native);f.render(hoja());f.input('Pendiente en Sheets');
+  const back=f.tools.children.find(b=>b.textContent==='Regresar al inicio del módulo');back.click();
+  const sent=f.events()[0];
+  assert.equal(sent.accion,'guardar');
+  assert.equal(f.nodes.get('celda-c0').contentEditable,'true');
+  f.render(hoja('Pendiente en Sheets','recibido'),{recibido_nonce:sent.nonce,guardado:''});
+  assert.equal(f.events().at(-1).accion,'inicio');
+  const backup=JSON.parse([...f.cache.values()][0]);
+  assert.ok(Object.values(backup.recibidos).some(c=>c.valor==='Pendiente en Sheets'));
+  assert.ok(!f.status.textContent.includes('Guardado confirmado'));
+}
+
+// La escritura posterior al envío se entrega antes de abandonar la hoja.
+{
+  const f=fixture();f.render(hoja());f.input('Primero');
+  f.tools.children.find(b=>b.textContent==='Regresar al inicio del módulo').click();
+  const first=f.events()[0];f.input('Más reciente');
+  f.render(hoja('Primero','r2'),{recibido_nonce:first.nonce,guardado:''});
+  const second=f.events().at(-1);
+  assert.equal(second.accion,'guardar');assert.equal(second.cambios.c0,'Más reciente');
+  f.render(hoja('Más reciente','r3'),{recibido_nonce:second.nonce,guardado:''});
+  assert.equal(f.events().at(-1).accion,'inicio');
+  assert.ok(f.cache.size);
+}
+
+module.exports={fixture,hoja,script};

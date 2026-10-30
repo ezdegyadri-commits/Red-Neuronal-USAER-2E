@@ -209,12 +209,11 @@ def _expediente_individual(df):
                 if col in exp["anexo3"].columns
             ]
             st.dataframe(exp["anexo3"][columnas_resumen], width="stretch", hide_index=True)
-            vista_a3 = anexo3_html(a, exp["anexo3"])
-            with st.expander("Vista previa oficial del Anexo III", expanded=True):
-                st.html(vista_a3)
+            if st.toggle("Ver vista previa oficial del Anexo III", key=f"exp_a3_preview_{id_alumno}"):
+                st.html(anexo3_html(a, exp["anexo3"]))
             st.download_button(
                 "Descargar Anexo III en PDF carta",
-                anexo3_pdf(a, exp["anexo3"]),
+                descarga_diferida(anexo3_pdf, a, exp["anexo3"]),
                 f"Anexo_III_{id_alumno}.pdf",
                 "application/pdf",
                 width="stretch",
@@ -222,7 +221,7 @@ def _expediente_individual(df):
             )
             st.download_button(
                 "Descargar Anexo III en HTML imprimible",
-                vista_a3,
+                descarga_diferida(anexo3_html, a, exp["anexo3"]),
                 f"Anexo_III_{id_alumno}.html",
                 "text/html",
                 width="stretch",
@@ -240,11 +239,11 @@ def _expediente_individual(df):
                 ) if col in exp["anexo4"].columns
             ]
             st.dataframe(exp["anexo4"][columnas_resumen], width="stretch", hide_index=True)
-            with st.expander("Vista previa oficial del Anexo IV", expanded=True):
+            if st.toggle("Ver vista previa oficial del Anexo IV", key=f"exp_a4_preview_{id_alumno}"):
                 st.html(anexo4_html(a, exp["anexo4"]))
             st.download_button(
                 "Descargar Anexo IV en PDF carta",
-                anexo4_pdf(a, exp["anexo4"]),
+                descarga_diferida(anexo4_pdf, a, exp["anexo4"]),
                 f"Anexo_IV_{id_alumno}.pdf",
                 "application/pdf",
                 width="stretch",
@@ -265,7 +264,7 @@ def _expediente_individual(df):
                 if col in exp["anexo5"].columns
             ]
             st.dataframe(exp["anexo5"][columnas_resumen], width="stretch", hide_index=True)
-            with st.expander("Vista previa oficial del Anexo V", expanded=True):
+            if st.toggle("Ver vista previa oficial del Anexo V", key=f"exp_a5_preview_{id_alumno}"):
                 st.html(anexo5_html(a, exp["anexo5"]))
             st.download_button(
                 "Descargar Anexo V en PDF carta",
@@ -277,7 +276,7 @@ def _expediente_individual(df):
             )
             st.download_button(
                 "Descargar Anexo V imprimible",
-                anexo5_html(a, exp["anexo5"]),
+                descarga_diferida(anexo5_html, a, exp["anexo5"]),
                 f"Anexo_V_{id_alumno}.html",
                 "text/html",
                 width="stretch",
