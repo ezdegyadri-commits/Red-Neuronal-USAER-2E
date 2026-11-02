@@ -52,7 +52,11 @@ def guardar(p,manual=False,background=False):
             st.session_state[p+'_diagnostico']=d
             st.session_state[p+'_reintentar_en']=time.monotonic()+max(15,d['espera']) if d['espera'] else float('inf')
             st.session_state[p+'_pending']=True
+            from ui.guardado_seguro import avisar
+            avisar(p)
             return False
+    from ui.guardado_seguro import confirmado
+    confirmado(p)
     st.session_state[p+'_pending']=False
     st.session_state[p+'_agrupar_hasta']=time.monotonic()+30
     st.session_state.pop(p+'_huella_pendiente',None)
@@ -77,6 +81,7 @@ def recibir(p,event):
         st.session_state.pop(p+'_rechazado',None)
         if guardar(p,manual=event['accion']!='autoguardar',background=True):st.session_state[p+'_aceptado']=nonce
         st.session_state[p+'_recibido']=nonce
+        if st.session_state.get(p+'_conexion_error'):return
         action=event['accion']
         if action=='inicio':st.session_state[p+'_volver']=True
         elif action in ('antecedentes','ia','opciones','pdf'):st.session_state[p+'_panel']=action

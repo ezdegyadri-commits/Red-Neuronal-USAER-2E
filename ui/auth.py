@@ -50,12 +50,13 @@ def _login_content():
             logging.getLogger(__name__).warning('autenticacion_lectura_error tipo=%s',type(exc).__name__)
             st.warning('La conexión de acceso está temporalmente ocupada. Vuelve a intentar; no se modificó tu cuenta.')
             return
-        match = None
-        if not df.empty:
-            for _, r in df.iterrows():
-                if hmac.compare_digest(str(r.get("Usuario", "")), user) and hmac.compare_digest(str(r.get("Password", "")), password):
-                    match = r
-                    break
+        try:
+            from services.autenticacion import buscar_usuario
+            match=buscar_usuario(df,user,password)
+        except Exception as exc:
+            logging.getLogger(__name__).warning('autenticacion_catalogo_error tipo=%s',type(exc).__name__)
+            st.error('No se pudo comprobar el acceso. Conserva tu usuario y vuelve a intentar.')
+            return
         if match is None:
             st.error("Usuario o contraseña incorrectos.")
         else:

@@ -43,6 +43,8 @@ def guardar(p,manual=False):
                 if local==sent:cola.pop(area,None)
                 else:cola[area]={'base':deepcopy(saved['contenido']),'revision':saved['revision']}
             if error:raise error
+            from ui.guardado_seguro import confirmado
+            confirmado(p)
             state.pop(p+'_diagnostico',None);state.pop(p+'_reintentar_en',None);state.pop(p+'_io_error_nonce',None);state.pop(p+'_fallos_io',None)
             state[p+'_pending']=bool(cola)
             if not cola:
@@ -55,6 +57,8 @@ def guardar(p,manual=False):
             detalle=programar(state,p,diagnostico(exc),fecha='_reintentar_en');state[p+'_diagnostico']=detalle
             state[p+'_io_error_nonce']=state.get(p+'_nonce','')
             state[p+'_pending']=bool(cola)
+            from ui.guardado_seguro import avisar
+            avisar(p)
             if _en_callback_fragmento():
                 state[p+'_toast_pendiente']='No se confirmó toda la EPP. Tu captura se conserva; consulta el aviso.'
             else:
@@ -70,6 +74,8 @@ def guardar(p,manual=False):
     except Exception as exc:
         state[p+'_diagnostico']=programar(state,p,diagnostico(exc),fecha='_reintentar_en')
         state[p+'_io_error_nonce']=state.get(p+'_nonce','')
+        from ui.guardado_seguro import avisar
+        avisar(p)
     return False
 
 
@@ -77,6 +83,8 @@ def guardar(p,manual=False):
 def acuses(p):
     if st.session_state.get(p+'_toast_pendiente') and not _en_callback_fragmento():
         st.toast(st.session_state.pop(p+'_toast_pendiente'),icon='⚠️')
-    if p+'_trabajo_io' not in st.session_state:return
-    guardar(p)
-    if p+'_trabajo_io' not in st.session_state:st.rerun(scope='app')
+    if p+'_trabajo_io' not in st.session_state:
+        from ui.guardado_seguro import mostrar
+        mostrar(p);return
+    confirmado=guardar(p)
+    if confirmado and p+'_trabajo_io' not in st.session_state:st.rerun(scope='app')

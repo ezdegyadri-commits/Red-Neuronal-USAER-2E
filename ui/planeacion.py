@@ -65,9 +65,8 @@ def _actualizar_materiales(prefix,current):
     materiales=fuentes_materiales(current)
     current['metadatos']['fuentes']=fuentes+materiales
     current=_resumen_complementos(current)
-    _open(prefix,current);_persist(prefix);st.rerun()
-
-
+    _open(prefix,current)
+    if _persist(prefix):st.rerun()
 def _unique_widget_key(base_key: str) -> str:
     """Garantiza llaves únicas por pasada de renderizado sin perder estabilidad en reruns."""
     try:
@@ -205,7 +204,8 @@ def _curriculo(prefix,doc):
                     previous=updated['metadatos'].get('resumen_educativo','')
                     updated['metadatos']['resumen_educativo']=previous[:8000]+'\n\n'+local_resumen[:3500]
                 updated=_resumen_complementos(updated)
-                _open(prefix,updated);_persist(prefix);st.rerun()
+                _open(prefix,updated)
+                if _persist(prefix):st.rerun()
         for source in FUENTES_BASE:st.link_button(source['organismo']+' · '+source['titulo'],source['url'])
 
 
@@ -244,6 +244,8 @@ def _persist(prefix,estado=None,automatic=False,background=False):
     try:
         saved=servicio.guardar(doc,estado)
         st.session_state[prefix+'_doc']=saved
+        from ui.guardado_seguro import confirmado
+        confirmado(prefix)
         st.session_state.pop(prefix+'_error',None)
         st.session_state.pop(prefix+'_guardado_diagnostico',None)
         st.session_state.pop(prefix+'_pdf',None)
@@ -254,12 +256,16 @@ def _persist(prefix,estado=None,automatic=False,background=False):
         st.session_state.pop(prefix+'_retry_at',None)
         return True
     except GuardadoPendiente as exc:
+        from ui.guardado_seguro import avisar
+        avisar(prefix)
         from services.planeacion_guardado_estado import diagnostico
         st.session_state[prefix+'_guardado_diagnostico']=diagnostico(exc)
         st.session_state[prefix+'_retry_at']=time.monotonic()+exc.espera
         st.session_state[prefix+'_error']=str(exc)
         return False
     except Exception as exc:
+        from ui.guardado_seguro import avisar
+        avisar(prefix)
         from services.planeacion_guardado_estado import diagnostico
         st.session_state[prefix+'_guardado_diagnostico']=diagnostico(exc)
         status=getattr(getattr(exc,'response',None),'status_code',None)
@@ -496,9 +502,8 @@ def _ai(prefix,doc,revision=False):
                 else:
                     tables['dosificacion'].append({'Contextos':proposal.get('contexto','Aula regular'),'Actividades':proposal['actividad'],'Fecha':proposal.get('temporalidad',''),'Recursos':proposal.get('recursos','')})
                 current['metadatos'].setdefault('Propuestas IA revisadas',[]).append(proposal)
-                _open(prefix,current);_persist(prefix);st.rerun()
-
-
+                _open(prefix,current)
+                if _persist(prefix):st.rerun()
 def _editor_contenido(prefix):
     doc=st.session_state[prefix+'_doc']; servicio.autorizar(doc,True)
     if doc['metadatos'].get('version_contexto')!=servicio.VERSION_CONTEXTO:
@@ -512,11 +517,11 @@ def _editor_contenido(prefix):
     with col_actions:
         b1,b2=st.columns(2)
         if b1.button('💾 Guardar',key=prefix+'_top_save',help='Guardar borrador inmediatamente'):
-            _persist(prefix);st.rerun()
+            if _persist(prefix):st.rerun()
         if b2.button('✖ Cerrar',key=prefix+'_top_close',help='Cerrar este documento para seleccionar otro alumno o escuela'):
-            if st.session_state.get(prefix+'_pending'):
-                _persist(prefix)
-            st.session_state.pop(prefix+'_doc',None);st.rerun()
+            cerrar=not st.session_state.get(prefix+'_pending') or _persist(prefix)
+            if cerrar:
+                st.session_state.pop(prefix+'_doc',None);st.rerun()
     if doc['metadatos'].get('aviso_contexto'):st.caption(doc['metadatos']['aviso_contexto'])
     if not doc['datos'].get('CCT'):_text(prefix,'datos','CCT','CCT no registrado: verifica y completa')
     alumnos_col,fuentes_col,estado_col=st.columns(3)
@@ -552,7 +557,8 @@ def _editor_contenido(prefix):
                 filas=rows.fillna('').to_dict('records')
                 for i,row in enumerate(filas):row['ID_Alumno']=guia['filas'][i]['ID_Alumno']
                 current['metadatos']['guia_grupal_manual']={'maestro_grupo':maestro,'filas':filas,'as':as_rows}
-                _open(prefix,current);_persist(prefix);st.rerun()
+                _open(prefix,current)
+                if _persist(prefix):st.rerun()
     conocer,planear,revisar=st.tabs(['1. Conocer y elegir','2. Preparar actividades','3. Revisar y compartir'])
     with conocer:
         st.caption('Revisa el expediente, elige qué aprendizaje trabajarás y añade materiales solo si los necesitas. Los datos del alumno ya están completos cuando existen en el padrón.')
@@ -586,12 +592,14 @@ def _editor_contenido(prefix):
                                 current['tablas']['barreras'].append({'Barreras para el Aprendizaje y la Participación':txt,'Apoyos y/o ajustes razonables':''})
                             else:
                                 current['tablas']['necesidades'].append({'NEE':txt,'Aprendizajes y/u Objetivos':'','Descriptor de Logro':'','Apoyos o ajustes':'','Temporalidad':'','Seguimiento':''})
-                            _open(prefix,current);_persist(prefix);st.rerun()
+                            _open(prefix,current)
+                            if _persist(prefix):st.rerun()
                 if not sources:st.caption('No hay evidencia vinculada disponible. No se inferirán necesidades o resultados.')
                 elif st.button('Preparar resumen educativo para revisar',key=prefix+'_summary'):
                     current=deepcopy(st.session_state[prefix+'_doc'])
                     current['metadatos']['resumen_educativo']=servicio.resumen_previo(current,sources)
-                    _open(prefix,current);_persist(prefix);st.rerun()
+                    _open(prefix,current)
+                    if _persist(prefix):st.rerun()
                 st.caption('El resumen se prepara localmente. Revisa posibles nombres o datos sensibles restantes antes de solicitar IA.')
             _text(prefix,'metadatos','necesidades_confirmadas','Necesidades y apoyos documentados (incluye la referencia de origen)')
             _text(prefix,'metadatos','referente_curricular','Campo formativo, fase, contenido y PDA verificado; referencia del programa')
@@ -659,9 +667,9 @@ def _editor_contenido(prefix):
     else:st.success('El formato está completo para enviarlo a Dirección. Revisa el PDF antes de compartir.')
     left,middle,right=st.columns(3)
     if left.button('Guardar borrador',key=prefix+'_save'):
-        _persist(prefix);st.rerun()
+        if _persist(prefix):st.rerun()
     if middle.button('Enviar a Dirección',key=prefix+'_send',disabled=bool(faltas)):
-        _persist(prefix,'ENVIADO');st.rerun()
+        if _persist(prefix,'ENVIADO'):st.rerun()
     if right.button('Preparar PDF',key=prefix+'_makepdf'):
         _persist(prefix)
         try:st.session_state[prefix+'_pdf']=_pdf_sesion(prefix,st.session_state[prefix+'_doc'])
@@ -797,7 +805,8 @@ def _planeacion_page_clasica():
                 if st.session_state.get(prefix+'_pending'):
                     if not conservar:raise RuntimeError('Primero guarda o confirma conservar la edición pendiente; no se reemplazó tu trabajo.')
                     _resguardar_pendiente(prefix)
-                _open(prefix,recovered);_persist(prefix);st.rerun()
+                _open(prefix,recovered)
+                if _persist(prefix):st.rerun()
             except Exception as exc:
                 st.warning(str(exc) if isinstance(exc,(ValueError,PermissionError)) else 'No se pudo recuperar el respaldo. No se modificó el documento guardado.')
         if st.button('Actualizar documentos',key=prefix+'_reload'):servicio.refrescar()
@@ -906,7 +915,8 @@ def _planeacion_page_clasica():
                     with st.spinner('Reuniendo la información que ya registró el equipo…'):
                         tipo='especialista' if modalidad=='grupal' and actor['area'] in ('Psicología','Comunicación','Trabajo Social') else modalidad
                         doc=servicio.preparar_contexto(servicio.nueva(formato,ids,int(ciclo),trimestre,modalidad=tipo,incluir_individuales=incluir))
-                    _open(prefix,doc);_persist(prefix);st.rerun()
+                    _open(prefix,doc)
+                    if _persist(prefix):st.rerun()
                 except (ValueError,PermissionError,RuntimeError) as exc:st.warning(str(exc))
         if prefix+'_doc' in st.session_state:_editor(prefix)
 

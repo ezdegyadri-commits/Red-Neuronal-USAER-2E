@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 import uuid
 
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 from data.database import (
     Alumno,
@@ -258,7 +258,12 @@ def asignaciones_sql() -> pd.DataFrame:
 
 
 def usuarios_sql() -> pd.DataFrame:
-    with get_session() as session:
+    # El login es solo lectura: una tabla aún no migrada no crea un esquema
+    # vacío ni oculta las cuentas vigentes de la base central.
+    engine=get_engine(initialize_schema=False)
+    if not inspect(engine).has_table(Usuario.__tablename__):
+        return pd.DataFrame(columns=["ID_Usuario", "Nombre", "Usuario", "Password", "Rol", "Escuelas_Permitidas"])
+    with get_session(initialize_schema=False) as session:
         usuarios = session.query(Usuario).all()
         if not usuarios:
             return pd.DataFrame(columns=["ID_Usuario", "Nombre", "Usuario", "Password", "Rol", "Escuelas_Permitidas"])

@@ -99,11 +99,15 @@ def _save(prefix, manual=False):
         doc['partes'][area]=saved
         st.session_state[prefix+'_value']=deepcopy(saved['contenido'])
         st.session_state.pop(prefix+'_error',None)
+        from ui.guardado_seguro import confirmado
+        confirmado(prefix)
         st.session_state[prefix+'_pending']=False
         st.session_state[prefix+'_saved']=saved['fecha']
         st.session_state[prefix+'_ultimo_guardado_red']=now
         st.session_state.pop(prefix+'_auto_pendiente', None)
     except Exception as exc:
+        from ui.guardado_seguro import avisar
+        avisar(prefix)
         st.session_state[prefix+'_pending']=True
         st.session_state[prefix+'_error']=str(exc) if isinstance(exc,(ValueError,PermissionError,RuntimeError)) else 'No se confirmó el guardado. Tu texto sigue en esta sesión: descarga el respaldo y vuelve a intentar.'
 
@@ -1096,7 +1100,8 @@ def _pagina_guiada():
                         st.write(sintetizar(ev['texto'])['resumen'])
                         if st.button('Retirar esta evaluación de mi área',key=edit+'_remove_'+ev['id']):
                             value['evaluaciones']=[e for e in value['evaluaciones'] if e['id']!=ev['id']]
-                            value['validada']=False;_save(edit);st.rerun()
+                            value['validada']=False;_save(edit)
+                            if not st.session_state.get(edit+'_pending'):st.rerun()
             with st.expander('Preparar mis apartados con IA'):
                 ready=bool(value.get('evaluaciones')) if area!='Conclusión' else any(
                     any(t.strip() for t in doc['partes'].get(other,{}).get('contenido',{}).get('campos',{}).values()) for other in AREAS)

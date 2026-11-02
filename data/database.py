@@ -24,7 +24,8 @@ from sqlalchemy import (
     create_engine,
     text,
 )
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker, Session as SQLSession
+from sqlalchemy.engine import make_url
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +262,15 @@ class BloqueoConcurrencia(Base):
 _ENGINE = None
 _SESSION_FACTORY = None
 _LOCK_DB = threading.Lock()
+_SCHEMA_READY = False
+
+class SafeSession(SQLSession):
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            if exc_type is not None:self.rollback()
+        finally:
+            self.close()
+        return False
 
 
 def get_database_url() -> str:
@@ -288,33 +298,26 @@ def get_database_url() -> str:
 
 def is_postgres() -> bool:
     url = get_database_url()
-    return url.startswith("postgresql://") or url.startswith("postgres://")
+    return make_url(url).drivername.split("+",1)[0] == "postgresql"
 
 
-def get_engine():
-    global _ENGINE, _SESSION_FACTORY
-    if _ENGINE is not None:
-        return _ENGINE
+def get_engine(*, initialize_schema=True):
+    global _ENGINE, _SESSION_FACTORY, _SCHEMA_READY
     with _LOCK_DB:
-        if _ENGINE is not None:
-            return _ENGINE
-        db_url = get_database_url()
-        connect_args = {}
-        if db_url.startswith("sqlite"):
-            connect_args = {"check_same_thread": False}
-        _ENGINE = create_engine(
-            db_url,
-            connect_args=connect_args,
-            pool_pre_ping=True,
-            echo=False,
-        )
-        _SESSION_FACTORY = sessionmaker(bind=_ENGINE, autoflush=False, expire_on_commit=False)
-        Base.metadata.create_all(_ENGINE)
+        if _ENGINE is None:
+            db_url = get_database_url()
+            options = {"check_same_thread": False} if db_url.startswith("sqlite") else {"connect_timeout":5}
+            kwargs={} if db_url.startswith("sqlite") else dict(pool_size=5,max_overflow=1,pool_timeout=3,pool_recycle=300)
+            _ENGINE = create_engine(db_url,connect_args=options,pool_pre_ping=True,echo=False,hide_parameters=True,**kwargs)
+            _SESSION_FACTORY = sessionmaker(bind=_ENGINE, class_=SafeSession, autoflush=False, expire_on_commit=False)
+        if initialize_schema and not _SCHEMA_READY:
+            Base.metadata.create_all(_ENGINE)
+            _SCHEMA_READY=True
         return _ENGINE
 
 
-def get_session():
-    get_engine()
+def get_session(*, initialize_schema=True):
+    get_engine(initialize_schema=initialize_schema)
     return _SESSION_FACTORY()
 
 

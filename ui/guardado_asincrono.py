@@ -23,10 +23,13 @@ def _fallo(prefix, exc):
     st.session_state[prefix+'_guardado_diagnostico']=detalle
     st.session_state[prefix+'_error']=detalle['causa']
     st.session_state[prefix+'_io_error_nonce']=st.session_state.get(prefix+'_papel_nonce',st.session_state.get(prefix+'_nonce',''))
+    from ui.guardado_seguro import avisar
+    avisar(prefix)
     if _en_callback_fragmento():
         st.session_state[prefix+'_toast_pendiente']='No se confirmó el envío. Tu edición sigue disponible; consulta el aviso de guardado.'
     else:
         st.toast('No se confirmó el envío. Tu edición sigue disponible; consulta el aviso de guardado.',icon='⚠️')
+
 
 
 def persistir(prefix, estado=None, automatic=False, aporte=False):
@@ -48,6 +51,8 @@ def persistir(prefix, estado=None, automatic=False, aporte=False):
                 from services.planeacion_compartida import _tres_vias
                 igual=doc==job['enviado'] and state.get(prefix+'_estado_pendiente',job['estado'])==job['estado']
                 state[prefix+'_doc']=saved if igual else _tres_vias(job['enviado'],doc,saved)
+            from ui.guardado_seguro import confirmado
+            confirmado(prefix)
             state[prefix+'_pending']=not igual
             for suffix in ('_error','_guardado_diagnostico','_retry_at','_pdf','_io_error_nonce','_fallos_io'):
                 state.pop(prefix+suffix,None)
@@ -87,8 +92,10 @@ def acuses(prefix, aporte=False):
     """Solo consulta un Future local; ningún tick hace lecturas de Sheets."""
     if st.session_state.get(prefix+'_toast_pendiente') and not _en_callback_fragmento():
         st.toast(st.session_state.pop(prefix+'_toast_pendiente'),icon='⚠️')
-    if prefix+'_trabajo_io' not in st.session_state:return
-    persistir(prefix,automatic=True,aporte=aporte)
     if prefix+'_trabajo_io' not in st.session_state:
+        from ui.guardado_seguro import mostrar
+        mostrar(prefix);return
+    confirmado=persistir(prefix,automatic=True,aporte=aporte)
+    if confirmado and prefix+'_trabajo_io' not in st.session_state:
         # Un acuse necesita actualizar la hoja y el indicador de cierre de sesión.
         st.rerun(scope='app')
