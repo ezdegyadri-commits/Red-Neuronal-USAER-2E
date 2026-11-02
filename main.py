@@ -4,7 +4,9 @@ Permite conservar el comando uvicorn main:app de un servicio existente.
 Los nuevos despliegues usan directamente streamlit run app.py (render.yaml).
 No hay formulario paralelo ni segundo sistema de autenticación.
 """
-import asyncio,json,os,subprocess,sys
+import asyncio,json,os,subprocess,sys,gzip,mimetypes,hashlib
+from functools import lru_cache
+from importlib.util import find_spec
 from pathlib import Path
 import httpx
 from websockets.asyncio.client import connect
@@ -15,6 +17,7 @@ TARGET=f'http://127.0.0.1:{PORT}'
 HOP={b'connection',b'keep-alive',b'proxy-authenticate',b'proxy-authorization',b'te',b'trailer',b'transfer-encoding',b'upgrade'}
 _child=None
 _ready=False
+STATIC=(Path(next(iter(find_spec("streamlit").submodule_search_locations)))/"static"/"static").resolve()
 
 def child_command():
     command=[sys.executable,'-m','streamlit','run',str(ROOT/'app.py'),'--server.address','127.0.0.1','--server.port',str(PORT),'--server.headless','true','--browser.gatherUsageStats','false']
@@ -71,6 +74,31 @@ async def websocket(scope,receive,send):
         try:await send({'type':'websocket.close','code':1011})
         except Exception:pass
 
+@lru_cache(maxsize=256)
+def recurso_estatico(path,comprimir):
+    candidate=(STATIC/path).resolve()
+    if not candidate.is_relative_to(STATIC) or not candidate.is_file():return None
+    data=candidate.read_bytes()
+    kind=mimetypes.guess_type(candidate.name)[0] or 'application/octet-stream'
+    if candidate.suffix=='.js':kind='application/javascript'
+    compressed=comprimir and len(data)>1024 and (kind.startswith('text/') or kind in {'application/javascript','application/json','image/svg+xml'})
+    if compressed:data=gzip.compress(data,compresslevel=5,mtime=0)
+    return data,kind,compressed,'"'+hashlib.sha256(data).hexdigest()+'"'
+
+async def servir_estatico(scope,send):
+    # Archivos públicos del paquete Streamlit, sin consultar la base ni reenviarlos por HTTP.
+    headers=dict(scope['headers']);accept=headers.get(b'accept-encoding',b'').decode('latin1')
+    item=await asyncio.to_thread(recurso_estatico,scope['path'][len('/static/'):],'gzip' in accept)
+    if item is None:
+        await send({'type':'http.response.start','status':404,'headers':[]});await send({'type':'http.response.body','body':b''});return
+    data,kind,compressed,etag=item
+    h=[(b'content-type',kind.encode()),(b'etag',etag.encode()),(b'cache-control',b'public, max-age=31536000, immutable'),(b'vary',b'Accept-Encoding')]
+    if compressed:h.append((b'content-encoding',b'gzip'))
+    unchanged=headers.get(b'if-none-match')==etag.encode()
+    if not unchanged:h.append((b'content-length',str(len(data)).encode()))
+    await send({'type':'http.response.start','status':304 if unchanged else 200,'headers':h})
+    await send({'type':'http.response.body','body':b'' if unchanged or scope['method']=='HEAD' else data})
+
 async def app(scope,receive,send):
     if scope['type']=='lifespan':
         while True:
@@ -81,6 +109,8 @@ async def app(scope,receive,send):
             elif msg['type']=='lifespan.shutdown':await shutdown();await send({'type':'lifespan.shutdown.complete'});return
     elif scope['type']=='websocket':await websocket(scope,receive,send)
     elif scope['type']=='http':
+        if scope['path'].startswith('/static/') and scope['method'] in {'GET','HEAD'}:
+            await servir_estatico(scope,send);return
         if scope['path'] in {'/health','/healthz'}:
             ok=_ready and _child is not None and _child.poll() is None
             body=json.dumps({'status':'ok' if ok else 'starting'}).encode()
