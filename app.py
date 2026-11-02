@@ -25,6 +25,8 @@ from ui.passkeys import configure_passkey
 from ui.escritura import activar_revision
 from ui.acceso_actualizacion import preparar as preparar_acceso
 preparar_acceso()
+from ui.operacion_actualizacion import preparar as preparar_operacion
+preparar_operacion()
 from ui.auth import login, logout
 from services.tramites import gestor as gestor_tramites, puede_solicitar
 from ui.sidebar import TITULOS_SIMPLIFICADOS
@@ -74,7 +76,7 @@ with cabecera_izq:
         f"<div style='padding:0.25rem 0;display:flex;align-items:center;gap:0.85rem;flex-wrap:wrap;'>"
         f"<span style='font-size:1.18rem;font-weight:800;color:var(--bs-primary-dark);display:inline-flex;align-items:center;gap:0.4rem;'><span style='color:#D97706;'>◈</span> USAER 02-E</span>"
         f"<span style='font-size:0.7rem;font-weight:750;letter-spacing:0.08em;text-transform:uppercase;color:#94A3B8;padding:2px 8px;background:rgba(15,23,42,0.04);border-radius:6px;'>Zona 001</span>"
-        f"<span class='user-badge'><span class='status-dot'></span> {nombre_usuario} <span style='color:var(--bs-secondary-color);font-weight:400;'>· {rol}</span></span>"
+        f"<span class='user-badge' data-operacion='C1'><span class='status-dot'></span> {nombre_usuario} <span style='color:var(--bs-secondary-color);font-weight:400;'>· {rol}</span></span>"
         f"</div>",
         unsafe_allow_html=True,
     )

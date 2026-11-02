@@ -29,10 +29,8 @@ import os
 import streamlit as st
 
 def usar_sql() -> bool:
- """Indica si el sistema debe operar contra el motor relacional SQL (PostgreSQL / Neon)."""
- if os.getenv("DISABLE_SQL", "").strip().lower() in {"1", "true", "yes"}:
-  return False
- return True
+ from data.origen_operativo import usar_sql as seleccion
+ return seleccion()
 
 
 def read(name): return df_sheet(name)
