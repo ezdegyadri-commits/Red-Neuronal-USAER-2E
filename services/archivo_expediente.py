@@ -138,7 +138,10 @@ def _contenido(row):
     if not re.fullmatch(r'A\d+:D\d+',rango):raise ValueError('Rango de archivo no válido.')
     n=int(row['Partes'])
     if not 1<=n<=234:raise ValueError('Archivo fuera del límite permitido.')
-    partes=retry_google(lambda:worksheet(PARTES).get(rango))
+    from data.pg_documental import Hoja
+    stored=worksheet(PARTES)
+    # La identidad del archivo es estable aunque una conciliación cambie posiciones.
+    partes=stored.por_clave('ID_Documento',row['ID_Documento']) if isinstance(stored,Hoja) else retry_google(lambda:stored.get(rango))
     if len(partes)!=n or any(len(r)!=4 or r[:3]!=[row['ID_Documento'],str(i),str(n)] for i,r in enumerate(partes)):
         raise ValueError('El archivo está incompleto; no se puede descargar.')
     data=base64.b64decode(''.join(r[3] for r in partes),validate=True)

@@ -107,7 +107,7 @@ def panel(prefix):
             from ui.planeacion import _curriculo
             _curriculo(prefix,doc)
         elif opcion=='Recuperar una versión anterior':
-            try:versiones=[v for v in s.listar(True) if v['id']==doc['id'] and v.get('revision')!=doc.get('revision')]
+            try:versiones=[v for v in s.listar(True,documento=doc['id']) if v['id']==doc['id'] and v.get('revision')!=doc.get('revision')]
             except Exception:
                 st.warning('No se pudo consultar el historial. La edición abierta se conserva y puedes seguir trabajando en el formato.');return
             if not versiones:st.caption('Aún no hay versiones anteriores disponibles.');return

@@ -75,7 +75,7 @@ def padron_autorizado():
     cached = getattr(st, 'session_state', {}).get(cache_key)
     ahora=time.monotonic()
     leido=st.session_state.get(cache_key+'_leido_en')
-    if cached is not None and (leido is None or ahora-leido<60):
+    if cached is not None and (leido is None or ahora-leido<10):
         st.session_state[cache_key+'_leido_en']=leido if leido is not None else ahora
         return cached.copy()
     frame=_padron_actor(actor,st.session_state.get('escuelas_permitidas',''))
@@ -243,7 +243,9 @@ def _recientes():
 def versiones_actuales():
     # No invalida la lectura de Sheets por cada campo editado. Las escrituras
     # confirmadas se incorporan al caché del proceso y el libro se refresca por TTL.
-    por_revision={d['revision']:d for d in _versiones()}
+    from data import pg_documental as pg
+    source=pg.planes() if pg._CTX.get() is not None else _versiones()
+    por_revision={d['revision']:d for d in source}
     with _control()[0]:
         por_revision.update(dict(_recientes()))
     return sorted(por_revision.values(),key=lambda d:d.get('guardado_en',''))
@@ -290,15 +292,21 @@ def reconstruir(values):
     return sorted(resultado,key=lambda r:r['_orden'])
 
 
-@st.cache_data(ttl=60,show_spinner=False)
+@st.cache_data(ttl=5,show_spinner=False)
 def _versiones():
-    return reconstruir(retry_google(_hoja().get_all_values))
+    from data.pg_documental import Hoja,planes
+    sheet=_hoja()
+    if isinstance(sheet,Hoja):return planes()
+    return reconstruir(retry_google(sheet.get_all_values))
 
 
-def listar(todas_versiones=False):
+def listar(todas_versiones=False,documento=None,solo_ultimas=False):
     actor=identidad(); resultado=[]
     from services.planeacion_grupo_unico import documentos
     versiones=versiones_actuales()
+    if todas_versiones and not solo_ultimas:
+        from data.pg_documental import Hoja,planes
+        if isinstance(_hoja(),Hoja):versiones=planes(todas=True,documento=documento)
     padron = padron_autorizado()
     for doc in versiones if todas_versiones else documentos(versiones):
         if not actor['director'] and doc.get('cuenta')!=actor['cuenta']:
@@ -379,8 +387,12 @@ def _firma_guardado(doc, estado, observaciones):
 
 
 def _confirmar(saved):
+    from data.pg_documental import confirmar
+    confirmar()
     with _control()[0]:
         _control()[1][saved['id']]=saved['revision']
+        for revision,value in tuple(_recientes().items()):
+            if value.get('id')==saved['id'] and revision!=saved['revision']:_recientes().pop(revision,None)
         _recientes()[saved['revision']]=deepcopy(saved)
         if len(_recientes())>1000:
             _versiones.clear()
@@ -392,7 +404,9 @@ def _resolver_intento(clave, firma):
     if not pendiente:return None
     # Una respuesta perdida nunca autoriza otro append ciego. Primero leer
     # servidor; una lectura fallida conserva el intento para la próxima vez.
-    versiones=reconstruir(retry_google(_hoja().get_all_values))
+    from data.pg_documental import Hoja,planes
+    sheet=_hoja()
+    versiones=planes(todas=True,documento=clave[0]) if isinstance(sheet,Hoja) else reconstruir(retry_google(sheet.get_all_values))
     confirmado=next((v for v in versiones if v['revision']==pendiente['saved']['revision']),None)
     if confirmado is None:
         ultimo=next((v for v in reversed(versiones) if v['id']==clave[0]),None)
@@ -411,7 +425,9 @@ def _resolver_intento(clave, firma):
 def _conciliar_otros_intentos(documento,clave):
     otros=[k for k in list(intentos()) if k[0]==documento and k!=clave]
     if not otros:return
-    versiones=reconstruir(retry_google(_hoja().get_all_values))
+    from data.pg_documental import Hoja,planes
+    sheet=_hoja()
+    versiones=planes(todas=True,documento=clave[0]) if isinstance(sheet,Hoja) else reconstruir(retry_google(sheet.get_all_values))
     for key in otros:
         revision=intentos()[key]['saved']['revision']
         confirmado=next((v for v in versiones if v['revision']==revision),None)

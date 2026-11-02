@@ -1,3 +1,4 @@
+from config.secretos import secreto
 """Redacción educativa bajo demanda; no interpreta pruebas ni decide diagnósticos."""
 import json
 import re
@@ -112,7 +113,7 @@ def redactar_apartado_epp(apartado, notas, area="Aprendizaje", alumno_contexto=N
     try:
         import streamlit as st
         import google.generativeai as genai_legacy
-        key = st.secrets.get('GEMINI_API_KEY', '')
+        key = secreto('GEMINI_API_KEY', '')
         if key:
             genai_legacy.configure(api_key=key)
             model = genai_legacy.GenerativeModel(GEMINI_MODEL)

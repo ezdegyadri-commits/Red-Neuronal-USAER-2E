@@ -1,3 +1,4 @@
+from config.secretos import secreto
 """Generación visible, editable y recuperable, sin IA durante cada edición."""
 from copy import deepcopy
 import streamlit as st
@@ -75,7 +76,7 @@ def panel_generacion(prefix,persist,abrir,compact=False):
             st.session_state['planeacion_motor'] = 'ChatGPT (OpenAI)'
             has_sec = False
             try:
-                has_sec = bool(st.secrets.get("OPENAI_API_KEY"))
+                has_sec = bool(secreto("OPENAI_API_KEY"))
             except Exception:
                 has_sec = False
             if not has_sec:

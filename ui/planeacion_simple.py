@@ -602,7 +602,7 @@ def _respaldo(prefix,doc):
             st.download_button('Descargar edición conservada para conciliar',json.dumps(resguardo,ensure_ascii=False),file_name='planeacion-conciliar-'+resguardo['id']+'.json',mime='application/json',key=p+'_simple_resguardo_'+firma)
     _recuperar(base)
     if st.toggle('Consultar versiones anteriores',key=prefix+'_simple_history'):
-        for history in s.listar(True):
+        for history in s.listar(True,documento=doc['id']):
             if history['id']==doc['id']:
                 st.download_button(history['guardado_en'][:19]+' · '+history['estado'],json.dumps(history,ensure_ascii=False),file_name=history['revision']+'.json',mime='application/json',key=prefix+'_simple_version_'+history['revision'])
 

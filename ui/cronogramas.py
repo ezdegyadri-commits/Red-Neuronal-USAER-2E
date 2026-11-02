@@ -1,6 +1,7 @@
 """Interfaz del generador mensual de cronogramas para el equipo especialista."""
 
 from __future__ import annotations
+from config.secretos import secreto
 
 import json
 import calendar
@@ -81,7 +82,7 @@ def _firma_drive_segura(firma_id: str) -> bytes | None:
 
 def _recursos_firma(perfil: dict):
     """Carga firmas opcionales de Drive sin incluir identificadores en el código fuente."""
-    firmas = st.secrets.get("CRONOGRAMAS_FIRMAS", FIRMAS_DRIVE_DEFAULT)
+    firmas = secreto("CRONOGRAMAS_FIRMAS", FIRMAS_DRIVE_DEFAULT)
     if isinstance(firmas, str):
         try:
             firmas = json.loads(firmas)
@@ -91,8 +92,8 @@ def _recursos_firma(perfil: dict):
     firma_id = str(firmas.get(perfil["nombre"], firmas.get(clave, ""))).strip() if hasattr(firmas, "get") else ""
     firma_especialista = _firma_drive_segura(firma_id)
 
-    sello_id = str(st.secrets.get("CRONOGRAMAS_SELLO_ID", "")).strip()
-    firma_direccion_id = str(st.secrets.get("CRONOGRAMAS_FIRMA_DIRECCION_ID", "")).strip()
+    sello_id = str(secreto("CRONOGRAMAS_SELLO_ID", "")).strip()
+    firma_direccion_id = str(secreto("CRONOGRAMAS_FIRMA_DIRECCION_ID", "")).strip()
     firma_direccion = _firma_drive_segura(firma_direccion_id)
     sello = _firma_drive_segura(sello_id)
     if firma_direccion is None:

@@ -1,3 +1,4 @@
+from config.secretos import secreto
 """Motor JSON fuera del hilo UI; respaldo acotado sin copiar datos a los logs."""
 import json
 import logging
@@ -17,7 +18,7 @@ def configuracion():
     import streamlit as st
     from ai.planeacion import modelo_configurado
     def secreto(k):
-        try:return st.secrets.get(k,'')
+        try:return secreto(k,'')
         except Exception:return ''
     return {'gemini':secreto('GEMINI_API_KEY'),'openai':secreto('OPENAI_API_KEY') or st.session_state.get('relatoria_openai_key',''),
         'modelos':[modelo_configurado()]}

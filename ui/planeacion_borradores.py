@@ -52,7 +52,7 @@ def cerrar_editor(base,prefix):
 def papelera(base):
     if not st.toggle('Mostrar borradores eliminados',key=base+'_papelera'):return
     try:
-        actuales={d['id']:d for d in s.listar(True)}
+        actuales={d['id']:d for d in s.listar(True,solo_ultimas=True)}
         retirados={i:d for i,d in actuales.items() if d['metadatos'].get('borrador_eliminado') and d['cuenta']==s.identidad()['cuenta']}
         if not retirados:st.caption('No hay borradores eliminados.');return
         did=st.selectbox('Borrador para recuperar',list(retirados),format_func=lambda i:retirados[i]['datos']['Escuela regular']+' · '+retirados[i]['datos']['Periodo'],key=base+'_recuperar_borrador')

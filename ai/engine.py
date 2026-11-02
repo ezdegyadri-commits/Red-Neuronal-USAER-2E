@@ -1,3 +1,4 @@
+from config.secretos import secreto
 import json, re
 import streamlit as st
 try:
@@ -11,7 +12,7 @@ def client():
     if genai is None:
         return None
     try:
-        key = st.secrets.get('GEMINI_API_KEY', '')
+        key = secreto('GEMINI_API_KEY', '')
     except Exception:
         key = ''
     return genai.Client(api_key=key) if key else None

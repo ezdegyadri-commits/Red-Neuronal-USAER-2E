@@ -34,7 +34,7 @@ def usar_sql() -> bool:
 
 
 def read(name): return df_sheet(name)
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def _alumnos_operativos():
  """Lee solo la base interna vigente y omite columnas duplicadas heredadas."""
  frame = read('Alumnos')
@@ -67,7 +67,7 @@ def _alumnos_operativos():
   from utils.escolar import grado_canonico
   frame=frame.copy();frame['Grado']=frame['Grado'].map(grado_canonico)
  return frame
- 
+
 def clear_alumnos_cache():
  try:
   _alumnos_operativos.clear()

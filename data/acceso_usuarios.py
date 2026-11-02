@@ -5,18 +5,11 @@ import pandas as pd
 from sqlalchemy import create_engine,inspect,text
 from sqlalchemy.engine import make_url
 from data.google import df_sheet
+VERSION_PERSISTENCIA='PG1'
 CAMPOS=['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas']
 
 def fuente():
-    value=os.getenv('USAER_AUTH_SOURCE')
-    if value is None:
-        try:
-            import streamlit as st
-            value=st.secrets.get('USAER_AUTH_SOURCE','central')
-        except (FileNotFoundError,KeyError):value='central'
-    value=str(value or 'central').strip().lower()
-    if value not in {'central','postgresql'}:raise ValueError('Fuente de acceso no reconocida.')
-    return value
+    return 'postgresql'
 
 @lru_cache(maxsize=1)
 def _engine(url):
@@ -35,7 +28,7 @@ def _sql():
 
 def usuarios():
     source=fuente()
-    frame=_sql() if source=='postgresql' else df_sheet('Usuarios')
+    frame=_sql()
     required={'Nombre','Usuario','Password','Rol','Escuelas_Permitidas'}
     if frame is None or frame.empty or not required.issubset(frame.columns):
         raise RuntimeError('El catálogo de acceso no está disponible. No se modificaron las cuentas.')

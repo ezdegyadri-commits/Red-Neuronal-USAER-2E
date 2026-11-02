@@ -1,3 +1,4 @@
+from config.secretos import secreto
 """IA bajo demanda: recibe únicamente el resumen revisado, nunca el padrón."""
 import json
 import logging
@@ -58,7 +59,7 @@ def notificar_progreso(etapa):
 def configuracion_modelo():
     """La configuración del portal tiene prioridad; no cambia facturación ni claves."""
     try:
-        pedido = str(st.secrets.get('PLANEACION_GEMINI_MODEL', MODEL)).strip() or DEFAULT_MODEL
+        pedido = str(secreto('PLANEACION_GEMINI_MODEL', MODEL)).strip() or DEFAULT_MODEL
     except FileNotFoundError:
         pedido = MODEL.strip() or DEFAULT_MODEL
     pedido = pedido.removeprefix('models/')
@@ -102,7 +103,7 @@ def _proponer_openai(prompt, schema=None, max_tokens=4000):
     )
     if not api_key:
         try:
-            api_key = st.secrets.get('OPENAI_API_KEY', '')
+            api_key = secreto('OPENAI_API_KEY', '')
         except Exception:
             api_key = ''
     if not api_key:
@@ -154,7 +155,7 @@ def proponer(resumen, formato, area, revisar=False, curriculo=None, *, _prompt=N
     if time.monotonic() < st.session_state.get('planeacion_ia_reintentar_desde', 0):
         raise RuntimeError('Espera unos 30 segundos antes de volver a solicitar IA. Puedes seguir editando tu borrador.')
     try:
-        key = st.secrets.get('GEMINI_API_KEY', '')
+        key = secreto('GEMINI_API_KEY', '')
         if not key:
             raw_openai = _proponer_openai(prompt, _schema, _max_tokens)
             if raw_openai:

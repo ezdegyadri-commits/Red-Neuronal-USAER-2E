@@ -1,3 +1,4 @@
+from config.secretos import secreto
 """Panel de trabajo y revisión. Claves de sesión separadas por cuenta."""
 from copy import deepcopy
 import hashlib
@@ -406,7 +407,7 @@ def _ai(prefix,doc,revision=False):
             st.session_state['planeacion_motor'] = 'ChatGPT (OpenAI)'
             has_sec = False
             try:
-                has_sec = bool(st.secrets.get("OPENAI_API_KEY"))
+                has_sec = bool(secreto("OPENAI_API_KEY"))
             except Exception:
                 has_sec = False
             if not has_sec:
@@ -823,7 +824,7 @@ def _planeacion_page_clasica():
                         _resguardar_pendiente(prefix)
                     _open(prefix,docs[i]);st.rerun()
                 with st.expander('Versiones anteriores (consulta y respaldo)'):
-                    histories=[d for d in servicio.listar(True) if d['id']==docs[i]['id']]
+                    histories=[d for d in servicio.listar(True,documento=docs[i]['id']) if d['id']==docs[i]['id']]
                     for idx_hist,history in enumerate(histories):
                         st.download_button(history['guardado_en'][:19]+' · '+history['estado'],json.dumps(history,ensure_ascii=False),file_name=history['revision']+'.json',mime='application/json',key=_unique_widget_key(f"{prefix}_history_{idx_hist}_{history['revision']}"))
             else:st.caption('Aún no tienes documentos guardados.')

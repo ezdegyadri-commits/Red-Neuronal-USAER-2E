@@ -20,10 +20,20 @@ def cliente(config, env_dir):
     client=gspread.authorize(Credentials.from_service_account_info(info, scopes=[READONLY_SCOPE]))
     client.set_timeout((5,30)); return client
 
-def snapshot(book):
+def leer_google(operation):
+    from gspread.exceptions import APIError
+    for intento in range(4):
+        try:return operation()
+        except APIError as exc:
+            code=getattr(getattr(exc,'response',None),'status_code',None)
+            if code not in {429,500,502,503,504} or intento==3:raise
+            print(json.dumps({'lectura_google':'reintentando','estado_http':code,'intento':intento+1}),flush=True)
+            time.sleep(10*(intento+1))
+
+def snapshot(book, *, require_core=True):
     # batchGet devuelve sólo los valores usados de rangos delimitados por metadata.
     from gspread.utils import rowcol_to_a1
-    meta=book.fetch_sheet_metadata(); sheets=meta["sheets"]
+    meta=leer_google(book.fetch_sheet_metadata); sheets=meta["sheets"]
     ranges=[]; names=[]
     for sheet in sheets:
         p=sheet["properties"]; grid=p["gridProperties"]; name=p["title"]
@@ -31,11 +41,11 @@ def snapshot(book):
         names.append(name)
     result={}
     for start in range(0,len(ranges),4):
-        response=book.values_batch_get(ranges[start:start+4], params={"valueRenderOption":"FORMATTED_VALUE"})
+        response=leer_google(lambda:book.values_batch_get(ranges[start:start+4], params={"valueRenderOption":"FORMATTED_VALUE"}))
         blocks=response.get("valueRanges",[])
         if len(blocks)!=len(names[start:start+4]): raise Integridad("La lectura de pestañas fue parcial.")
         for name,block in zip(names[start:start+4],blocks): result[name]=block.get("values",[])
-    if not {"Alumnos","Usuarios","Planeaciones_Versiones","EPP_Versiones"}<=set(result):
+    if require_core and not {"Alumnos","Usuarios","Planeaciones_Versiones","EPP_Versiones"}<=set(result):
         raise Integridad("Falta una pestaña obligatoria.")
     return result
 

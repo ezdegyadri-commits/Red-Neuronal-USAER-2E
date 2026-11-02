@@ -48,6 +48,14 @@ class ConclusionTests(unittest.TestCase):
 
 
 class PantallaConclusionTests(unittest.TestCase):
+    def setUp(self):
+        from services import epp
+        import ai.epp
+        self._originales=(epp.planes.resumen_previo,epp.contexto,ai.epp.generar)
+    def tearDown(self):
+        from services import epp
+        import ai.epp
+        epp.planes.resumen_previo,epp.contexto,ai.epp.generar=self._originales
     def preparar(self,cambia=False):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_file(str(Path(__file__).parent/'fixtures/epp_viva_app.py'),default_timeout=30)

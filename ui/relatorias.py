@@ -1,3 +1,4 @@
+from config.secretos import secreto
 import glob
 import os
 import shutil
@@ -47,7 +48,7 @@ MODELO_DURABLE_DEFAULT = "gemini-3.8-flash"
 
 def _resolver_modelo_gemini_relatoria():
     try:
-        solicitado = st.secrets.get("RELATORIAS_GEMINI_MODEL") or st.secrets.get("GEMINI_MODEL")
+        solicitado = secreto("RELATORIAS_GEMINI_MODEL") or secreto("GEMINI_MODEL")
     except Exception:
         solicitado = None
     if not solicitado:
@@ -137,7 +138,7 @@ def _procesar_openai(ruta, prompt, progreso, api_key_manual=None):
     api_key = api_key_manual
     if not api_key:
         try:
-            api_key = st.secrets.get("OPENAI_API_KEY", "")
+            api_key = secreto("OPENAI_API_KEY", "")
         except Exception:
             api_key = ""
     if not api_key:
@@ -246,7 +247,7 @@ def generador_relatorias_director():
             st.caption("✨ **ChatGPT Plus (OpenAI)**: Transcripción con Whisper y redacción oficial con GPT-4o.")
             has_secret = False
             try:
-                has_secret = bool(st.secrets.get("OPENAI_API_KEY"))
+                has_secret = bool(secreto("OPENAI_API_KEY"))
             except Exception:
                 has_secret = False
             if not has_secret:
