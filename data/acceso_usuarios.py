@@ -15,7 +15,7 @@ def fuente():
 def _engine(url):
     parsed=make_url(url)
     if parsed.drivername.split('+',1)[0]!='postgresql':raise ValueError('El acceso SQL requiere PostgreSQL explícito.')
-    return create_engine(parsed,pool_size=2,max_overflow=0,pool_timeout=3,pool_pre_ping=True,hide_parameters=True,connect_args={'connect_timeout':5})
+    return create_engine(parsed.set(drivername="postgresql+psycopg2"),pool_size=2,max_overflow=0,pool_timeout=3,pool_pre_ping=True,hide_parameters=True,connect_args={'connect_timeout':5})
 
 def _sql():
     from data.database import get_database_url

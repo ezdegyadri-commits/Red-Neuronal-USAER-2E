@@ -306,6 +306,8 @@ def get_engine(*, initialize_schema=True):
     with _LOCK_DB:
         if _ENGINE is None:
             db_url = get_database_url()
+            if is_postgres():
+                db_url=make_url(db_url).set(drivername="postgresql+psycopg2").render_as_string(hide_password=False)
             options = {"check_same_thread": False} if db_url.startswith("sqlite") else {"connect_timeout":5}
             kwargs={} if db_url.startswith("sqlite") else dict(pool_size=5,max_overflow=1,pool_timeout=3,pool_recycle=300)
             _ENGINE = create_engine(db_url,connect_args=options,pool_pre_ping=True,echo=False,hide_parameters=True,**kwargs)

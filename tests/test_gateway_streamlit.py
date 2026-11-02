@@ -27,3 +27,13 @@ class GatewayAssetsTests(unittest.TestCase):
         self.assertEqual(self.request(path,'HEAD')[1],b'')
         cached,body=self.request(path,headers=[(b'if-none-match',etag)])
         self.assertEqual((cached['status'],body),(304,b''))
+
+class DatabaseDriverTests(unittest.TestCase):
+    def test_auth_normaliza_controlador_disponible(self):
+        from unittest.mock import patch
+        from data import acceso_usuarios
+        acceso_usuarios._engine.cache_clear()
+        with patch.object(acceso_usuarios,'create_engine') as create:
+            acceso_usuarios._engine('postgresql+psycopg://fake:fake@localhost/fake')
+            self.assertEqual(create.call_args.args[0].drivername,'postgresql+psycopg2')
+        acceso_usuarios._engine.cache_clear()
