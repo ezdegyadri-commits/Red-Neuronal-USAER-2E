@@ -23,6 +23,8 @@ from ui.theme import inject
 from ui.mobile_install import install_metadata, installation_help
 from ui.passkeys import configure_passkey
 from ui.escritura import activar_revision
+from ui.acceso_actualizacion import preparar as preparar_acceso
+preparar_acceso()
 from ui.auth import login, logout
 from services.tramites import gestor as gestor_tramites, puede_solicitar
 from ui.sidebar import TITULOS_SIMPLIFICADOS

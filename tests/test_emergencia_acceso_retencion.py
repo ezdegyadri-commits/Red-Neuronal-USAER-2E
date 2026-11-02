@@ -8,25 +8,36 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from data import repository as repo,database as db,sql_repository as sql
 from services.autenticacion import buscar_usuario
+from data import acceso_usuarios as source
 from ui import guardado_seguro,guardado_asincrono as plan,epp_guardado_asincrono as eppui
 from tests.test_planeacion_panel import ACTOR,documento
 from services.epp_modelo import vacia
 FIELDS=['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas']
 ROW=dict(ID_Usuario='F1',Nombre='Persona Ficticia',Usuario='maestra_ñ',Password=' clave ñ ',Rol='APOYO',Escuelas_Permitidas='E1')
 class AccessTests(unittest.TestCase):
- def test_unconfigured_sql_uses_central_without_creating_sqlite(self):
-  with patch.object(repo,'usar_sql',return_value=True),patch.object(db,'is_postgres',return_value=False),patch.object(repo,'read',return_value=pd.DataFrame([ROW])) as read,patch.object(sql,'usuarios_sql') as sqlread:
+ def test_central_remains_default_even_when_data_sql_is_enabled(self):
+  with patch.object(source,'fuente',return_value='central'),patch.object(source,'df_sheet',return_value=pd.DataFrame([ROW])) as read,patch.object(source,'_sql') as sqlread:
    self.assertEqual(repo.usuarios().iloc[0]['Usuario'],ROW['Usuario']);read.assert_called_once_with('Usuarios');sqlread.assert_not_called()
- def test_empty_sql_recovers_current_catalog(self):
-  with patch.object(repo,'usar_sql',return_value=True),patch.object(db,'is_postgres',return_value=True),patch.object(sql,'usuarios_sql',return_value=pd.DataFrame(columns=FIELDS)),patch.object(repo,'read',return_value=pd.DataFrame([ROW])):
-   self.assertEqual(repo.usuarios().to_dict('records'),[ROW])
- def test_populated_sql_remains_sole_source(self):
-  with patch.object(repo,'usar_sql',return_value=True),patch.object(db,'is_postgres',return_value=True),patch.object(sql,'usuarios_sql',return_value=pd.DataFrame([ROW])),patch.object(repo,'read') as fallback:
+ def test_empty_central_catalog_is_service_error_not_bad_password(self):
+  with patch.object(source,'fuente',return_value='central'),patch.object(source,'df_sheet',return_value=pd.DataFrame(columns=FIELDS)):
+   with self.assertRaises(RuntimeError):repo.usuarios()
+ def test_explicit_sql_remains_sole_source(self):
+  with patch.object(source,'fuente',return_value='postgresql'),patch.object(source,'_sql',return_value=pd.DataFrame([ROW])),patch.object(source,'df_sheet') as fallback:
    self.assertEqual(repo.usuarios().to_dict('records'),[ROW]);fallback.assert_not_called()
  def test_sql_failure_does_not_resurrect_central_account(self):
-  with patch.object(repo,'usar_sql',return_value=True),patch.object(db,'is_postgres',return_value=True),patch.object(sql,'usuarios_sql',side_effect=ConnectionError()),patch.object(repo,'read') as fallback:
+  with patch.object(source,'fuente',return_value='postgresql'),patch.object(source,'_sql',side_effect=ConnectionError()),patch.object(source,'df_sheet') as fallback:
    with self.assertRaises(ConnectionError):repo.usuarios()
    fallback.assert_not_called()
+ def test_activation_replaces_old_imports_without_touching_session(self):
+  from ui import auth,acceso_actualizacion as activation
+  before={'autenticado':True,'borrador_ficticio':'NO BORRAR'}
+  with patch.object(activation,'_aplicada',False),patch.object(auth,'usuarios',return_value=pd.DataFrame()),patch.object(repo,'usuarios',return_value=pd.DataFrame()),patch('data.google.clear_cache') as clear,patch.object(auth.st,'session_state',before):
+   activation.preparar();self.assertIs(auth.usuarios,source.usuarios);self.assertIs(repo.usuarios,source.usuarios)
+   clear.assert_called_once_with('Usuarios');self.assertEqual(before,{'autenticado':True,'borrador_ficticio':'NO BORRAR'})
+ def test_activation_reloads_cached_old_auth_module(self):
+  from ui import auth,acceso_actualizacion as activation
+  with patch.object(activation,'_aplicada',False),patch.object(auth,'VERSION_ACCESO','anterior'),patch.object(auth,'usuarios',return_value=pd.DataFrame()),patch.object(repo,'usuarios',return_value=pd.DataFrame()),patch('data.google.clear_cache'):
+   activation.preparar();self.assertEqual(auth.VERSION_ACCESO,'A3');self.assertIs(auth.usuarios,source.usuarios)
  def test_exact_utf8_credentials_and_ambiguous_account_rejected(self):
   frame=pd.DataFrame([ROW]);self.assertIsNotNone(buscar_usuario(frame,ROW['Usuario'],ROW['Password']))
   for user,password in [(ROW['Usuario'].upper(),ROW['Password']),(ROW['Usuario'],ROW['Password'].strip())]:self.assertIsNone(buscar_usuario(frame,user,password))
@@ -51,7 +62,7 @@ from ui.auth import login
 if st.session_state.get('autenticado'):st.success('Acceso correcto')
 else:login()
 """
-  with patch.object(repo,'usar_sql',return_value=True),patch.object(db,'is_postgres',return_value=True),patch.object(sql,'usuarios_sql',return_value=pd.DataFrame(columns=FIELDS)),patch.object(repo,'read',return_value=pd.DataFrame([ROW])),patch.object(auth,'login_passkey'),patch.object(auth,'installation_help'):
+  with patch.object(source,'fuente',return_value='central'),patch.object(source,'df_sheet',return_value=pd.DataFrame([ROW])),patch.object(auth,'login_passkey'),patch.object(auth,'installation_help'):
    app=AppTest.from_string(script).run(timeout=15)
    app.text_input[0].set_value(ROW['Usuario']);app.text_input[1].set_value(ROW['Password']);app.button[0].click().run(timeout=15)
    self.assertFalse(app.exception);self.assertTrue(app.session_state['autenticado']);self.assertEqual(app.success[0].value,'Acceso correcto')

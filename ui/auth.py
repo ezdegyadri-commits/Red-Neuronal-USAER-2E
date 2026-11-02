@@ -2,7 +2,8 @@ import hmac
 import hashlib
 import logging
 import streamlit as st
-from data.repository import usuarios
+from data.acceso_usuarios import usuarios
+VERSION_ACCESO = "A3"
 from services.asignaciones import escuelas_asignadas
 from utils.text import normalizar_texto
 from ui.mobile_install import installation_help
@@ -62,6 +63,7 @@ def _login_content():
         else:
             start_session(match)
             st.rerun()
+    st.caption("Acceso actualizado · A3")
     installation_help()
     st.markdown("<p class='institution-footnote' style='text-align:center;'>USAER 02-E · Zona 001 · Yucatán<br>Información educativa de uso exclusivo del personal autorizado.</p>", unsafe_allow_html=True)
 

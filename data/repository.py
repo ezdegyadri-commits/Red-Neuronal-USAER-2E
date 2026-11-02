@@ -272,17 +272,9 @@ def asignaciones():
   return asignaciones_sql()
  return read('Asignaciones')
 def usuarios():
- # SQL no contiene las cuentas de la migración previa del núcleo. No usar
- # una SQLite vacía implícita para autenticar ni mezclar fuentes por cuenta.
- if usar_sql():
-  from data.database import is_postgres
-  if is_postgres():
-   from data.sql_repository import usuarios_sql
-   frame=usuarios_sql()
-   if not frame.empty:return frame
- # Catálogo vigente mientras no haya usuarios SQL. Nunca se usa este
- # respaldo cuando SQL tiene cuentas o cuando falla su consulta.
- return read('Usuarios')
+ from data.acceso_usuarios import usuarios as cargar_usuarios
+ return cargar_usuarios()
+
 def anexo3():
  if usar_sql():
   from data.sql_repository import anexo3_sql
