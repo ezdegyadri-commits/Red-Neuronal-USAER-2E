@@ -224,6 +224,9 @@ MODULOS_INFO = {
 
 def _ir_a_modulo(modulo):
     st.session_state["navegacion_principal"] = modulo
+    st.session_state['_ruta_diagnostico']=True
+    import logging
+    logging.getLogger(__name__).warning('usaer_ruta etapa=seleccion modulo=%s',modulo)
 
 
 def render_hub_card(modulo_key):

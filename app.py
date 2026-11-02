@@ -51,7 +51,11 @@ from ui.interacciones_rapidas import activar as activar_respuesta_local
 install_metadata()
 
 from ui.sesiones_recuperables import recuperar as recuperar_sesion
+import time as _tiempo, logging as _registro
+_inicio_clic=_tiempo.monotonic()
 recuperar_sesion()
+if st.session_state.get('_ruta_diagnostico'):
+    _registro.getLogger(__name__).warning('usaer_ruta etapa=sesion segundos=%.3f',_tiempo.monotonic()-_inicio_clic)
 
 # El acceso directo también identifica la cuenta antes de ofrecer escuelas.
 if st.query_params.get("p") in ("docentes", "docentes_primaria", "maestros_regulares") or st.query_params.get("form") in ("docentes", "docentes_primaria"):
@@ -76,6 +80,8 @@ from ui.navegacion_actualizacion import preparar_entrada as preparar_navegacion
 preparar_navegacion()
 
 activar_revision()
+if st.session_state.get('_ruta_diagnostico'):
+    _registro.getLogger(__name__).warning('usaer_ruta etapa=cabecera segundos=%.3f',_tiempo.monotonic()-_inicio_clic)
 
 rol = st.session_state.get("rol", "")
 escuelas = st.session_state.get("escuelas_permitidas", "")
@@ -143,4 +149,8 @@ if page == "EPP":
     preparar_entrada('2026-10-27-contextual-v1')
 
 from ui.contenido_modulo import mostrar as mostrar_modulo
+if st.session_state.get('_ruta_diagnostico'):
+    _registro.getLogger(__name__).warning('usaer_ruta etapa=abrir modulo=%s segundos=%.3f',page,_tiempo.monotonic()-_inicio_clic)
 mostrar_modulo(page,rol,escuelas,menu)
+if st.session_state.pop('_ruta_diagnostico',False):
+    _registro.getLogger(__name__).warning('usaer_ruta etapa=listo modulo=%s segundos=%.3f',page,_tiempo.monotonic()-_inicio_clic)
