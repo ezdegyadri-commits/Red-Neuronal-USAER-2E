@@ -25,7 +25,15 @@ INTEGRATED_HEADERS={
 'Relaciones_Expediente':['ID_Relacion','ID_Expediente','ID_Alumno','Tipo_Registro','ID_Registro','Fecha','Estado'],
 'Linea_Tiempo':['ID_Evento_Timeline','ID_Expediente','ID_Alumno','Fecha','Tipo','Titulo','Descripcion','Usuario']}
 
+import os
 import streamlit as st
+
+def usar_sql() -> bool:
+ """Indica si el sistema debe operar contra el motor relacional SQL (PostgreSQL / Neon)."""
+ if os.getenv("DISABLE_SQL", "").strip().lower() in {"1", "true", "yes"}:
+  return False
+ return True
+
 
 def read(name): return df_sheet(name)
 @st.cache_data(ttl=120, show_spinner=False)
@@ -73,10 +81,23 @@ def clear_alumnos_cache():
   pass
 
 def alumnos():
+ if usar_sql():
+  from data.sql_repository import alumnos_sql
+  df = alumnos_sql()
+  if 'Grado' in df.columns:
+   from utils.escolar import grado_canonico
+   df = df.copy()
+   df['Grado'] = df['Grado'].map(grado_canonico)
+  return df
  """Lee la base interna vigente con caché operativa en memoria."""
  return _alumnos_operativos().copy()
 
 def update_alumno(id_alumno, cambios, allowed_ids):
+ if usar_sql():
+  from data.sql_repository import update_alumno_sql
+  res = update_alumno_sql(id_alumno, cambios, allowed_ids)
+  clear_alumnos_cache()
+  return res
  """Actualiza campos permitidos de un alumno en la hoja central.
 
  El ID es inmutable y el llamador debe proporcionar los IDs visibles en su
@@ -143,10 +164,19 @@ def update_alumno(id_alumno, cambios, allowed_ids):
  clear_cache('Alumnos')
  return id_alumno
 
-def personal(): return read('Personal')
+def personal():
+ if usar_sql():
+  from data.sql_repository import personal_sql
+  return personal_sql()
+ return read('Personal')
 
 
 def actualizar_ubicacion_alumno(id_alumno,cambios,esperado):
+ if usar_sql():
+  from data.sql_repository import update_alumno_sql
+  res = update_alumno_sql(id_alumno, cambios, [id_alumno])
+  clear_alumnos_cache()
+  return res
  """Escritura acotada del servicio de movimientos, sin mover otras hojas."""
  permitidos={'ID_Escuela','Nombre_Escuela','CCT_Escuela','Turno_Escuela','Direccion_Escuela','Localidad_Escuela','Municipio_Escuela','Maestra de Apoyo','ID_Maestro_Regular','Grado','Grupo','Estatus'}
  if not cambios or set(cambios)-permitidos or set(esperado)!=set(cambios):raise ValueError('Campos de movimiento no válidos.')
@@ -236,11 +266,31 @@ def personal_para_formato():
  personal_formulario['Escuela_Asignada'] = personal_formulario.get('Escuelas_Atendidas', '')
  personal_formulario['Fuente_Fecha'] = respuestas.get('Marca temporal', '')
  return personal_formulario.reset_index(drop=True)
-def asignaciones(): return read('Asignaciones')
-def usuarios(): return read('Usuarios')
-def anexo3(): return read('Anexo3_Deteccion')
-def anexo4(): return read('Anexo4_Sugerencias')
-def anexo5(): return read('Anexo5_Eventos')
+def asignaciones():
+ if usar_sql():
+  from data.sql_repository import asignaciones_sql
+  return asignaciones_sql()
+ return read('Asignaciones')
+def usuarios():
+ if usar_sql():
+  from data.sql_repository import usuarios_sql
+  return usuarios_sql()
+ return read('Usuarios')
+def anexo3():
+ if usar_sql():
+  from data.sql_repository import anexo3_sql
+  return anexo3_sql()
+ return read('Anexo3_Deteccion')
+def anexo4():
+ if usar_sql():
+  from data.sql_repository import anexo4_sql
+  return anexo4_sql()
+ return read('Anexo4_Sugerencias')
+def anexo5():
+ if usar_sql():
+  from data.sql_repository import anexo5_sql
+  return anexo5_sql()
+ return read('Anexo5_Eventos')
 
 def eventos_alumno(
  id_alumno, nombre="", grado_grupo="", incluir_inactivos=False,
@@ -381,10 +431,25 @@ def eventos_alumno(
 def _escuelas_cached():
  return read('Escuelas')
 
-def escuelas(): return _escuelas_cached().copy()
-def visitas(): return read('Registro_Visitas')
-def oficios_comision(): return read('Oficios_Comision')
+def escuelas():
+ if usar_sql():
+  from data.sql_repository import escuelas_sql
+  return escuelas_sql()
+ return _escuelas_cached().copy()
+def visitas():
+ if usar_sql():
+  from data.sql_repository import visitas_sql
+  return visitas_sql()
+ return read('Registro_Visitas')
+def oficios_comision():
+ if usar_sql():
+  from data.sql_repository import oficios_comision_sql
+  return oficios_comision_sql()
+ return read('Oficios_Comision')
 def configuracion_oficios():
+ if usar_sql():
+  from data.sql_repository import configuracion_oficios_sql
+  return configuracion_oficios_sql()
  """Lee la configuración sin validar la hoja en cada navegación."""
  try:
   return read('Configuracion_Oficios')
@@ -394,7 +459,11 @@ def configuracion_oficios():
 def configuracion_oficios_actual():
  configuracion = configuracion_oficios()
  return configuracion.tail(1).iloc[0].to_dict() if not configuracion.empty else {}
-def anexo7(): return read('Anexo7_Derivacion')
+def anexo7():
+ if usar_sql():
+  from data.sql_repository import anexo7_sql
+  return anexo7_sql()
+ return read('Anexo7_Derivacion')
 
 PADRON_FIELDS = {
  'Nombre_Completo', 'CURP', 'Edad_1_Septiembre', 'Sexo', 'Situacion_Alumno',
@@ -417,11 +486,21 @@ def _a1_column(number):
 
 
 def save_alumno(data):
+ if usar_sql():
+  from data.sql_repository import save_alumno_sql
+  res = save_alumno_sql(data)
+  clear_alumnos_cache()
+  return res
  """Crea un alumno manual y rechaza CURP que ya existan en la base central."""
  _, _, ids = upsert_alumnos([data], return_ids=True, reject_existing=True)
  return ids[0] if ids else ""
 
 def save_alumnos(rows):
+ if usar_sql():
+  from data.sql_repository import save_alumnos_sql
+  res = save_alumnos_sql(rows)
+  clear_alumnos_cache()
+  return res
  """Guarda altas nuevas solo si sus CURP no existen previamente."""
  _, _, ids = upsert_alumnos(rows, return_ids=True, reject_existing=True)
  return ids
@@ -541,6 +620,9 @@ def upsert_alumnos(rows, return_ids=False, reject_existing=False):
 
 
 def guardar_configuracion_oficios(data):
+ if usar_sql():
+  from data.sql_repository import guardar_configuracion_oficios_sql
+  return guardar_configuracion_oficios_sql(data)
  """Registra la configuración vigente definida exclusivamente por Dirección."""
  headers = BASE_HEADERS['Configuracion_Oficios']
  ensure_headers('Configuracion_Oficios', headers)
@@ -564,6 +646,9 @@ def _siguiente_folio_oficio(folios):
  return max([21, *validos]) + 1
 
 def guardar_oficio_comision(data, folio_manual=None):
+ if usar_sql():
+  from data.sql_repository import guardar_oficio_comision_sql
+  return guardar_oficio_comision_sql(data, folio_manual=folio_manual)
  """Guarda una emisión y asigna folio automático (desde 22) o manual (1–21)."""
  headers = BASE_HEADERS['Oficios_Comision']
  ensure_headers('Oficios_Comision', headers)
@@ -636,10 +721,16 @@ def repair_nombres_alumnos(rows):
  return corregidos
 
 def save_anexo3(data):
+ if usar_sql():
+  from data.sql_repository import save_anexo3_sql
+  return save_anexo3_sql(data)
  ensure_headers('Anexo3_Deteccion', BASE_HEADERS['Anexo3_Deteccion'])
  data=dict(data); data.setdefault('ID_Anexo3',next_numeric_id('Anexo3_Deteccion','ID_Anexo3','AN3')); data.setdefault('Estado','ACTIVO'); append_dict('Anexo3_Deteccion',data); return data['ID_Anexo3']
 
 def update_anexo3(id_anexo3, cambios):
+ if usar_sql():
+  from data.sql_repository import update_anexo3_sql
+  return update_anexo3_sql(id_anexo3, cambios)
  """Actualiza un BAP sin modificar su identificador ni borrar la fila."""
  ensure_headers('Anexo3_Deteccion', BASE_HEADERS['Anexo3_Deteccion'])
  ws=worksheet('Anexo3_Deteccion')
@@ -666,13 +757,22 @@ def update_anexo3(id_anexo3, cambios):
  return str(id_anexo3)
 
 def delete_anexo3(id_anexo3):
+ if usar_sql():
+  from data.sql_repository import delete_anexo3_sql
+  return delete_anexo3_sql(id_anexo3)
  """Retira un BAP de la vista activa y conserva el registro para auditoría."""
  return update_anexo3(id_anexo3, {'Estado': 'ANULADO'})
 def save_anexo4(data):
+ if usar_sql():
+  from data.sql_repository import save_anexo4_sql
+  return save_anexo4_sql(data)
  ensure_headers('Anexo4_Sugerencias', BASE_HEADERS['Anexo4_Sugerencias'])
  data=dict(data); data.setdefault('ID_Anexo4',next_numeric_id('Anexo4_Sugerencias','ID_Anexo4','AN4')); data.setdefault('Estado','ACTIVO'); append_dict('Anexo4_Sugerencias',data); return data['ID_Anexo4']
 
 def update_anexo4(id_anexo4, cambios):
+ if usar_sql():
+  from data.sql_repository import update_anexo4_sql
+  return update_anexo4_sql(id_anexo4, cambios)
  """Actualiza un Anexo IV existente sin borrar columnas ni crear duplicados."""
  ensure_headers('Anexo4_Sugerencias', BASE_HEADERS['Anexo4_Sugerencias'])
  ws=worksheet('Anexo4_Sugerencias')
@@ -701,13 +801,22 @@ def update_anexo4(id_anexo4, cambios):
  return str(id_anexo4)
 
 def delete_anexo4(id_anexo4):
+ if usar_sql():
+  from data.sql_repository import delete_anexo4_sql
+  return delete_anexo4_sql(id_anexo4)
  """Retira una sugerencia de la vista activa sin borrar su historial."""
  return update_anexo4(id_anexo4, {'Estado': 'ANULADO'})
 def save_anexo5(data):
+ if usar_sql():
+  from data.sql_repository import save_anexo5_sql
+  return save_anexo5_sql(data)
  ensure_headers('Anexo5_Eventos', BASE_HEADERS['Anexo5_Eventos'])
  data=dict(data); data.setdefault('ID_Evento',next_numeric_id('Anexo5_Eventos','ID_Evento','AN5')); append_dict('Anexo5_Eventos',data); return data['ID_Evento']
 
 def update_anexo5(id_evento, cambios):
+ if usar_sql():
+  from data.sql_repository import update_anexo5_sql
+  return update_anexo5_sql(id_evento, cambios)
  """Corrige un evento o lo marca como duplicado sin borrar la fila."""
  ws=ensure_headers('Anexo5_Eventos', BASE_HEADERS['Anexo5_Eventos'])
  headers=retry_google(lambda: ws.row_values(1))
@@ -734,9 +843,15 @@ def update_anexo5(id_evento, cambios):
  clear_cache('Anexo5_Eventos')
  return str(id_evento)
 def save_anexo7(data):
+ if usar_sql():
+  from data.sql_repository import save_anexo7_sql
+  return save_anexo7_sql(data)
  ensure_headers('Anexo7_Derivacion', BASE_HEADERS['Anexo7_Derivacion'])
  data=dict(data); data.setdefault('ID_Anexo7',next_numeric_id('Anexo7_Derivacion','ID_Anexo7','AN7')); append_dict('Anexo7_Derivacion',data); return data['ID_Anexo7']
 def save_visita(data):
+ if usar_sql():
+  from data.sql_repository import save_visita_sql
+  return save_visita_sql(data)
  ensure_headers('Registro_Visitas', BASE_HEADERS['Registro_Visitas'])
  data=dict(data); data.setdefault('ID_Visita',next_numeric_id('Registro_Visitas','ID_Visita','VIS')); append_dict('Registro_Visitas',data); return data['ID_Visita']
 
