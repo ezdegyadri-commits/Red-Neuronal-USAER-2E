@@ -211,24 +211,8 @@ def escuelas_sql() -> pd.DataFrame:
     with get_session() as session:
         escuelas = session.query(Escuela).all()
         if not escuelas:
-            # Inicializar catálogo base de escuelas si está vacío
-            catalogo = [
-                {"ID_Escuela": "ESC-01", "CCT": "31EPR0001A", "Nombre_Escuela": "Primaria Benito Juárez", "Nivel": "Primaria", "Turno": "Matutino"},
-                {"ID_Escuela": "ESC-02", "CCT": "31DPR0002B", "Nombre_Escuela": "Primaria Miguel Hidalgo", "Nivel": "Primaria", "Turno": "Vespertino"},
-            ]
-            filas = []
-            for item in catalogo:
-                esc = Escuela(
-                    id=item["ID_Escuela"],
-                    cct=item["CCT"],
-                    nombre_escuela=item["Nombre_Escuela"],
-                    nivel=item["Nivel"],
-                    turno=item["Turno"],
-                )
-                session.add(esc)
-                filas.append(item)
-            session.commit()
-            return pd.DataFrame(filas)
+            # Consultar nunca crea escuelas de ejemplo ni modifica el catálogo.
+            return pd.DataFrame(columns=["ID_Escuela", "CCT", "Nombre_Escuela", "Nivel", "Turno"])
         return pd.DataFrame([
             {"ID_Escuela": e.id, "CCT": e.cct, "Nombre_Escuela": e.nombre_escuela, "Nivel": e.nivel, "Turno": e.turno}
             for e in escuelas
