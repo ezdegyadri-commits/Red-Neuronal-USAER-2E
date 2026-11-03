@@ -209,8 +209,8 @@ def autorizar(doc, escribir=False, incluir_bajas=False, frame=None):
                     en_escuela_nom = en_escuela['Nombre_Completo'].fillna('').astype(str).str.strip().str.upper()
                     por_nom = en_escuela.loc[en_escuela_nom.isin(nombres_doc)]
                     if not por_nom.empty:
-                        faltantes = set()
                         actuales = pd.concat([actuales, por_nom], ignore_index=True).drop_duplicates(subset=['ID_Alumno'])
+                        faltantes = set(ids) - set(actuales['ID_Alumno'].fillna('').astype(str).str.strip())
             except Exception:
                 pass
         if faltantes:raise PermissionError('Este documento contiene alumnos fuera de tu asignación actual.')
