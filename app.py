@@ -70,6 +70,11 @@ if not st.session_state.get("autenticado"):
     login()
     st.stop()
 
+if st.query_params.get('diagnostico_ia')=='1':
+    from ui.diagnostico_ia import pagina as comprobar_ia
+    comprobar_ia()
+    st.stop()
+
 from ui import memoria_actualizacion
 if getattr(memoria_actualizacion,'VERSION',None)!='2026-10-29-cronogramas-v3':
     import importlib
