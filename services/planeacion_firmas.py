@@ -114,12 +114,18 @@ def canonizar_escuela(escuela_o_id: str | None) -> str:
 
 def clasificar_area(doc: Mapping[str, Any]) -> str:
     """Clasifica la función del documento: TRABAJO_SOCIAL, PSICOLOGIA, COMUNICACION o APOYO."""
-    formato = str(doc.get("formato", "")).strip().upper()
-    if formato == "XXV":
+    meta = doc.get("metadatos", {}) if isinstance(doc.get("metadatos"), dict) else {}
+    meta_area = normalizar_texto(str(meta.get("area", "") or ""))
+    if any(k in meta_area for k in ("TRABAJO", "SOCIAL", "TS")):
         return "TRABAJO_SOCIAL"
-    datos = doc.get("datos", {})
-    funcion = normalizar_texto(str(datos.get("Función", "") or ""))
-    autor = normalizar_texto(str(datos.get("Nombre del especialista", "") or ""))
+    if any(k in meta_area for k in ("PSIC", "PSICOLOG")):
+        return "PSICOLOGIA"
+    if any(k in meta_area for k in ("COM", "COMUNICAC")):
+        return "COMUNICACION"
+
+    datos = doc.get("datos", {}) if isinstance(doc.get("datos"), dict) else {}
+    funcion = normalizar_texto(str(datos.get("Función", "") or datos.get("Funcion", "") or ""))
+    autor = normalizar_texto(str(datos.get("Nombre del especialista", "") or meta.get("autor", "") or doc.get("cuenta", "") or ""))
 
     if any(k in funcion for k in ("TRABAJO", "SOCIAL", "TS")) or "PERALTA" in autor:
         return "TRABAJO_SOCIAL"
@@ -127,6 +133,10 @@ def clasificar_area(doc: Mapping[str, Any]) -> str:
         return "PSICOLOGIA"
     if any(k in funcion for k in ("COM", "COMUNICAC")) or any(k in autor for k in ("PUERTO GONE", "PEREZ LIZAMA")):
         return "COMUNICACION"
+
+    formato = str(doc.get("formato", "")).strip().upper()
+    if formato == "XXV":
+        return "TRABAJO_SOCIAL"
     return "APOYO"
 
 
@@ -136,10 +146,21 @@ def resolver_firmante_docente(doc: Mapping[str, Any]) -> tuple[str, str]:
     la planeación, verificando la escuela asignada, función y rol.
     """
     area = clasificar_area(doc)
-    datos = doc.get("datos", {})
-    escuela = canonizar_escuela(datos.get("ID_Escuela") or datos.get("Escuela regular"))
+    datos = doc.get("datos", {}) if isinstance(doc.get("datos"), dict) else {}
+    meta = doc.get("metadatos", {}) if isinstance(doc.get("metadatos"), dict) else {}
+    escuela = canonizar_escuela(
+        datos.get("ID_Escuela")
+        or datos.get("Escuela regular")
+        or datos.get("Escuela")
+        or datos.get("escuela")
+    )
 
-    autor_raw = str(datos.get("Nombre del especialista", "") or "").strip()
+    autor_raw = str(
+        datos.get("Nombre del especialista", "")
+        or meta.get("autor", "")
+        or doc.get("cuenta", "")
+        or ""
+    ).strip()
     autor_norm = _normalizar_identidad(autor_raw)
 
     # 1. Caso Trabajo Social:
