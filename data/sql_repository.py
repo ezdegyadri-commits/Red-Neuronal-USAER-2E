@@ -731,7 +731,7 @@ def planeaciones_resumen_sql(cuenta: str, es_director: bool = False) -> List[Dic
         if not es_director and cuenta:
             query = query.filter(PlaneacionDoc.cuenta == str(cuenta).strip())
         
-        query = query.order_by(PlaneacionDoc.actualizado_en.desc())
+        query = query.order_by(PlaneacionDoc.actualizado_en.desc()).limit(50)
         rows = query.all()
         
         res = []

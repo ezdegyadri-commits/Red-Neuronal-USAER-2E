@@ -82,7 +82,8 @@ def motor():
         engine=create_engine(u,connect_args={"check_same_thread": False} if u.drivername.startswith("sqlite") else {})
         Base.metadata.create_all(engine)
         return engine
-    engine=create_engine(u.set(drivername="postgresql+psycopg2"),pool_size=10,max_overflow=10,pool_timeout=15,pool_pre_ping=True,pool_recycle=300,hide_parameters=True,connect_args={"connect_timeout":10})
+    from sqlalchemy.pool import NullPool
+    engine=create_engine(u.set(drivername="postgresql+psycopg2"),poolclass=NullPool,pool_pre_ping=True,hide_parameters=True,connect_args={"connect_timeout":10})
     return engine
 
 @contextmanager
@@ -90,8 +91,12 @@ def sesion(engine=None):
     current=_CTX.get()
     if current is not None:
         yield current;return
-    with Session(engine or motor(),expire_on_commit=False) as s:
-        with s.begin():yield s
+    s = Session(engine or motor(), expire_on_commit=False)
+    try:
+        with s.begin():
+            yield s
+    finally:
+        s.close()
 
 @contextmanager
 def bloqueo(documento,engine=None):
@@ -368,7 +373,7 @@ def planes_resumen(cuenta=None, es_director=False, engine=None, libro=None):
             else:
                 q = q.where(func.json_extract(VersionPlaneacion.contenido, '$.cuenta') == str(cuenta).strip())
             
-        rows = list(s.scalars(q.order_by(VersionPlaneacion.fecha.desc(), VersionPlaneacion.orden.desc())))
+        rows = list(s.scalars(q.order_by(VersionPlaneacion.fecha.desc(), VersionPlaneacion.orden.desc()).limit(50)))
         result = []
         for r in rows:
             c = r.contenido

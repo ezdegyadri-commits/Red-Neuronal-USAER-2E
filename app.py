@@ -14,6 +14,11 @@ import services  # noqa: E402,F401
 import ui  # noqa: E402,F401
 import utils  # noqa: E402,F401
 import streamlit as st  # noqa: E402
+# Purga obligatoria de estado: destruye memoria corrupta al iniciar
+try:
+    st.cache_data.clear()
+except Exception:
+    pass
 from config.settings import PAGE_TITLE
 from data import repository as repo
 from services.expedientes import alumnos_visibles

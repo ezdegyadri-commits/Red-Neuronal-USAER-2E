@@ -17,11 +17,10 @@ def _engine(url):
     parsed = make_url(url)
     if parsed.drivername.split('+', 1)[0] != 'postgresql':
         return create_engine(parsed, connect_args={"check_same_thread": False} if parsed.drivername.startswith("sqlite") else {})
+    from sqlalchemy.pool import NullPool
     return create_engine(
         parsed.set(drivername="postgresql+psycopg2"),
-        pool_size=5,
-        max_overflow=5,
-        pool_timeout=10,
+        poolclass=NullPool,
         pool_pre_ping=True,
         hide_parameters=True,
         connect_args={'connect_timeout': 5}
