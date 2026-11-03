@@ -17,10 +17,10 @@ log=logging.getLogger(__name__)
 def configuracion():
     import streamlit as st
     from ai.planeacion import modelo_configurado
-    def secreto(k):
+    def leer_secreto(k):
         try:return secreto(k,'')
         except Exception:return ''
-    return {'gemini':secreto('GEMINI_API_KEY'),'openai':secreto('OPENAI_API_KEY') or st.session_state.get('relatoria_openai_key',''),
+    return {'gemini':leer_secreto('GEMINI_API_KEY'),'openai':leer_secreto('OPENAI_API_KEY') or st.session_state.get('relatoria_openai_key',''),
         'modelos':[modelo_configurado()]}
 
 
