@@ -1,5 +1,5 @@
 """Comprobación autorizada para Dirección; usa únicamente un caso ficticio."""
-import time
+import time,os
 import streamlit as st
 from services import diagnostico_ia as prueba
 
@@ -25,6 +25,11 @@ def pagina():
         st.error('Esta comprobación está reservada a Dirección.');return
     st.title('Prueba de IA con datos ficticios')
     st.caption('Mismo transporte, configuración y rol pedagógico de Planeación. No consulta expedientes ni modifica documentos.')
+    from ai.planeacion import configuracion_trabajo
+    config=configuracion_trabajo()
+    st.caption('Código del servicio: '+os.getenv('RENDER_GIT_COMMIT','local')[:10])
+    st.json({'gemini_disponible':bool(config.get('gemini')),'openai_disponible':bool(config.get('openai')),
+        'variables_ia_presentes':sorted(k for k,v in os.environ.items() if v and 'KEY' in k.upper() and any(t in k.upper() for t in ('GEMINI','OPENAI','GOOGLE')))})
     st.info(prueba.CASO_FICTICIO)
     job=st.session_state.get('_qa_ia_trabajo')
     ultima=st.session_state.get('_qa_ia_ultima',0)

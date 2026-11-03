@@ -28,6 +28,11 @@ def contexto(doc,actor):
 
 
 def indice(locales=()):
+    from data.repository import captura_padron
+    with captura_padron():return _indice(locales)
+
+
+def _indice(locales=()):
     """Fuentes canónicas, un documento por ID y comprobación actual de permisos."""
     actor=s.identidad();frame=s.padron_autorizado()
     propios=s.listar()

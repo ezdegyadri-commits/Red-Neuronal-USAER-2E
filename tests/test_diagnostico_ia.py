@@ -31,3 +31,9 @@ class ConfiguracionCompartidaIATests(unittest.TestCase):
   from ai import epp_contextual,planeacion
   with patch.object(epp_contextual,'secreto',return_value=''),patch.object(st,'session_state',{'relatoria_openai_key':'clave-de-sesion-ficticia'}),patch.object(planeacion,'modelo_configurado',return_value='modelo-ficticio'):
    self.assertEqual(epp_contextual.configuracion()['openai'],'clave-de-sesion-ficticia')
+
+ def test_alias_estandar_google_no_se_pierde(self):
+  import os,streamlit as st
+  from config.secretos import secreto
+  with patch.dict(os.environ,{'GEMINI_API_KEY':'','GOOGLE_API_KEY':'clave-google-alias-ficticia'}),patch.object(st,'secrets',{}):
+   self.assertEqual(secreto('GEMINI_API_KEY',''),'clave-google-alias-ficticia')

@@ -69,6 +69,8 @@ def _alumnos_operativos():
  return frame
 
 def clear_alumnos_cache():
+ cache=globals().get('_lectura_padron')
+ if cache is not None and cache.get() is not None:cache.get().clear()
  try:
   _alumnos_operativos.clear()
  except Exception:
@@ -78,7 +80,27 @@ def clear_alumnos_cache():
  except Exception:
   pass
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+_lectura_padron=ContextVar('usaer_padron_solo_lectura',default=None)
+
+@contextmanager
+def captura_padron():
+ """Una instantánea por consulta de documentos; nunca compartida entre peticiones."""
+ if _lectura_padron.get() is not None:
+  yield;return
+ token=_lectura_padron.set({})
+ try:yield
+ finally:_lectura_padron.reset(token)
+
 def alumnos():
+ cache=_lectura_padron.get()
+ if cache is None:return _leer_alumnos()
+ if 'frame' not in cache:cache['frame']=_leer_alumnos()
+ return cache['frame'].copy(deep=True)
+
+
+def _leer_alumnos():
  if usar_sql():
   from data.sql_repository import alumnos_sql
   df = alumnos_sql()

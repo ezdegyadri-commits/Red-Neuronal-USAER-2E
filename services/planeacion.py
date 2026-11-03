@@ -808,9 +808,12 @@ def compartidos(documento=None):
         versiones=[d for d in versiones if d['id']==documento or scope and clave(d) and clave(d)[:4]==scope[:4]]
     padron=padron_autorizado()
     for doc in documentos(versiones):
+        # El tipo de documento no depende de ampliar la matrícula. No preparar
+        # individuales ajenas al buscar solamente las hojas compartibles.
+        if not compartible(doc):continue
         from services.planeacion_compartida import ampliar_matricula
         doc=ampliar_matricula(doc,padron)
-        if not compartible(doc):continue
+        if not doc['datos']['Alumnos']:continue
         try:autorizar(doc,frame=padron)
         except PermissionError:continue
         resultado.append(deepcopy(doc))
