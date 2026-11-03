@@ -27,17 +27,29 @@ def contexto(doc,actor):
             'rol':actor.get('rol',''),'area':actor.get('area','')}
 
 
+import streamlit as st
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _indice_cached(cuenta, rol, es_director):
+    return _indice(())
+
 def indice(locales=()):
-    from data.repository import captura_padron
-    with captura_padron():return _indice(locales)
+    if locales:
+        from data.repository import captura_padron
+        with captura_padron():return _indice(locales)
+    actor=s.identidad()
+    return _indice_cached(actor.get('cuenta',''), actor.get('rol',''), bool(actor.get('director')))
 
 
 def _indice(locales=()):
     """Fuentes canónicas, un documento por ID y comprobación actual de permisos."""
     actor=s.identidad();frame=s.padron_autorizado()
     propios=s.listar()
-    docs={d['id']:deepcopy(d) for d in s.compartidos()}
-    docs.update({d['id']:deepcopy(d) for d in propios if actor['director'] or d['cuenta']==actor['cuenta']})
+    if actor.get('director'):
+        docs={d['id']:deepcopy(d) for d in propios}
+    else:
+        docs={d['id']:deepcopy(d) for d in s.compartidos()}
+        docs.update({d['id']:deepcopy(d) for d in propios if d['cuenta']==actor['cuenta']})
     for d in locales:
         if d['cuenta']==actor['cuenta'] or d['id'] in docs:
             try:s.autorizar(d,frame=frame)

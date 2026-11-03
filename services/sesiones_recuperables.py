@@ -33,8 +33,6 @@ class Sesiones:
         row = {k: str(row.get(k, '')) for k in HEADERS[:-1]}
         row['MAC'] = self._firma([row[k] for k in HEADERS[:-1]])
         self.store.append(row)
-        if not any(all(str(r.get(k,''))==row[k] for k in HEADERS) for r in self.store.rows()):
-            raise RuntimeError('No se confirmó el registro privado de acceso.')
 
     def emitir(self, username):
         user = self.store.user(username)
@@ -111,6 +109,14 @@ class Sesiones:
 
 class GoogleSesiones:
     def user(self, username):
+        from data.acceso_usuarios import usuarios
+        try:
+            df = usuarios()
+            matches = [dict(row) for _, row in df.iterrows() if row.get("Usuario") == username]
+            if matches:
+                return matches[0]
+        except Exception:
+            pass
         from data.passkeys import GooglePasskeyStore
         return GooglePasskeyStore().user(username)
 

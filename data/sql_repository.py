@@ -21,6 +21,7 @@ from data.database import (
     ConfiguracionOficio,
     DocenteRegular,
     Escuela,
+    EPPDoc,
     OficioComision,
     Personal,
     PlaneacionDoc,
@@ -707,3 +708,170 @@ def sync_from_sheets_if_empty(table_name: str, df: pd.DataFrame) -> None:
                     session.commit()
     except Exception as exc:
         logger.warning("Error en sincronización inicial de %s: %s", table_name, exc)
+
+
+def planeaciones_resumen_sql(cuenta: str, es_director: bool = False) -> List[Dict[str, Any]]:
+    """Carga EXCLUSIVAMENTE la vista resumida de los documentos del usuario activo (o todos para Director).
+    
+    Optimización crítica: No descarga el historial completo de la BD ni los payloads pesados de tablas/textos;
+    filtra por cuenta en el motor relacional y retorna únicamente las columnas necesarias para el listado.
+    """
+    with get_session() as session:
+        query = session.query(
+            PlaneacionDoc.id,
+            PlaneacionDoc.cuenta,
+            PlaneacionDoc.formato,
+            PlaneacionDoc.estado,
+            PlaneacionDoc.revision,
+            PlaneacionDoc.guardado_en,
+            PlaneacionDoc.datos_json,
+            PlaneacionDoc.metadatos_json,
+            PlaneacionDoc.observaciones_director,
+        )
+        if not es_director and cuenta:
+            query = query.filter(PlaneacionDoc.cuenta == str(cuenta).strip())
+        
+        query = query.order_by(PlaneacionDoc.actualizado_en.desc())
+        rows = query.all()
+        
+        res = []
+        for r in rows:
+            datos = json.loads(r.datos_json) if r.datos_json else {}
+            metadatos = json.loads(r.metadatos_json) if r.metadatos_json else {}
+            res.append({
+                "id": str(r.id),
+                "cuenta": str(r.cuenta or ""),
+                "formato": str(r.formato or "XXIII"),
+                "estado": str(r.estado or "BORRADOR"),
+                "revision": str(r.revision or ""),
+                "guardado_en": str(r.guardado_en or ""),
+                "datos": datos,
+                "metadatos": metadatos,
+                "tablas": {},
+                "textos": {},
+                "observaciones_director": str(r.observaciones_director or ""),
+            })
+        return res
+
+
+def planeacion_por_id_sql(id_planeacion: str) -> Optional[Dict[str, Any]]:
+    """Obtiene el documento completo de una planeación por su ID."""
+    with get_session() as session:
+        r = session.query(PlaneacionDoc).filter_by(id=str(id_planeacion).strip()).first()
+        if not r:
+            return None
+        if hasattr(r, "payload_json") and r.payload_json and r.payload_json != "{}":
+            try:
+                return json.loads(r.payload_json)
+            except Exception:
+                pass
+        datos = json.loads(r.datos_json) if r.datos_json else {}
+        metadatos = json.loads(r.metadatos_json) if r.metadatos_json else {}
+        tablas = json.loads(r.tablas_json) if r.tablas_json else {}
+        textos = json.loads(r.textos_json) if r.textos_json else {}
+        return {
+            "id": str(r.id),
+            "cuenta": str(r.cuenta or ""),
+            "formato": str(r.formato or "XXIII"),
+            "estado": str(r.estado or "BORRADOR"),
+            "revision": str(r.revision or ""),
+            "guardado_en": str(r.guardado_en or ""),
+            "datos": datos,
+            "metadatos": metadatos,
+            "tablas": tablas,
+            "textos": textos,
+            "observaciones_director": str(r.observaciones_director or ""),
+        }
+
+
+def guardar_planeacion_sql(doc: Dict[str, Any]) -> str:
+    """Persiste o actualiza una planeación en PostgreSQL con transacción atómica."""
+    with get_session() as session:
+        pid = str(doc.get("id") or uuid.uuid4().hex[:12])
+        existente = session.query(PlaneacionDoc).filter_by(id=pid).first()
+        payload_str = json.dumps(doc, ensure_ascii=False)
+        datos_str = json.dumps(doc.get("datos", {}), ensure_ascii=False)
+        metadatos_str = json.dumps(doc.get("metadatos", {}), ensure_ascii=False)
+        tablas_str = json.dumps(doc.get("tablas", {}), ensure_ascii=False)
+        textos_str = json.dumps(doc.get("textos", {}), ensure_ascii=False)
+        
+        if existente:
+            existente.cuenta = str(doc.get("cuenta", ""))
+            existente.formato = str(doc.get("formato", "XXIII"))
+            existente.estado = str(doc.get("estado", "BORRADOR"))
+            existente.revision = str(doc.get("revision", ""))
+            existente.guardado_en = str(doc.get("guardado_en", ""))
+            existente.datos_json = datos_str
+            existente.metadatos_json = metadatos_str
+            existente.tablas_json = tablas_str
+            existente.textos_json = textos_str
+            existente.payload_json = payload_str
+            existente.observaciones_director = str(doc.get("observaciones_director", ""))
+        else:
+            p = PlaneacionDoc(
+                id=pid,
+                cuenta=str(doc.get("cuenta", "")),
+                formato=str(doc.get("formato", "XXIII")),
+                estado=str(doc.get("estado", "BORRADOR")),
+                revision=str(doc.get("revision", "")),
+                guardado_en=str(doc.get("guardado_en", "")),
+                datos_json=datos_str,
+                metadatos_json=metadatos_str,
+                tablas_json=tablas_str,
+                textos_json=textos_str,
+                payload_json=payload_str,
+                observaciones_director=str(doc.get("observaciones_director", "")),
+            )
+            session.add(p)
+        session.commit()
+        return pid
+
+
+def epp_listar_sql(ids_alumnos: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    """Consulta indexada ultrarrápida de informes EPP filtrados por los alumnos autorizados."""
+    with get_session() as session:
+        query = session.query(EPPDoc)
+        if ids_alumnos is not None:
+            query = query.filter(EPPDoc.alumno.in_([str(a).strip() for a in ids_alumnos]))
+        records = query.order_by(EPPDoc.actualizado_en.desc()).all()
+        docs = []
+        for r in records:
+            partes = json.loads(r.partes_json) if r.partes_json else {}
+            docs.append({
+                "id": str(r.id),
+                "alumno": str(r.alumno),
+                "ciclo": str(r.ciclo),
+                "revision": str(r.revision),
+                "fecha": str(r.fecha),
+                "partes": partes,
+            })
+        return docs
+
+
+def guardar_epp_sql(doc: Dict[str, Any]) -> str:
+    """Persiste un informe EPP en PostgreSQL."""
+    with get_session() as session:
+        eid = str(doc.get("id") or f"{doc.get('alumno')}:{doc.get('ciclo')}")
+        existente = session.query(EPPDoc).filter_by(id=eid).first()
+        partes_str = json.dumps(doc.get("partes", {}), ensure_ascii=False)
+        estado = str(doc.get("partes", {}).get("META", {}).get("estado", "BORRADOR"))
+        if existente:
+            existente.alumno = str(doc.get("alumno", ""))
+            existente.ciclo = str(doc.get("ciclo", ""))
+            existente.estado = estado
+            existente.revision = str(doc.get("revision", ""))
+            existente.fecha = str(doc.get("fecha", ""))
+            existente.partes_json = partes_str
+        else:
+            e = EPPDoc(
+                id=eid,
+                alumno=str(doc.get("alumno", "")),
+                ciclo=str(doc.get("ciclo", "")),
+                estado=estado,
+                revision=str(doc.get("revision", "")),
+                fecha=str(doc.get("fecha", "")),
+                partes_json=partes_str,
+            )
+            session.add(e)
+        session.commit()
+        return eid

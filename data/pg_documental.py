@@ -82,9 +82,7 @@ def motor():
         engine=create_engine(u,connect_args={"check_same_thread": False} if u.drivername.startswith("sqlite") else {})
         Base.metadata.create_all(engine)
         return engine
-    engine=create_engine(u.set(drivername="postgresql+psycopg2"),pool_size=5,max_overflow=1,pool_timeout=3,pool_pre_ping=True,pool_recycle=300,hide_parameters=True,connect_args={"connect_timeout":5})
-    @event.listens_for(engine,"begin")
-    def limits(c):c.execute(text("SELECT set_config('statement_timeout','20000',true),set_config('lock_timeout','3000',true)"))
+    engine=create_engine(u.set(drivername="postgresql+psycopg2"),pool_size=10,max_overflow=10,pool_timeout=15,pool_pre_ping=True,pool_recycle=300,hide_parameters=True,connect_args={"connect_timeout":10})
     return engine
 
 @contextmanager
@@ -205,10 +203,7 @@ class Hoja:
                 if not rows:return {"updates":{"updatedRows":1,"updatedRange":"'"+self.title+"'!A1:"+rowcol_to_a1(1,len(tab.columnas))}}
             reservation=s.bind.dialect.name=="postgresql" and tab not in s.new and tab not in s.dirty
             if reservation:
-                # La reserva de posiciones es breve y no retiene un candado global
-                # mientras se guardan e indexan documentos de escuelas diferentes.
-                with (self.engine or motor()).begin() as allocator:
-                    start=allocator.execute(update(Tabla).where(Tabla.libro==self.libro,Tabla.nombre==self.title).values(siguiente=Tabla.siguiente+len(rows),ancho=func.greatest(Tabla.ancho,max(len(r) for r in rows)),revision=Tabla.revision+1).returning(Tabla.siguiente-len(rows))).scalar_one()
+                start=s.execute(update(Tabla).where(Tabla.libro==self.libro,Tabla.nombre==self.title).values(siguiente=Tabla.siguiente+len(rows),ancho=func.greatest(Tabla.ancho,max(len(r) for r in rows)),revision=Tabla.revision+1).returning(Tabla.siguiente-len(rows))).scalar_one()
                 s.expire(tab,['siguiente','ancho','revision'])
             else:
                 tab=self._tabla(s,True);start=tab.siguiente
@@ -392,8 +387,8 @@ def planes_resumen(cuenta=None, es_director=False, engine=None, libro=None):
                 'guardado_en': c.get('guardado_en', r.fecha),
                 'datos': c.get('datos', {}),
                 'metadatos': c.get('metadatos', {}),
-                'tablas': {},
-                'textos': {},
+                'tablas': c.get('tablas', {}),
+                'textos': c.get('textos', {}),
                 'observaciones_director': c.get('observaciones_director', ''),
                 '_orden': r.orden,
             })

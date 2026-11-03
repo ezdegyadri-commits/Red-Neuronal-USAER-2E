@@ -821,7 +821,12 @@ def compartidos(documento=None):
     """Solo PI o guías de apoyo, con todos sus alumnos dentro de la asignación actual."""
     from services.planeacion_colaboracion import compartible
     from services.planeacion_grupo_unico import documentos
-    resultado=[];versiones=versiones_actuales()
+    from data.pg_documental import Hoja, planes_resumen
+    if isinstance(_hoja(), Hoja):
+        versiones = planes_resumen(es_director=False)
+    else:
+        versiones = versiones_actuales()
+    resultado=[]
     if documento:
         base=next((d for d in reversed(versiones) if d['id']==documento),None)
         if not base:return []

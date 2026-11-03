@@ -245,8 +245,22 @@ class PlaneacionDoc(Base):
     metadatos_json = Column(Text, default="{}")
     tablas_json = Column(Text, default="{}")
     textos_json = Column(Text, default="{}")
+    payload_json = Column(Text, default="{}")
     observaciones_director = Column(Text, default="")
-    actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
+
+
+class EPPDoc(Base):
+    __tablename__ = "epp_documentos"
+
+    id = Column(String(64), primary_key=True)
+    alumno = Column(String(64), index=True)
+    ciclo = Column(String(32), index=True)
+    estado = Column(String(32), default="BORRADOR", index=True)
+    revision = Column(String(64), default="")
+    fecha = Column(String(32), default="")
+    partes_json = Column(Text, default="{}")
+    actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
 
 
 class BloqueoConcurrencia(Base):
