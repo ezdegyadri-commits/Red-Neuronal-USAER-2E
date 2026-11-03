@@ -88,7 +88,10 @@ class VisibilidadTests(TestCase):
         d=individual();d['revision']='revision-ficticia'
         estado={'_pdf_spec_cache':{(d['id'],d['revision']):{'spec_antiguo':True}}}
         with patch.object(st,'session_state',estado),patch('documents.planeacion_papel.hoja',wraps=papel.hoja) as hoja:
-            preparar_descarga(d);preparar_descarga(d)
+            descargar=preparar_descarga(d);preparar_descarga(d)
+            hoja.assert_not_called()
+            with patch('documents.planeacion_papel._generar_pdf',return_value=b'PDF'):
+                descargar()
             self.assertEqual(hoja.call_count,1)
 
     def test_generacion_ensambla_resumen_no_fragmentos_del_expediente(self):

@@ -59,14 +59,33 @@ class ClaridadTests(unittest.TestCase):
         self.assertEqual(spec['cells'][item['celda']]['target'],('tabla','aprendizajes',0,'Descriptor de logro'))
         self.assertFalse(any('fila 2' in i['mensaje'] for i in items))
 
-    def test_descarga_diferida_autoriza_antes_del_hilo_y_no_genera_al_abrir(self):
+    def test_descarga_diferida_conserva_contexto_y_valida_en_el_hilo(self):
         from documents import planeacion_papel as pdf
-        d=documento()
-        with patch.object(pdf,'_generar_pdf',return_value=b'PDF') as generar:
-            descargar=pdf.preparar_descarga(d);generar.assert_not_called()
-            with patch.object(s,'autorizar',side_effect=RuntimeError('No session_state en el hilo')):
-                self.assertEqual(descargar(),b'PDF')
+        from services.trabajos_documento import contexto
+        from concurrent.futures import ThreadPoolExecutor
+        import streamlit as st
+        d=documento();before=deepcopy(d)
+        def construir(snapshot,**kwargs):
+            self.assertIsNotNone(contexto())
+            self.assertEqual(snapshot,before)
+            return {'estructura':'nueva'}
+        with patch.object(st,'session_state',{'escuelas_permitidas':'ESC-001'}),patch.object(pdf,'hoja',side_effect=construir) as hoja,patch.object(pdf,'_generar_pdf',return_value=b'PDF') as generar:
+            descargar=pdf.preparar_descarga(d)
+            hoja.assert_not_called();generar.assert_not_called()
+            d['estado']='OTRO'
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                self.assertEqual(executor.submit(descargar).result(),b'PDF')
             generar.assert_called_once()
+        self.assertIsNone(contexto())
+
+    def test_descarga_no_entrega_pdf_si_cambian_los_permisos(self):
+        from documents import planeacion_papel as pdf
+        import streamlit as st
+        with patch.object(st,'session_state',{'escuelas_permitidas':'ESC-001'}):
+            descargar=pdf.preparar_descarga(documento())
+        with patch.object(pdf,'hoja',side_effect=PermissionError('Fuera del padrón autorizado')),patch.object(pdf,'_generar_pdf') as generar:
+            with self.assertRaises(PermissionError):descargar()
+            generar.assert_not_called()
 
     def test_ensamble_ia_prioriza_nee_docente_y_separa_fundamentos(self):
         from services import planeacion_generacion as g

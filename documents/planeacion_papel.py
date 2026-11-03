@@ -12,18 +12,22 @@ def generar_pdf(doc,archivo=False):
 
 
 def preparar_descarga(doc):
-    # Streamlit ejecuta la descarga diferida fuera del hilo de la pantalla.
-    # Autorizar ahora y capturar una instantánea evita leer session_state allí.
+    """Captura identidad y documento; prepara la hoja sólo al pedir la descarga."""
     from copy import deepcopy
     import streamlit as st
+    from services import planeacion as planes
+    from services.trabajos_documento import contexto,como
+    actor=deepcopy(planes.autorizar(doc,False))
+    trabajo=contexto()
+    escuelas=trabajo['escuelas'] if trabajo is not None else str(st.session_state.get('escuelas_permitidas',''))
     copia=deepcopy(doc)
-    cache=getattr(st,'session_state',{}).setdefault('_pdf_spec_cache',{}) if hasattr(st,'session_state') else {}
-    cache_key=('visibilidad-2026-10-20',doc.get('id',''),doc.get('revision',''))
-    spec=cache.get(cache_key)
-    if spec is None:
-        spec=hoja(copia,para_impresion=True)
-        cache[cache_key]=spec
-    return lambda:_generar_pdf(copia,spec)
+    def descargar():
+        # El contexto de trabajo canónico permite volver a comprobar permisos sin
+        # leer session_state desde el hilo HTTP de la descarga. No reutiliza una
+        # estructura PDF anterior ni realiza consultas al pintar cada tarjeta.
+        with como(actor,escuelas):
+            return generar_pdf(copia)
+    return descargar
 
 
 def _generar_pdf(doc,spec):
