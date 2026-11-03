@@ -158,8 +158,34 @@ def fechas_habiles(mes: str) -> list[date]:
 
 @st.cache_resource(ttl=600, show_spinner=False)
 def _worksheet():
-    # El historial completo ya está en Neon; no intentar conexiones Google/OAuth.
-    return service_account_client().open_by_key(CRONOGRAMAS_SPREADSHEET_ID).worksheet("Registros")
+    errores = []
+    # Preferir la cuenta de servicio para evitar depender del token OAuth de
+    # Drive, que puede vencer o revocarse. Esta credencial abre directamente
+    # libros compartidos y no requiere acceder al atributo interno del libro maestro.
+    try:
+        libro = service_account_client().open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
+        return retry_google(lambda: libro.worksheet("Registros"))
+    except Exception as exc:
+        if "429" in str(exc) or "quota exceeded" in str(exc).lower():
+            raise  # Una cuota agotada no es un fallo de autenticación.
+        errores.append(("cuenta de servicio", exc))
+    try:
+        libro = drive_oauth_google_client().open_by_key(CRONOGRAMAS_SPREADSHEET_ID)
+        return retry_google(lambda: libro.worksheet("Registros"))
+    except Exception as exc:
+        errores.append(("Drive OAuth", exc))
+        detalle = "; ".join(
+            f"{metodo}: {_resumen_error(error)}" for metodo, error in errores
+        )
+        raise RuntimeError(
+            "No se pudo autenticar contra el libro de cronogramas. "
+            f"Diagnóstico: {detalle}. La pestaña 'Registros' existe. "
+            "Si aparece permiso insuficiente o archivo no visible, en Streamlit Cloud abre Manage app > Settings > "
+            "Secrets, copia el campo client_email dentro de credenciales_json y comparte "
+            "con esa cuenta el libro de cronogramas como Editor. Si Drive OAuth reporta "
+            "invalid_grant, vuelve a autorizar/actualizar token_json y reinicia la app. "
+            f"Libro: https://docs.google.com/spreadsheets/d/{CRONOGRAMAS_SPREADSHEET_ID}/edit"
+        ) from exc
 
 
 def _resumen_error(exc: Exception) -> str:

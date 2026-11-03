@@ -135,8 +135,6 @@ def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR',actua
         from services.planeacion_estabilidad import reservar_escritura
         reservar_escritura()
         ws.append_rows([row],value_input_option='RAW')
-        from data.pg_documental import confirmar
-        confirmar()
         with control():
             recientes()[rev]=dict(zip(HEADERS,row))
             _DOCS_CACHE.clear()

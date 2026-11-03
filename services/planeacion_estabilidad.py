@@ -54,14 +54,7 @@ def candado(documento, espera_maxima=2):
         (time.monotonic()-inicio)*1000,'admitido' if adquirido else 'diferido')
     if not adquirido:raise GuardadoPendiente(5)
     try:
-        from data.pg_documental import bloqueo
-        with bloqueo(documento):
-            # La revisión concurrente se obtiene dentro del bloqueo SQL.
-            from data.google import clear_cache
-            clear_cache('EPP_Versiones')
-            from services import planeacion
-            planeacion._versiones.clear()
-            yield
+        yield
     finally:
         documento_lock.release()
 
@@ -71,7 +64,7 @@ def intentos():
 
 
 def reservar_escritura():
-    return  # PostgreSQL no tiene la cuota de escrituras de Sheets.
+    presupuesto().reservar()
 
 
 @st.cache_resource(show_spinner=False)

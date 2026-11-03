@@ -26,7 +26,7 @@ from ui.escritura import activar_revision
 from ui.acceso_actualizacion import preparar as preparar_acceso
 preparar_acceso()
 from ui import operacion_actualizacion
-if getattr(operacion_actualizacion,'VERSION',None)!='PG1':
+if getattr(operacion_actualizacion,'VERSION',None)!='SG1':
     import importlib
     importlib.reload(operacion_actualizacion)
 operacion_actualizacion.preparar()
@@ -36,17 +36,8 @@ from ui.sidebar import TITULOS_SIMPLIFICADOS
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="collapsed")
 inject()
-from data.database import is_postgres
-try:
-    conexion_neon_configurada=is_postgres()
-except Exception:
-    conexion_neon_configurada=False
-if not conexion_neon_configurada:
-    st.warning('Este acceso necesita configurar su conexión a Neon. Puedes entrar a la plataforma institucional desde el acceso principal.')
-    st.link_button('Abrir USAER 2E',os.getenv('USAER_PUBLIC_URL','https://usaer-fastapi.onrender.com/'),type='primary',width='stretch')
-    st.stop()
 from ui.interacciones_rapidas import activar as activar_respuesta_local
-# La idempotencia se controla en SQL; no interceptar eventos nativos de Streamlit.
+# Se conserva la captura pendiente y la conciliación de los diarios de Sheets.
 # Instaladores móviles 1.0.0 disponibles en ingreso.
 install_metadata()
 
@@ -99,7 +90,7 @@ with cabecera_izq:
         f"<div style='padding:0.25rem 0;display:flex;align-items:center;gap:0.85rem;flex-wrap:wrap;'>"
         f"<span style='font-size:1.18rem;font-weight:800;color:var(--bs-primary-dark);display:inline-flex;align-items:center;gap:0.4rem;'><span style='color:#D97706;'>◈</span> USAER 02-E</span>"
         f"<span style='font-size:0.7rem;font-weight:750;letter-spacing:0.08em;text-transform:uppercase;color:#94A3B8;padding:2px 8px;background:rgba(15,23,42,0.04);border-radius:6px;'>Zona 001</span>"
-        f"<span class='user-badge' data-operacion='PG1'><span class='status-dot'></span> {nombre_usuario} <span style='color:var(--bs-secondary-color);font-weight:400;'>· {rol}</span></span>"
+        f"<span class='user-badge' data-operacion='SG1'><span class='status-dot'></span> {nombre_usuario} <span style='color:var(--bs-secondary-color);font-weight:400;'>· {rol}</span></span>"
         f"</div>",
         unsafe_allow_html=True,
     )

@@ -5,17 +5,18 @@ import pandas as pd
 from sqlalchemy import create_engine,inspect,text
 from sqlalchemy.engine import make_url
 from data.google import df_sheet
-VERSION_PERSISTENCIA='PG1'
 CAMPOS=['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas']
 
+VERSION_PERSISTENCIA='SG1'
+
 def fuente():
-    return 'postgresql'
+    return 'central'  # Contingencia: no consultar SQL aunque exista DATABASE_URL.
 
 @lru_cache(maxsize=1)
 def _engine(url):
     parsed=make_url(url)
     if parsed.drivername.split('+',1)[0]!='postgresql':raise ValueError('El acceso SQL requiere PostgreSQL explícito.')
-    return create_engine(parsed.set(drivername="postgresql+psycopg2"),pool_size=2,max_overflow=0,pool_timeout=3,pool_pre_ping=True,hide_parameters=True,connect_args={'connect_timeout':5})
+    return create_engine(parsed,pool_size=2,max_overflow=0,pool_timeout=3,pool_pre_ping=True,hide_parameters=True,connect_args={'connect_timeout':5})
 
 def _sql():
     from data.database import get_database_url
@@ -28,7 +29,7 @@ def _sql():
 
 def usuarios():
     source=fuente()
-    frame=_sql()
+    frame=_sql() if source=='postgresql' else df_sheet('Usuarios')
     required={'Nombre','Usuario','Password','Rol','Escuelas_Permitidas'}
     if frame is None or frame.empty or not required.issubset(frame.columns):
         raise RuntimeError('El catálogo de acceso no está disponible. No se modificaron las cuentas.')

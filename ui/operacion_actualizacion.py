@@ -2,7 +2,7 @@
 import threading,importlib,sys
 import streamlit as st
 from data.origen_operativo import usar_sql
-VERSION='PG1'
+VERSION='SG1'
 _lock=threading.RLock()
 _aplicada=False
 
@@ -28,6 +28,9 @@ def preparar():
             for modname,attribute in [('services.planeacion','_hoja'),('services.planeacion','_versiones'),('services.epp','hoja'),('services.cronogramas','_worksheet'),('data.passkeys','registry_sheet')]:
                 module=sys.modules.get(modname);fn=getattr(module,attribute,None) if module else None
                 if callable(getattr(fn,'clear',None)):fn.clear()
+            for modname in ('services.planeacion_estabilidad','services.planeacion','services.epp','services.cronogramas','services.archivo_expediente'):
+                module=sys.modules.get(modname)
+                if module is not None:importlib.reload(module)
             google.clear_cache()
             repo.clear_alumnos_cache()
             _aplicada=True

@@ -15,11 +15,11 @@ from services.epp_modelo import vacia
 FIELDS=['ID_Usuario','Nombre','Usuario','Password','Rol','Escuelas_Permitidas']
 ROW=dict(ID_Usuario='F1',Nombre='Persona Ficticia',Usuario='maestra_ñ',Password=' clave ñ ',Rol='APOYO',Escuelas_Permitidas='E1')
 class AccessTests(unittest.TestCase):
- def test_postgresql_is_the_only_authentication_source(self):
-  with patch.object(source,'_sql',return_value=pd.DataFrame([ROW])) as sqlread,patch.object(source,'df_sheet') as read:
-   self.assertEqual(repo.usuarios().iloc[0]['Usuario'],ROW['Usuario']);sqlread.assert_called_once();read.assert_not_called()
- def test_empty_sql_catalog_is_service_error_not_bad_password(self):
-  with patch.object(source,'_sql',return_value=pd.DataFrame(columns=FIELDS)):
+ def test_sheets_is_the_only_runtime_authentication_source(self):
+  with patch.object(source,'df_sheet',return_value=pd.DataFrame([ROW])) as read,patch.object(source,'_sql') as sqlread:
+   self.assertEqual(repo.usuarios().iloc[0]['Usuario'],ROW['Usuario']);read.assert_called_once_with('Usuarios');sqlread.assert_not_called()
+ def test_empty_sheets_catalog_is_service_error_not_bad_password(self):
+  with patch.object(source,'df_sheet',return_value=pd.DataFrame(columns=FIELDS)):
    with self.assertRaises(RuntimeError):repo.usuarios()
  def test_explicit_sql_remains_sole_source(self):
   with patch.object(source,'fuente',return_value='postgresql'),patch.object(source,'_sql',return_value=pd.DataFrame([ROW])),patch.object(source,'df_sheet') as fallback:
@@ -54,7 +54,7 @@ class AccessTests(unittest.TestCase):
   with patch.object(sql,'get_engine',return_value=engine),patch.object(sql,'get_session',side_effect=lambda **kw:db.SafeSession(engine)):
    self.assertIsNotNone(buscar_usuario(sql.usuarios_sql(),ROW['Usuario'],ROW['Password']))
   engine.dispose()
- def test_streamlit_form_login_uses_sql_with_existing_password(self):
+ def test_streamlit_form_login_uses_sheets_with_existing_password(self):
   from streamlit.testing.v1 import AppTest
   from ui import auth
   script="""import streamlit as st
@@ -62,7 +62,7 @@ from ui.auth import login
 if st.session_state.get('autenticado'):st.success('Acceso correcto')
 else:login()
 """
-  with patch.object(source,'_sql',return_value=pd.DataFrame([ROW])),patch.object(auth,'login_passkey'),patch.object(auth,'installation_help'):
+  with patch.object(source,'df_sheet',return_value=pd.DataFrame([ROW])),patch.object(auth,'login_passkey'),patch.object(auth,'installation_help'):
    app=AppTest.from_string(script).run(timeout=15)
    app.text_input[0].set_value(ROW['Usuario']);app.text_input[1].set_value(ROW['Password']);app.button[0].click().run(timeout=15)
    self.assertFalse(app.exception);self.assertTrue(app.session_state['autenticado']);self.assertEqual(app.success[0].value,'Acceso correcto')
