@@ -69,9 +69,9 @@ class ClaridadTests(unittest.TestCase):
             self.assertIsNotNone(contexto())
             self.assertEqual(snapshot,before)
             return {'estructura':'nueva'}
-        with patch.object(st,'session_state',{'escuelas_permitidas':'ESC-001'}),patch.object(pdf,'hoja',side_effect=construir) as hoja,patch.object(pdf,'_generar_pdf',return_value=b'PDF') as generar:
+        with patch.object(s,'identidad',return_value={}),patch.object(st,'session_state',{'escuelas_permitidas':'ESC-001'}),patch.object(pdf,'hoja',side_effect=construir) as hoja,patch.object(pdf,'_generar_pdf',return_value=b'PDF') as generar:
             descargar=pdf.preparar_descarga(d)
-            hoja.assert_not_called();generar.assert_not_called()
+            hoja.assert_not_called();generar.assert_not_called();s.autorizar.assert_not_called()
             d['estado']='OTRO'
             with ThreadPoolExecutor(max_workers=1) as executor:
                 self.assertEqual(executor.submit(descargar).result(),b'PDF')
@@ -81,7 +81,7 @@ class ClaridadTests(unittest.TestCase):
     def test_descarga_no_entrega_pdf_si_cambian_los_permisos(self):
         from documents import planeacion_papel as pdf
         import streamlit as st
-        with patch.object(st,'session_state',{'escuelas_permitidas':'ESC-001'}):
+        with patch.object(s,'identidad',return_value={}),patch.object(st,'session_state',{'escuelas_permitidas':'ESC-001'}):
             descargar=pdf.preparar_descarga(documento())
         with patch.object(pdf,'hoja',side_effect=PermissionError('Fuera del padrón autorizado')),patch.object(pdf,'_generar_pdf') as generar:
             with self.assertRaises(PermissionError):descargar()

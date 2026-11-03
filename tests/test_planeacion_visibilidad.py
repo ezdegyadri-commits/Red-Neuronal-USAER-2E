@@ -87,7 +87,7 @@ class VisibilidadTests(TestCase):
         import streamlit as st
         d=individual();d['revision']='revision-ficticia'
         estado={'_pdf_spec_cache':{(d['id'],d['revision']):{'spec_antiguo':True}}}
-        with patch.object(st,'session_state',estado),patch('documents.planeacion_papel.hoja',wraps=papel.hoja) as hoja:
+        with patch('services.planeacion.identidad',return_value={}),patch.object(st,'session_state',estado),patch('documents.planeacion_papel.hoja',wraps=papel.hoja) as hoja:
             descargar=preparar_descarga(d);preparar_descarga(d)
             hoja.assert_not_called()
             with patch('documents.planeacion_papel._generar_pdf',return_value=b'PDF'):

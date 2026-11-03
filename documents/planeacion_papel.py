@@ -17,7 +17,7 @@ def preparar_descarga(doc):
     import streamlit as st
     from services import planeacion as planes
     from services.trabajos_documento import contexto,como
-    actor=deepcopy(planes.autorizar(doc,False))
+    actor=deepcopy(planes.identidad())
     trabajo=contexto()
     escuelas=trabajo['escuelas'] if trabajo is not None else str(st.session_state.get('escuelas_permitidas',''))
     copia=deepcopy(doc)

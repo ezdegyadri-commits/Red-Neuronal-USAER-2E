@@ -66,6 +66,11 @@ def _filtro(label,opciones,key):
 
 
 def lista(base,desde_inicio=False):
+    from data.repository import captura_padron
+    with captura_padron():return _lista(base,desde_inicio)
+
+
+def _lista(base,desde_inicio=False):
     actor=s.identidad();locales=_locales(base)
     try:docs=nav.indice([d for _,d in locales])
     except Exception:
