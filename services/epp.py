@@ -61,6 +61,11 @@ def recientes():
 def hoja():
     return ensure_headers(HOJA, HEADERS)
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _epp_rows_cached():
+    return df_sheet(HOJA)
+
 def listar(incluir_eliminados=False,incluir_bajas=False):
     actor()
     if incluir_bajas:
@@ -69,7 +74,7 @@ def listar(incluir_eliminados=False,incluir_bajas=False):
     else:frame = planes.padron_autorizado()
     ids = set(frame['ID_Alumno'].astype(str)) if 'ID_Alumno' in frame else set()
     # No se crea una hoja por visitar la pantalla.
-    try: rows = df_sheet(HOJA)
+    try: rows = _epp_rows_cached().copy()
     except Exception as exc:
         # Sólo la ausencia explícita permite un listado vacío. Nunca ocultar cuotas/permisos.
         if type(exc).__name__ == 'WorksheetNotFound': return []
@@ -118,6 +123,8 @@ def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR',actua
     with planes.candado('epp:'+clave(str(id_alumno),ciclo)):
         ws = hoja()
         if actual_confirmado is None:clear_cache(HOJA)
+        try: _epp_rows_cached.clear()
+        except Exception: pass
         current = actual_confirmado if actual_confirmado is not None else _actual(id_alumno,ciclo)
         latest = current['partes'].get(parte) if current else None
         if latest and ((latest['contenido']==value and latest['estado']==estado) or parte=='META' and not revision):
@@ -143,6 +150,8 @@ def _append(id_alumno, ciclo, parte, value, revision='', estado='BORRADOR',actua
             if len(recientes())>1000:
                 recientes().clear()
         clear_cache(HOJA)
+        try: _epp_rows_cached.clear()
+        except Exception: pass
         # Devuelve únicamente el área confirmada; no modifica snapshots de otras áreas.
         return {'contenido':deepcopy(value),'revision':rev,'fecha':now,'autor':a['nombre'],
                 'cuenta':a['cuenta'],'estado':estado}
@@ -183,6 +192,8 @@ def guardar_cambios(doc, parte, base, value, revision):
     autorizar(doc,parte)
     with planes.candado('epp:'+doc['id']):
         clear_cache(HOJA)
+        try: _epp_rows_cached.clear()
+        except Exception: pass
         actual=_actual(doc['alumno'],doc['ciclo'])
         latest=actual['partes'].get(parte,{})
         remoto=latest.get('contenido',vacia(parte))

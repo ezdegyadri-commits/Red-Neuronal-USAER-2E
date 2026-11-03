@@ -104,7 +104,7 @@ def retry_google(operation, attempts=3):
     """Nombre heredado: SQL confirma una vez; los reintentos conservan el envío."""
     return operation()
 
-@st.cache_data(ttl=5, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def read_sheet(name):
     """
     Lee una hoja de Google Sheets de forma tolerante.
@@ -127,7 +127,7 @@ def read_sheet(name):
     return retry_google(operation)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def read_personal_responses():
     """Lee respuestas recientes del formulario sin escribir en Google Sheets."""
     def operation():

@@ -34,7 +34,7 @@ def usar_sql() -> bool:
 
 
 def read(name): return df_sheet(name)
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _alumnos_operativos():
  """Lee solo la base interna vigente y omite columnas duplicadas heredadas."""
  frame = read('Alumnos')
@@ -68,17 +68,50 @@ def _alumnos_operativos():
   frame=frame.copy();frame['Grado']=frame['Grado'].map(grado_canonico)
  return frame
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _alumnos_sql_cached():
+ from data.sql_repository import alumnos_sql
+ return alumnos_sql()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _escuelas_sql_cached():
+ from data.sql_repository import escuelas_sql
+ return escuelas_sql()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _personal_sql_cached():
+ from data.sql_repository import personal_sql
+ return personal_sql()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _asignaciones_sql_cached():
+ from data.sql_repository import asignaciones_sql
+ return asignaciones_sql()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _usuarios_sql_cached():
+ from data.sql_repository import usuarios_sql
+ return usuarios_sql()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _docentes_regulares_sql_cached():
+ from data.sql_repository import docentes_regulares_sql
+ return docentes_regulares_sql()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _configuracion_oficios_sql_cached():
+ from data.sql_repository import configuracion_oficios_sql
+ return configuracion_oficios_sql()
+
 def clear_alumnos_cache():
  cache=globals().get('_lectura_padron')
  if cache is not None and cache.get() is not None:cache.get().clear()
- try:
-  _alumnos_operativos.clear()
- except Exception:
-  pass
- try:
-  _escuelas_cached.clear()
- except Exception:
-  pass
+ for fn in (_alumnos_operativos, _escuelas_cached, _alumnos_sql_cached, _escuelas_sql_cached, _personal_sql_cached, _asignaciones_sql_cached, _usuarios_sql_cached, _docentes_regulares_sql_cached, _configuracion_oficios_sql_cached):
+  try:
+   fn.clear()
+  except Exception:
+   pass
 
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -102,14 +135,12 @@ def alumnos():
 
 def _leer_alumnos():
  if usar_sql():
-  from data.sql_repository import alumnos_sql
-  df = alumnos_sql()
+  df = _alumnos_sql_cached().copy()
   if 'Grado' in df.columns:
    from utils.escolar import grado_canonico
    df = df.copy()
    df['Grado'] = df['Grado'].map(grado_canonico)
   return df
- """Lee la base interna vigente con caché operativa en memoria."""
  return _alumnos_operativos().copy()
 
 def update_alumno(id_alumno, cambios, allowed_ids):
@@ -186,8 +217,7 @@ def update_alumno(id_alumno, cambios, allowed_ids):
 
 def personal():
  if usar_sql():
-  from data.sql_repository import personal_sql
-  return personal_sql()
+  return _personal_sql_cached().copy()
  return read('Personal')
 
 
@@ -288,8 +318,7 @@ def personal_para_formato():
  return personal_formulario.reset_index(drop=True)
 def asignaciones():
  if usar_sql():
-  from data.sql_repository import asignaciones_sql
-  return asignaciones_sql()
+  return _asignaciones_sql_cached().copy()
  return read('Asignaciones')
 def usuarios():
  from data.acceso_usuarios import usuarios as cargar_usuarios
@@ -446,14 +475,13 @@ def eventos_alumno(
   ].copy()
  resultado.attrs["eventos_ambiguos"] = eventos_ambiguos
  return resultado
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _escuelas_cached():
  return read('Escuelas')
 
 def escuelas():
  if usar_sql():
-  from data.sql_repository import escuelas_sql
-  return escuelas_sql()
+  return _escuelas_sql_cached().copy()
  return _escuelas_cached().copy()
 def visitas():
  if usar_sql():
@@ -467,8 +495,7 @@ def oficios_comision():
  return read('Oficios_Comision')
 def configuracion_oficios():
  if usar_sql():
-  from data.sql_repository import configuracion_oficios_sql
-  return configuracion_oficios_sql()
+  return _configuracion_oficios_sql_cached().copy()
  """Lee la configuración sin validar la hoja en cada navegación."""
  try:
   return read('Configuracion_Oficios')

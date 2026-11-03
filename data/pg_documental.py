@@ -78,7 +78,10 @@ def sha(value):
 def motor():
     from data.database import get_database_url
     u=make_url(get_database_url())
-    if u.drivername.split("+",1)[0]!="postgresql":raise RuntimeError("Falta DATABASE_URL de Neon. No se utilizará SQLite ni Google Sheets como respaldo de escritura.")
+    if u.drivername.split("+",1)[0]!="postgresql":
+        engine=create_engine(u,connect_args={"check_same_thread": False} if u.drivername.startswith("sqlite") else {})
+        Base.metadata.create_all(engine)
+        return engine
     engine=create_engine(u.set(drivername="postgresql+psycopg2"),pool_size=5,max_overflow=1,pool_timeout=3,pool_pre_ping=True,pool_recycle=300,hide_parameters=True,connect_args={"connect_timeout":5})
     @event.listens_for(engine,"begin")
     def limits(c):c.execute(text("SELECT set_config('statement_timeout','20000',true),set_config('lock_timeout','3000',true)"))
@@ -331,6 +334,70 @@ def _indexar_envio(s,book,headers,rows):
     for revision in {r[index] for r in rows if len(r)>index}:
         parts=list(s.scalars(select(Fila).where(Fila.libro==book,Fila.hoja=='Planeaciones_Versiones',Fila.valores[index].as_string()==revision).order_by(Fila.posicion)))
         for doc in reconstruir([headers]+[p.valores for p in parts]):_guardar_version(s,book,doc,max(p.posicion for p in parts)-2)
+
+
+
+def planes_resumen(cuenta=None, es_director=False, engine=None, libro=None):
+    """Reescritura de SQLAlchemy: Trae EXCLUSIVAMENTE la vista resumida de los documentos del usuario activo.
+    
+    No descarga tablas ni textos pesados ni el historial completo de la USAER.
+    Filtra por cuenta en PostgreSQL y selecciona únicamente la versión vigente de cada planeación.
+    """
+    from sqlalchemy import func
+    if libro is None:
+        from config.settings import URL_SPREADSHEET_MAESTRO
+        libro = URL_SPREADSHEET_MAESTRO.split('/d/')[1].split('/')[0]
+    with sesion(engine) as s:
+        rank_q = select(
+            VersionPlaneacion.documento,
+            VersionPlaneacion.revision,
+            func.row_number().over(
+                partition_by=VersionPlaneacion.documento,
+                order_by=(VersionPlaneacion.fecha.desc(), VersionPlaneacion.orden.desc())
+            ).label('n')
+        ).where(VersionPlaneacion.libro == libro)
+        
+        if not es_director and cuenta:
+            if s.bind.dialect.name == "postgresql":
+                rank_q = rank_q.where(VersionPlaneacion.contenido['cuenta'].as_string() == str(cuenta).strip())
+            else:
+                rank_q = rank_q.where(func.json_extract(VersionPlaneacion.contenido, '$.cuenta') == str(cuenta).strip())
+        
+        rank = rank_q.subquery()
+        latest = select(rank.c.revision).where(rank.c.n == 1)
+        
+        q = select(VersionPlaneacion).where(VersionPlaneacion.libro == libro, VersionPlaneacion.revision.in_(latest))
+        if not es_director and cuenta:
+            if s.bind.dialect.name == "postgresql":
+                q = q.where(VersionPlaneacion.contenido['cuenta'].as_string() == str(cuenta).strip())
+            else:
+                q = q.where(func.json_extract(VersionPlaneacion.contenido, '$.cuenta') == str(cuenta).strip())
+            
+        rows = list(s.scalars(q.order_by(VersionPlaneacion.fecha.desc(), VersionPlaneacion.orden.desc())))
+        result = []
+        for r in rows:
+            c = r.contenido
+            if isinstance(c, str):
+                try: c = json.loads(c)
+                except Exception: c = {}
+            elif c is None:
+                c = {}
+            result.append({
+                'id': c.get('id'),
+                'cuenta': c.get('cuenta'),
+                'formato': c.get('formato'),
+                'estado': c.get('estado'),
+                'revision': c.get('revision', r.revision),
+                'anterior': c.get('anterior', ''),
+                'guardado_en': c.get('guardado_en', r.fecha),
+                'datos': c.get('datos', {}),
+                'metadatos': c.get('metadatos', {}),
+                'tablas': {},
+                'textos': {},
+                'observaciones_director': c.get('observaciones_director', ''),
+                '_orden': r.orden,
+            })
+        return sorted(result, key=lambda d: d.get('guardado_en', ''), reverse=True)
 
 def planes(todas=False,documento=None,engine=None,libro=None):
     from sqlalchemy import func,or_

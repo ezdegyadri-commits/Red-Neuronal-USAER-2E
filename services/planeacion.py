@@ -75,7 +75,7 @@ def padron_autorizado():
     cached = getattr(st, 'session_state', {}).get(cache_key)
     ahora=time.monotonic()
     leido=st.session_state.get(cache_key+'_leido_en')
-    if cached is not None and (leido is None or ahora-leido<10):
+    if cached is not None and (leido is None or ahora-leido<3600):
         st.session_state[cache_key+'_leido_en']=leido if leido is not None else ahora
         return cached.copy()
     frame=_padron_actor(actor,st.session_state.get('escuelas_permitidas',''))
@@ -209,8 +209,8 @@ def autorizar(doc, escribir=False, incluir_bajas=False, frame=None):
                     en_escuela_nom = en_escuela['Nombre_Completo'].fillna('').astype(str).str.strip().str.upper()
                     por_nom = en_escuela.loc[en_escuela_nom.isin(nombres_doc)]
                     if not por_nom.empty:
-                        faltantes = set()
                         actuales = pd.concat([actuales, por_nom], ignore_index=True).drop_duplicates(subset=['ID_Alumno'])
+                        faltantes = set(ids) - set(actuales['ID_Alumno'].fillna('').astype(str).str.strip())
             except Exception:
                 pass
         if faltantes:raise PermissionError('Este documento contiene alumnos fuera de tu asignación actual.')
@@ -292,7 +292,7 @@ def reconstruir(values):
     return sorted(resultado,key=lambda r:r['_orden'])
 
 
-@st.cache_data(ttl=5,show_spinner=False)
+@st.cache_data(ttl=3600,show_spinner=False)
 def _versiones():
     from data.pg_documental import Hoja,planes
     sheet=_hoja()
@@ -302,6 +302,29 @@ def _versiones():
 
 def listar(todas_versiones=False,documento=None,solo_ultimas=False):
     actor=identidad(); resultado=[]
+    if not todas_versiones:
+        from data.pg_documental import Hoja, planes_resumen
+        sheet = _hoja()
+        if isinstance(sheet, Hoja):
+            docs = planes_resumen(cuenta=actor.get('cuenta', ''), es_director=actor.get('director', False))
+            padron = padron_autorizado()
+            from services.planeacion_grupo_unico import documentos
+            for doc in documentos(docs):
+                if not actor.get('director') and doc.get('cuenta') != actor.get('cuenta'):
+                    continue
+                from services.planeacion_compartida import ampliar_matricula
+                doc = ampliar_matricula(doc, padron)
+                if not doc.get('datos', {}).get('Alumnos'):
+                    continue
+                try:
+                    autorizar(doc, frame=padron)
+                except PermissionError:
+                    continue
+                from services.planeacion_recuperacion import clasificar_heredada
+                doc = clasificar_heredada(doc, padron)
+                resultado.append(doc)
+            ultimas = {d['id']: d for d in resultado}
+            return [d for d in ultimas.values() if not d.get('metadatos', {}).get('borrador_eliminado')]
     from services.planeacion_grupo_unico import documentos
     versiones=versiones_actuales()
     if todas_versiones and not solo_ultimas:
