@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>USAER 02-E · Sistema Pedagógico Integrado (Piloto SPA)</title>
+  <title>USAER 02-E · Sistema Integral SPA 2.0</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React 18 & ReactDOM -->
@@ -11,8 +11,6 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <!-- Babel Standalone para JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     :root {
       --primary: #0F172A;
@@ -23,16 +21,23 @@
       background-color: var(--bg);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
-    .badge-status {
-      transition: all 0.2s ease-in-out;
-    }
-    /* Animación sutil de pulso para autoguardado */
     @keyframes pulse-subtle {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
     .animate-saving {
       animation: pulse-subtle 1.2s infinite ease-in-out;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -42,267 +47,1575 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
 
-    // -------------------------------------------------------------
-    // SERVICIO API REST LOCAL (SUB-MILISEGUNDO)
-    // -------------------------------------------------------------
     const API_BASE = window.location.origin;
 
-    async function fetchAPI(endpoint, options = {}) {
+    // Cliente API seguro con Bearer Token y manejo de sesión
+    async function apiRequest(endpoint, options = {}) {
+      const token = sessionStorage.getItem('usaer_token');
       const headers = {
         'Content-Type': 'application/json',
-        'X-User-Account': localStorage.getItem('usaer_user') || 'docente.apoyo@usaer2e.edu.mx',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...options.headers,
       };
       const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
-      if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+      if (res.status === 401) {
+        sessionStorage.removeItem('usaer_token');
+        sessionStorage.removeItem('usaer_user');
+        window.dispatchEvent(new Event('auth_expired'));
+        throw new Error('Sesión expirada o credenciales inválidas');
+      }
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `Error ${res.status}`);
+      }
       return await res.json();
     }
 
-    // -------------------------------------------------------------
-    // COMPONENTE PRINCIPAL APP
-    // -------------------------------------------------------------
-    function App() {
-      const [view, setView] = useState('list'); // 'list' | 'editor'
-      const [usuario, setUsuario] = useState({
-        nombre: 'Mtra. Cindy Mayanín Burgos González',
-        rol: 'MAESTRA DE APOYO',
-        cuenta: 'docente.apoyo@usaer2e.edu.mx',
-        director: false
-      });
-      const [planeaciones, setPlaneaciones] = useState([]);
-      const [loadingList, setLoadingList] = useState(true);
-      const [filtroTexto, setFiltroTexto] = useState('');
-      const [currentDoc, setCurrentDoc] = useState(null);
-      const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'dirty' | 'error'
-      const [assistantOpen, setAssistantOpen] = useState(false);
-      const [metrics, setMetrics] = useState({ latency: 0, requests: 0 });
+    // =============================================================
+    // COMPONENTE: PANTALLA DE INICIO DE SESIÓN (LOGIN REAL)
+    // =============================================================
+    function LoginScreen({ onLoginSuccess }) {
+      const [usuario, setUsuario] = useState('edgar');
+      const [password, setPassword] = useState('123');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
 
-      // Cargar lista de planeaciones al montar
-      const loadPlaneaciones = useCallback(async () => {
-        setLoadingList(true);
-        const t0 = performance.now();
+      const handleSubmit = async (e) => {
+        if (e) e.preventDefault();
+        setError('');
+        setLoading(true);
         try {
-          const data = await fetchAPI('/api/planeaciones');
-          setPlaneaciones(data);
-          const t1 = performance.now();
-          setMetrics(m => ({ ...m, latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+          const res = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, password })
+          });
+          if (!res.ok) {
+            throw new Error('Usuario o contraseña incorrectos.');
+          }
+          const data = await res.json();
+          onLoginSuccess(data.user, data.token);
         } catch (err) {
-          console.error("Error cargando planeaciones", err);
+          setError(err.message || 'Error de conexión');
         } finally {
-          setLoadingList(false);
-        }
-      }, []);
-
-      useEffect(() => {
-        loadPlaneaciones();
-      }, [loadPlaneaciones]);
-
-      // Abrir una planeación directamente en memoria (< 100ms)
-      const openDoc = async (id) => {
-        setSaveStatus('saved');
-        const t0 = performance.now();
-        try {
-          const doc = await fetchAPI(`/api/planeaciones/${id}`);
-          setCurrentDoc(doc);
-          setView('editor');
-          const t1 = performance.now();
-          setMetrics(m => ({ ...m, latency: Math.round(t1 - t0), requests: m.requests + 1 }));
-        } catch (err) {
-          alert("Error abriendo documento: " + err.message);
+          setLoading(false);
         }
       };
 
-      // Crear nuevo borrador
-      const nuevoDoc = () => {
-        const idNuevo = `plan-${Date.now().toString(36)}`;
-        const docVacio = {
-          id: idNuevo,
-          formato: 'XXIII',
-          estado: 'BORRADOR',
-          revision: 'rev-nueva',
-          datos: { Escuela: 'Damián Carmona', Grado_Grupo: '2° A', Alumnos: [] },
-          metadatos: { titulo: 'Nueva Planeación de Apoyo' },
-          tablas: {
-            aprendizajes: [{ "Necesidades educativas específicas": "", "Aprendizaje y/u objetivo": "", "Descriptor de logro": "" }],
-            dosificacion: [{ "Contextos": "Aula de apoyo", "Actividades": "", "Temporalidad": "Noviembre 2026", "Recursos": "" }]
-          },
-          textos: { "Evaluación": "", "Observaciones": "" },
-          observaciones_director: ""
-        };
-        setCurrentDoc(docVacio);
-        setSaveStatus('dirty');
-        setView('editor');
+      const selectDemoAccount = (u, p) => {
+        setUsuario(u);
+        setPassword(p);
       };
 
       return (
-        <div className="flex flex-col min-h-screen">
-          {/* Cabecera Minimalista */}
-          <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
-            <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-              <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setView('list')}>
-                <span className="text-amber-500 font-extrabold text-xl">◈</span>
-                <span className="font-bold tracking-tight text-slate-100 text-lg">USAER 02-E</span>
-                <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded font-medium">Zona 001 · Piloto SPA</span>
+        <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 font-black text-3xl mb-2">
+                ◈
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">USAER 02-E · 2.0</h1>
+              <p className="text-xs text-slate-500 font-medium">Plataforma Pedagógica y Administrativa Desacoplada</p>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold">
+                ⚠️ {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Usuario</label>
+                <input
+                  type="text"
+                  required
+                  value={usuario}
+                  onChange={(e) => setUsuario(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  placeholder="ej. edgar o cindy.burgos"
+                />
               </div>
 
-              <div className="flex items-center space-x-4">
-                {/* Métricas de rendimiento en vivo */}
-                <div className="hidden sm:flex items-center space-x-2 text-xs bg-slate-800/80 px-2.5 py-1 rounded border border-slate-700/50">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Contraseña</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {loading ? <span>Iniciando sesión...</span> : <span>Entrar al Sistema →</span>}
+              </button>
+            </form>
+
+            <div className="border-t border-slate-100 pt-4 space-y-2">
+              <div className="text-[11px] font-bold uppercase text-slate-400 tracking-wider text-center">Cuentas Institucionales Rápidas</div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => selectDemoAccount('edgar', '123')}
+                  className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
+                >
+                  <div className="font-bold text-slate-800">Dirección</div>
+                  <div className="text-[10px] text-slate-500">Edgar Adrián Yam</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectDemoAccount('cindy.burgos', '123')}
+                  className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
+                >
+                  <div className="font-bold text-slate-800">Maestra de Apoyo</div>
+                  <div className="text-[10px] text-slate-500">Cindy Burgos (Damián C.)</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectDemoAccount('laura.pech', '123')}
+                  className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
+                >
+                  <div className="font-bold text-slate-800">Psicología</div>
+                  <div className="text-[10px] text-slate-500">Laura Pech</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectDemoAccount('mariana.solis', '123')}
+                  className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
+                >
+                  <div className="font-bold text-slate-800">Comunicación</div>
+                  <div className="text-[10px] text-slate-500">Mariana Solís</div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // COMPONENTE PRINCIPAL (APP CON NAVEGACIÓN SPA)
+    // =============================================================
+    function App() {
+      const [user, setUser] = useState(() => {
+        try {
+          const u = sessionStorage.getItem('usaer_user');
+          const t = sessionStorage.getItem('usaer_token');
+          return u && t ? JSON.parse(u) : null;
+        } catch {
+          return null;
+        }
+      });
+
+      const [currentView, setCurrentView] = useState('mis_documentos'); // 'mis_documentos' | 'editor' | 'expedientes' | 'visitas' | 'estadisticas'
+      const [activeDocId, setActiveDocId] = useState(null);
+      const [activeAlumnoId, setActiveAlumnoId] = useState(null);
+      const [metrics, setMetrics] = useState({ latency: 12, requests: 1 });
+
+      useEffect(() => {
+        const handleAuthExpired = () => {
+          setUser(null);
+        };
+        window.addEventListener('auth_expired', handleAuthExpired);
+        return () => window.removeEventListener('auth_expired', handleAuthExpired);
+      }, []);
+
+      const handleLoginSuccess = (userData, token) => {
+        sessionStorage.setItem('usaer_token', token);
+        sessionStorage.setItem('usaer_user', JSON.stringify(userData));
+        setUser(userData);
+      };
+
+      const handleLogout = async () => {
+        try {
+          await apiRequest('/api/auth/logout', { method: 'POST' });
+        } catch (_) {}
+        sessionStorage.clear();
+        setUser(null);
+      };
+
+      if (!user) {
+        return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+      }
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          {/* Barra de Navegación Superior Inmediata */}
+          <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
+            <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+              <div
+                className="flex items-center space-x-3 cursor-pointer"
+                onClick={() => setCurrentView('mis_documentos')}
+              >
+                <span className="text-amber-500 font-black text-xl">◈</span>
+                <span className="font-bold tracking-tight text-slate-100 text-lg">USAER 02-E</span>
+                <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded font-semibold hidden sm:inline">
+                  Zona 001 · SPA 2.0
+                </span>
+              </div>
+
+              {/* Pestañas de Acceso Rápido (1 Clic) */}
+              <nav className="hidden md:flex items-center space-x-1 text-sm font-medium">
+                <button
+                  onClick={() => setCurrentView('mis_documentos')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    currentView === 'mis_documentos' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📁 Mis Documentos
+                </button>
+                <button
+                  onClick={() => setCurrentView('expedientes')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    currentView === 'expedientes' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  👤 Alumnos y Expedientes
+                </button>
+                <button
+                  onClick={() => setCurrentView('visitas')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    currentView === 'visitas' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📋 Actas y Oficios
+                </button>
+                <button
+                  onClick={() => setCurrentView('estadisticas')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    currentView === 'estadisticas' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📊 Estadísticas Zona
+                </button>
+              </nav>
+
+              <div className="flex items-center space-x-3">
+                <div className="hidden sm:flex items-center space-x-1.5 text-xs bg-slate-800/80 px-2.5 py-1 rounded border border-slate-700/50">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span className="text-slate-400">Latencia API:</span>
+                  <span className="text-slate-400">Latencia:</span>
                   <strong className="text-emerald-300 font-mono">{metrics.latency} ms</strong>
-                  <span className="text-slate-600">|</span>
-                  <span className="text-slate-400">Peticiones:</span>
-                  <strong className="text-slate-200 font-mono">{metrics.requests}</strong>
                 </div>
 
-                <div className="text-xs text-right">
-                  <div className="font-semibold text-slate-200">{usuario.nombre}</div>
-                  <div className="text-slate-400">{usuario.rol}</div>
+                <div className="flex items-center space-x-2">
+                  <div className="text-right text-xs hidden lg:block">
+                    <div className="font-semibold text-slate-200">{user.nombre}</div>
+                    <div className="text-slate-400">{user.rol}</div>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded border border-slate-700 transition"
+                    title="Cerrar sesión"
+                  >
+                    Salir
+                  </button>
                 </div>
               </div>
             </div>
           </header>
 
-          {/* Contenedor Principal */}
+          {/* Área de Contenido SPA */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-            {view === 'list' ? (
-              <DocumentListView
-                planeaciones={planeaciones}
-                loading={loadingList}
-                filtro={filtroTexto}
-                setFiltro={setFiltroTexto}
-                onOpen={openDoc}
-                onNuevo={nuevoDoc}
-                onRefresh={loadPlaneaciones}
+            {currentView === 'mis_documentos' && (
+              <MisDocumentosView
+                onOpenDoc={(id) => {
+                  setActiveDocId(id);
+                  setCurrentView('editor');
+                }}
+                onOpenExpediente={(id) => {
+                  setActiveAlumnoId(id);
+                  setCurrentView('expedientes');
+                }}
+                setMetrics={setMetrics}
               />
-            ) : (
-              <EditorView
-                doc={currentDoc}
-                setDoc={setCurrentDoc}
-                saveStatus={saveStatus}
-                setSaveStatus={setSaveStatus}
-                onBack={() => { setView('list'); loadPlaneaciones(); }}
-                assistantOpen={assistantOpen}
-                setAssistantOpen={setAssistantOpen}
+            )}
+
+            {currentView === 'editor' && (
+              <PlaneacionEditorView
+                docId={activeDocId}
+                onBack={() => setCurrentView('mis_documentos')}
+                setMetrics={setMetrics}
+              />
+            )}
+
+            {currentView === 'expedientes' && (
+              <ExpedientesView
+                initialAlumnoId={activeAlumnoId}
+                onBack={() => setCurrentView('mis_documentos')}
+                setMetrics={setMetrics}
+              />
+            )}
+
+            {currentView === 'visitas' && (
+              <ActasYOficiosView
+                onBack={() => setCurrentView('mis_documentos')}
+                setMetrics={setMetrics}
+              />
+            )}
+
+            {currentView === 'estadisticas' && (
+              <EstadisticasView
+                onBack={() => setCurrentView('mis_documentos')}
                 setMetrics={setMetrics}
               />
             )}
           </main>
 
-          {/* Pie de página sutil */}
           <footer className="border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-400">
-            USAER 02-E · Sistema Integral SPA · Entorno Piloto Seguro · Sin impacto en producción
+            USAER 02-E · Sistema Pedagógico Integrado 2.0 · React SPA + FastAPI + PostgreSQL (Cero Recargas)
           </footer>
         </div>
       );
     }
 
-    // -------------------------------------------------------------
-    // VISTA 1: LISTADO DE DOCUMENTOS Y MIS PLANEACIONES
-    // -------------------------------------------------------------
-    function DocumentListView({ planeaciones, loading, filtro, setFiltro, onOpen, onNuevo, onRefresh }) {
-      const docsFiltrados = planeaciones.filter(p => {
-        const busqueda = filtro.toLowerCase();
-        const escuela = (p.datos?.Escuela || '').toLowerCase();
-        const titulo = (p.metadatos?.titulo || p.id).toLowerCase();
-        const formato = (p.formato || '').toLowerCase();
-        return escuela.includes(busqueda) || titulo.includes(busqueda) || formato.includes(busqueda);
+    // =============================================================
+    // VISTA 1: MIS DOCUMENTOS (HUB CENTRAL EN 1 CLIC)
+    // =============================================================
+    function MisDocumentosView({ onOpenDoc, onOpenExpediente, setMetrics }) {
+      const [planeaciones, setPlaneaciones] = useState([]);
+      const [alumnos, setAlumnos] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [busqueda, setBusqueda] = useState('');
+      const [modalAlumno, setModalAlumno] = useState(false);
+      const [deleteTargetId, setDeleteTargetId] = useState(null);
+
+      // Estado para nuevo alumno
+      const [nuevoNombre, setNuevoNombre] = useState('');
+      const [nuevoCURP, setNuevoCURP] = useState('');
+      const [nuevoGrado, setNuevoGrado] = useState('2');
+      const [nuevoGrupo, setNuevoGrupo] = useState('A');
+      const [nuevaEscuela, setNuevaEscuela] = useState('ESC-001');
+      const [nuevaCondicion, setNuevaCondicion] = useState('TDAH');
+
+      const loadHub = useCallback(async () => {
+        const t0 = performance.now();
+        try {
+          const [planesData, alumnosData] = await Promise.all([
+            apiRequest('/api/planeaciones'),
+            apiRequest('/api/alumnos')
+          ]);
+          setPlaneaciones(planesData);
+          setAlumnos(alumnosData);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 2 }));
+        } catch (e) {
+          console.error("Error cargando hub:", e);
+        } finally {
+          setLoading(false);
+        }
+      }, [setMetrics]);
+
+      useEffect(() => {
+        loadHub();
+      }, [loadHub]);
+
+      const handleCrearAlumno = async (e) => {
+        e.preventDefault();
+        try {
+          await apiRequest('/api/alumnos', {
+            method: 'POST',
+            body: JSON.stringify({
+              nombre_completo: nuevoNombre,
+              curp: nuevoCURP,
+              grado: nuevoGrado,
+              grupo: nuevoGrupo,
+              id_escuela: nuevaEscuela,
+              condicion_discapacidad: nuevaCondicion
+            })
+          });
+          setModalAlumno(false);
+          setNuevoNombre('');
+          setNuevoCURP('');
+          loadHub();
+        } catch (err) {
+          alert(`Error al crear alumno: ${err.message}`);
+        }
+      };
+
+      const handleConfirmarEliminar = async () => {
+        if (!deleteTargetId) return;
+        try {
+          await apiRequest(`/api/planeaciones/${deleteTargetId}`, { method: 'DELETE' });
+          setPlaneaciones(prev => prev.filter(p => p.id !== deleteTargetId));
+          setDeleteTargetId(null);
+        } catch (err) {
+          alert(`Error al eliminar: ${err.message}`);
+        }
+      };
+
+      const planesFiltrados = planeaciones.filter(p => {
+        const q = busqueda.toLowerCase();
+        return (p.metadatos?.titulo || '').toLowerCase().includes(q) ||
+               (p.datos?.Escuela || '').toLowerCase().includes(q) ||
+               (p.id || '').toLowerCase().includes(q);
       });
 
       return (
         <div className="space-y-6">
+          {/* Encabezado y Acciones Rápidas */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Mis Planeaciones e Intervención</h1>
-              <p className="text-sm text-slate-500">Documentos activos y planes curriculares asignados</p>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Mis Documentos de Trabajo</h1>
+              <p className="text-sm text-slate-500">Acceso directo a tus planeaciones activas y expedientes de alumnos</p>
             </div>
             <div className="flex items-center space-x-3">
               <button
-                onClick={onRefresh}
-                className="px-3 py-2 text-sm bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium shadow-sm transition"
+                onClick={() => setModalAlumno(true)}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold text-sm transition"
               >
-                ↻ Actualizar
+                + Alta Rápida de Alumno
               </button>
               <button
-                onClick={onNuevo}
-                className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold shadow-sm transition flex items-center space-x-2"
+                onClick={() => onOpenDoc(`plan-nuevo-${Date.now().toString(36)}`)}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-semibold shadow-sm text-sm transition flex items-center space-x-2"
               >
                 <span>+</span>
-                <span>Nueva Planeación</span>
+                <span>Nueva Planeación (Anexo XXIII)</span>
               </button>
             </div>
           </div>
 
-          {/* Barra de Búsqueda Rápida en Memoria */}
+          {/* Barra de Búsqueda Instantánea en Memoria */}
           <div className="relative">
             <input
               type="text"
-              value={filtro}
-              onChange={(e) => setFiltro(e.target.value)}
-              placeholder="Buscar por escuela, alumno, grado o contenido curricular..."
-              className="w-full pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-sm"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar documento por alumno, escuela, grado o aprendizaje esperado..."
+              className="w-full pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-sm"
             />
-            {filtro && (
-              <button
-                onClick={() => setFiltro('')}
-                className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600"
-              >
-                Limpiar
-              </button>
+          </div>
+
+          {/* Sección de Planeaciones Recientes */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
+              <span>📝 Planeaciones y Planes de Intervención</span>
+              <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">{planesFiltrados.length}</span>
+            </h2>
+
+            {loading ? (
+              <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+                <div className="inline-block animate-spin text-amber-600 text-2xl mb-2">◈</div>
+                <p className="text-sm text-slate-500">Cargando documentos desde PostgreSQL...</p>
+              </div>
+            ) : planesFiltrados.length === 0 ? (
+              <div className="text-center py-8 bg-white rounded-xl border border-slate-200 text-slate-500 text-sm">
+                No hay planeaciones que coincidan con la búsqueda.
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {planesFiltrados.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className="bg-white p-4 rounded-xl border border-slate-200 hover:border-amber-500/50 hover:shadow-md transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                  >
+                    <div
+                      className="space-y-1 cursor-pointer flex-1"
+                      onClick={() => onOpenDoc(plan.id)}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-slate-900 group-hover:text-amber-700 transition">
+                          {plan.metadatos?.titulo || `Planeación Anexo ${plan.formato}`}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          plan.estado === 'APROBADO' || plan.estado === 'AUTORIZADA' ? 'bg-emerald-100 text-emerald-800' :
+                          plan.estado === 'REVISIÓN' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {plan.estado}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 flex items-center space-x-3">
+                        <span>🏫 {plan.datos?.Escuela || 'Primaria Oficial'}</span>
+                        <span>•</span>
+                        <span>Grado: {plan.datos?.Grado_Grupo || '2° A'}</span>
+                        <span>•</span>
+                        <span>Guardado: {plan.guardado_en || 'Reciente'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      {plan.observaciones_director && (
+                        <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 font-medium hidden sm:inline">
+                          💬 Con Vo. Bo.
+                        </span>
+                      )}
+                      <button
+                        onClick={() => onOpenDoc(plan.id)}
+                        className="text-xs font-semibold text-amber-600 hover:text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 hover:bg-amber-50 transition"
+                      >
+                        Abrir →
+                      </button>
+                      <button
+                        onClick={() => setDeleteTargetId(plan.id)}
+                        className="text-xs text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
+                        title="Eliminar planeación"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* Tarjetas / Tabla de Documentos */}
-          {loading ? (
-            <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-              <div className="inline-block animate-spin text-amber-600 text-2xl mb-2">◈</div>
-              <p className="text-sm text-slate-500">Cargando documentos en memoria...</p>
-            </div>
-          ) : docsFiltrados.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-              <p className="text-slate-500 text-sm">No se encontraron documentos con el criterio ingresado.</p>
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {docsFiltrados.map((doc) => (
+          {/* Sección de Alumnos Frecuentes / Expedientes */}
+          <div className="space-y-3 pt-4">
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
+              <span>👥 Expedientes de Alumnos Asignados</span>
+              <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">{alumnos.length}</span>
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {alumnos.map((al) => (
                 <div
-                  key={doc.id}
-                  onClick={() => onOpen(doc.id)}
-                  className="bg-white p-4 rounded-xl border border-slate-200 hover:border-amber-500/50 hover:shadow-md transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                  key={al.id}
+                  onClick={() => onOpenExpediente(al.id)}
+                  className="bg-white p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition cursor-pointer space-y-1.5"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-bold text-slate-900 group-hover:text-amber-700 transition">
-                        {doc.metadatos?.titulo || `Planeación Anexo ${doc.formato}`}
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                        doc.estado === 'AUTORIZADA' ? 'bg-emerald-100 text-emerald-800' :
-                        doc.estado === 'REVISIÓN' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {doc.estado}
-                      </span>
+                  <div className="font-bold text-slate-800 text-sm">{al.nombre_completo}</div>
+                  <div className="text-xs text-slate-500">
+                    <span>{al.grado}° {al.grupo}</span>
+                    <span className="mx-1.5">•</span>
+                    <span>{al.escuela}</span>
+                  </div>
+                  <div className="pt-1 flex items-center justify-between">
+                    <span className="text-[11px] bg-amber-50 text-amber-800 font-semibold px-2 py-0.5 rounded border border-amber-200">
+                      {al.condicion || 'Atención USAER'}
+                    </span>
+                    <span className="text-xs text-slate-400 hover:text-slate-700 font-medium">Ver expediente →</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Modal de Confirmación para Eliminar */}
+          {deleteTargetId && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4">
+                <h3 className="font-bold text-slate-900 text-lg">¿Eliminar planeación?</h3>
+                <p className="text-xs text-slate-600">Esta acción removerá el borrador seleccionado de la base de datos de forma permanente.</p>
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button
+                    onClick={() => setDeleteTargetId(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmarEliminar}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-sm"
+                  >
+                    Eliminar Documento
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de Alta Rápida de Alumno */}
+          {modalAlumno && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-slate-900 text-base">Registrar Nuevo Alumno</h3>
+                  <button onClick={() => setModalAlumno(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <form onSubmit={handleCrearAlumno} className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Nombre Completo:</label>
+                    <input
+                      type="text"
+                      required
+                      value={nuevoNombre}
+                      onChange={(e) => setNuevoNombre(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      placeholder="ej. Mateo Emiliano Poot Dzib"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">CURP:</label>
+                    <input
+                      type="text"
+                      value={nuevoCURP}
+                      onChange={(e) => setNuevoCURP(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 uppercase"
+                      placeholder="18 caracteres"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Grado:</label>
+                      <select
+                        value={nuevoGrado}
+                        onChange={(e) => setNuevoGrado(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg"
+                      >
+                        <option value="1">1° Primaria</option>
+                        <option value="2">2° Primaria</option>
+                        <option value="3">3° Primaria</option>
+                        <option value="4">4° Primaria</option>
+                        <option value="5">5° Primaria</option>
+                        <option value="6">6° Primaria</option>
+                      </select>
                     </div>
-                    <div className="text-xs text-slate-500 flex items-center space-x-3">
-                      <span>🏫 {doc.datos?.Escuela || 'Escuela sin asignar'}</span>
-                      <span>•</span>
-                      <span>Grado: {doc.datos?.Grado_Grupo || 'Varios'}</span>
-                      <span>•</span>
-                      <span>Guardado: {doc.guardado_en || 'Reciente'}</span>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Grupo:</label>
+                      <input
+                        type="text"
+                        value={nuevoGrupo}
+                        onChange={(e) => setNuevoGrupo(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg uppercase"
+                        placeholder="A, B, C"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Condición / BAP:</label>
+                    <input
+                      type="text"
+                      value={nuevaCondicion}
+                      onChange={(e) => setNuevaCondicion(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="ej. TDAH, TEA, Dificultades de Aprendizaje"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setModalAlumno(false)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-sm"
+                    >
+                      Guardar Alumno
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 2: EDITOR DE PLANEACIÓN INDIVIDUAL (ANEXO XXIII)
+    // =============================================================
+    function PlaneacionEditorView({ docId, onBack, setMetrics }) {
+      const [doc, setDoc] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [activeTab, setActiveTab] = useState('aprendizajes'); // 'aprendizajes' | 'dosificacion' | 'evaluacion' | 'firmas'
+      const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'dirty' | 'offline' | 'error'
+      const [assistantOpen, setAssistantOpen] = useState(false);
+      const [isOnline, setIsOnline] = useState(navigator.onLine);
+      const debounceTimer = useRef(null);
+
+      useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => {
+          setIsOnline(false);
+          setSaveStatus('offline');
+        };
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+        };
+      }, []);
+
+      // Cargar documento completo
+      useEffect(() => {
+        let mounted = true;
+        const fetchDoc = async () => {
+          const t0 = performance.now();
+          try {
+            const data = await apiRequest(`/api/planeaciones/${docId}`);
+            if (mounted) {
+              setDoc(data);
+              const t1 = performance.now();
+              setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+            }
+          } catch (e) {
+            console.error("Error abriendo planeación:", e);
+          } finally {
+            if (mounted) setLoading(false);
+          }
+        };
+        fetchDoc();
+        return () => { mounted = false; };
+      }, [docId, setMetrics]);
+
+      // Guardar con debounce
+      const persistir = useCallback(async (docActual) => {
+        if (!navigator.onLine) {
+          setSaveStatus('offline');
+          return;
+        }
+        setSaveStatus('saving');
+        const t0 = performance.now();
+        try {
+          const res = await apiRequest('/api/planeaciones', {
+            method: 'POST',
+            body: JSON.stringify(docActual)
+          });
+          setSaveStatus('saved');
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+          setDoc(d => ({ ...d, revision: res.revision, guardado_en: res.guardado_en, firmas_resueltas: res.firmas }));
+        } catch (e) {
+          console.error("Error al persistir:", e);
+          setSaveStatus('error');
+        }
+      }, [setMetrics]);
+
+      // Detectar cambios y programar autoguardado a 1.5s
+      const mutarDoc = (updater) => {
+        setDoc(prev => {
+          const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
+          setSaveStatus('dirty');
+          return next;
+        });
+      };
+
+      useEffect(() => {
+        if (saveStatus === 'dirty') {
+          if (debounceTimer.current) clearTimeout(debounceTimer.current);
+          debounceTimer.current = setTimeout(() => {
+            persistir(doc);
+          }, 1500);
+        }
+        return () => {
+          if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        };
+      }, [doc, saveStatus, persistir]);
+
+      if (loading || !doc) {
+        return (
+          <div className="text-center py-24 bg-white rounded-xl border border-slate-200">
+            <div className="inline-block animate-spin text-amber-600 text-3xl mb-3">◈</div>
+            <p className="text-slate-600 text-sm font-medium">Abriendo planeación oficial...</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="space-y-4">
+          {/* Cabecera del Editor */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={onBack}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 text-xs font-semibold transition"
+              >
+                ← Volver a Mis Documentos
+              </button>
+              <div>
+                <input
+                  type="text"
+                  value={doc.metadatos?.titulo || ''}
+                  onChange={(e) => mutarDoc(d => ({ ...d, metadatos: { ...d.metadatos, titulo: e.target.value } }))}
+                  className="font-bold text-slate-900 text-base md:text-lg border-b border-transparent hover:border-slate-300 focus:border-amber-500 focus:outline-none px-1 w-full max-w-lg"
+                  placeholder="Título del Plan de Intervención"
+                />
+                <div className="text-xs text-slate-500 px-1 flex items-center space-x-2">
+                  <span>Escuela: {doc.datos?.Escuela || 'Primaria Oficial'}</span>
+                  <span>•</span>
+                  <span>Anexo {doc.formato}</span>
+                  <span>•</span>
+                  <span>Revisión: {doc.revision}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2.5">
+              {/* Indicador de Guardado */}
+              <div className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-slate-50 border-slate-200 flex items-center space-x-2">
+                {saveStatus === 'saved' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span className="text-slate-600">Guardado confirmado</span>
+                  </>
+                )}
+                {saveStatus === 'saving' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                    <span className="text-amber-700 font-semibold animate-saving">Guardando cambios...</span>
+                  </>
+                )}
+                {saveStatus === 'dirty' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                    <span className="text-slate-500">Cambios pendientes</span>
+                  </>
+                )}
+                {saveStatus === 'offline' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                    <span className="text-slate-600">Sin conexión (esperando red)</span>
+                  </>
+                )}
+                {saveStatus === 'error' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                    <span className="text-red-600 font-bold">Error de guardado</span>
+                  </>
+                )}
+              </div>
+
+              <a
+                href={`${API_BASE}/api/planeaciones/${doc.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5"
+              >
+                <span>Descargar PDF Oficial</span>
+                <span>📄</span>
+              </a>
+
+              <button
+                onClick={() => setAssistantOpen(!assistantOpen)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-sm transition flex items-center space-x-1.5 ${
+                  assistantOpen ? 'bg-amber-600 text-white ring-2 ring-amber-400' : 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100'
+                }`}
+              >
+                <span>🤖 Asistente Pedagógico IA</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Navegación por Pestañas del Formato Oficial */}
+          <div className="flex border-b border-slate-200 space-x-1 text-sm font-semibold">
+            {[
+              { id: 'aprendizajes', label: '1. NEE y Descriptores Observables' },
+              { id: 'dosificacion', label: '2. Dosificación y Actividades' },
+              { id: 'evaluacion', label: '3. Evaluación Formativa' },
+              { id: 'firmas', label: '4. Firmas y Vo. Bo. Oficial' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2.5 border-b-2 font-bold transition text-xs sm:text-sm ${
+                  activeTab === tab.id
+                    ? 'border-amber-600 text-amber-700 bg-amber-50/50'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Contenedor Principal: Editor + Drawer IA */}
+          <div className="flex gap-4 items-start">
+            <div className="flex-1 bg-white p-5 rounded-xl border border-slate-200 shadow-sm min-h-[420px]">
+              {/* TAB 1: NEE, BAP y Descriptores Observables */}
+              {activeTab === 'aprendizajes' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                        Barreras, PDA y Descriptores Individualizados
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Indicador 5: Redactar con <strong>Sujeto + Verbo en Presente + Complemento Observable</strong>.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const nuevaFila = {
+                          alumno: 'Jesús Emmanuel Chan Burgos',
+                          curp: 'CABJ160512MYNRRN01',
+                          barreras_o_necesidades: 'Atención sostenida en lectura guiada.',
+                          pda: 'Identifica y reflexiona sobre textos narrativos.',
+                          descriptor: 'Jesús Emmanuel identifica elementos clave y formula preguntas breves con apoyo visual.',
+                          apoyos: 'Cronómetro visual y tarjetas léxicas.'
+                        };
+                        mutarDoc(d => ({
+                          ...d,
+                          tablas: { ...d.tablas, nee: [...(d.tablas?.nee || []), nuevaFila] }
+                        }));
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold"
+                    >
+                      + Agregar Alumno a Planeación
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold">
+                          <th className="p-2.5 w-1/5">Alumno</th>
+                          <th className="p-2.5 w-1/4">Barrera o Necesidad (BAP)</th>
+                          <th className="p-2.5 w-1/4">Descriptor Observable (Zona 001)</th>
+                          <th className="p-2.5 w-1/4">Apoyos y Ajustes Razonables</th>
+                          <th className="p-2.5 w-8"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {(doc.tablas?.nee || []).map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/70 transition">
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                value={row.alumno || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...d.tablas.nee];
+                                    copy[idx] = { ...copy[idx], alumno: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-slate-200 rounded font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <textarea
+                                rows="2"
+                                value={row.barreras_o_necesidades || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...d.tablas.nee];
+                                    copy[idx] = { ...copy[idx], barreras_o_necesidades: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <textarea
+                                rows="2"
+                                value={row.descriptor || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...d.tablas.nee];
+                                    copy[idx] = { ...copy[idx], descriptor: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-amber-300 bg-amber-50/30 rounded text-slate-900 font-medium focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <textarea
+                                rows="2"
+                                value={row.apoyos || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...d.tablas.nee];
+                                    copy[idx] = { ...copy[idx], apoyos: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                onClick={() => {
+                                  mutarDoc(d => ({
+                                    ...d,
+                                    tablas: { ...d.tablas, nee: d.tablas.nee.filter((_, i) => i !== idx) }
+                                  }));
+                                }}
+                                className="text-slate-400 hover:text-red-600 font-bold p-1"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: Dosificación de Actividades */}
+              {activeTab === 'dosificacion' && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Secuencia Didáctica y Modalidad</h3>
+                    <button
+                      onClick={() => {
+                        mutarDoc(d => ({
+                          ...d,
+                          tablas: {
+                            ...d.tablas,
+                            dosificacion: [
+                              ...(d.tablas?.dosificacion || []),
+                              { semana: 'Semana 1', actividad: 'Lectura interactiva', recursos: 'Láminas', modalidad: 'Aula de Apoyo' }
+                            ]
+                          }
+                        }));
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold"
+                    >
+                      + Agregar Sesión
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(doc.tablas?.dosificacion || []).map((dos, i) => (
+                      <div key={i} className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 space-y-2 text-xs">
+                        <div className="flex justify-between items-center">
+                          <input
+                            type="text"
+                            value={dos.semana || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              mutarDoc(d => {
+                                const copy = [...d.tablas.dosificacion];
+                                copy[i] = { ...copy[i], semana: val };
+                                return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
+                              });
+                            }}
+                            className="font-bold text-slate-800 bg-white px-2 py-1 border border-slate-200 rounded"
+                          />
+                          <button
+                            onClick={() => {
+                              mutarDoc(d => ({
+                                ...d,
+                                tablas: { ...d.tablas, dosificacion: d.tablas.dosificacion.filter((_, idx) => idx !== i) }
+                              }));
+                            }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <textarea
+                          rows="2"
+                          value={dos.actividad || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            mutarDoc(d => {
+                              const copy = [...d.tablas.dosificacion];
+                              copy[i] = { ...copy[i], actividad: val };
+                              return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
+                            });
+                          }}
+                          className="w-full p-2 border border-slate-200 rounded bg-white"
+                          placeholder="Descripción de la actividad pedagógica..."
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: Evaluación Formativa */}
+              {activeTab === 'evaluacion' && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Criterios e Instrumentos de Evaluación</h3>
+                  <textarea
+                    rows="6"
+                    value={doc.textos?.evaluacion || ''}
+                    onChange={(e) => mutarDoc(d => ({ ...d, textos: { ...d.textos, evaluacion: e.target.value } }))}
+                    className="w-full p-3 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                    placeholder="Registra los indicadores de logro formativo y rúbricas de la Zona 001..."
+                  />
+                </div>
+              )}
+
+              {/* TAB 4: Firmas y Vo. Bo. Oficial */}
+              {activeTab === 'firmas' && (
+                <div className="space-y-6 max-w-2xl mx-auto py-6">
+                  <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-xl text-xs text-slate-700 space-y-1">
+                    <div className="font-bold text-amber-900">Validación de Firmas Oficiales de Zona 001</div>
+                    <p>Las firmas se computan automáticamente desde el personal asignado a la escuela y la Dirección de USAER 2E.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6">
+                    <div className="p-4 border-2 border-dashed border-slate-300 rounded-xl text-center space-y-2">
+                      <div className="text-xs text-slate-400 uppercase font-semibold">Elaboró</div>
+                      <div className="font-bold text-slate-900 text-sm">
+                        {doc.firmas_resueltas?.elaboro || doc.datos?.Docente_Especialista || 'Docente Especialista USAER'}
+                      </div>
+                      <div className="text-[11px] text-slate-500">Maestra de Apoyo / Área Especialista</div>
+                    </div>
+
+                    <div className="p-4 border-2 border-dashed border-amber-400 bg-amber-50/20 rounded-xl text-center space-y-2">
+                      <div className="text-xs text-amber-700 uppercase font-bold">Vo. Bo. Dirección USAER</div>
+                      <div className="font-bold text-slate-900 text-sm">
+                        {doc.firmas_resueltas?.vo_bo || 'Psic. Edgar Adrián Yam Briceño MD'}
+                      </div>
+                      <div className="text-[11px] text-slate-500">Director USAER 02-E</div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3">
-                    {doc.observaciones_director && (
-                      <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 font-medium">
-                        💬 Con observaciones
-                      </span>
-                    )}
-                    <span className="text-xs font-semibold text-amber-600 group-hover:translate-x-1 transition-transform flex items-center space-x-1">
-                      <span>Abrir editor</span>
-                      <span>→</span>
+                  {doc.observaciones_director && (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                      <div className="font-bold text-slate-800">Observaciones del Director:</div>
+                      <div className="text-slate-600">{doc.observaciones_director}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* DRAWER LATERAL: ASISTENTE PEDAGÓGICO CONVERSACIONAL */}
+            {assistantOpen && (
+              <div className="w-80 md:w-96 bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex flex-col h-[520px]">
+                <PedagogicalChatComponent
+                  alumnoId="ALU-001"
+                  onInsertProposal={(propuesta) => {
+                    mutarDoc(d => ({
+                      ...d,
+                      tablas: {
+                        ...d.tablas,
+                        nee: [...(d.tablas?.nee || []), propuesta]
+                      }
+                    }));
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // COMPONENTE: ASISTENTE PEDAGÓGICO IA CONVERSACIONAL
+    // =============================================================
+    function PedagogicalChatComponent({ alumnoId, onInsertProposal }) {
+      const [messages, setMessages] = useState([
+        {
+          sender: 'ai',
+          text: 'Hola. Soy el Asistente Pedagógico de USAER 02-E. Puedo sugerir descriptores observables para tus alumnos alineados a los 14 indicadores de la Zona 001. ¿En qué aprendizaje o ajuste estás trabajando?'
+        }
+      ]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [lastProposal, setLastProposal] = useState(null);
+
+      const handleSend = async (e) => {
+        if (e) e.preventDefault();
+        if (!input.trim()) return;
+
+        const userMsg = input.trim();
+        setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
+        setInput('');
+        setLoading(true);
+
+        try {
+          const res = await apiRequest('/api/ai/chat', {
+            method: 'POST',
+            body: JSON.stringify({
+              mensaje: userMsg,
+              alumno_id: alumnoId
+            })
+          });
+
+          setMessages(prev => [...prev, { sender: 'ai', text: res.respuesta }]);
+          if (res.propuesta_tabla) {
+            setLastProposal(res.propuesta_tabla);
+          }
+        } catch (err) {
+          setMessages(prev => [...prev, { sender: 'ai', text: 'Lo siento, ocurrió un error consultando el motor pedagógico.' }]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="flex flex-col h-full space-y-3">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-amber-600 font-bold">🤖</span>
+              <span className="font-bold text-xs text-slate-800">Asistente Pedagógico Zona 001</span>
+            </div>
+            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Activo</span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2 text-xs pr-1">
+            {messages.map((m, idx) => (
+              <div
+                key={idx}
+                className={`p-2.5 rounded-xl ${
+                  m.sender === 'user' ? 'bg-amber-600 text-white ml-6 font-medium' : 'bg-slate-50 text-slate-800 mr-2 border border-slate-200'
+                }`}
+              >
+                <div className="whitespace-pre-wrap">{m.text}</div>
+              </div>
+            ))}
+            {loading && (
+              <div className="p-2.5 bg-slate-50 rounded-xl text-slate-400 text-xs italic">
+                Elaborando propuesta contextualizada...
+              </div>
+            )}
+          </div>
+
+          {lastProposal && (
+            <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-1.5">
+              <div className="font-bold text-amber-900 text-[11px]">Propuesta lista para insertar:</div>
+              <div className="text-slate-600 text-[11px] truncate">"{lastProposal.descriptor}"</div>
+              <button
+                onClick={() => {
+                  onInsertProposal(lastProposal);
+                  setLastProposal(null);
+                }}
+                className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-xs shadow-sm transition"
+              >
+                + Insertar en Planeación (1 Clic)
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleSend} className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Escribe tu instrucción pedagógica..."
+              className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-amber-500"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition disabled:opacity-50"
+            >
+              Enviar
+            </button>
+          </form>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 3: EXPEDIENTES INTEGRALES DE ALUMNOS (CON HISTORIA Y EPP)
+    // =============================================================
+    function ExpedientesView({ initialAlumnoId, onBack, setMetrics }) {
+      const [alumnos, setAlumnos] = useState([]);
+      const [selectedId, setSelectedId] = useState(initialAlumnoId || null);
+      const [expediente, setExpediente] = useState(null);
+      const [loadingExp, setLoadingExp] = useState(false);
+      const [activeExpTab, setActiveExpTab] = useState('resumen'); // 'resumen' | 'epp' | 'bap' | 'sugerencias' | 'eventos' | 'derivacion'
+
+      useEffect(() => {
+        apiRequest('/api/alumnos').then(data => {
+          setAlumnos(data);
+          if (!selectedId && data.length > 0) {
+            setSelectedId(data[0].id);
+          }
+        });
+      }, []);
+
+      useEffect(() => {
+        if (!selectedId) return;
+        setLoadingExp(true);
+        const t0 = performance.now();
+        apiRequest(`/api/expedientes/${selectedId}`).then(exp => {
+          setExpediente(exp);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+          setLoadingExp(false);
+        });
+      }, [selectedId, setMetrics]);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+                ← Volver a Mis Documentos
+              </button>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Expedientes de Alumnos</h1>
+            </div>
+            <a
+              href={`${API_BASE}/api/alumnos/exportar`}
+              className="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border border-slate-300 transition"
+            >
+              Exportar Padrón CSV 📥
+            </a>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Lista Izquierda de Alumnos */}
+            <div className="lg:col-span-4 bg-white p-4 rounded-xl border border-slate-200 space-y-2 self-start">
+              <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">Matrícula de Atención</h3>
+              <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                {alumnos.map(al => (
+                  <div
+                    key={al.id}
+                    onClick={() => setSelectedId(al.id)}
+                    className={`p-2.5 rounded-lg text-xs cursor-pointer transition ${
+                      selectedId === al.id ? 'bg-amber-100/70 border border-amber-300 font-bold text-slate-900' : 'hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div>{al.nombre_completo}</div>
+                    <div className="text-[11px] text-slate-500">{al.grado}° {al.grupo} • {al.escuela}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Vista Derecha del Expediente Integral */}
+            <div className="lg:col-span-8 bg-white p-6 rounded-xl border border-slate-200 space-y-5">
+              {loadingExp || !expediente ? (
+                <div className="text-center py-16 text-slate-500 text-sm">Cargando expediente integral desde base relacional...</div>
+              ) : (
+                <>
+                  <div className="border-b border-slate-200 pb-4 flex justify-between items-start">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">{expediente.alumno?.nombre_completo}</h2>
+                      <div className="text-xs text-slate-500 mt-1">
+                        <span>CURP: {expediente.alumno?.curp || 'No registrada'}</span>
+                        <span className="mx-2">•</span>
+                        <span>{expediente.alumno?.escuela}</span>
+                        <span className="mx-2">•</span>
+                        <span>Grado: {expediente.alumno?.grado}° {expediente.alumno?.grupo}</span>
+                      </div>
+                    </div>
+                    <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
+                      {expediente.alumno?.condicion || 'Atención USAER'}
                     </span>
                   </div>
+
+                  {/* Sub-pestañas de Expediente */}
+                  <div className="flex border-b border-slate-200 space-x-1 text-xs font-bold">
+                    {[
+                      { id: 'resumen', label: 'Resumen' },
+                      { id: 'epp', label: 'Evaluación Psicopedagógica (EPP)' },
+                      { id: 'bap', label: `BAP (${expediente.anexo3_bap?.length || 0})` },
+                      { id: 'sugerencias', label: `Sugerencias (${expediente.anexo4_sugerencias?.length || 0})` },
+                      { id: 'eventos', label: `Eventos (${expediente.anexo5_eventos?.length || 0})` },
+                      { id: 'derivacion', label: 'Derivación y Salud' },
+                    ].map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => setActiveExpTab(t.id)}
+                        className={`px-3 py-2 border-b-2 transition ${
+                          activeExpTab === t.id ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-400 hover:text-slate-700'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* SUB-TAB: RESUMEN */}
+                  {activeExpTab === 'resumen' && (
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-bold text-slate-700">Maestra de Apoyo Asignada</div>
+                        <div className="text-slate-900">{expediente.alumno?.maestra_apoyo || 'Por asignar'}</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-bold text-slate-700">Tipo de Atención</div>
+                        <div className="text-slate-900">{expediente.alumno?.tipo_atencion || 'Atención Focalizada'}</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-bold text-slate-700">Turno y CCT</div>
+                        <div className="text-slate-900">{expediente.alumno?.turno} • {expediente.alumno?.cct}</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-bold text-slate-700">Documentos Vinculados</div>
+                        <div className="text-amber-700 font-bold">{expediente.total_documentos} registros en expediente</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: EPP MULTI-ÁREA */}
+                  {activeExpTab === 'epp' && (
+                    <div className="space-y-3 text-xs">
+                      {expediente.epp ? (
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center text-slate-500">
+                            <span>Ciclo Escolar: {expediente.epp.ciclo}</span>
+                            <span>Revisión: {expediente.epp.revision}</span>
+                          </div>
+                          {Object.entries(expediente.epp.partes || {}).map(([area, datos]) => {
+                            if (area === 'META') return null;
+                            return (
+                              <div key={area} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                                <div className="font-bold text-slate-900 uppercase tracking-wider text-[11px] text-amber-700">
+                                  Área: {area}
+                                </div>
+                                {typeof datos === 'object' ? (
+                                  Object.entries(datos).map(([k, v]) => (
+                                    <div key={k} className="text-slate-700">
+                                      <strong className="text-slate-800">{k.replace(/_/g, ' ')}:</strong> {String(v)}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="text-slate-700">{String(datos)}</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-slate-500">No hay Evaluación Psicopedagógica cargada para este ciclo.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: BAP */}
+                  {activeExpTab === 'bap' && (
+                    <div className="space-y-2 text-xs">
+                      {expediente.anexo3_bap?.map((b) => (
+                        <div key={b.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                          <div className="flex justify-between items-center font-bold text-slate-800">
+                            <span>Detección BAP</span>
+                            <span className="text-slate-400 font-normal">{b.fecha}</span>
+                          </div>
+                          {b.fisicas && <div><strong>Físicas:</strong> {b.fisicas}</div>}
+                          {b.actitudinales && <div><strong>Actitudinales:</strong> {b.actitudinales}</div>}
+                          {b.pedagogicas && <div><strong>Pedagógicas:</strong> {b.pedagogicas}</div>}
+                          {b.organizativas && <div><strong>Organizativas:</strong> {b.organizativas}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: SUGERENCIAS */}
+                  {activeExpTab === 'sugerencias' && (
+                    <div className="space-y-2 text-xs">
+                      {expediente.anexo4_sugerencias?.map((sug) => (
+                        <div key={sug.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                          <div className="flex justify-between items-center font-bold text-slate-800">
+                            <span>Área: {sug.area}</span>
+                            <span className="text-slate-400 font-normal">{sug.fecha}</span>
+                          </div>
+                          <div><strong>Sugerencias:</strong> {sug.sugerencias}</div>
+                          {sug.motivo && <div><strong>Motivo:</strong> {sug.motivo}</div>}
+                          {sug.cumplimiento && <div className="text-amber-800"><strong>Resultado:</strong> {sug.cumplimiento}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: EVENTOS */}
+                  {activeExpTab === 'eventos' && (
+                    <div className="space-y-2 text-xs">
+                      {expediente.anexo5_eventos?.map((ev) => (
+                        <div key={ev.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-start">
+                          <div>
+                            <div className="font-bold text-slate-800">{ev.especialista}</div>
+                            <div className="text-slate-600 mt-1">{ev.evento}</div>
+                          </div>
+                          <span className="text-slate-400 font-mono text-[11px] whitespace-nowrap ml-4">{ev.fecha}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: DERIVACIÓN */}
+                  {activeExpTab === 'derivacion' && (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                      <div className="font-bold text-slate-900">Anexo VII — Formato de Derivación</div>
+                      <div><strong>Docente Regular:</strong> {expediente.anexo7_derivacion?.docente_regular || 'No registrado'}</div>
+                      <div><strong>Salud:</strong> {expediente.anexo7_derivacion?.salud || 'Buena salud reportada'}</div>
+                      <div><strong>Seguimiento Médico:</strong> {expediente.anexo7_derivacion?.seguimiento_medico || 'Sin seguimiento activo'}</div>
+                      <div><strong>Aspecto Relevante:</strong> {expediente.anexo7_derivacion?.aspecto_relevante || 'Ninguno'}</div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 4: ACTAS DE VISITA Y OFICIOS DE COMISIÓN
+    // =============================================================
+    function ActasYOficiosView({ onBack, setMetrics }) {
+      const [visitas, setVisitas] = useState([]);
+      const [oficios, setOficios] = useState([]);
+      const [subTab, setSubTab] = useState('visitas'); // 'visitas' | 'oficios'
+
+      useEffect(() => {
+        const t0 = performance.now();
+        Promise.all([
+          apiRequest('/api/visitas'),
+          apiRequest('/api/oficios')
+        ]).then(([v, o]) => {
+          setVisitas(v);
+          setOficios(o);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 2 }));
+        });
+      }, [setMetrics]);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Actas de Visita y Oficios de Comisión</h1>
+          </div>
+
+          <div className="flex border-b border-slate-200 space-x-2 text-xs font-bold">
+            <button
+              onClick={() => setSubTab('visitas')}
+              className={`px-4 py-2 border-b-2 transition ${
+                subTab === 'visitas' ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-500'
+              }`}
+            >
+              📋 Actas de Visita de Acompañamiento ({visitas.length})
+            </button>
+            <button
+              onClick={() => setSubTab('oficios')}
+              className={`px-4 py-2 border-b-2 transition ${
+                subTab === 'oficios' ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-500'
+              }`}
+            >
+              📜 Oficios de Comisión ({oficios.length})
+            </button>
+          </div>
+
+          {subTab === 'visitas' && (
+            <div className="space-y-3">
+              {visitas.map((v, i) => (
+                <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-1 shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-900 text-sm">Escuela: {v.Escuela}</span>
+                    <span className="text-slate-400">{v.Fecha}</span>
+                  </div>
+                  <div><strong>Personal de Acompañamiento:</strong> {v.Personal}</div>
+                  <div><strong>Motivo:</strong> {v.Motivo}</div>
+                  {v.Observaciones && <div className="text-slate-600"><strong>Observaciones:</strong> {v.Observaciones}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {subTab === 'oficios' && (
+            <div className="space-y-3">
+              {oficios.map((o, i) => (
+                <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-1 shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-900 text-sm">Folio: {o.Folio}</span>
+                    <span className="text-slate-400">Emisión: {o.Fecha_Emision}</span>
+                  </div>
+                  <div><strong>Destino:</strong> {o.Destino} ({o.Escuela})</div>
+                  <div><strong>Personal comisionado:</strong> {o.Maestra_Apoyo}</div>
+                  <div><strong>Asunto:</strong> {o.Asunto}</div>
+                  <div><strong>Horario:</strong> {o.Horario}</div>
                 </div>
               ))}
             </div>
@@ -311,458 +1624,87 @@
       );
     }
 
-    // -------------------------------------------------------------
-    // VISTA 2: EDITOR MINIMALISTA CON AUTOGUARDADO DEBOUNCED
-    // -------------------------------------------------------------
-    function EditorView({ doc, setDoc, saveStatus, setSaveStatus, onBack, assistantOpen, setAssistantOpen, setMetrics }) {
-      const [tab, setTab] = useState('aprendizajes'); // 'aprendizajes' | 'dosificacion' | 'textos' | 'firmas'
-      const debounceTimer = useRef(null);
+    // =============================================================
+    // VISTA 5: ESTADÍSTICAS INSTITUCIONALES DE ZONA
+    // =============================================================
+    function EstadisticasView({ onBack, setMetrics }) {
+      const [stats, setStats] = useState(null);
 
-      // Mutación controlada del documento
-      const updateDoc = (updater) => {
-        setDoc(prev => {
-          const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
-          setSaveStatus('dirty');
-          return next;
-        });
-      };
-
-      // Disparador de guardado persistente con debounce
-      const persistirCambios = useCallback(async (docToSave) => {
-        setSaveStatus('saving');
-        const t0 = performance.now();
-        try {
-          const res = await fetchAPI('/api/planeaciones', {
-            method: 'POST',
-            body: JSON.stringify(docToSave)
-          });
-          setSaveStatus('saved');
-          const t1 = performance.now();
-          setMetrics(m => ({ ...m, latency: Math.round(t1 - t0), requests: m.requests + 1 }));
-          // Guardar respaldo local de emergencia
-          localStorage.setItem(`planeacion_${docToSave.id}`, JSON.stringify(docToSave));
-        } catch (err) {
-          console.error("Fallo de guardado:", err);
-          setSaveStatus('error');
-        }
-      }, [setMetrics, setSaveStatus]);
-
-      // Efecto debounce: si hay cambios sucios, guarda automáticamente a los 1.5s
       useEffect(() => {
-        if (saveStatus === 'dirty') {
-          if (debounceTimer.current) clearTimeout(debounceTimer.current);
-          debounceTimer.current = setTimeout(() => {
-            persistirCambios(doc);
-          }, 1500);
-        }
-        return () => {
-          if (debounceTimer.current) clearTimeout(debounceTimer.current);
-        };
-      }, [doc, saveStatus, persistirCambios]);
-
-      // Manejadores para edición de celdas
-      const updateAprendizaje = (index, field, value) => {
-        updateDoc(d => {
-          const rows = [...(d.tablas?.aprendizajes || [])];
-          rows[index] = { ...rows[index], [field]: value };
-          return { ...d, tablas: { ...d.tablas, aprendizajes: rows } };
+        const t0 = performance.now();
+        apiRequest('/api/estadisticas/zona').then(data => {
+          setStats(data);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
         });
-      };
+      }, [setMetrics]);
 
-      const addAprendizajeRow = () => {
-        updateDoc(d => {
-          const rows = [...(d.tablas?.aprendizajes || []), { "Necesidades educativas específicas": "", "Aprendizaje y/u objetivo": "", "Descriptor de logro": "" }];
-          return { ...d, tablas: { ...d.tablas, aprendizajes: rows } };
-        });
-      };
-
-      const removeAprendizajeRow = (idx) => {
-        updateDoc(d => {
-          const rows = d.tablas?.aprendizajes?.filter((_, i) => i !== idx) || [];
-          return { ...d, tablas: { ...d.tablas, aprendizajes: rows } };
-        });
-      };
+      if (!stats) {
+        return <div className="text-center py-16 text-slate-500 text-sm">Calculando indicadores relacionales...</div>;
+      }
 
       return (
-        <div className="space-y-4">
-          {/* Barra superior de control del editor */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={onBack}
-                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition"
-                title="Volver a la lista"
-              >
-                ← Volver
-              </button>
-              <div>
-                <input
-                  type="text"
-                  value={doc.metadatos?.titulo || ''}
-                  onChange={(e) => updateDoc(d => ({ ...d, metadatos: { ...d.metadatos, titulo: e.target.value } }))}
-                  className="font-bold text-slate-900 text-lg border-b border-transparent hover:border-slate-300 focus:border-amber-500 focus:outline-none px-1"
-                  placeholder="Título de la planeación"
-                />
-                <div className="text-xs text-slate-500 px-1">
-                  <span>Escuela: {doc.datos?.Escuela}</span>
-                  <span className="mx-2">•</span>
-                  <span>Formato: Anexo {doc.formato}</span>
-                </div>
-              </div>
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Estadísticas de Zona 001</h1>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Total Alumnos en Padrón</div>
+              <div className="text-2xl font-black text-slate-900 mt-1">{stats.total_alumnos}</div>
+              <div className="text-[11px] text-emerald-600 mt-1">Activos en ciclo {stats.ciclo_activo}</div>
             </div>
-
-            <div className="flex items-center space-x-3">
-              {/* Indicador visual de guardado */}
-              <div className="flex items-center space-x-2 text-xs font-medium px-3 py-1.5 rounded-lg border bg-slate-50 border-slate-200">
-                {saveStatus === 'saved' && (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span className="text-slate-600">Guardado en SQL</span>
-                  </>
-                )}
-                {saveStatus === 'saving' && (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-saving"></span>
-                    <span className="text-amber-700">Guardando cambios...</span>
-                  </>
-                )}
-                {saveStatus === 'dirty' && (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                    <span className="text-slate-500">Cambios pendientes (autoguardado)...</span>
-                  </>
-                )}
-                {saveStatus === 'error' && (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    <span className="text-rose-600">Reintentando conexión...</span>
-                  </>
-                )}
-              </div>
-
-              {/* Botón Asistente IA */}
-              <button
-                onClick={() => setAssistantOpen(!assistantOpen)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition flex items-center space-x-1.5 ${
-                  assistantOpen
-                    ? 'bg-amber-100 border-amber-300 text-amber-900'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span>✨</span>
-                <span>Asistente IA</span>
-              </button>
-
-              {/* Botón Guardar Forzado */}
-              <button
-                onClick={() => persistirCambios(doc)}
-                className="px-4 py-1.5 text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 rounded-lg shadow-sm transition"
-              >
-                Guardar ahora
-              </button>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Escuelas de la Zona</div>
+              <div className="text-2xl font-black text-amber-600 mt-1">{stats.total_escuelas}</div>
+              <div className="text-[11px] text-slate-400 mt-1">Primarias públicas</div>
+            </div>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Cumplimiento EPP</div>
+              <div className="text-2xl font-black text-emerald-600 mt-1">{stats.cumplimiento_epp}</div>
+              <div className="text-[11px] text-slate-400 mt-1">Avance curricular</div>
+            </div>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Actas y Oficios</div>
+              <div className="text-2xl font-black text-slate-900 mt-1">{stats.visitas_registradas + stats.oficios_emitidos}</div>
+              <div className="text-[11px] text-slate-400 mt-1">Supervisión técnica</div>
             </div>
           </div>
 
-          {/* Navegación por Pestañas del Documento */}
-          <div className="flex border-b border-slate-200 space-x-4 text-sm font-medium">
-            <button
-              onClick={() => setTab('aprendizajes')}
-              className={`pb-2.5 transition border-b-2 ${
-                tab === 'aprendizajes' ? 'border-amber-600 text-amber-800 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              1. Necesidades y Aprendizajes
-            </button>
-            <button
-              onClick={() => setTab('dosificacion')}
-              className={`pb-2.5 transition border-b-2 ${
-                tab === 'dosificacion' ? 'border-amber-600 text-amber-800 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              2. Dosificación de Actividades
-            </button>
-            <button
-              onClick={() => setTab('textos')}
-              className={`pb-2.5 transition border-b-2 ${
-                tab === 'textos' ? 'border-amber-600 text-amber-800 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              3. Evaluación y Observaciones
-            </button>
-            <button
-              onClick={() => setTab('firmas')}
-              className={`pb-2.5 transition border-b-2 ${
-                tab === 'firmas' ? 'border-amber-600 text-amber-800 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              4. Firmas y Autorización
-            </button>
-          </div>
-
-          {/* Contenido del Tab Activo */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className={assistantOpen ? "lg:col-span-8 space-y-4" : "lg:col-span-12 space-y-4"}>
-              {tab === 'aprendizajes' && (
-                <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-slate-800 text-sm">Necesidades educativas específicas, aprendizaje y descriptor de logro</h3>
-                    <button
-                      onClick={addAprendizajeRow}
-                      className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-semibold transition"
-                    >
-                      + Añadir Fila
-                    </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-5 bg-white rounded-xl border border-slate-200 space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm">Distribución por Condición o Discapacidad</h3>
+              <div className="space-y-2 text-xs">
+                {Object.entries(stats.distribucion_condicion || {}).map(([cond, count]) => (
+                  <div key={cond} className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-700">{cond}</span>
+                    <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{count}</span>
                   </div>
-
-                  <div className="space-y-3">
-                    {(doc.tablas?.aprendizajes || []).map((row, idx) => (
-                      <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 relative group">
-                        <button
-                          onClick={() => removeAprendizajeRow(idx)}
-                          className="absolute right-2 top-2 text-slate-400 hover:text-rose-600 text-xs opacity-0 group-hover:opacity-100 transition"
-                          title="Eliminar fila"
-                        >
-                          ✕
-                        </button>
-                        <div>
-                          <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Necesidad Educativa Específica</label>
-                          <textarea
-                            rows="2"
-                            value={row["Necesidades educativas específicas"] || ''}
-                            onChange={(e) => updateAprendizaje(idx, "Necesidades educativas específicas", e.target.value)}
-                            className="w-full text-xs p-2 bg-white border border-slate-200 rounded-md focus:border-amber-500 focus:outline-none"
-                            placeholder="Describa la necesidad u objetivo prioritario..."
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Aprendizaje y/u Objetivo</label>
-                            <input
-                              type="text"
-                              value={row["Aprendizaje y/u objetivo"] || ''}
-                              onChange={(e) => updateAprendizaje(idx, "Aprendizaje y/u objetivo", e.target.value)}
-                              className="w-full text-xs p-2 bg-white border border-slate-200 rounded-md focus:border-amber-500 focus:outline-none"
-                              placeholder="Aprendizaje esperado..."
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Descriptor de Logro</label>
-                            <input
-                              type="text"
-                              value={row["Descriptor de logro"] || ''}
-                              onChange={(e) => updateAprendizaje(idx, "Descriptor de logro", e.target.value)}
-                              className="w-full text-xs p-2 bg-white border border-slate-200 rounded-md focus:border-amber-500 focus:outline-none"
-                              placeholder="Evidencia observable..."
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {tab === 'dosificacion' && (
-                <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
-                  <h3 className="font-bold text-slate-800 text-sm">Organización de las actividades de aprendizaje</h3>
-                  {(doc.tablas?.dosificacion || []).map((row, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold text-slate-600">Contexto</label>
-                        <select
-                          value={row["Contextos"] || 'Aula de apoyo'}
-                          onChange={(e) => {
-                            const rows = [...doc.tablas.dosificacion];
-                            rows[idx]["Contextos"] = e.target.value;
-                            updateDoc(d => ({ ...d, tablas: { ...d.tablas, dosificacion: rows } }));
-                          }}
-                          className="w-full text-xs p-2 bg-white border border-slate-200 rounded-md mt-1"
-                        >
-                          <option>Aula de apoyo</option>
-                          <option>Aula regular</option>
-                          <option>Escuela</option>
-                          <option>Familia</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-slate-600">Temporalidad</label>
-                        <input
-                          type="text"
-                          value={row["Temporalidad"] || ''}
-                          onChange={(e) => {
-                            const rows = [...doc.tablas.dosificacion];
-                            rows[idx]["Temporalidad"] = e.target.value;
-                            updateDoc(d => ({ ...d, tablas: { ...d.tablas, dosificacion: rows } }));
-                          }}
-                          className="w-full text-xs p-2 bg-white border border-slate-200 rounded-md mt-1"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="text-xs font-semibold text-slate-600">Actividades</label>
-                        <textarea
-                          rows="3"
-                          value={row["Actividades"] || ''}
-                          onChange={(e) => {
-                            const rows = [...doc.tablas.dosificacion];
-                            rows[idx]["Actividades"] = e.target.value;
-                            updateDoc(d => ({ ...d, tablas: { ...d.tablas, dosificacion: rows } }));
-                          }}
-                          className="w-full text-xs p-2 bg-white border border-slate-200 rounded-md mt-1"
-                          placeholder="Secuencia didáctica..."
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {tab === 'textos' && (
-                <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
-                  <h3 className="font-bold text-slate-800 text-sm">Evaluación y Observaciones de Seguimiento</h3>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600">Evaluación formativa</label>
-                    <textarea
-                      rows="3"
-                      value={doc.textos?.["Evaluación"] || ''}
-                      onChange={(e) => updateDoc(d => ({ ...d, textos: { ...d.textos, "Evaluación": e.target.value } }))}
-                      className="w-full text-xs p-2 bg-white border border-slate-200 rounded-md mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600">Observaciones generales</label>
-                    <textarea
-                      rows="3"
-                      value={doc.textos?.["Observaciones"] || ''}
-                      onChange={(e) => updateDoc(d => ({ ...d, textos: { ...d.textos, "Observaciones": e.target.value } }))}
-                      className="w-full text-xs p-2 bg-white border border-slate-200 rounded-md mt-1"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {tab === 'firmas' && (
-                <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
-                  <h3 className="font-bold text-slate-800 text-sm">Validación Canónica y Firmas Oficiales</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                    <div className="border border-slate-200 rounded-xl p-4 text-center space-y-2">
-                      <div className="text-xs text-slate-400 font-medium">Elaboró:</div>
-                      <div className="h-16 flex items-end justify-center border-b border-dashed border-slate-300 pb-2">
-                        <span className="text-slate-300 text-xs italic">Firma Electrónica Verificada</span>
-                      </div>
-                      <div className="font-bold text-slate-900 text-sm">
-                        {doc.firmas_resueltas?.especialista_nombre || 'Mtra. Cindy Mayanín Burgos González'}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {doc.firmas_resueltas?.especialista_cargo || 'Maestra de Apoyo'}
-                      </div>
-                    </div>
-
-                    <div className="border border-slate-200 rounded-xl p-4 text-center space-y-2">
-                      <div className="text-xs text-slate-400 font-medium">Vo. Bo. Dirección:</div>
-                      <div className="h-16 flex items-end justify-center border-b border-dashed border-slate-300 pb-2">
-                        <span className="text-slate-300 text-xs italic">Sello Digital USAER 02-E</span>
-                      </div>
-                      <div className="font-bold text-slate-900 text-sm">
-                        {doc.firmas_resueltas?.director_nombre || 'Psic. Edgar Adrián Yam Briceño MD'}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {doc.firmas_resueltas?.director_cargo || 'Vo. Bo. Director del Servicio de Apoyo'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
 
-            {/* Panel Lateral: Asistente Pedagógico IA */}
-            {assistantOpen && (
-              <div className="lg:col-span-4 bg-white p-4 rounded-xl border border-amber-200 shadow-sm space-y-4 self-start">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-amber-500">✨</span>
-                    <h4 className="font-bold text-slate-900 text-sm">Asistente Pedagógico</h4>
+            <div className="p-5 bg-white rounded-xl border border-slate-200 space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm">Matrícula por Escuela</h3>
+              <div className="space-y-2 text-xs">
+                {Object.entries(stats.distribucion_escuela || {}).map(([esc, count]) => (
+                  <div key={esc} className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-700">{esc}</span>
+                    <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{count}</span>
                   </div>
-                  <button onClick={() => setAssistantOpen(false)} className="text-xs text-slate-400 hover:text-slate-600">✕</button>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Genera propuestas pedagógicas contextualizadas basadas en la evidencia y barreras registradas.
-                </p>
-                <AssistantTool onApply={(sug) => {
-                  updateDoc(d => {
-                    const rows = [...(d.tablas?.aprendizajes || [])];
-                    rows.push({
-                      "Necesidades educativas específicas": sug.motivo || sug.sugerencias,
-                      "Aprendizaje y/u objetivo": "Estrategias de acceso sugeridas por IA",
-                      "Descriptor de logro": sug.seguimiento || "Evaluación a 30 días"
-                    });
-                    return { ...d, tablas: { ...d.tablas, aprendizajes: rows } };
-                  });
-                }} />
+                ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
       );
     }
 
-    // Subcomponente de llamada al Asistente IA
-    function AssistantTool({ onApply }) {
-      const [loading, setLoading] = useState(false);
-      const [barrera, setBarrera] = useState('Dificultad en autorregulación y atención');
-      const [resultado, setResultado] = useState(null);
-
-      const solicitar = async () => {
-        setLoading(true);
-        try {
-          const res = await fetchAPI('/api/ai/sugerencias', {
-            method: 'POST',
-            body: JSON.stringify({ necesidad_o_barrera: barrera })
-          });
-          setResultado(res);
-        } catch (e) {
-          alert("Error de IA: " + e.message);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      return (
-        <div className="space-y-3 pt-1">
-          <div>
-            <label className="text-[11px] font-semibold text-slate-600">Barrera o necesidad a consultar:</label>
-            <input
-              type="text"
-              value={barrera}
-              onChange={(e) => setBarrera(e.target.value)}
-              className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-md mt-1"
-            />
-          </div>
-          <button
-            onClick={solicitar}
-            disabled={loading}
-            className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-xs rounded-lg transition"
-          >
-            {loading ? 'Consultando IA...' : '⚡ Generar Propuesta'}
-          </button>
-          {resultado && (
-            <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs space-y-2">
-              <p className="text-slate-700 leading-relaxed">{resultado.sugerencias}</p>
-              <button
-                onClick={() => onApply(resultado)}
-                className="w-full py-1 text-center bg-white border border-amber-300 text-amber-800 font-semibold rounded hover:bg-amber-100 transition"
-              >
-                + Insertar en la planeación
-              </button>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Renderizado en el DOM
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
-

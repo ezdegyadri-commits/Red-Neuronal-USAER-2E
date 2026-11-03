@@ -827,6 +827,16 @@ def guardar_planeacion_sql(doc: Dict[str, Any]) -> str:
         return pid
 
 
+def delete_planeacion_sql(id_planeacion: str) -> bool:
+    with get_session() as session:
+        r = session.query(PlaneacionDoc).filter_by(id=str(id_planeacion).strip()).first()
+        if r:
+            session.delete(r)
+            session.commit()
+            return True
+        return False
+
+
 def epp_listar_sql(ids_alumnos: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """Consulta indexada ultrarrápida de informes EPP filtrados por los alumnos autorizados."""
     with get_session() as session:

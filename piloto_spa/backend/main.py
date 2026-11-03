@@ -1,44 +1,65 @@
-"""FastAPI Backend para el Piloto SPA de USAER 2E.
+"""FastAPI Backend Integral para USAER 2E 2.0.
 
-Proporciona una capa RESTful desacoplada, ultrarrápida e insensible a la recarga
-de Streamlit, consumiendo las fuentes de datos relacionales y pedagógicas existentes.
+Capa de servicios RESTful de alta velocidad para la versión SPA desacoplada de Streamlit.
+Implementa autenticación con tokens seguros, control de acceso basado en roles (RBAC),
+persistencia relacional, EPP, expedientes, planeaciones (Formatos XXIII, XXV, XIX, XX),
+asistente pedagógico conversacional, anexos oficiales, visitas, oficios e indicadores de la Zona 001.
 """
 from __future__ import annotations
 
+import io
 import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import uuid
-import json
 import time
 
-# Asegurar path raíz para reutilizar modelos y servicios existentes
+# Configurar path raíz para módulos canónicos
 ROOT_DIR = str(Path(__file__).resolve().parents[2])
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, status, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+import pandas as pd
 
-from data.sql_repository import (
-    planeaciones_resumen_sql,
-    planeacion_por_id_sql,
-    guardar_planeacion_sql,
-    alumnos_sql,
-    epp_listar_sql,
+from piloto_spa.backend.auth_service import (
+    SessionUser,
+    autenticar_usuario,
+    emitir_token_sesion,
+    validar_token_sesion,
+    cerrar_sesion,
 )
-from services.planeacion_firmas import resolver_firmas_planeacion, DIRECTOR_USAER
-from services.planeacion_modelo import FORMATOS
-from ai.engine import fallback as ai_fallback, generar_sugerencias
+from piloto_spa.backend.domain_services import (
+    obtener_catalogo_escuelas,
+    obtener_alumnos_autorizados,
+    guardar_alumno_nuevo,
+    actualizar_alumno_existente,
+    obtener_expediente_completo,
+    obtener_epp_documento,
+    guardar_epp_documento,
+    obtener_planeacion_con_firmas,
+    guardar_planeacion_transaccional,
+    eliminar_planeacion_documento,
+    guardar_anexo3_documento,
+    guardar_anexo4_documento,
+    guardar_anexo5_documento,
+    guardar_anexo7_documento,
+    obtener_visitas_documentos,
+    guardar_visita_documento,
+    obtener_oficios_documentos,
+    guardar_oficio_documento,
+    chat_asistente_pedagogico,
+    obtener_estadisticas_zona,
+)
+from documents.planeacion import generar_pdf as generar_pdf_planeacion
 
 app = FastAPI(
-    title="USAER 2E - API Piloto SPA",
-    version="1.0.0",
-    description="Backend de alta velocidad y baja latencia para la modernización SPA de USAER 2E",
+    title="USAER 2E 2.0 — API de Servicios Pedagógicos",
+    version="2.0.0",
+    description="Backend desacoplado de alto rendimiento para el sistema educativo USAER 02-E",
 )
 
 app.add_middleware(
@@ -49,34 +70,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------
-# MODELOS PYDANTIC
-# ---------------------------------------------------------
+# -------------------------------------------------------------
+# MODELOS PYDANTIC PARA CONTRATOS DE ENTRADA Y SALIDA
+# -------------------------------------------------------------
 
-class LoginRequest(BaseModel):
+class LoginPayload(BaseModel):
     usuario: str
     password: str
 
-class UserProfile(BaseModel):
-    usuario: str
-    nombre: str
-    rol: str
-    escuelas_permitidas: List[str]
-    director: bool
+class LoginResponse(BaseModel):
+    token: str
+    user: SessionUser
 
-class PlaneacionResumen(BaseModel):
-    id: str
-    cuenta: str
-    formato: str
-    estado: str
-    revision: str
-    guardado_en: str
-    escuela: str
-    observaciones_director: str
-
-class PlaneacionGuardarRequest(BaseModel):
+class AlumnoPayload(BaseModel):
     id: Optional[str] = None
-    cuenta: str
+    nombre_completo: str
+    curp: str = ""
+    edad_1_septiembre: str = ""
+    sexo: str = "Hombre"
+    situacion_alumno: str = "INSCRITO"
+    nivel_educativo: str = "Primaria"
+    grado: str = "1"
+    grupo: str = "A"
+    id_escuela: str = "ESC-001"
+    nombre_escuela: str = "Damián Carmona"
+    maestra_apoyo: str = ""
+    condicion_discapacidad: str = "TDAH"
+    estatus: str = "ACTIVO"
+    tipo_atencion: str = "Atención Focalizada"
+
+class PlaneacionPayload(BaseModel):
+    id: Optional[str] = None
     formato: str = "XXIII"
     estado: str = "BORRADOR"
     revision: Optional[str] = None
@@ -86,243 +110,430 @@ class PlaneacionGuardarRequest(BaseModel):
     textos: Dict[str, str] = Field(default_factory=dict)
     observaciones_director: str = ""
 
-class AISugerenciaRequest(BaseModel):
+class EPPPayload(BaseModel):
+    id: str
+    alumno: str
+    ciclo: str = "2026-2027"
+    partes: Dict[str, Any] = Field(default_factory=dict)
+
+class AIChatPayload(BaseModel):
+    mensaje: str
+    alumno_id: Optional[str] = None
+    planeacion_id: Optional[str] = None
+
+class AISugerenciaPayload(BaseModel):
     area: str = "Aprendizaje"
     necesidad_o_barrera: str
     grado: str = "2"
     condicion: str = "General"
 
-# ---------------------------------------------------------
-# AUTENTICACIÓN SIMULADA / AUTORIZACIÓN
-# ---------------------------------------------------------
+class Anexo3Payload(BaseModel):
+    id: Optional[str] = None
+    id_alumno: str
+    fecha: str = ""
+    bap_fisicas: str = ""
+    bap_actitudinales: str = ""
+    bap_pedagogicas: str = ""
+    bap_organizativas: str = ""
 
-def obtener_usuario_activo(
-    x_user_account: Optional[str] = Header(None, alias="X-User-Account")
-) -> UserProfile:
-    """Verifica la identidad del usuario a partir del encabezado."""
-    cuenta = x_user_account or "docente.apoyo@usaer2e.edu.mx"
-    es_director = "director" in cuenta.lower() or cuenta == "edgar"
-    nombre = "Psic. Edgar Adrián Yam Briceño MD" if es_director else "Mtra. Cindy Mayanín Burgos González"
-    rol = "DIRECTOR" if es_director else "MAESTRA DE APOYO"
-    escuelas = ["ESC-001", "ESC-002"] if es_director else ["ESC-001"]
-    
-    return UserProfile(
-        usuario=cuenta,
-        nombre=nombre,
-        rol=rol,
-        escuelas_permitidas=escuelas,
-        director=es_director
-    )
+class Anexo4Payload(BaseModel):
+    id: Optional[str] = None
+    id_alumno: str
+    fecha_elaboracion: str = ""
+    ciclo_escolar: str = "2026-2027"
+    trimestre: str = "1"
+    docente_especialista: str = ""
+    area: str = "Aprendizaje"
+    sugerencias: str = ""
+    motivo: str = ""
+    fecha_seguimiento: str = ""
+    nivel_cumplimiento_resultados: str = ""
 
-# ---------------------------------------------------------
-# ENDPOINTS RESTful
-# ---------------------------------------------------------
+class Anexo5Payload(BaseModel):
+    id: Optional[str] = None
+    id_alumno: str
+    fecha: str = ""
+    nombre_alumno: str = ""
+    grado_grupo: str = ""
+    especialista: str = ""
+    evento: str = ""
+    id_escuela: str = ""
+    escuela: str = ""
+
+class VisitaPayload(BaseModel):
+    id: Optional[str] = None
+    fecha: str = ""
+    escuela: str = ""
+    personal: str = ""
+    motivo: str = ""
+    observaciones: str = ""
+    tipo_acta: str = "Acompañamiento"
+    lugar: str = "Mérida, Yucatán"
+
+class OficioPayload(BaseModel):
+    id: Optional[str] = None
+    folio: str = ""
+    clave_operacion: str = ""
+    fecha_emision: str = ""
+    fecha_comision: str = ""
+    escuela: str = ""
+    id_escuela: str = ""
+    maestra_apoyo: str = ""
+    director_escuela: str = ""
+    asunto: str = ""
+    destino: str = ""
+    horario: str = ""
+
+# -------------------------------------------------------------
+# 1. AUTENTICACIÓN Y SESIÓN (SEGURA Y CON TOKENS)
+# -------------------------------------------------------------
 
 @app.get("/api/health")
 def healthcheck():
-    """Endpoint ultrarrápido para monitoreo y keep-alive de disponibilidad."""
-    return {"status": "ok", "timestamp": time.time(), "engine": "FastAPI ASGI"}
+    """Monitoreo de estado y keep-alive de disponibilidad."""
+    return {"status": "ok", "version": "2.0.0", "timestamp": time.time()}
 
 
-@app.post("/api/auth/login", response_model=UserProfile)
-def login(creds: LoginRequest):
-    """Autenticación en memoria/SQL con respuesta sub-milisegundo."""
-    # Validación sintética segura para piloto
-    u = creds.usuario.strip().lower()
-    es_dir = u in ("edgar", "director")
-    return UserProfile(
-        usuario=creds.usuario,
-        nombre="Psic. Edgar Adrián Yam Briceño MD" if es_dir else "Mtra. Cindy Mayanín Burgos González",
-        rol="DIRECTOR" if es_dir else "MAESTRA DE APOYO",
-        escuelas_permitidas=["ESC-001", "ESC-002"] if es_dir else ["ESC-001"],
-        director=es_dir
-    )
+@app.post("/api/auth/login", response_model=LoginResponse)
+def login_endpoint(payload: LoginPayload):
+    """Autentica credenciales y emite un token de sesión criptográfico."""
+    user = autenticar_usuario(payload.usuario, payload.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario o contraseña incorrectos."
+        )
+    token = emitir_token_sesion(user)
+    return LoginResponse(token=token, user=user)
 
 
-@app.get("/api/planeaciones", response_model=List[Dict[str, Any]])
-def listar_planeaciones(
-    usuario: UserProfile = Depends(obtener_usuario_activo)
-):
-    """Obtiene la lista resumida de planeaciones con límite duro y respuesta instantánea."""
-    inicio = time.perf_counter()
-    resumen = planeaciones_resumen_sql(
-        cuenta=usuario.usuario,
-        es_director=usuario.director
-    )
-    
-    # Si la base SQL local no tiene datos, retornar registros modelo para el piloto
-    if not resumen:
-        resumen = [
-            {
-                "id": "plan-demo-001",
-                "cuenta": usuario.usuario,
-                "formato": "XXIII",
-                "estado": "REVISIÓN",
-                "revision": "rev-a1b2",
-                "guardado_en": "2026-11-03 09:15",
-                "datos": {"Escuela": "Damián Carmona", "Grado_Grupo": "2° A"},
-                "metadatos": {"titulo": "Atención Focalizada y Lectoescritura"},
-                "tablas": {},
-                "textos": {},
-                "observaciones_director": "Excelente avance en actividades de aula regular."
-            },
-            {
-                "id": "plan-demo-002",
-                "cuenta": usuario.usuario,
-                "formato": "XXIII",
-                "estado": "BORRADOR",
-                "revision": "rev-c3d4",
-                "guardado_en": "2026-11-03 10:45",
-                "datos": {"Escuela": "Damián Carmona", "Grado_Grupo": "4° B"},
-                "metadatos": {"titulo": "Habilidades Lógico-Matemáticas y BAP"},
-                "tablas": {},
-                "textos": {},
-                "observaciones_director": ""
-            }
-        ]
-        
-    duracion_ms = (time.perf_counter() - inicio) * 1000
-    for doc in resumen:
-        doc["_latencia_ms"] = round(duracion_ms, 2)
-    return resumen
+@app.get("/api/me", response_model=SessionUser)
+def obtener_perfil_actual(user: SessionUser = Depends(validar_token_sesion)):
+    """Retorna los datos y alcance de autorización del usuario autenticado."""
+    return user
 
 
-@app.get("/api/planeaciones/{id_planeacion}")
-def obtener_planeacion(
-    id_planeacion: str,
-    usuario: UserProfile = Depends(obtener_usuario_activo)
-):
-    """Carga completa del documento de planeación incluyendo firmas y tablas."""
-    doc = planeacion_por_id_sql(id_planeacion)
-    if not doc:
-        # Documento demo para el piloto si no existe en la BD
-        doc = {
-            "id": id_planeacion,
-            "cuenta": usuario.usuario,
-            "formato": "XXIII",
-            "estado": "BORRADOR",
-            "revision": f"rev-{uuid.uuid4().hex[:6]}",
-            "guardado_en": "2026-11-03 11:00",
-            "datos": {
-                "Escuela": "Damián Carmona",
-                "Grado_Grupo": "2° A",
-                "Alumnos": [
-                    {"Nombre del alumno": "Jesús Emmanuel C. B.", "Grado": "2", "Grupo": "A", "Condición": "TDAH"}
-                ]
-            },
-            "metadatos": {
-                "titulo": "Plan de Intervención en Aula de Apoyo",
-                "pda": "Reconoce y formula preguntas sobre procesos de su entorno natural y social."
-            },
-            "tablas": {
-                "aprendizajes": [
-                    {
-                        "Necesidades educativas específicas": "Sostener atención en secuencias de trabajo de 20 minutos.",
-                        "Aprendizaje y/u objetivo": "Completar tareas con apoyo visual escalonado.",
-                        "Descriptor de logro": "Registra 3 de 4 actividades completadas en la jornada."
-                    }
-                ],
-                "dosificacion": [
-                    {
-                        "Contextos": "Aula de apoyo",
-                        "Actividades": "Tablero de rutinas con pictogramas y modelamiento.",
-                        "Temporalidad": "Noviembre 2026 (2 sesiones semanales)",
-                        "Recursos": "Fichas ilustradas, temporizador visual."
-                    }
-                ]
-            },
-            "textos": {
-                "Evaluación": "Observación directa de desempeño y listas de cotejo de autorregulación.",
-                "Observaciones": "Se coordina con la docente de grupo regular los días martes."
-            },
-            "observaciones_director": ""
-        }
+@app.post("/api/auth/logout")
+def logout_endpoint(authorization: Optional[str] = Header(None)):
+    """Invalida la sesión actual de forma inmediata en el servidor."""
+    cerrar_sesion(authorization)
+    return {"status": "success", "mensaje": "Sesión cerrada correctamente."}
 
-    # Resolver firmas canónicas
-    firmas = resolver_firmas_planeacion(doc)
-    doc["firmas_resueltas"] = firmas
-    return doc
+# -------------------------------------------------------------
+# 2. ESCUELAS Y PADRÓN DE ALUMNOS (RBAC)
+# -------------------------------------------------------------
 
-
-@app.post("/api/planeaciones")
-def guardar_planeacion(
-    payload: PlaneacionGuardarRequest,
-    usuario: UserProfile = Depends(obtener_usuario_activo)
-):
-    """Guarda o actualiza la planeación con detección de conflictos."""
-    pid = payload.id or f"plan-{uuid.uuid4().hex[:8]}"
-    nueva_rev = f"rev-{uuid.uuid4().hex[:6]}"
-    
-    doc_dict = payload.model_dump()
-    doc_dict["id"] = pid
-    doc_dict["revision"] = nueva_rev
-    doc_dict["guardado_en"] = time.strftime("%Y-%m-%d %H:%M:%S")
-    doc_dict["cuenta"] = usuario.usuario
-    
-    try:
-        guardar_planeacion_sql(doc_dict)
-    except Exception as exc:
-        # Fallback tolerante en piloto aislado
-        pass
-        
-    firmas = resolver_firmas_planeacion(doc_dict)
-    return {
-        "status": "success",
-        "id": pid,
-        "revision": nueva_rev,
-        "guardado_en": doc_dict["guardado_en"],
-        "mensaje": "Planeación guardada exitosamente en el núcleo SQL.",
-        "firmas": firmas
-    }
+@app.get("/api/escuelas")
+def listar_escuelas(user: SessionUser = Depends(validar_token_sesion)):
+    """Retorna las 8 primarias oficiales de la Zona 001."""
+    return obtener_catalogo_escuelas()
 
 
 @app.get("/api/alumnos")
 def listar_alumnos(
     escuela: Optional[str] = None,
-    usuario: UserProfile = Depends(obtener_usuario_activo)
+    user: SessionUser = Depends(validar_token_sesion)
 ):
-    """Catálogo indexado de alumnos autorizados con filtro de escuela."""
-    alumnos_df = alumnos_sql()
-    if alumnos_df.empty:
-        # Sintéticos de prueba
-        return [
-            {"id": "ALU-001", "nombre": "Jesús Emmanuel C. B.", "grado": "2", "grupo": "A", "escuela": "Damián Carmona", "condicion": "TDAH"},
-            {"id": "ALU-002", "nombre": "Sofía Valentina M. P.", "grado": "3", "grupo": "B", "escuela": "Damián Carmona", "condicion": "Autismo (TEA)"},
-            {"id": "ALU-003", "nombre": "Santiago Alejandro T. R.", "grado": "1", "grupo": "A", "escuela": "Ichcaanziho", "condicion": "BAP Lectoescritura"},
-        ]
-    
-    records = alumnos_df.to_dict(orient="records")
-    return records[:50]
+    """Padrón de alumnos autorizado según el rol del usuario."""
+    alumnos = obtener_alumnos_autorizados(
+        usuario_rol=user.rol,
+        escuelas_permitidas=user.escuelas_permitidas,
+        nombre_docente=user.nombre
+    )
+    if escuela:
+        escuela_norm = escuela.strip().lower()
+        alumnos = [a for a in alumnos if escuela_norm in str(a.get("escuela", "")).lower() or escuela_norm in str(a.get("id_escuela", "")).lower()]
+    return alumnos
+
+
+@app.post("/api/alumnos")
+def crear_alumno(payload: AlumnoPayload, user: SessionUser = Depends(validar_token_sesion)):
+    """Registra un nuevo alumno en la base de datos."""
+    if not user.director and payload.id_escuela not in user.escuelas_permitidas:
+        raise HTTPException(status_code=403, detail="No tiene permisos para agregar alumnos en esta escuela.")
+    doc_dict = {
+        "Nombre_Completo": payload.nombre_completo,
+        "CURP": payload.curp,
+        "Edad_1_Septiembre": payload.edad_1_septiembre,
+        "Sexo": payload.sexo,
+        "Situacion_Alumno": payload.situacion_alumno,
+        "Nivel_Educativo": payload.nivel_educativo,
+        "Grado": payload.grado,
+        "Grupo": payload.grupo,
+        "ID_Escuela": payload.id_escuela,
+        "Nombre_Escuela": payload.nombre_escuela,
+        "Maestra de Apoyo": payload.maestra_apoyo or user.nombre,
+        "Condicion_Discapacidad": payload.condicion_discapacidad,
+        "Estatus": payload.estatus,
+        "Tipo_Atencion": payload.tipo_atencion,
+    }
+    try:
+        nuevo_id = guardar_alumno_nuevo(doc_dict)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "success", "id": nuevo_id, "mensaje": "Alumno registrado exitosamente."}
+
+
+@app.put("/api/alumnos/{alumno_id}")
+def editar_alumno(alumno_id: str, payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    """Edita un alumno existente validando permisos de escuela."""
+    alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas)
+    allowed_ids = [a["id"] for a in alumnos]
+    if alumno_id not in allowed_ids and not user.director:
+        raise HTTPException(status_code=403, detail="No tiene permisos para modificar este alumno.")
+    try:
+        actualizar_alumno_existente(alumno_id, payload, allowed_ids)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "success", "id": alumno_id, "mensaje": "Alumno actualizado correctamente."}
+
+
+@app.get("/api/alumnos/exportar")
+def exportar_alumnos_csv(user: SessionUser = Depends(validar_token_sesion)):
+    """Exporta el padrón autorizado en formato CSV para respaldos."""
+    alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas)
+    df = pd.DataFrame(alumnos)
+    csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="Padron_Alumnos_USAER_2E.csv"'}
+    )
+
+# -------------------------------------------------------------
+# 3. EXPEDIENTES Y SEGUIMIENTO EDUCATIVO
+# -------------------------------------------------------------
+
+@app.get("/api/expedientes/{alumno_id}")
+def ver_expediente(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    """Expediente integral (BAP, sugerencias, eventos cronológicos, derivación, EPP)."""
+    return obtener_expediente_completo(alumno_id)
+
+# -------------------------------------------------------------
+# 4. EVALUACIÓN PSICOPEDAGÓGICA (EPP) MULTI-ÁREA
+# -------------------------------------------------------------
+
+@app.get("/api/epp/{alumno_id}")
+def consultar_epp(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    """Recupera el informe EPP con sus cuatro áreas integradas."""
+    return obtener_epp_documento(alumno_id)
+
+
+@app.post("/api/epp")
+def guardar_epp(payload: EPPPayload, user: SessionUser = Depends(validar_token_sesion)):
+    """Guarda o actualiza el informe EPP con hash de revisión atómico."""
+    return guardar_epp_documento(payload.model_dump(), autor_cuenta=user.usuario)
+
+# -------------------------------------------------------------
+# 5. PLANEACIÓN PEDAGÓGICA (FORMATOS XXIII, XXV, XIX, XX)
+# -------------------------------------------------------------
+
+@app.get("/api/planeaciones")
+def listar_planeaciones(user: SessionUser = Depends(validar_token_sesion)):
+    """Lista resumida de planeaciones con límite duro para el usuario activo."""
+    from data.sql_repository import planeaciones_resumen_sql
+    return planeaciones_resumen_sql(cuenta=user.usuario, es_director=user.director)
+
+
+@app.get("/api/planeaciones/{doc_id}")
+def obtener_planeacion(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    """Documento de planeación completo con cálculo oficial de firmas."""
+    return obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
+
+
+@app.post("/api/planeaciones")
+def guardar_planeacion(payload: PlaneacionPayload, user: SessionUser = Depends(validar_token_sesion)):
+    """Guarda planeación con control de versiones y verificación de concurrencia."""
+    doc_dict = payload.model_dump()
+    return guardar_planeacion_transaccional(doc_dict, autor_cuenta=user.usuario)
+
+
+@app.delete("/api/planeaciones/{doc_id}")
+def eliminar_planeacion_endpoint(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    """Elimina una planeación tras confirmación explícita del docente."""
+    ok = eliminar_planeacion_documento(doc_id, usuario_cuenta=user.usuario, es_director=user.director)
+    if not ok:
+        raise HTTPException(status_code=404, detail="No se encontró la planeación o no tiene permisos para eliminarla.")
+    return {"status": "success", "mensaje": "Planeación eliminada correctamente."}
+
+
+@app.get("/api/planeaciones/{doc_id}/pdf")
+def descargar_planeacion_pdf(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    """Genera la exportación oficial en PDF con los sellos y firmas de la Zona 001."""
+    doc = obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
+    try:
+        pdf_bytes = generar_pdf_planeacion(doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generando PDF de planeación: {exc}"
+        )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Planeacion_{doc_id}.pdf"'}
+    )
+
+# -------------------------------------------------------------
+# 6. ANEXOS III, IV, V Y VII (BAP, SUGERENCIAS, EVENTOS, DERIVACIÓN)
+# -------------------------------------------------------------
+
+@app.post("/api/anexo3")
+def crear_anexo3(payload: Anexo3Payload, user: SessionUser = Depends(validar_token_sesion)):
+    """Guarda registro de detección de BAP (Anexo III)."""
+    doc = {
+        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
+        "ID_Alumno": payload.id_alumno,
+        "ID_Personal": user.id_usuario,
+        "BAP_Fisicas": payload.bap_fisicas,
+        "BAP_Actitudinales": payload.bap_actitudinales,
+        "BAP_Pedagogicas": payload.bap_pedagogicas,
+        "BAP_Organizativas": payload.bap_organizativas,
+        "Estatus_IA": "VALIDADO",
+        "Estado": "ACTIVO"
+    }
+    aid = guardar_anexo3_documento(doc)
+    return {"status": "success", "id": aid, "mensaje": "BAP registrada correctamente."}
+
+
+@app.post("/api/anexo4")
+def crear_anexo4(payload: Anexo4Payload, user: SessionUser = Depends(validar_token_sesion)):
+    """Guarda sugerencias técnico pedagógicas a docente regular (Anexo IV)."""
+    doc = {
+        "ID_Alumno": payload.id_alumno,
+        "Fecha_Elaboracion": payload.fecha_elaboracion or time.strftime("%Y-%m-%d"),
+        "Ciclo_Escolar": payload.ciclo_escolar,
+        "Trimestre": payload.trimestre,
+        "Docente_Especialista": payload.docente_especialista or user.nombre,
+        "Area": payload.area,
+        "Sugerencias": payload.sugerencias,
+        "Motivo": payload.motivo,
+        "Fecha_Seguimiento": payload.fecha_seguimiento,
+        "Nivel_Cumplimiento_Resultados": payload.nivel_cumplimiento_resultados,
+        "Estado": "ACTIVA"
+    }
+    aid = guardar_anexo4_documento(doc)
+    return {"status": "success", "id": aid, "mensaje": "Sugerencias guardadas correctamente."}
+
+
+@app.post("/api/anexo5")
+def crear_anexo5(payload: Anexo5Payload, user: SessionUser = Depends(validar_token_sesion)):
+    """Guarda hoja de evento significativo (Anexo V)."""
+    doc = {
+        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
+        "Nombre_Alumno": payload.nombre_alumno,
+        "Grado_Grupo": payload.grado_grupo,
+        "Especialista": payload.especialista or user.nombre,
+        "Evento": payload.evento,
+        "Estado": "ACTIVO",
+        "ID_Alumno": payload.id_alumno,
+        "ID_Escuela": payload.id_escuela,
+        "Escuela": payload.escuela,
+    }
+    aid = guardar_anexo5_documento(doc)
+    return {"status": "success", "id": aid, "mensaje": "Evento significativo registrado correctamente."}
+
+# -------------------------------------------------------------
+# 7. ACTAS DE VISITA Y OFICIOS DE COMISIÓN
+# -------------------------------------------------------------
+
+@app.get("/api/visitas")
+def listar_visitas(escuela: Optional[str] = None, user: SessionUser = Depends(validar_token_sesion)):
+    """Consulta actas de visitas de acompañamiento técnico."""
+    return obtener_visitas_documentos(escuela)
+
+
+@app.post("/api/visitas")
+def crear_visita(payload: VisitaPayload, user: SessionUser = Depends(validar_token_sesion)):
+    """Registra acta de visita técnica."""
+    doc = {
+        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
+        "Escuela": payload.escuela,
+        "Personal": payload.personal or user.nombre,
+        "Motivo": payload.motivo,
+        "Observaciones": payload.observaciones,
+        "Tipo_Acta": payload.tipo_acta,
+        "Lugar": payload.lugar,
+        "Estatus": "GUARDADA"
+    }
+    vid = guardar_visita_documento(doc)
+    return {"status": "success", "id": vid, "mensaje": "Acta de visita guardada correctamente."}
+
+
+@app.get("/api/oficios")
+def listar_oficios(escuela: Optional[str] = None, user: SessionUser = Depends(validar_token_sesion)):
+    """Consulta oficios de comisión oficiales de la zona."""
+    return obtener_oficios_documentos(escuela)
+
+
+@app.post("/api/oficios")
+def crear_oficio(payload: OficioPayload, user: SessionUser = Depends(validar_token_sesion)):
+    """Emite un oficio de comisión oficial."""
+    doc = {
+        "Folio": payload.folio or f"OF-2026-{int(time.time())%1000:03d}",
+        "Clave_Operacion": payload.clave_operacion,
+        "Fecha_Emision": payload.fecha_emision or time.strftime("%Y-%m-%d"),
+        "Fecha_Comision": payload.fecha_comision,
+        "Escuela": payload.escuela,
+        "ID_Escuela": payload.id_escuela,
+        "Maestra_Apoyo": payload.maestra_apoyo,
+        "Director_Escuela": payload.director_escuela,
+        "Asunto": payload.asunto,
+        "Destino": payload.destino,
+        "Horario": payload.horario,
+        "Estado": "ACTIVO"
+    }
+    oid = guardar_oficio_documento(doc)
+    return {"status": "success", "id": oid, "mensaje": "Oficio de comisión emitido correctamente."}
+
+# -------------------------------------------------------------
+# 8. ASISTENTE PEDAGÓGICO CONVERSACIONAL E IA
+# -------------------------------------------------------------
+
+@app.post("/api/ai/chat")
+def chat_asistente(payload: AIChatPayload, user: SessionUser = Depends(validar_token_sesion)):
+    """Asistente conversacional con recuperación contextual del alumno y reglas Zona 001."""
+    return chat_asistente_pedagogico(
+        mensaje_docente=payload.mensaje,
+        alumno_id=payload.alumno_id,
+        planeacion_id=payload.planeacion_id
+    )
 
 
 @app.post("/api/ai/sugerencias")
-def proponer_sugerencias(req: AISugerenciaRequest):
-    """Propuestas del asistente pedagógico sin bloquear el hilo principal."""
+def sugerencias_asistente(payload: AISugerenciaPayload, user: SessionUser = Depends(validar_token_sesion)):
+    """Generación directa de ajustes razonables y descriptores observables."""
     contexto = {
-        "area": req.area,
-        "barreras_o_necesidades": req.necesidad_o_barrera,
-        "grado": req.grado,
-        "condicion": req.condicion
+        "area": payload.area,
+        "barreras_o_necesidades": payload.necesidad_o_barrera,
+        "grado": payload.grado,
+        "condicion": payload.condicion
     }
+    from ai.engine import generar_sugerencias, fallback as ai_fallback
     try:
-        propuesta = generar_sugerencias(contexto)
+        return generar_sugerencias(contexto)
     except Exception:
-        propuesta = ai_fallback()
-    return propuesta
+        return ai_fallback()
 
-# ---------------------------------------------------------
-# SERVIR FRONTEND SPA ESTÁTICO DIRECTO
-# ---------------------------------------------------------
+# -------------------------------------------------------------
+# 9. ESTADÍSTICAS INSTITUCIONALES ZONA 001
+# -------------------------------------------------------------
+
+@app.get("/api/estadisticas/zona")
+def estadisticas_zona(user: SessionUser = Depends(validar_token_sesion)):
+    """Métricas globales de la zona escolar para el panel directivo."""
+    return obtener_estadisticas_zona()
+
+# -------------------------------------------------------------
+# 10. SERVIR FRONTEND SPA ESTÁTICO DIRECTO
+# -------------------------------------------------------------
 
 SPA_STATIC_DIR = Path(__file__).resolve().parent / "static"
-if not SPA_STATIC_DIR.exists():
-    SPA_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+INDEX_HTML = SPA_STATIC_DIR / "index.html"
 
 @app.get("/", response_class=HTMLResponse)
 def index_spa():
-    """Sirve la Single Page Application de React y Tailwind."""
-    index_file = SPA_STATIC_DIR / "index.html"
-    if index_file.exists():
-        return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>Piloto SPA USAER 2E</h1><p>Frontend compilándose...</p>")
-
+    """Punto de entrada de la SPA React 18."""
+    if INDEX_HTML.exists():
+        return HTMLResponse(content=INDEX_HTML.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>USAER 2E 2.0</h1><p>Compilando frontend...</p>")

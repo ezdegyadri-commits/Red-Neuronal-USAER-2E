@@ -7,3 +7,4 @@ echo   Servidor en: http://localhost:8000
 echo ========================================================
 python iniciar_piloto.py
 pause
+
