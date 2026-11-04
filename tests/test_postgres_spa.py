@@ -103,10 +103,27 @@ class PostgreSQLAislado(unittest.TestCase):
                             cur.execute("CREATE DATABASE usaer_2e_2_0 OWNER ezdegyadri")
                     prueba = URL.create("postgresql+psycopg2", username="ezdegyadri", password=clave,
                                         host="127.0.0.1", port=pg_port, database="usaer_2e_2_0")
+                    respaldo = carpeta / "spark.dump"
                     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests",
                                     "-p", "test_uppcoder.py", "-v"], cwd=ROOT,
-                                   env=dict(base_env, USAER_UPPCODER_TEST_LOCAL_URL=prueba.render_as_string(hide_password=False)),
+                                   env=dict(base_env, USAER_UPPCODER_TEST_LOCAL_URL=prueba.render_as_string(hide_password=False),
+                                            USAER_UPPCODER_TEST_DUMP=str(respaldo),
+                                            USAER_UPPCODER_TEST_PG_DUMP=str(binarios / ("pg_dump.exe" if os.name == "nt" else "pg_dump"))),
                                    check=True)
+                    with closing(psycopg2.connect(host="127.0.0.1", port=pg_port, dbname="postgres",
+                                                  user="spa_bootstrap", password=bootstrap)) as db:
+                        db.autocommit = True
+                        with db.cursor() as cur:
+                            cur.execute("CREATE DATABASE spark_restauracion")
+                    pg("pg_restore", "-h", "127.0.0.1", "-p", pg_port, "-U", "spa_bootstrap",
+                       "-d", "spark_restauracion", "--no-owner", "--no-privileges", "--single-transaction",
+                       respaldo, env=dict(base_env, PGPASSWORD=bootstrap))
+                    with closing(psycopg2.connect(host="127.0.0.1", port=pg_port, dbname="spark_restauracion",
+                                                  user="spa_bootstrap", password=bootstrap)) as db:
+                        with db.cursor() as cur:
+                            cur.execute("SELECT (SELECT count(*) FROM spa_sesiones), (SELECT count(*) FROM alumnos), "
+                                        "(SELECT count(*) FROM usuarios)")
+                            self.assertEqual(cur.fetchone(), (0, 2, 4))
                     return
 
                 if os.getenv("USAER_MIGRACION_PRUEBA"):

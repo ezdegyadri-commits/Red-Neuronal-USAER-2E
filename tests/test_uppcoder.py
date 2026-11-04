@@ -4,6 +4,9 @@ import secrets
 import sys
 from importlib.abc import MetaPathFinder
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from time import monotonic, process_time
 from unittest.mock import patch
 
 from sqlalchemy import text
@@ -141,11 +144,91 @@ class UppcoderPostgres(unittest.TestCase):
                 propuesta = cliente.post(ruta + "/propuesta", headers=headers, json={"enfoque": "lectura"})
                 self.assertEqual(propuesta.status_code, 200, propuesta.text)
                 self.assertTrue(cliente.get(ruta + "/pdf").content.startswith(b"%PDF"))
+                from deploy.cuentas_docentes_spark import CUENTAS, crear_cuentas
+                claves = {usuario: secrets.token_urlsafe(24) + "1a" for usuario, *_ in CUENTAS}
+                self.assertEqual(crear_cuentas(engine, claves.__getitem__), list(claves))
+                self.assertEqual(crear_cuentas(engine, lambda _: self.fail("Cuenta ya creada")), [])
+                accesos = [(usuario, claves[usuario], escuela[-1]) for usuario, _, _, escuela in CUENTAS]
+                with engine.begin() as db:
+                    db.execute(text("UPDATE alumnos SET tipo_atencion = 'Grupal' WHERE id = :id"), {"id": alumno})
             with TestClient(app, base_url=f"https://{host}") as cliente:
                 cliente.post("/api/auth/login", headers=headers, json={"usuario": "direccion.piloto", "password": clave})
                 self.assertEqual(cliente.get(ruta).json()["metadatos"]["titulo"], "Plan ficticio Spark")
+
+                def comprobar_acceso(acceso):
+                    usuario, password, escuela = acceso
+                    propio = f"alu-uppcoder-{escuela}"
+                    ajeno = "alu-uppcoder-b" if escuela == "a" else alumno
+                    with TestClient(app, base_url=f"https://{host}") as docente:
+                        login = docente.post("/api/auth/login", headers=headers, json={"usuario": usuario, "password": password})
+                        self.assertEqual(login.status_code, 200, login.text)
+                        self.assertEqual([a["id"] for a in docente.get("/api/alumnos").json()], [propio])
+                        self.assertEqual(docente.get(f"/api/epp/{propio}/anexo").status_code, 200)
+                        self.assertEqual(docente.get(f"/api/epp/{ajeno}/anexo").status_code, 404)
+                        self.assertEqual(docente.get("/api/auth/cuentas").status_code, 403)
+                        if usuario == "docente.a.piloto":
+                            individual = docente.post("/api/planeaciones/nueva", headers=headers, json={
+                                "modalidad": "individual", "alumnos": [propio],
+                            })
+                            self.assertEqual(individual.status_code, 200, individual.text)
+                            grupal = docente.post("/api/planeaciones/nueva", headers=headers, json={
+                                "modalidad": "grupal", "alumnos": [propio],
+                            })
+                            self.assertEqual(grupal.status_code, 200, grupal.text)
+                            ruta_grupo = "/api/planeaciones/" + grupal.json()["id"]
+                            guia = docente.get(ruta_grupo).json()
+                            campo = "Aprendizaje"
+                            self.assertIn(campo, guia["editor"]["columnas_editables"])
+                            revision = guia["metadatos"]["revisiones_celda"]["filas"][propio][campo]
+                            celda = docente.patch(ruta_grupo + "/celda", headers=headers, json={
+                                "tabla": "filas", "alumno": propio, "campo": campo,
+                                "revision": revision, "texto": "Aportación ficticia guardada",
+                            })
+                            self.assertEqual(celda.status_code, 200, celda.text)
+                            informe = docente.post("/api/informes", headers=headers, json={
+                                "alumno_id": propio, "ciclo": "2026-2027", "titulo": "Informe ficticio docente",
+                            })
+                            self.assertEqual(informe.status_code, 201, informe.text)
+                            documento = (informe.json()["id"], ruta_grupo, campo)
+                        else:
+                            documento = None
+                        cookie = docente.cookies.get("usaer_spa_session")
+                        docente.post("/api/auth/logout", headers=headers)
+                        self.assertEqual(docente.get("/api/alumnos").status_code, 401)
+                        self.assertEqual(docente.get("/api/alumnos", headers={
+                            "Cookie": f"usaer_spa_session={cookie}",
+                        }).status_code, 401)
+                        return documento
+
+                inicio, cpu = monotonic(), process_time()
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    documentos, _, _ = list(pool.map(comprobar_acceso, accesos))
+                informe_id, ruta_grupo, campo = documentos
+                print(f"Tres cuentas concurrentes locales: {monotonic()-inicio:.2f} s, CPU Python {process_time()-cpu:.2f} s.")
+
+                for usuario, password, _ in accesos:
+                    with TestClient(app, base_url=f"https://{host}") as docente:
+                        docente.post("/api/auth/login", headers=headers, json={"usuario": usuario, "password": password})
+                        informe = docente.get(f"/api/informes/{informe_id}")
+                        self.assertEqual(informe.status_code, 200 if usuario == "docente.a.piloto" else 404)
+                        guia = docente.get(ruta_grupo)
+                        if usuario == "docente.b.piloto":
+                            self.assertEqual(guia.status_code, 404)
+                        else:
+                            self.assertEqual(guia.json()["metadatos"]["guia_grupal_manual"]["filas"][0][campo],
+                                             "Aportación ficticia guardada")
+                            if usuario == "psicologia.a.piloto":
+                                intento = docente.patch(ruta_grupo + "/celda", headers=headers, json={
+                                    "tabla": "filas", "alumno": alumno, "campo": campo,
+                                    "revision": "", "texto": "Cambio ajeno",
+                                })
+                                self.assertEqual(intento.status_code, 403)
+            if destino := os.getenv("USAER_UPPCODER_TEST_DUMP"):
+                from deploy.respaldo_spark import respaldar
+
+                respaldar(make_url(url_local).set(username=runtime, password=clave_runtime), Path(destino),
+                          pg_dump=os.getenv("USAER_UPPCODER_TEST_PG_DUMP", "pg_dump"))
             if os.getenv("USAER_SPARK_CARGA_LOCAL") == "1":
-                from time import monotonic, process_time
                 from data.database import Usuario, get_session
                 from piloto_spa.backend.auth_service import hash_password
                 from carga_piloto import memoria_mib
