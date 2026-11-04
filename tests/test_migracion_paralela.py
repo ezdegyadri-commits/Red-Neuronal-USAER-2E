@@ -4,8 +4,9 @@ import unittest
 
 import httpx
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 
-from tools.migracion_paralela import MARCA, PESTANAS, destino, guardar, leer_sheets, revertir
+from tools.migracion_paralela import MARCA, PESTANAS, destino, guardar, leer_sheets, recuperar, revertir, verificar_destino_local
 
 
 def copia_sintetica():
@@ -24,6 +25,15 @@ def copia_sintetica():
 
 
 class CopiaSheets(unittest.TestCase):
+    def test_destino_remoto_o_override_se_rechaza_antes_de_conectar(self):
+        url = make_url("postgresql://spa_fixture_migracion_ensayo@127.0.0.1/usaer_spa_test_migracion_ensayo")
+        verificar_destino_local(url, "migracion")
+        for destino_invalido in (url.set(host="postgres.example.invalid"),
+                                 url.update_query_dict({"host": "postgres.example.invalid"}),
+                                 url.set(username="cuenta-no-aislada")):
+            with self.assertRaises(ValueError):
+                verificar_destino_local(destino_invalido, "migracion")
+
     def test_solo_get_copia_marcada_y_exclusion_de_cuentas(self):
         identificador = "copia_ficticia_de_prueba_001"
         peticiones = []
@@ -83,6 +93,7 @@ class CopiaPostgres(unittest.TestCase):
         alta = guardar(engine, copia, aplicar=True)
         self.assertEqual(alta["lote"], vista["lote"])
         self.assertEqual(alta["huellas_verificadas"], len(PESTANAS))
+        self.assertEqual(recuperar(engine, alta["lote"]), copia)
         repetida = guardar(engine, copia, aplicar=True)
         self.assertTrue(repetida["repetido"])
         self.assertEqual(repetida["filas_nuevas_en_archivo"], 0)
@@ -92,6 +103,8 @@ class CopiaPostgres(unittest.TestCase):
         incremental = guardar(engine, siguiente, aplicar=True)
         self.assertEqual(incremental["filas_nuevas_en_archivo"], 1)
         revertir(engine, incremental["lote"])
+        with self.assertRaises(ValueError):
+            recuperar(engine, incremental["lote"])
         with self.assertRaises(ValueError):
             guardar(engine, siguiente, aplicar=True)
         self.assertTrue(guardar(engine, copia, aplicar=True)["repetido"])

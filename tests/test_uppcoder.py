@@ -144,6 +144,31 @@ class UppcoderPostgres(unittest.TestCase):
                 propuesta = cliente.post(ruta + "/propuesta", headers=headers, json={"enfoque": "lectura"})
                 self.assertEqual(propuesta.status_code, 200, propuesta.text)
                 self.assertTrue(cliente.get(ruta + "/pdf").content.startswith(b"%PDF"))
+                from ai.actividades_curriculares import ActividadCurricular
+                referente = cliente.get(ruta + "/referentes").json()[0]
+                externo = ruta + "/actividad-curricular-externa"
+                pedido = {"pda_id": referente["id"], "autorizo": True}
+                revision_antes = cliente.get(ruta).json()["revision"]
+                with patch("ai.actividades_curriculares.sugerir_con_gemini") as proveedor:
+                    with patch.dict(os.environ, {"USAER_IA_CURRICULAR_HABILITADA": "0"}):
+                        self.assertEqual(cliente.post(externo, headers=headers, json=pedido).status_code, 403)
+                    with patch.dict(os.environ, {"USAER_IA_CURRICULAR_HABILITADA": "1"}):
+                        self.assertEqual(cliente.post(externo, headers=headers, json={
+                            **pedido, "autorizo": False,
+                        }).status_code, 403)
+                        self.assertEqual(cliente.post(externo, headers=headers, json={
+                            **pedido, "pda_id": "no-oficial",
+                        }).status_code, 422)
+                        proveedor.assert_not_called()
+                        proveedor.return_value = ActividadCurricular(
+                            actividad="Actividad ficticia", apoyos="Apoyo", recursos="Material",
+                            evaluacion="Observación",
+                        )
+                        respuesta = cliente.post(externo, headers=headers, json=pedido)
+                        self.assertEqual(respuesta.status_code, 200, respuesta.text)
+                        self.assertTrue(respuesta.json()["requiere_revision_docente"])
+                        proveedor.assert_called_once_with(referente["id"], autorizado=True)
+                self.assertEqual(cliente.get(ruta).json()["revision"], revision_antes)
                 from deploy.cuentas_docentes_spark import CUENTAS, crear_cuentas
                 claves = {usuario: secrets.token_urlsafe(24) + "1a" for usuario, *_ in CUENTAS}
                 self.assertEqual(crear_cuentas(engine, claves.__getitem__), list(claves))
@@ -151,6 +176,9 @@ class UppcoderPostgres(unittest.TestCase):
                 accesos = [(usuario, claves[usuario], escuela[-1]) for usuario, _, _, escuela in CUENTAS]
                 with engine.begin() as db:
                     db.execute(text("UPDATE alumnos SET tipo_atencion = 'Grupal' WHERE id = :id"), {"id": alumno})
+                from data.sql_repository import guardar_epp_sql
+                guardar_epp_sql({"alumno": alumno, "ciclo": "2025-2026", "revision": "ficticia-a"})
+                guardar_epp_sql({"alumno": "alu-uppcoder-b", "ciclo": "2026-2027", "revision": "ficticia-b"})
             with TestClient(app, base_url=f"https://{host}") as cliente:
                 cliente.post("/api/auth/login", headers=headers, json={"usuario": "direccion.piloto", "password": clave})
                 self.assertEqual(cliente.get(ruta).json()["metadatos"]["titulo"], "Plan ficticio Spark")
@@ -165,6 +193,14 @@ class UppcoderPostgres(unittest.TestCase):
                         self.assertEqual([a["id"] for a in docente.get("/api/alumnos").json()], [propio])
                         self.assertEqual(docente.get(f"/api/epp/{propio}/anexo").status_code, 200)
                         self.assertEqual(docente.get(f"/api/epp/{ajeno}/anexo").status_code, 404)
+                        comparativo = "/api/estadisticas/epp-ciclos?ciclos=2025-2026,2026-2027"
+                        cobertura = docente.get(comparativo)
+                        self.assertEqual(cobertura.status_code, 200, cobertura.text)
+                        self.assertEqual(cobertura.json()["alumnos_activos"], 1)
+                        self.assertEqual([x["alumnos_con_epp"] for x in cobertura.json()["ciclos"]],
+                                         [1, 0] if escuela == "a" else [0, 1])
+                        otra = "b" if escuela == "a" else "a"
+                        self.assertEqual(docente.get(comparativo + f"&escuela=esc-uppcoder-{otra}").status_code, 404)
                         self.assertEqual(docente.get("/api/auth/cuentas").status_code, 403)
                         if usuario == "docente.a.piloto":
                             individual = docente.post("/api/planeaciones/nueva", headers=headers, json={

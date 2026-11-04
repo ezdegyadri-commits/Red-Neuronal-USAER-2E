@@ -209,6 +209,16 @@ else:
                     nueva = urls["migracion_restaurada"]
                     pg("pg_restore", *conexion, "-U", nueva.username, "--no-owner", "--exit-on-error",
                        "-d", nueva.database, respaldo, env=dict(base_env, PGPASSWORD=nueva.password))
+                    from sqlalchemy import create_engine
+                    from test_migracion_paralela import copia_sintetica
+                    from tools.migracion_paralela import guardar, recuperar
+                    motor_restaurado = create_engine(nueva.set(drivername="postgresql+psycopg2"))
+                    try:
+                        esperado = copia_sintetica()
+                        lote = guardar(None, esperado)["lote"]
+                        self.assertEqual(recuperar(motor_restaurado, lote), esperado)
+                    finally:
+                        motor_restaurado.dispose()
                     with closing(psycopg2.connect(nueva.render_as_string(hide_password=False))) as db:
                         with db.cursor() as cur:
                             cur.execute("SELECT count(*) FROM copia_usaer.lote WHERE NOT revertido")

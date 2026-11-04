@@ -142,16 +142,30 @@ def preparar(copia):
     return filas, reporte
 
 
-def _esquema(db):
-    base, rol, marca, propietario = db.execute(text("""
+def verificar_destino_local(url, perfil):
+    if (url.get_backend_name() != "postgresql" or url.host not in {"127.0.0.1", "::1"}
+            or url.query or not re.fullmatch(rf"usaer_spa_test_{perfil}_[a-z0-9_]+", url.database or "")
+            or url.username != url.database.replace("usaer_spa_test_", "spa_fixture_", 1)):
+        raise ValueError("Se requiere un PostgreSQL sintético local con base y rol independientes.")
+
+
+def verificar_base_local(db, perfil):
+    base, rol, marca, propietario, version, elevado = db.execute(text("""
         SELECT current_database(), current_user, shobj_description(oid, 'pg_database'),
-               pg_get_userbyid(datdba)
+               pg_get_userbyid(datdba), current_setting('server_version_num')::int,
+               (SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls
+                FROM pg_roles WHERE rolname=current_user)
         FROM pg_database WHERE datname=current_database()
     """)).one()
-    if (not re.fullmatch(r"usaer_spa_test_migracion_[a-z0-9_]+", base)
+    if (not re.fullmatch(rf"usaer_spa_test_{perfil}_[a-z0-9_]+", base)
             or rol != base.replace("usaer_spa_test_", "spa_fixture_", 1)
-            or propietario != rol or marca != "USAER SPA synthetic only"):
+            or propietario != rol or marca != "USAER SPA synthetic only"
+            or elevado or not 170000 <= version < 180000):
         raise ValueError("La base no pertenece al perfil independiente de migración sintética.")
+
+
+def _esquema(db):
+    verificar_base_local(db, "migracion")
     db.execute(text("SELECT pg_advisory_xact_lock(28150031)"))
     for ddl in (
         "CREATE SCHEMA IF NOT EXISTS copia_usaer",
@@ -174,6 +188,7 @@ def guardar(engine, copia, *, aplicar=False):
                  "pestanas_ausentes": sorted(PESTANAS.keys() - hojas.keys())}
     if not aplicar:
         return resultado
+    verificar_destino_local(engine.url, "migracion")
     with engine.begin() as db:
         _esquema(db)
         previo = db.execute(text("SELECT revertido FROM copia_usaer.lote WHERE id=:id"), {"id": lote}).scalar()
@@ -189,21 +204,49 @@ def guardar(engine, copia, *, aplicar=False):
                            [{"h": h, "c": json.dumps(c)} for h, c in filas])
                 db.execute(text("INSERT INTO copia_usaer.orden VALUES(:id,:n,:p,:h)"),
                            [{"id": lote, "n": nombre, "p": i, "h": h} for i, (h, _) in enumerate(filas)])
-        for nombre, informe in reporte.items():
-            restauradas = list(db.execute(text("""
-                SELECT f.celdas FROM copia_usaer.orden o JOIN copia_usaer.fila f USING(huella)
-                WHERE o.lote=:id AND o.pestana=:n ORDER BY o.posicion
-            """), {"id": lote, "n": nombre}).scalars())
-            if huella(restauradas) != informe["sha256"]:
-                raise RuntimeError(f"El contenido reconstruido no coincide para {nombre}.")
+        _reconstruir(db, lote, reporte)
         nuevas = db.execute(text("SELECT count(*) FROM copia_usaer.fila")).scalar_one() - filas_antes
         return {**resultado, "repetido": previo is False, "huellas_verificadas": len(hojas),
                 "filas_nuevas_en_archivo": nuevas}
 
 
+def _reconstruir(db, lote, reporte):
+    hojas = {}
+    for nombre, informe in reporte.items():
+        hojas[nombre] = list(db.execute(text("""
+            SELECT f.celdas FROM copia_usaer.orden o JOIN copia_usaer.fila f USING(huella)
+            WHERE o.lote=:id AND o.pestana=:n ORDER BY o.posicion
+        """), {"id": lote, "n": nombre}).scalars())
+        if huella(hojas[nombre]) != informe["sha256"]:
+            raise RuntimeError(f"El contenido reconstruido no coincide para {nombre}.")
+    return hojas
+
+
+def recuperar(engine, lote):
+    """Reconstruye una copia exacta sin consultar Sheets ni tablas operativas."""
+    if not re.fullmatch(r"[0-9a-f]{64}", lote):
+        raise ValueError("Identificador de lote inválido.")
+    verificar_destino_local(engine.url, "migracion")
+    with engine.connect().execution_options(isolation_level="REPEATABLE READ") as db, db.begin():
+        db.execute(text("SET TRANSACTION READ ONLY"))
+        verificar_base_local(db, "migracion")
+        if not db.scalar(text("SELECT to_regclass('copia_usaer.lote')")):
+            raise ValueError("No hay lotes de migración archivados.")
+        registro = db.execute(text("""
+            SELECT origen, reporte FROM copia_usaer.lote WHERE id=:id AND NOT revertido
+        """), {"id": lote}).one_or_none()
+        if registro is None:
+            raise ValueError("El lote no existe o está revertido.")
+        origen, reporte = registro
+        if huella([origen, {n: v["sha256"] for n, v in reporte.items()}]) != lote:
+            raise RuntimeError("El manifiesto archivado no coincide con la identidad del lote.")
+        return {"marca": MARCA, "origen": origen, "pestanas": _reconstruir(db, lote, reporte)}
+
+
 def revertir(engine, lote):
     if not re.fullmatch(r"[0-9a-f]{64}", lote):
         raise ValueError("Identificador de lote inválido.")
+    verificar_destino_local(engine.url, "migracion")
     with engine.begin() as db:
         _esquema(db)
         cambio = db.execute(text("UPDATE copia_usaer.lote SET revertido=true WHERE id=:id"), {"id": lote})
@@ -215,9 +258,7 @@ def revertir(engine, lote):
 
 def destino():
     url = make_url(os.getenv("USAER_MIGRACION_TEST_URL") or "sqlite://")
-    if (not re.fullmatch(r"usaer_spa_test_migracion_[a-z0-9_]+", url.database or "")
-            or url.username != (url.database or "").replace("usaer_spa_test_", "spa_fixture_", 1)):
-        raise ValueError("Se requiere una base independiente usaer_spa_test_migracion_<nombre>.")
+    verificar_destino_local(url, "migracion")
     os.environ.update(DATABASE_URL=url.render_as_string(hide_password=False),
                       USAER_SPA_MODE="postgres-synthetic", USAER_SPA_ROLE="owner")
     from piloto_spa.backend.main import verificar_base_piloto
@@ -233,10 +274,15 @@ def main():
     origen.add_argument("--json", type=Path)
     origen.add_argument("--id-copia-sintetica")
     origen.add_argument("--revertir")
+    origen.add_argument("--recuperar-lote")
     parser.add_argument("--aplicar", action="store_true")
     args = parser.parse_args()
     try:
-        if args.revertir:
+        if args.recuperar_lote:
+            if args.aplicar:
+                raise ValueError("La recuperación es exclusivamente de lectura.")
+            reporte = recuperar(destino(), args.recuperar_lote)
+        elif args.revertir:
             if not args.aplicar:
                 raise ValueError("La reversión requiere --aplicar.")
             revertir(destino(), args.revertir)

@@ -1040,6 +1040,19 @@ def epp_listar_sql(ids_alumnos: Optional[List[str]] = None) -> List[Dict[str, An
         return docs
 
 
+def cobertura_epp_sql(ids_alumnos, ciclos):
+    """Cuenta expedientes EPP distintos sin recuperar sus contenidos."""
+    from sqlalchemy import func, select
+
+    if not ids_alumnos:
+        return {}
+    with get_session() as session:
+        consulta = (select(EPPDoc.ciclo, func.count(EPPDoc.alumno.distinct()))
+                    .where(EPPDoc.alumno.in_(ids_alumnos), EPPDoc.ciclo.in_(ciclos))
+                    .group_by(EPPDoc.ciclo))
+        return {ciclo: total for ciclo, total in session.execute(consulta)}
+
+
 def guardar_epp_sql(doc: Dict[str, Any], *, revision_esperada=None, verificar_revision=False, actor_spa=None) -> str:
     """Persiste un informe EPP en PostgreSQL."""
     with get_session() as session:

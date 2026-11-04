@@ -3,7 +3,6 @@ from argparse import ArgumentParser
 import json
 import os
 from pathlib import Path
-import re
 import sys
 
 from sqlalchemy import select, text
@@ -12,13 +11,14 @@ from sqlalchemy.engine import make_url
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from data.sincronizacion_pg import DESTINOS, preparar as preparar_tablas
-from tools.migracion_paralela import MAX_BYTES, preparar
+from tools.migracion_paralela import MAX_BYTES, preparar, verificar_base_local, verificar_destino_local
 
 TABLAS = ("Escuelas", "Alumnos", "Anexo3_Deteccion", "Anexo4_Sugerencias",
           "Anexo5_Eventos", "Anexo7_Derivacion", "Registro_Visitas")
 
 
 def proyectar(engine, copia, *, aplicar=False):
+    verificar_destino_local(engine.url, "proyeccion")
     _, conciliacion = preparar(copia)
     fuente = copia["pestanas"]
     if any(any(conciliacion[n]["errores"].values()) for n in TABLAS if n in conciliacion):
@@ -37,19 +37,14 @@ def proyectar(engine, copia, *, aplicar=False):
             raise ValueError(f"{nombre}: se requiere un alumno de origen conciliado.")
     resultado = {"aplicado": aplicar, "solo_archivo": sorted(set(fuente) - set(plan)), "tablas": {}}
     with engine.begin() as db:
-        nombre, rol, marca = db.execute(text("""
-            SELECT current_database(), current_user, shobj_description(oid, 'pg_database')
-            FROM pg_database WHERE datname=current_database()
-        """)).one()
-        if (not re.fullmatch(r"usaer_spa_test_proyeccion_[a-z0-9_]+", nombre)
-                or rol != nombre.replace("usaer_spa_test_", "spa_fixture_", 1)
-                or marca != "USAER SPA synthetic only"):
-            raise ValueError("El destino no corresponde a la proyección sintética independiente.")
+        verificar_base_local(db, "proyeccion")
+        db.execute(text("SET LOCAL search_path TO public"))
         # Los nombres proceden del catálogo fijo, nunca del archivo.
         if aplicar:
             nombres = ", ".join(DESTINOS[n][0].__tablename__ for n in TABLAS if n in plan)
             db.execute(text(f"LOCK TABLE {nombres} IN SHARE ROW EXCLUSIVE MODE"))
         alumnos_en_conflicto = set()
+        escuelas_en_conflicto = set()
         for nombre in (n for n in TABLAS if n in plan):
             filas = plan[nombre]
             tabla = DESTINOS[nombre][0].__table__
@@ -61,6 +56,7 @@ def proyectar(engine, copia, *, aplicar=False):
                 actual = existentes.get(fila["id"])
                 curp = fila.get("curp", "").strip().upper()
                 if (fila.get("id_alumno") in alumnos_en_conflicto
+                        or fila.get("id_escuela") in escuelas_en_conflicto
                         or nombre == "Alumnos" and curp and curps_db.get(curp, fila["id"]) != fila["id"]):
                     cuenta["conflictos_preservados"] += 1
                     if nombre == "Alumnos":
@@ -75,6 +71,8 @@ def proyectar(engine, copia, *, aplicar=False):
                     cuenta["conflictos_preservados"] += 1
                     if nombre == "Alumnos":
                         alumnos_en_conflicto.add(fila["id"])
+                    if nombre == "Escuelas":
+                        escuelas_en_conflicto.add(fila["id"])
             resultado["tablas"][nombre] = cuenta
     return resultado
 
@@ -87,8 +85,10 @@ def main():
     if args.archivo.stat().st_size > MAX_BYTES:
         parser.error("La copia supera el límite.")
     url = make_url(os.getenv("USAER_PROYECCION_TEST_URL") or "sqlite://")
-    if not re.fullmatch(r"usaer_spa_test_proyeccion_[a-z0-9_]+", url.database or ""):
-        parser.error("Configura una base dedicada de proyección sintética.")
+    try:
+        verificar_destino_local(url, "proyeccion")
+    except ValueError as exc:
+        parser.error(str(exc))
     os.environ.update(DATABASE_URL=url.render_as_string(hide_password=False),
                       USAER_SPA_MODE="postgres-synthetic", USAER_SPA_ROLE="owner")
     from data.database import get_engine

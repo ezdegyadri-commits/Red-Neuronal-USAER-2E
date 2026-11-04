@@ -225,6 +225,12 @@ class PropuestaPlaneacion(BaseModel):
     campo: str = Field(default="Lenguajes", max_length=80)
 
 
+class ActividadCurricularExterna(BaseModel):
+    pda_id: str = Field(min_length=1, max_length=100)
+    campo: str = Field(default="Lenguajes", max_length=80)
+    autorizo: bool = Field(default=False, strict=True)
+
+
 class FundamentoNEE(BaseModel):
     texto: str = Field(min_length=1, max_length=1200)
     fundamento: str = Field(min_length=1, max_length=2500)
@@ -1130,6 +1136,29 @@ def propuesta_planeacion(doc_id: str, payload: PropuestaPlaneacion,
     return {**propuesta, "revision": doc["revision"], "indicadores": revisar(doc), "motor": "reglas_locales"}
 
 
+@app.post("/api/planeaciones/{doc_id}/actividad-curricular-externa")
+def actividad_curricular_externa(doc_id: str, payload: ActividadCurricularExterna,
+                                user: SessionUser = Depends(validar_token_sesion)):
+    from ai.actividades_curriculares import sugerir_con_gemini
+    from services.curriculo import grados, opciones
+
+    doc = exigir_plantilla(doc_id, user)
+    if os.getenv("USAER_IA_CURRICULAR_HABILITADA") != "1" or not payload.autorizo:
+        raise HTTPException(403, "La actividad externa requiere habilitación y autorización explícita.")
+    referente = next((fila for fila in opciones(doc, payload.campo, grados(doc))
+                      if fila["id"] == payload.pda_id), None)
+    if referente is None:
+        raise HTTPException(422, "Selecciona un PDA oficial del grado y campo de la planeación.")
+    try:
+        actividad = sugerir_con_gemini(referente["id"], autorizado=True)
+    except PermissionError:
+        raise HTTPException(403, "La integración curricular externa está deshabilitada.") from None
+    except Exception:
+        raise HTTPException(503, "No se pudo obtener la actividad curricular externa.") from None
+    return {"actividad": actividad.model_dump(), "referente": referente, "revision": doc["revision"],
+            "requiere_revision_docente": True}
+
+
 @app.get("/api/planeaciones/{doc_id}")
 def obtener_planeacion(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
     """Documento de planeación completo con cálculo oficial de firmas."""
@@ -1803,12 +1832,7 @@ def estadisticas_zona(user: SessionUser = Depends(validar_token_sesion)):
     return obtener_estadisticas_zona()
 
 
-@app.get("/api/estadisticas/padron")
-def estadisticas_padron(escuela: str = "", incluir_bajas: bool = False,
-                       ciclo: str = "2026-2027", user: SessionUser = Depends(validar_token_sesion)):
-    from utils.text import normalizar_texto
-
-    ciclo_epp(ciclo)
+def _padron_en_alcance_estadistico(user, escuela):
     if escuela and not user.director and escuela not in user.escuelas_permitidas:
         raise HTTPException(404, "Escuela no disponible.")
     alumnos = alumnos_sql().drop_duplicates("ID_Alumno")
@@ -1816,6 +1840,37 @@ def estadisticas_padron(escuela: str = "", incluir_bajas: bool = False,
         alumnos = alumnos[alumnos["ID_Escuela"].isin(user.escuelas_permitidas)]
     if escuela:
         alumnos = alumnos[alumnos["ID_Escuela"].eq(escuela)]
+    return alumnos
+
+
+@app.get("/api/estadisticas/epp-ciclos")
+def comparar_epp_ciclos(ciclos: str, escuela: str = "", user: SessionUser = Depends(validar_token_sesion)):
+    """Compara cobertura documental de la cohorte activa actual por ciclo."""
+    from data.sql_repository import cobertura_epp_sql
+    from utils.text import normalizar_texto
+
+    solicitados = ciclos.split(",")
+    if not 2 <= len(solicitados) <= 5 or len(set(solicitados)) != len(solicitados):
+        raise HTTPException(422, "Indica de dos a cinco ciclos distintos separados por comas.")
+    for ciclo in solicitados:
+        ciclo_epp(ciclo)
+    alumnos = _padron_en_alcance_estadistico(user, escuela)
+    ids = alumnos.loc[alumnos["Estatus"].map(normalizar_texto).eq("ACTIVO"), "ID_Alumno"].tolist()
+    epp = cobertura_epp_sql(ids, solicitados)
+    return {"cohorte": "padron_activo_actual", "alumnos_activos": len(ids), "ciclos": [
+        {"ciclo": ciclo, "alumnos_con_epp": epp.get(ciclo, 0),
+         "porcentaje": round(100 * epp.get(ciclo, 0) / len(ids), 1) if ids else None}
+        for ciclo in solicitados
+    ]}
+
+
+@app.get("/api/estadisticas/padron")
+def estadisticas_padron(escuela: str = "", incluir_bajas: bool = False,
+                       ciclo: str = "2026-2027", user: SessionUser = Depends(validar_token_sesion)):
+    from utils.text import normalizar_texto
+
+    ciclo_epp(ciclo)
+    alumnos = _padron_en_alcance_estadistico(user, escuela)
     activos = alumnos["Estatus"].map(normalizar_texto).eq("ACTIVO")
     ids_activos = alumnos.loc[activos, "ID_Alumno"].tolist()
     if not incluir_bajas:
