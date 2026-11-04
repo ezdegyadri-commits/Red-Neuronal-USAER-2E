@@ -10,7 +10,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 
-HOST_DB = "gwhdki61-postgresql-17"
+HOST_DB = "zja3x8j3-postgresql-17"
 BASE_DB = "usaer_2e_2_0"
 USUARIO_DB = "usaer_app"
 MARCA = "uppcoder-sintetico-v1"
@@ -18,18 +18,31 @@ TABLA_MARCA = "usaer_uppcoder_piloto"
 CONFIG_SPARK = Path.home() / ".config" / "usaer-spark" / "config.json"
 
 
+def destino_postgres():
+    host = os.getenv("USAER_UPPCODER_DB_HOST", HOST_DB)
+    base = os.getenv("USAER_UPPCODER_DB_NAME", BASE_DB)
+    usuario = os.getenv("USAER_UPPCODER_DB_USER", USUARIO_DB)
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", host):
+        raise RuntimeError("Indica el nombre interno de PostgreSQL, sin esquema ni puerto.")
+    if not all(re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]{0,62}", valor) for valor in (base, usuario)):
+        raise RuntimeError("La base y el usuario deben ser identificadores PostgreSQL simples.")
+    return host, 5432, base, usuario
+
+
 def password_conexion():
+    host, puerto, base, usuario = destino_postgres()
     if clave := os.getenv("USAER_UPPCODER_DB_PASSWORD"):
         return clave
     if (os.getenv("POSTGRES_HOST"), os.getenv("POSTGRES_PORT", "5432"),
-            os.getenv("POSTGRES_DB"), os.getenv("POSTGRES_USER")) == (HOST_DB, "5432", BASE_DB, USUARIO_DB):
-        return os.getenv("POSTGRES_PASSWORD")
+            os.getenv("POSTGRES_DB"), os.getenv("POSTGRES_USER")) == (host, str(puerto), base, usuario):
+        if clave := os.getenv("POSTGRES_PASSWORD"):
+            return clave
     if previa := os.getenv("DATABASE_URL"):
         try:
             url = make_url(previa)
         except (ArgumentError, ValueError):
             return None
-        if (url.host, url.port or 5432, url.database, url.username) == (HOST_DB, 5432, BASE_DB, USUARIO_DB):
+        if (url.host, url.port or 5432, url.database, url.username) == (host, puerto, base, usuario):
             return url.password
     return None
 
@@ -40,6 +53,17 @@ def cargar_spark():
     if not CONFIG_SPARK.is_file() or CONFIG_SPARK.stat().st_mode & 0o077:
         raise RuntimeError("Falta la configuración Spark privada o sus permisos no son 0600.")
     datos = json.loads(CONFIG_SPARK.read_text(encoding="utf-8"))
+    if not all(campo in datos for campo in ("db_host", "db_name", "db_user")):
+        raise RuntimeError("Ejecuta activar_spark.py para registrar el destino PostgreSQL de esta pila.")
+    configurar_spark(datos)
+
+
+def configurar_spark(datos):
+    os.environ.update(
+        USAER_UPPCODER_DB_HOST=datos["db_host"],
+        USAER_UPPCODER_DB_NAME=datos["db_name"],
+        USAER_UPPCODER_DB_USER=datos["db_user"],
+    )
     os.environ["USAER_UPPCODER_PUBLIC_HOST"] = datos["host"]
     os.environ["USAER_UPPCODER_SYNTHETIC"] = "1"
     os.environ["USAER_UPPCODER_SPARK"] = "1"
@@ -64,8 +88,8 @@ def configurar():
     if not password:
         raise RuntimeError("Configura el secreto USAER_UPPCODER_DB_PASSWORD.")
     driver = "postgresql+psycopg" if os.getenv("USAER_UPPCODER_SPARK") == "1" else "postgresql+psycopg2"
-    url = URL.create(driver, username=USUARIO_DB, password=password,
-                     host=HOST_DB, port=5432, database=BASE_DB)
+    host, puerto, base, usuario = destino_postgres()
+    url = URL.create(driver, username=usuario, password=password, host=host, port=puerto, database=base)
     os.environ.update(USAER_SPA_MODE="uppcoder", USAER_SPA_ROLE="runtime",
                       DATABASE_URL=url.render_as_string(hide_password=False))
 
@@ -73,8 +97,9 @@ def configurar():
 def verificar_url():
     url = make_url(os.environ.get("DATABASE_URL", "sqlite://"))
     if (os.getenv("USAER_UPPCODER_SYNTHETIC") != "1" or os.getenv("USAER_SPA_ROLE") != "runtime"
-            or url.drivername not in {"postgresql+psycopg2", "postgresql+psycopg"} or url.host != HOST_DB or url.port != 5432
-            or url.database != BASE_DB or url.username != USUARIO_DB or not url.password or url.query):
+            or url.drivername not in {"postgresql+psycopg2", "postgresql+psycopg"}
+            or (url.host, url.port, url.database, url.username) != destino_postgres()
+            or not url.password or url.query):
         raise RuntimeError("Destino PostgreSQL fuera del perfil sintético autorizado de Uppcoder.")
 
 
@@ -84,8 +109,9 @@ def verificar_conexion(db):
                rolsuper OR rolreplication OR rolbypassrls OR rolcreaterole OR rolcreatedb
         FROM pg_roles WHERE rolname = current_user
     """)).one()
-    if (base, rol, esquema) != (BASE_DB, USUARIO_DB, "public") or not 170000 <= version < 180000 or privilegiado:
-        raise RuntimeError("Uppcoder requiere PostgreSQL 17 y el rol usaer_app sin privilegios elevados.")
+    _, _, base_esperada, rol_esperado = destino_postgres()
+    if (base, rol, esquema) != (base_esperada, rol_esperado, "public") or not 170000 <= version < 180000 or privilegiado:
+        raise RuntimeError("Uppcoder requiere PostgreSQL 17 y el rol configurado sin privilegios elevados.")
 
 
 def verificar_instalacion(db):

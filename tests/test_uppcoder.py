@@ -12,6 +12,27 @@ from deploy import uppcoder
 
 
 class ConfiguracionUppcoder(unittest.TestCase):
+    def test_destino_spark_y_secreto_del_servicio_enlazado(self):
+        clave = secrets.token_urlsafe(20) + "@:/"
+        datos = {"host": "piloto.example.invalid", "db_host": "pila-postgresql-17",
+                 "db_name": "piloto_dedicado", "db_user": "rol_piloto"}
+        with patch.dict(os.environ, {"POSTGRES_HOST": "otra-pila", "POSTGRES_DB": datos["db_name"],
+                                     "POSTGRES_USER": datos["db_user"], "POSTGRES_PASSWORD": clave}, clear=True):
+            uppcoder.configurar_spark(datos)
+            self.assertIsNone(uppcoder.password_conexion())
+            os.environ["POSTGRES_HOST"] = datos["db_host"]
+            uppcoder.configurar()
+            url = make_url(os.environ["DATABASE_URL"])
+            self.assertEqual((url.host, url.database, url.username), tuple(datos[k] for k in ("db_host", "db_name", "db_user")))
+            self.assertEqual(url.password, clave)
+            uppcoder.verificar_url()
+            os.environ["USAER_UPPCODER_DB_NAME"] = "otra_base"
+            with self.assertRaises(RuntimeError):
+                uppcoder.verificar_url()
+            os.environ["USAER_UPPCODER_DB_HOST"] = "https://otro:5432"
+            with self.assertRaises(RuntimeError):
+                uppcoder.destino_postgres()
+
     def test_url_cerrada_secreto_codificado_y_proxy_acotado(self):
         clave = secrets.token_urlsafe(20) + "@:/"
         with patch.dict(os.environ, {"USAER_UPPCODER_PUBLIC_HOST": "piloto.example.invalid",

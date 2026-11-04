@@ -88,6 +88,9 @@ def instalar():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", required=True, help="Host HTTPS del stack, sin esquema ni puerto.")
+    parser.add_argument("--db-host", default=os.getenv("USAER_UPPCODER_DB_HOST"), help="Nombre interno de PostgreSQL.")
+    parser.add_argument("--db-name", default=os.getenv("USAER_UPPCODER_DB_NAME"), help="Base sintética dedicada.")
+    parser.add_argument("--db-user", default=os.getenv("USAER_UPPCODER_DB_USER"), help="Rol sin privilegios elevados.")
     parser.add_argument("--limpiar-cache", action="store_true", help="Retira solo caché de pip y dependencias Node regenerables.")
     args = parser.parse_args()
     if sys.platform != "linux" or REPO != Path.home().resolve() / "app/usaer2e":
@@ -107,22 +110,27 @@ def main():
     instalar()
 
     from deploy import uppcoder
-    os.environ["USAER_UPPCODER_PUBLIC_HOST"] = args.host
-    uppcoder.host_publico()
     cfg = uppcoder.CONFIG_SPARK
     if cfg.parent.is_symlink() or cfg.parent.parent.is_symlink() or cfg.is_symlink():
         raise RuntimeError("La configuración privada no admite enlaces.")
     cfg.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     cfg.parent.chmod(0o700)
-    datos = {"host": args.host}
+    destino = {
+        "db_host": uppcoder.HOST_DB if args.db_host is None else args.db_host,
+        "db_name": uppcoder.BASE_DB if args.db_name is None else args.db_name,
+        "db_user": uppcoder.USUARIO_DB if args.db_user is None else args.db_user,
+    }
+    datos = {"host": args.host, **destino}
+    uppcoder.configurar_spark(datos)
+    uppcoder.host_publico()
     if not uppcoder.password_conexion():
         guardada = json.loads(cfg.read_text()) if cfg.is_file() and not cfg.stat().st_mode & 0o077 else {}
-        clave = guardada.get("password") or getpass("Contraseña PostgreSQL de usaer_app: ")
+        clave = guardada.get("password") if all(guardada.get(k) == v for k, v in destino.items()) else None
+        clave = clave or getpass("Contraseña PostgreSQL del rol configurado: ")
         if not clave:
             raise RuntimeError("Falta la contraseña PostgreSQL.")
         datos["password"] = clave
-    atomico(cfg, json.dumps(datos).encode())
-    uppcoder.cargar_spark()
+    uppcoder.configurar_spark(datos)
     uppcoder.configurar()
     from data.database import get_engine
     from sqlalchemy import inspect
@@ -141,6 +149,8 @@ def main():
         if respaldo.exists() or respaldo.is_symlink():
             raise RuntimeError("Ya existe un respaldo de main.py. Revísalo antes de sustituir el arranque.")
         atomico(respaldo, anterior)
+    atomico(cfg, json.dumps(datos).encode())
+    if anterior != adaptador:
         atomico(inicio, adaptador)
     print("SPA entregada a main:app. Comprueba el reinicio en el supervisor de Uppcoder.", flush=True)
 
