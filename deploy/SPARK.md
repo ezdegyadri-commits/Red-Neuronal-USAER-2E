@@ -11,7 +11,7 @@ git fetch origin refs/heads/codex-uppcoder-spark:refs/remotes/origin/codex-uppco
 git switch -c codex-uppcoder-spark --track origin/codex-uppcoder-spark
 cd ~/app
 pixi run -e web-fastapi python usaer2e/deploy/activar_spark.py --host 'HOST_DEL_STACK' \
-  --db-host zja3x8j3-postgresql-17 --db-name usaer_2e_2_0 --db-user usaer_app --limpiar-cache
+  --db-host zja3x8j3-postgresql-17 --db-name usaer_2e_2_0 --db-user ezdegyadri --limpiar-cache
 ```
 
 En una actualización posterior, sustituye `git switch -c …` por

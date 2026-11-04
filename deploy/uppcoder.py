@@ -12,7 +12,7 @@ from sqlalchemy.exc import ArgumentError
 
 HOST_DB = "zja3x8j3-postgresql-17"
 BASE_DB = "usaer_2e_2_0"
-USUARIO_DB = "usaer_app"
+USUARIO_DB = "ezdegyadri"
 MARCA = "uppcoder-sintetico-v1"
 TABLA_MARCA = "usaer_uppcoder_piloto"
 CONFIG_SPARK = Path.home() / ".config" / "usaer-spark" / "config.json"

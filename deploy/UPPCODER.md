@@ -2,7 +2,7 @@
 
 Usa el servicio FastAPI del stack existente y su PostgreSQL 17 interno. El
 perfil usa por defecto `zja3x8j3-postgresql-17:5432`, base `usaer_2e_2_0`,
-usuario `usaer_app`. Mantén el stack privado durante el ensayo.
+usuario `ezdegyadri`. Mantén el stack privado durante el ensayo.
 
 ## Actualizar e instalar
 
@@ -37,7 +37,7 @@ de migración y para el servicio que inicia la aplicación.
 | `USAER_UPPCODER_SYNTHETIC` | `1` |
 | `USAER_UPPCODER_PUBLIC_HOST` | Host exacto de la dirección HTTPS que muestra el stack, sin `https://`, puerto ni ruta |
 | `USAER_UPPCODER_DB_HOST`, `USAER_UPPCODER_DB_NAME`, `USAER_UPPCODER_DB_USER` | Opcionales. Destino interno, base sintética y rol restringido |
-| `USAER_UPPCODER_DB_PASSWORD` | Contraseña existente de `usaer_app`, como secreto |
+| `USAER_UPPCODER_DB_PASSWORD` | Contraseña del usuario PostgreSQL configurado, como secreto |
 | `USAER_UPPCODER_DIRECTOR_PASSWORD` | Contraseña inicial aleatoria de al menos 16 caracteres, como secreto |
 | `PORT` | El puerto asignado por Uppcoder. Si el entorno no lo define, el arranque usa 8000 |
 | `USAER_UPPCODER_PROXY_IPS` | Opcional. Usa las IP o redes concretas que confirme el operador del proxy si se necesita la IP real del cliente. El valor por defecto confía solo en loopback |
