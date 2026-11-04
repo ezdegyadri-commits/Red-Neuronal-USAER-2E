@@ -1,17 +1,50 @@
 """Arranque y migración explícita del piloto sintético de Uppcoder."""
 from ipaddress import ip_network
+import json
 import os
+from pathlib import Path
 import re
 import sys
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import ArgumentError
 
 HOST_DB = "gwhdki61-postgresql-17"
 BASE_DB = "usaer_2e_2_0"
 USUARIO_DB = "usaer_app"
 MARCA = "uppcoder-sintetico-v1"
 TABLA_MARCA = "usaer_uppcoder_piloto"
+CONFIG_SPARK = Path.home() / ".config" / "usaer-spark" / "config.json"
+
+
+def password_conexion():
+    if clave := os.getenv("USAER_UPPCODER_DB_PASSWORD"):
+        return clave
+    if (os.getenv("POSTGRES_HOST"), os.getenv("POSTGRES_PORT", "5432"),
+            os.getenv("POSTGRES_DB"), os.getenv("POSTGRES_USER")) == (HOST_DB, "5432", BASE_DB, USUARIO_DB):
+        return os.getenv("POSTGRES_PASSWORD")
+    if previa := os.getenv("DATABASE_URL"):
+        try:
+            url = make_url(previa)
+        except (ArgumentError, ValueError):
+            return None
+        if (url.host, url.port or 5432, url.database, url.username) == (HOST_DB, 5432, BASE_DB, USUARIO_DB):
+            return url.password
+    return None
+
+
+def cargar_spark():
+    if CONFIG_SPARK.is_symlink():
+        raise RuntimeError("La configuración Spark no admite enlaces simbólicos.")
+    if not CONFIG_SPARK.is_file() or CONFIG_SPARK.stat().st_mode & 0o077:
+        raise RuntimeError("Falta la configuración Spark privada o sus permisos no son 0600.")
+    datos = json.loads(CONFIG_SPARK.read_text(encoding="utf-8"))
+    os.environ["USAER_UPPCODER_PUBLIC_HOST"] = datos["host"]
+    os.environ["USAER_UPPCODER_SYNTHETIC"] = "1"
+    os.environ["USAER_UPPCODER_SPARK"] = "1"
+    if not password_conexion() and datos.get("password"):
+        os.environ["USAER_UPPCODER_DB_PASSWORD"] = datos["password"]
 
 
 def host_publico():
@@ -27,10 +60,11 @@ def configurar():
     host_publico()
     if os.getenv("USAER_UPPCODER_SYNTHETIC") != "1":
         raise RuntimeError("Este perfil requiere USAER_UPPCODER_SYNTHETIC=1 y una base exclusiva de pruebas.")
-    password = os.environ.get("USAER_UPPCODER_DB_PASSWORD")
+    password = password_conexion()
     if not password:
         raise RuntimeError("Configura el secreto USAER_UPPCODER_DB_PASSWORD.")
-    url = URL.create("postgresql+psycopg2", username=USUARIO_DB, password=password,
+    driver = "postgresql+psycopg" if os.getenv("USAER_UPPCODER_SPARK") == "1" else "postgresql+psycopg2"
+    url = URL.create(driver, username=USUARIO_DB, password=password,
                      host=HOST_DB, port=5432, database=BASE_DB)
     os.environ.update(USAER_SPA_MODE="uppcoder", USAER_SPA_ROLE="runtime",
                       DATABASE_URL=url.render_as_string(hide_password=False))
@@ -39,7 +73,7 @@ def configurar():
 def verificar_url():
     url = make_url(os.environ.get("DATABASE_URL", "sqlite://"))
     if (os.getenv("USAER_UPPCODER_SYNTHETIC") != "1" or os.getenv("USAER_SPA_ROLE") != "runtime"
-            or url.drivername != "postgresql+psycopg2" or url.host != HOST_DB or url.port != 5432
+            or url.drivername not in {"postgresql+psycopg2", "postgresql+psycopg"} or url.host != HOST_DB or url.port != 5432
             or url.database != BASE_DB or url.username != USUARIO_DB or not url.password or url.query):
         raise RuntimeError("Destino PostgreSQL fuera del perfil sintético autorizado de Uppcoder.")
 

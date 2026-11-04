@@ -407,7 +407,10 @@ def get_engine(*, initialize_schema=True):
         if _ENGINE is None:
             db_url = get_database_url()
             if is_postgres():
-                db_url=make_url(db_url).set(drivername="postgresql+psycopg2").render_as_string(hide_password=False)
+                url = make_url(db_url)
+                if os.getenv("USAER_SPA_MODE") != "uppcoder" or url.drivername != "postgresql+psycopg":
+                    url = url.set(drivername="postgresql+psycopg2")
+                db_url = url.render_as_string(hide_password=False)
             from sqlalchemy.pool import NullPool
             if db_url.startswith("sqlite"):
                 _ENGINE = create_engine(db_url, connect_args={"check_same_thread": False}, echo=False, hide_parameters=True)

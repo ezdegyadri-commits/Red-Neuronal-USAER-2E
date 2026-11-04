@@ -1,0 +1,8 @@
+fastapi>=0.115,<1
+sqlalchemy>=2,<3
+psycopg>=3.2,<4
+pandas>=3,<4
+openpyxl>=3.1,<4
+reportlab>=5,<6
+fpdf2>=2.8,<3
+pymupdf>=1.26,<2

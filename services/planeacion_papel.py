@@ -2,10 +2,10 @@
 from copy import deepcopy
 import hashlib
 import json
-from services import planeacion as s,planeacion_formato as f,planeacion_viva as viva
+from services import planeacion_formato as f
 from services.planeacion_modalidad import guia_grupal,GUIA_XIX
 from services.planeacion_modelo import FORMATOS
-from services.planeacion_edicion import huella as huella_documento
+from services.planeacion_huella import huella as huella_documento
 from services.curriculo import contexto_ia
 from services import planeacion_equipo as equipo
 from services.planeacion_limpieza import normalizar,tiene_contenido
@@ -21,9 +21,15 @@ def huella(doc):
     return huella_documento(copia)
 
 
-def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
+def hoja(doc,para_impresion=False,colaborativa=False,archivo=False,*,actor_impresion=None):
     if archivo and not para_impresion:raise PermissionError('El acceso al archivo es solo para lectura e impresión.')
-    actor=s.autorizar(doc,False,incluir_bajas=True) if archivo else s.autorizar(doc,not colaborativa and not para_impresion)
+    if actor_impresion is None:
+        from services import planeacion as s
+        actor=s.autorizar(doc,False,incluir_bajas=True) if archivo else s.autorizar(doc,not colaborativa and not para_impresion)
+    elif para_impresion and not colaborativa and not archivo:
+        actor = actor_impresion
+    else:
+        raise PermissionError("El actor preautorizado solo puede imprimir.")
     if colaborativa:
         from services.planeacion_colaboracion import compartible
         if not compartible(doc) or actor.get('area') not in ('Psicología','Comunicación','Trabajo Social') or actor.get('director'):
@@ -65,7 +71,14 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
     organizacion=doc['metadatos'].get('equipo',{}) if equipo.aplica(doc) else {}
     curricular='\n\n'.join('Contenido: '+r['contenido']+'\nPDA: '+r['pda']+'\n'+r['fuente']+' · p. '+str(r['pagina_pdf']) for r in cur.get('referentes_por_grado',[]))
     if grupal:
-        rows=guia_grupal(doc)['filas'];permitidos=[] if bloqueada else [actor['area']] if colaborativa else viva.campos_guia(doc)
+        rows=guia_grupal(doc)['filas']
+        if para_impresion or bloqueada:
+            permitidos = []
+        elif colaborativa:
+            permitidos = [actor['area']]
+        else:
+            from services import planeacion_viva as viva
+            permitidos = viva.campos_guia(doc)
         tables.append({'id':'guia','title':'','headers':GUIA_XIX,'rows':[[celda(row.get(c,''),('aporte' if colaborativa else 'guia',i,c) if c in permitidos else None,c,destinatario=row['ID_Alumno']) for c in GUIA_XIX] for i,row in enumerate(rows)],'add':False,'delete':False,'widths':[14,12,9,14,12,12,12,8,7]})
     if doc['formato']=='XXV':
         tables.append({'id':'alumnos_ts','title':'','headers':['Nombre del alumno','Grado','Grupo'],
@@ -177,6 +190,7 @@ def hoja(doc,para_impresion=False,colaborativa=False,archivo=False):
 
 
 def aplicar(doc,event):
+    from services import planeacion as s, planeacion_viva as viva
     s.autorizar(doc,True)
     spec=hoja(doc)
     if not isinstance(event,dict) or event.get('documento')!=doc['id'] or event.get('huella')!=spec['huella']:
@@ -259,6 +273,7 @@ def aplicar(doc,event):
 
 
 def aplicar_aporte(doc,event,con_observaciones=False):
+    from services import planeacion as s
     """Parche estrictamente acotado; ni el navegador ni el especialista reescriben otra área."""
     spec=hoja(doc,colaborativa=True);actor=s.identidad()
     if not isinstance(event,dict) or event.get('documento')!=doc['id'] or event.get('huella')!=spec['huella']:

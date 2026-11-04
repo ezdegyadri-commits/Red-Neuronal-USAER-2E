@@ -1,7 +1,7 @@
 """Propuestas educativas locales y transparentes; no usa motores ni inventa NEE."""
 from copy import deepcopy
 import re
-from services import planeacion as s,planeacion_edicion as ed
+from services.planeacion_huella import huella
 from services.planeacion_generacion import fuentes_pertinentes
 from services.curriculo import contexto_ia
 from services.planeacion_modelo import FORMATOS
@@ -42,6 +42,7 @@ def vincular_cadena_nee(actividad, necesidad, pda, conclusion):
 
 
 def preparar(doc,enfoque='',contexto_actividad=None):
+    from services import planeacion as s
     s.autorizar(doc,True)
     return preparar_documento_autorizado(doc, enfoque, contexto_actividad)
 
@@ -85,17 +86,18 @@ def preparar_documento_autorizado(doc, enfoque='', contexto_actividad=None):
             sustento='Referentes seleccionados: '+', '.join(referentes) if referentes else 'Sin PDA específico seleccionado. Revisar su vinculación antes de enviar.'
             if area=='Trabajo Social' and not referentes:sustento='Revisar la barrera documentada, los apoyos y el contexto elegido en el Anexo XXV.'
             if base_formato:alcance+=' Se reutiliza la orientación escrita en el formato como propuesta de trabajo; no confirma una evaluación ni un resultado.'
-            firma=ed.huella({'doc':doc['id'],'alumno':a['ID_Alumno'],'campo':campo,'enfoque':enfoque,'fuentes':individuales+materiales,'referentes':seleccionados,'base_formato':bases,'contexto':contexto_actividad,'version':2})
+            firma=huella({'doc':doc['id'],'alumno':a['ID_Alumno'],'campo':campo,'enfoque':enfoque,'fuentes':individuales+materiales,'referentes':seleccionados,'base_formato':bases,'contexto':contexto_actividad,'version':2})
             propuestas.append({'id':firma,'alumno':a['ID_Alumno'],'nombre':a['Nombre del alumno'],'campo':campo,
                 'actividad':(a['Nombre del alumno']+'\n' if len(doc['datos']['Alumnos'])>1 else '')+'Inicio: '+inicio+'\nDesarrollo: '+desarrollo+'\nCierre: '+cierre,
                 'orientacion':alcance+'\n'+sustento,
                 'recursos':recursos,'evidencias':antecedentes,'referentes':referentes,'contexto':contexto_actividad})
-    return {'huella':ed.huella(doc),'propuestas':propuestas,'enfoque':str(enfoque)}
+    return {'huella':huella(doc),'propuestas':propuestas,'enfoque':str(enfoque)}
 
 
 def aplicar(doc,propuesta,ids):
+    from services import planeacion as s, planeacion_edicion as ed
     s.autorizar(doc,True)
-    if propuesta['huella']!=ed.huella(doc):raise ValueError('La planeación cambió. Prepara otra vez la propuesta local antes de incorporarla.')
+    if propuesta['huella']!=huella(doc):raise ValueError('La planeación cambió. Prepara otra vez la propuesta local antes de incorporarla.')
     disponibles={r['id']:r for r in propuesta['propuestas']}
     if not ids or not set(ids)<=set(disponibles):raise ValueError('Elige propuestas de esta preparación.')
     alumnos={a['ID_Alumno'] for a in doc['datos']['Alumnos']}

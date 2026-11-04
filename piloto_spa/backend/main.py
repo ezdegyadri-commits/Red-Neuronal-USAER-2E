@@ -1253,7 +1253,8 @@ def descargar_planeacion_pdf(doc_id: str, user: SessionUser = Depends(validar_to
     doc = obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
     doc = adaptar_planeacion_para_pdf(doc)
     try:
-        pdf_bytes = generar_pdf_planeacion(doc)
+        pdf_bytes = generar_pdf_planeacion(doc, actor_impresion={"cuenta": user.usuario, "area": user.area,
+                                                                "director": user.director})
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1651,7 +1652,7 @@ def chat_asistente(payload: AIChatPayload, user: SessionUser = Depends(validar_t
 @app.post("/api/ai/sugerencias")
 def sugerencias_asistente(payload: AISugerenciaPayload, user: SessionUser = Depends(validar_token_sesion)):
     """Generación directa de ajustes razonables y descriptores observables."""
-    from ai.engine import fallback as ai_fallback
+    from ai.sugerencia_local import fallback as ai_fallback
     return {**ai_fallback(), "origen": "ejemplo_local"}
 
 

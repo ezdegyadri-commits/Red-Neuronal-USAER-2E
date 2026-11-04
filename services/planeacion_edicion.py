@@ -1,14 +1,10 @@
 """Edición y reutilización aditivas sobre la autorización y versiones existentes."""
 from copy import deepcopy
-import hashlib
 import json
 from services import planeacion as s
+from services.planeacion_huella import huella
 from services.planeacion_modelo import FORMATOS
 from services.planeacion_matricula import clave_escuela
-
-
-def huella(doc):
-    return hashlib.sha256(json.dumps(doc,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
 
 
 def borrador(doc):

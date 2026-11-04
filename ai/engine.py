@@ -6,6 +6,7 @@ try:
 except ImportError:
     genai = None
 from config.settings import GEMINI_MODEL
+from ai.sugerencia_local import fallback
 
 @st.cache_resource(show_spinner=False)
 def client():
@@ -16,9 +17,6 @@ def client():
     except Exception:
         key = ''
     return genai.Client(api_key=key) if key else None
-
-def fallback():
-    return {'area':'Aprendizaje','motivo':'Resultados del Anexo 3: barreras identificadas','sugerencias':'Revisar los resultados del Anexo 3 y establecer estrategias de acceso, participación y aprendizaje acordes con las barreras identificadas. Definir responsables, evidencias observables y un plazo de seguimiento.','seguimiento':'30 días'}
 
 def generar_sugerencias(contexto):
     cli = client()

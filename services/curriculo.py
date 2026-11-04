@@ -4,7 +4,7 @@ import gzip
 import json
 from pathlib import Path
 import re
-import streamlit as st
+from functools import lru_cache
 
 CAMPOS={
  'Lenguajes':'Comunicar, interpretar y expresar significados mediante lenguas, textos, oralidad y lenguajes artísticos, en situaciones reales.',
@@ -23,7 +23,7 @@ FUENTES_BASE=[
  {'id':'SEP-PLAN2022','titulo':'Plan de Estudio 2022 para preescolar, primaria y secundaria','edicion':'Edición proporcionada 2025','organismo':'SEP','url':'https://educacionbasica.sep.gob.mx/materiales-de-apoyo-a-la-apropiacion-del-plan-y-programas-de-estudio-2022/','nota':'Campos, ejes, integración curricular y evaluación formativa. No equivale al catálogo de PDA.'},
  {'id':'SEGEY-USAER','titulo':'Manual de Operatividad del Servicio de Apoyo de Educación Especial USAER','edicion':'2021','organismo':'SEGEY Yucatán','url':'https://www.educacion.yucatan.gob.mx/multimedia/publicaciones/220121_Manual_USAER.pdf','nota':'Anexos XXI-XXVI: objetivos derivados de NEE/IEPP, barreras, apoyos, ajustes, contextos y seguimiento.'}]
 
-@st.cache_data(show_spinner=False)
+@lru_cache(maxsize=1)
 def catalogo():
     root=Path(__file__).resolve().parents[1]/'data'
     compressed=root/'curriculo_sep.json.gz'

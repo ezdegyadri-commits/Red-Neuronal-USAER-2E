@@ -7,8 +7,8 @@ from reportlab.platypus import SimpleDocTemplate,Paragraph,Table,TableStyle,Spac
 from services.planeacion_papel import hoja
 
 
-def generar_pdf(doc,archivo=False):
-    return _generar_pdf(doc,hoja(doc,para_impresion=True,archivo=archivo))
+def generar_pdf(doc,archivo=False,*,actor_impresion=None):
+    return _generar_pdf(doc,hoja(doc,para_impresion=True,archivo=archivo,actor_impresion=actor_impresion))
 
 
 def preparar_descarga(doc):

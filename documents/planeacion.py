@@ -10,10 +10,10 @@ from services.planeacion_modelo import FORMATOS
 from services.curriculo import contexto_ia
 
 
-def generar_pdf(doc):
+def generar_pdf(doc, *, actor_impresion=None):
     if doc.get('metadatos',{}).get('intervenciones_nee'):
         from documents.planeacion_papel import generar_pdf as generar_por_nee
-        return generar_por_nee(doc)
+        return generar_por_nee(doc, actor_impresion=actor_impresion)
     from services.planeacion_equipo import aplica
     es_equipo=aplica(doc) and 'equipo' in doc['metadatos']
     output=BytesIO(); width,height=landscape(letter); available=width-60
