@@ -74,7 +74,8 @@ class PostgreSQLAislado(unittest.TestCase):
 
                 nombres = ["a", "b", "recuperada"]
                 if os.getenv("USAER_MIGRACION_PRUEBA"):
-                    nombres.extend(("migracion_fixture", "migracion_restaurada", "preparacion", "proyeccion_fixture"))
+                    nombres.extend(("migracion_fixture", "migracion_restaurada", "preparacion",
+                                    "proyeccion_fixture", "proyeccion_documental", "proyeccion_restaurada"))
                 urls = {nombre: db_config(nombre) for nombre in nombres}
                 with closing(psycopg2.connect(host="127.0.0.1", port=pg_port, dbname="postgres",
                                               user="spa_bootstrap", password=bootstrap, connect_timeout=5)) as db:
@@ -153,6 +154,45 @@ print("Proyección operativa: altas, repetición y ediciones locales preservadas
 """
                     subprocess.run([sys.executable, "-c", script_proyeccion], cwd=ROOT,
                                    env=app_env("proyeccion_fixture"), check=True)
+                    env_documental = dict(app_env("proyeccion_documental"), USAER_SPA_MODE="postgres-synthetic",
+                                          USAER_SPA_ROLE="owner", USAER_DOCUMENTAL_PASSWORD=secrets.token_urlsafe(24))
+                    clave_copia = secrets.token_urlsafe(24)
+                    with closing(psycopg2.connect(host="127.0.0.1", port=pg_port, dbname="postgres",
+                                                  user="spa_bootstrap", password=bootstrap)) as db:
+                        db.autocommit = True
+                        with db.cursor() as cur:
+                            cur.execute("CREATE ROLE copia_ensayo_fixture LOGIN PASSWORD %s", (clave_copia,))
+                            cur.execute("CREATE DATABASE usaer_copia_ensayo_fixture OWNER copia_ensayo_fixture")
+                            cur.execute("COMMENT ON DATABASE usaer_copia_ensayo_fixture IS 'USAER COPIA ENSAYO V1'")
+                    env_documental["USAER_COPIA_TEST_URL"] = URL.create(
+                        "postgresql+psycopg2", username="copia_ensayo_fixture", password=clave_copia,
+                        host="127.0.0.1", port=pg_port, database="usaer_copia_ensayo_fixture",
+                    ).render_as_string(hide_password=False)
+                    subprocess.run([sys.executable, "-c", "from tests.fixture_proyeccion_documental import probar; probar()"],
+                                   cwd=ROOT, env=env_documental, check=True)
+                    if os.getenv("USAER_DOCUMENTAL_BROWSER") == "1":
+                        for fase in ("editar", "reabrir"):
+                            with servidor(env_documental, carpeta) as cliente:
+                                subprocess.run(["node", "tests/proyeccion_documental_browser.cjs",
+                                                str(cliente.base_url), fase], cwd=ROOT, env=env_documental,
+                                               check=True, timeout=55)
+                    origen_documental = urls["proyeccion_documental"]
+                    restaurada_documental = urls["proyeccion_restaurada"]
+                    respaldo_documental = carpeta / "documentos.dump"
+                    pg("pg_dump", "-h", "127.0.0.1", "-p", pg_port, "-U", origen_documental.username,
+                       "-Fc", "--exclude-table-data=public.spa_sesiones", "-f", respaldo_documental,
+                       origen_documental.database, env=dict(base_env, PGPASSWORD=origen_documental.password))
+                    pg("pg_restore", "-h", "127.0.0.1", "-p", pg_port, "-U", restaurada_documental.username,
+                       "--no-owner", "--no-privileges", "--single-transaction", "-d", restaurada_documental.database,
+                       respaldo_documental, env=dict(base_env, PGPASSWORD=restaurada_documental.password))
+                    with closing(psycopg2.connect(restaurada_documental.render_as_string(hide_password=False))) as db:
+                        with db.cursor() as cur:
+                            cur.execute("""SELECT (SELECT count(*) FROM spa_sesiones),
+                                (SELECT count(*) FROM spa_planeacion_alumnos), (SELECT count(*) FROM spa_planeacion_grupos),
+                                (SELECT contenido_json::jsonb->>'avances' FROM informes_educativos_spa
+                                 WHERE id='informe-historico')""")
+                            self.assertEqual(cur.fetchone(), (0, 2, 1, "Edición docente posterior"))
+                    print("Restauración operativa: relaciones y edición docente verificadas; cero sesiones.")
                     script_semilla = """
 import secrets
 import sys

@@ -12,16 +12,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from data.sincronizacion_pg import DESTINOS, preparar as preparar_tablas
 from tools.migracion_paralela import MAX_BYTES, preparar, verificar_base_local, verificar_destino_local
+from tools.documentos_historicos import TABLAS_DOCUMENTOS, proyectar_documentos
 
 TABLAS = ("Escuelas", "Alumnos", "Anexo3_Deteccion", "Anexo4_Sugerencias",
           "Anexo5_Eventos", "Anexo7_Derivacion", "Registro_Visitas")
+ARCHIVOS = {"Documentos_Expediente", "Archivos_Expediente"}
 
 
 def proyectar(engine, copia, *, aplicar=False):
     verificar_destino_local(engine.url, "proyeccion")
     _, conciliacion = preparar(copia)
     fuente = copia["pestanas"]
-    if any(any(conciliacion[n]["errores"].values()) for n in TABLAS if n in conciliacion):
+    if any(any(conciliacion[n]["errores"].values()) for n in (*TABLAS, *TABLAS_DOCUMENTOS, *ARCHIVOS) if n in conciliacion):
         raise ValueError("Las pestañas operativas tienen identidades o relaciones sin conciliar.")
     if len(fuente["Escuelas"]) < 2:
         raise ValueError("La proyección requiere un catálogo de escuelas explícito.")
@@ -35,13 +37,20 @@ def proyectar(engine, copia, *, aplicar=False):
     for nombre in TABLAS[2:-1]:
         if any(r.get("id_alumno") not in alumnos_origen for r in plan.get(nombre, [])):
             raise ValueError(f"{nombre}: se requiere un alumno de origen conciliado.")
-    resultado = {"aplicado": aplicar, "solo_archivo": sorted(set(fuente) - set(plan)), "tablas": {}}
+    proyectadas = TABLAS_DOCUMENTOS | (ARCHIVOS if "Documentos_Expediente" in fuente else set())
+    resultado = {"aplicado": aplicar, "solo_archivo": sorted(set(fuente) - set(plan) - proyectadas), "tablas": {}}
     with engine.begin() as db:
         verificar_base_local(db, "proyeccion")
         db.execute(text("SET LOCAL search_path TO public"))
         # Los nombres proceden del catálogo fijo, nunca del archivo.
         if aplicar:
-            nombres = ", ".join(DESTINOS[n][0].__tablename__ for n in TABLAS if n in plan)
+            nombres = {DESTINOS[n][0].__tablename__ for n in TABLAS if n in plan}
+            if TABLAS_DOCUMENTOS & fuente.keys():
+                nombres.update(("epp_documentos", "informes_educativos_spa", "spa_cambios", "usuarios",
+                                "planeaciones", "spa_planeacion_alumnos", "spa_planeacion_grupos", "registro_visitas"))
+            if ARCHIVOS & fuente.keys():
+                nombres.update(("spa_adjunto_expediente", "spa_cambios"))
+            nombres = ", ".join(sorted(nombres))
             db.execute(text(f"LOCK TABLE {nombres} IN SHARE ROW EXCLUSIVE MODE"))
         alumnos_en_conflicto = set()
         escuelas_en_conflicto = set()
@@ -74,6 +83,8 @@ def proyectar(engine, copia, *, aplicar=False):
                     if nombre == "Escuelas":
                         escuelas_en_conflicto.add(fila["id"])
             resultado["tablas"][nombre] = cuenta
+        alumnos_conciliados = {r["id"]: r for r in plan["Alumnos"] if r["id"] not in alumnos_en_conflicto}
+        resultado["tablas"].update(proyectar_documentos(db, fuente, alumnos_conciliados, aplicar=aplicar))
     return resultado
 
 
@@ -96,6 +107,11 @@ def main():
 
     verificar_base_piloto()
     copia = json.loads(args.archivo.read_text(encoding="utf-8-sig"))
+    if "manifiesto" in copia:
+        from tools.copia_controlada import verificar_paquete
+
+        verificar_paquete(copia, clase="ensayo")
+        copia = copia["copia"]
     print(json.dumps(proyectar(get_engine(initialize_schema=False), copia, aplicar=args.aplicar),
                      ensure_ascii=False, indent=2))
 

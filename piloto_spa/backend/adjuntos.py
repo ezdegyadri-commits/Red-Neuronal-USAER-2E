@@ -28,7 +28,7 @@ def listar(alumno):
         ).order_by(AdjuntoExpedienteSPA.fecha.desc())).all()]
 
 
-def guardar(alumno, nombre, autor, contenido):
+def validar_pdf(nombre, contenido):
     if (not nombre or len(nombre) > 120 or chr(92) in nombre or PurePosixPath(nombre).name != nombre
             or any(ord(c) < 32 for c in nombre) or not nombre.lower().endswith(".pdf")):
         raise HTTPException(422, "El nombre debe corresponder a un archivo PDF.")
@@ -42,6 +42,10 @@ def guardar(alumno, nombre, autor, contenido):
                 raise HTTPException(422, "Usa un PDF simple, sin cifrado, archivos incrustados ni acciones activas.")
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(422, "PDF inválido.") from exc
+
+
+def guardar(alumno, nombre, autor, contenido):
+    validar_pdf(nombre, contenido)
     with get_session() as db:
         if not db.scalar(select(Alumno.id).where(Alumno.id == alumno).with_for_update()):
             raise HTTPException(404, "Expediente no disponible.")
