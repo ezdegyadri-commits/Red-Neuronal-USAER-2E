@@ -34,6 +34,10 @@ def autorizar(user):
 
 
 def procesar(data, user, revision=None):
+    from piloto_spa.backend.alcance_alumno import ICHC
+
+    if not user.director and (ICHC in user.escuelas_permitidas or "TODAS" in user.escuelas_permitidas):
+        raise HTTPException(403, "La importación del padrón compartido corresponde a Dirección.")
     escuelas = [
         {"ID_Escuela": e["id"], "Nombre_Escuela": e["nombre"], "CCT_Escuela": e["cct"]}
         for e in obtener_catalogo_escuelas() if user.director or e["id"] in user.escuelas_permitidas

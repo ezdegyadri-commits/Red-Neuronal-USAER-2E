@@ -28,7 +28,7 @@ conciliarla con una cuenta autorizada.
 1. Obtén paquetes individuales según el [procedimiento de copia controlada](COPIA_CONTROLADA.md).
    Para el ensayo usa datos ficticios. Para una operación posterior autorizada,
    conserva el mismo alias de origen por escuela y registra la fecha real de
-   cada captura. El límite inicial sigue siendo 20 alumnos por paquete.
+   cada captura. Usa el [descriptor paginado](B01_CAPTURA_REAL.md).
 2. Desde el clon de desarrollo, con una base de preparación PostgreSQL 17
    local y su rol exclusivo, ejecuta:
 

@@ -15,6 +15,7 @@ from config.settings import ESCUELAS_USAER
 from tools.copia_controlada import (leer_json, permiso_real, preparar_bd, verificar_destino,
                                    verificar_paquete)
 from tools.migracion_paralela import PESTANAS
+from tools.expedientes_b01 import ICHC, conteo_ichc, evidencia_ichc
 from utils.text import normalizar_texto
 
 BLOQUES = {
@@ -30,7 +31,8 @@ CCT_PUBLICOS = {
 }
 COMPATIBLES = {"Escuelas", "Alumnos", "Documentos_Expediente", "Archivos_Expediente", "EPP_Versiones",
                "NEE", "Planeaciones_Versiones", "Informes", "Actas", "Anexo3_Deteccion", "Anexo4_Sugerencias",
-               "Anexo5_Eventos", "Anexo7_Derivacion", "Registro_Visitas"}
+               "Anexo5_Eventos", "Anexo7_Derivacion", "Registro_Visitas", "Expedientes",
+               "Relaciones_Documentos", "Asignaciones_Apoyo"}
 ESPACIO = text("""SELECT coalesce(sum(pg_total_relation_size(c.oid)), 0)
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='copia_controlada' AND c.relkind='r'""")
@@ -42,7 +44,7 @@ def catalogo():
             for bloque, claves in BLOQUES.items()}
 
 
-def preparar_bloque(engine, bloque, paquetes, *, clase, aplicar=False, referencia=None):
+def preparar_bloque(engine, bloque, paquetes, *, clase, aplicar=False, referencia=None, padron=None):
     claves = BLOQUES[bloque]
     if not 1 <= len(paquetes) <= len(claves):
         raise ValueError("Indica hasta cuatro paquetes de un mismo bloque.")
@@ -59,10 +61,17 @@ def preparar_bloque(engine, bloque, paquetes, *, clase, aplicar=False, referenci
         catalogo_escuela = next(f for f in hojas["Escuelas"][1:] if any(c.strip() for c in f))
         fila = dict(zip(hojas["Escuelas"][0], catalogo_escuela))
         cct = fila.get("CCT", "").strip().upper()
+        turno = normalizar_texto(fila.get("Turno", ""))
         if clase == "real" and (len(cct) != 10 or not cct.isascii() or not cct.isalnum()
                                  or cct in ccts or normalizar_texto(fila.get("Nombre_Escuela", ""))
                                  != normalizar_texto(NOMBRES[escuela])):
             raise ValueError("Coteja CCT y nombre con el padrón institucional autorizado.")
+        if clase == "real":
+            validado = (padron or {}).get(escuela, {})
+            if (cct != validado.get("cct", "").strip().upper() or not turno
+                    or turno != normalizar_texto(validado.get("turno", ""))
+                    or normalizar_texto(validado.get("nombre", "")) != normalizar_texto(NOMBRES[escuela])):
+                raise ValueError("CCT, nombre o turno difieren del padrón autorizado.")
         ccts.add(cct)
         identidades = set(m["identidades"]["Alumnos"])
         if alumnos & identidades:
@@ -70,6 +79,7 @@ def preparar_bloque(engine, bloque, paquetes, *, clase, aplicar=False, referenci
         alumnos.update(identidades)
         informes[escuela] = {
             "nombre_catalogo": NOMBRES[escuela], "cct_de_la_copia": cct or None,
+            "turno_de_la_copia": turno or None,
             "cct_publicos_por_cotejar": CCT_PUBLICOS[escuela],
             "cct_coincide_con_referencia_publica": cct in CCT_PUBLICOS[escuela] if cct else None,
             "capturada": m["capturada"], "alumnos": m["pestanas"]["Alumnos"]["filas"],
@@ -79,7 +89,12 @@ def preparar_bloque(engine, bloque, paquetes, *, clase, aplicar=False, referenci
             "compatibilidad_por_conciliar": sorted(COMPATIBLES & hojas.keys()),
             "solo_preparacion": sorted(hojas.keys() - COMPATIBLES),
             "pestanas_ausentes": sorted(PESTANAS.keys() - hojas.keys()),
+            "errores_conciliacion": {n: {k: v for k, v in datos["errores"].items() if v}
+                                    for n, datos in m["pestanas"].items() if any(datos["errores"].values())},
         }
+        if escuela == ICHC:
+            informes[escuela]["asignaciones"] = conteo_ichc(hojas)
+            informes[escuela]["evidencia_en_padron_sin_conceder_acceso"] = evidencia_ichc(hojas)
     tracemalloc.start()
     reloj, cpu = time.monotonic(), time.process_time()
     try:
@@ -110,6 +125,8 @@ def preparar_bloque(engine, bloque, paquetes, *, clase, aplicar=False, referenci
         estado = "bloqueado_por_cuarentena"
     elif cotejo:
         estado = "bloqueado_por_cotejo_cct"
+    elif informes.get(ICHC, {}).get("asignaciones", {}).get("pendientes"):
+        estado = "bloqueado_por_asignaciones"
     else:
         estado = "pendiente_validacion_operativa"
     return {
@@ -136,6 +153,7 @@ def main():
     preparar.add_argument("--aplicar", action="store_true")
     preparar.add_argument("--real", action="store_true")
     preparar.add_argument("--referencia")
+    preparar.add_argument("--padron-autorizado", type=Path)
     args = parser.parse_args()
     if args.comando == "catalogo":
         print(json.dumps(catalogo(), ensure_ascii=False, indent=2))
@@ -144,6 +162,9 @@ def main():
         clase = "real" if args.real else "ensayo"
         if args.real:
             permiso_real(args.referencia)
+            if not args.padron_autorizado:
+                raise ValueError("Se requiere el padrón autorizado de CCT y turno.")
+        padron = leer_json(args.padron_autorizado) if args.real else None
         if len(args.paquetes) > len(BLOQUES[args.bloque]):
             raise ValueError("Un bloque admite hasta cuatro paquetes.")
         paquetes = [leer_json(archivo) for archivo in args.paquetes]
@@ -152,7 +173,7 @@ def main():
         engine = create_engine(url, hide_parameters=True, connect_args={"connect_timeout": 5})
         try:
             resultado = preparar_bloque(engine, args.bloque, paquetes, clase=clase,
-                                        aplicar=args.aplicar, referencia=args.referencia)
+                                        aplicar=args.aplicar, referencia=args.referencia, padron=padron)
         finally:
             engine.dispose()
         print(json.dumps(resultado, ensure_ascii=False, indent=2))

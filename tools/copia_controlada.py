@@ -47,8 +47,8 @@ def alcance_copia(copia, escuela):
                  for n, tabla in hojas.items()}
     alumnos = registros["Alumnos"]
     if (len(registros["Escuelas"]) != 1 or registros["Escuelas"][0].get("ID_Escuela") != escuela
-            or len(alumnos) > 20 or any(r.get("ID_Escuela") != escuela for r in alumnos)):
-        raise ValueError("La copia debe corresponder a una escuela y a un máximo de 20 alumnos.")
+            or any(r.get("ID_Escuela") != escuela for r in alumnos)):
+        raise ValueError("La copia debe corresponder a una sola escuela.")
     ids = {r.get("ID_Alumno") for r in alumnos}
     if None in ids or "" in ids:
         raise ValueError("El padrón del ensayo contiene una identidad sin conciliar.")
@@ -84,9 +84,9 @@ def leer_lote_sheets(cliente, libro, rangos, encabezados):
     if not re.fullmatch(r"[A-Za-z0-9_-]{20,160}", libro) or not 1 <= len(rangos) <= 25:
         raise ValueError("Identificador o cantidad de rangos fuera del límite.")
     for nombre, tramo in rangos.items():
-        m = re.fullmatch(r"A1:([A-Z]{1,2})([1-9][0-9]{0,3})", tramo)
-        if nombre not in PESTANAS or not m or int(m[2]) > 2000:
-            raise ValueError("Solo se admiten pestañas conocidas y rangos explícitos de hasta 2000 filas.")
+        m = re.fullmatch(r"A([1-9][0-9]{0,4}):([A-Z]{1,2})([1-9][0-9]{0,4})", tramo)
+        if nombre not in PESTANAS or not m or not 0 <= int(m[3]) - int(m[1]) < 2000:
+            raise ValueError("Solo se admiten pestañas conocidas y páginas de hasta 2000 filas.")
     with cliente.stream("GET", RAIZ_API + libro + "/values:batchGet",
                         params={"ranges": [f"'{n}'!{r}" for n, r in rangos.items()],
                                 "majorDimension": "ROWS", "valueRenderOption": "FORMATTED_VALUE"},
@@ -104,9 +104,35 @@ def leer_lote_sheets(cliente, libro, rangos, encabezados):
         raise ValueError("La respuesta no coincide con el libro autorizado.")
     hojas = {}
     for nombre, bloque in zip(rangos, devueltos):
-        if bloque.get("range", "").split("!", 1)[0].strip("'") != nombre:
-            raise ValueError("Sheets devolvió una pestaña inesperada.")
+        pestaña, _, tramo = bloque.get("range", "").partition("!")
+        if pestaña.strip("'") != nombre or tramo != rangos[nombre]:
+            raise ValueError("Sheets devolvió una pestaña o rango distinto del solicitado.")
         hojas[nombre] = bloque.get("values", [])
+    return hojas
+
+
+def leer_captura_paginada(cliente, libro, pestañas, encabezados, *, tamano=250):
+    if not 1 <= tamano <= 500 or not {"Escuelas", "Alumnos"} <= pestañas.keys():
+        raise ValueError("Indica la extensión autorizada de Escuelas y Alumnos.")
+    hojas, bytes_total = {}, 0
+    for nombre, alcance in pestañas.items():
+        final, columna = alcance["ultima_fila"], alcance["ultima_columna"]
+        if (nombre not in PESTANAS or type(final) is not int or not 1 <= final <= 50001
+                or not re.fullmatch(r"[A-Z]{1,2}", columna)):
+            raise ValueError("La extensión declarada de una pestaña es inválida.")
+        filas = []
+        for inicio in range(1, final + 1, tamano):
+            fin = min(final, inicio + tamano - 1)
+            pagina = leer_lote_sheets(cliente, libro, {nombre: f"A{inicio}:{columna}{fin}"}, encabezados)[nombre]
+            n = fin - inicio + 1
+            if not isinstance(pagina, list) or len(pagina) > n or (inicio == 1 and not pagina):
+                raise ValueError("Página truncada o fuera del rango declarado.")
+            filas.extend(pagina)
+            filas.extend([] for _ in range(n - len(pagina)))
+            bytes_total += len(json.dumps(pagina, ensure_ascii=False).encode("utf-8")) + 4 * (n - len(pagina))
+            if bytes_total > MAX_BYTES:
+                raise ValueError("La captura excede el tamaño seguro. Usa exportaciones manuales separadas y conciliadas.")
+        hojas[nombre] = filas
     return hojas
 
 
@@ -319,8 +345,9 @@ def main():
                 sesion.trust_env = False
                 credencial.refresh(Request(session=sesion))
             with httpx.Client(timeout=15, trust_env=False, follow_redirects=False) as cliente:
-                hojas = leer_lote_sheets(cliente, entrada["libro"], entrada["rangos"],
-                                        {"Authorization": f"Bearer {credencial.token}"})
+                hojas = leer_captura_paginada(cliente, entrada["libro"], entrada["pestanas"],
+                                              {"Authorization": f"Bearer {credencial.token}"},
+                                              tamano=entrada.get("filas_por_pagina", 250))
             entrada = {"marca": MARCA_REAL, "origen": entrada["origen"], "pestanas": hojas}
         paquete = empaquetar(entrada, args.escuela, args.capturada, clase="real" if real else "ensayo")
         escribir(args.salida, paquete)

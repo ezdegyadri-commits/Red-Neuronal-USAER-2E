@@ -171,11 +171,13 @@ print("Proyección operativa: altas, repetición y ediciones locales preservadas
                     subprocess.run([sys.executable, "-c", "from tests.fixture_proyeccion_documental import probar; probar()"],
                                    cwd=ROOT, env=env_documental, check=True)
                     if os.getenv("USAER_DOCUMENTAL_BROWSER") == "1":
-                        for fase in ("editar", "reabrir"):
+                        for fase in ("editar", "reabrir", "ichc"):
                             with servidor(env_documental, carpeta) as cliente:
                                 subprocess.run(["node", "tests/proyeccion_documental_browser.cjs",
                                                 str(cliente.base_url), fase], cwd=ROOT, env=env_documental,
                                                check=True, timeout=55)
+                    if os.environ["USAER_MIGRACION_PRUEBA"] == "documental":
+                        return
                     origen_documental = urls["proyeccion_documental"]
                     restaurada_documental = urls["proyeccion_restaurada"]
                     respaldo_documental = carpeta / "documentos.dump"

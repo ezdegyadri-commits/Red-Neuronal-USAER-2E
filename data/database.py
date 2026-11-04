@@ -70,6 +70,39 @@ class Alumno(Base):
     actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
+class ApoyoAlumnoSPA(Base):
+    __tablename__ = "spa_apoyo_alumno"
+
+    id = Column(String(64), primary_key=True)
+    alumno_id = Column(String(64), ForeignKey("alumnos.id"), nullable=False, index=True)
+    escuela_id = Column(String(64), nullable=False)
+    usuario_id = Column(String(64), ForeignKey("usuarios.id"), nullable=False, index=True)
+    desde = Column(String(10), nullable=False, default="")
+    hasta = Column(String(10), nullable=False, default="")
+    responsable = Column(String(16), nullable=False)
+
+
+class ExpedienteHistoricoSPA(Base):
+    __tablename__ = "spa_expedientes_historicos"
+
+    id = Column(String(64), primary_key=True)
+    alumno_id = Column(String(64), ForeignKey("alumnos.id"), nullable=False, index=True)
+    escuela_id = Column(String(64), nullable=False)
+    estado = Column(String(64), nullable=False)
+    apertura = Column(String(32), nullable=False)
+    actualizado = Column(String(32), nullable=False)
+
+
+class RelacionHistoricaSPA(Base):
+    __tablename__ = "spa_relaciones_historicas"
+
+    id = Column(String(64), primary_key=True)
+    expediente_id = Column(String(64), ForeignKey("spa_expedientes_historicos.id"), nullable=False, index=True)
+    tipo_documento = Column(String(64), nullable=False)
+    documento_id = Column(String(128), nullable=False)
+    documento_origen_id = Column(String(128), nullable=False)
+
+
 class Escuela(Base):
     __tablename__ = "escuelas"
 

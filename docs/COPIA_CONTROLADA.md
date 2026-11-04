@@ -21,7 +21,7 @@ credenciales de producción.
 En una carpeta cifrada **fuera del repositorio**, coloca CSV UTF-8 con los
 nombres de pestaña, como `Escuelas.csv` y `Alumnos.csv`, o un JSON con
 `marca: "USAER_SPA_COPIA_SINTETICA_V1"`, `origen` y `pestanas`.
-Incluye una escuela, hasta 20 alumnos ficticios y solo sus documentos.
+Incluye una escuela y solo sus alumnos ficticios y documentos.
 Al anonimizar, sustituye identificadores de forma consistente y revisa
 texto libre, PDF, metadatos y firmas. Para el primer ensayo es preferible
 generar datos ficticios como los de `tests/fixture_proyeccion_documental.py`.
@@ -68,10 +68,10 @@ la copia se suministran fuera de Git. No se cambia la compartición de los libro
 oficiales. La opción preferida es que el responsable entregue una copia mínima
 por el canal institucional. La alternativa usa una copia filtrada que ya esté
 autorizada y compartida como lectora a una cuenta dedicada. El alcance OAuth
-es `spreadsheets.readonly`. El exportador usa `values:batchGet` con rangos
-explícitos y una sola petición de valores. El descriptor privado incluye
-`tipo: "copia_filtrada_autorizada"`, `libro`, `origen` y `rangos`, por
-ejemplo rangos `A1:B20` para las pestañas autorizadas.
+es `spreadsheets.readonly`. El exportador usa `values:batchGet` por páginas.
+El descriptor privado incluye `tipo: "copia_filtrada_autorizada"`, `libro`,
+`origen` y la extensión de cada pestaña. Consulta el
+[descriptor B01](B01_CAPTURA_REAL.md).
 
 ```sh
 export USAER_COPIA_PRIVADA_AUTORIZADA=1

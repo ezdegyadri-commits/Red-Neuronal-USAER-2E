@@ -10,6 +10,25 @@ async function probar() {
     page.setDefaultTimeout(12000);
     await page.route("**/*", route => new URL(route.request().url()).origin === url.origin
       ? route.continue() : route.abort());
+    if (fase === "ichc") {
+      for (const [cuenta, propio, ajeno] of [
+        ["ceci.ensayo", "ichc-ceci", "ichc-mary"],
+        ["mary.ensayo", "ichc-mary", "ichc-ceci"],
+      ]) {
+        await page.context().clearCookies();
+        await page.goto(url.href);
+        await page.locator("input[type=text]").first().fill(cuenta);
+        await page.locator("input[type=password]").fill(process.env.USAER_DOCUMENTAL_PASSWORD);
+        await page.getByRole("button", { name: /Entrar al Sistema/ }).click();
+        await page.getByRole("button", { name: /Alumnos y Expedientes/ }).click();
+        await page.getByText("Caso " + propio, { exact: true }).first().waitFor({ state: "attached" });
+        for (const alumno of [ajeno, "ichc-pendiente"]) {
+          if (await page.getByText("Caso " + alumno, { exact: true }).count()) throw new Error("Matrícula ajena en React");
+        }
+      }
+      console.log("React: matrícula separada en las dos cuentas de Ichcaanziho.");
+      return;
+    }
     await page.goto(url.href);
     await page.locator("input[type=text]").first().fill("maestra.historia");
     await page.locator("input[type=password]").fill(process.env.USAER_DOCUMENTAL_PASSWORD);

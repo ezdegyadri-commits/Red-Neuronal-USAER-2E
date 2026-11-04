@@ -33,6 +33,7 @@ PESTANAS = {
     "Tramites_Expedientes": ("ID_Tramite", "Revision"),
     "Juntas_Academicas_Versiones": ("Documento", "Revision"),
     "Movimientos_Alumnos": ("ID_Movimiento", "Estado"),
+    "Asignaciones_Apoyo": ("ID_Asignacion",),
 }
 RAIZ_API = "https://sheets.googleapis.com/v4/spreadsheets/"
 

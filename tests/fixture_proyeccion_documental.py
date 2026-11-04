@@ -128,7 +128,8 @@ def probar():
                     "Escuelas": [["ID_Escuela", "Nombre_Escuela"], [eid, plantel["nombre"]]],
                     "Alumnos": [["ID_Alumno", "ID_Escuela", "Nombre_Completo"],
                                 [alumno_bloque, eid, "Estudiante ficticio"]],
-                    "Expedientes": [["ID_Expediente", "ID_Alumno"], ["exp-" + eid, alumno_bloque]],
+                    "Expedientes": [["ID_Expediente", "ID_Alumno", "Estatus", "Fecha_Apertura", "Ultima_Actualizacion"],
+                                    ["exp-" + eid, alumno_bloque, "Abierto", "2026-08-20", "2026-08-20"]],
                     "Anexo5_Eventos": [["ID_Evento", "ID_Alumno", "Evento"],
                                       ["ev-" + eid, alumno_bloque, "Evento ficticio"]],
                 }}
@@ -143,7 +144,7 @@ def probar():
                 operativo = proyectar(engine, paquete["copia"], aplicar=True)
                 assert operativo["tablas"]["Alumnos"]["nuevas"] == 1
                 assert operativo["tablas"]["Anexo5_Eventos"]["nuevas"] == 1
-                assert "Expedientes" in operativo["solo_archivo"]
+                assert operativo["tablas"]["Expedientes"]["nuevas"] == 1
             az = empaquetar({"marca": MARCA, "origen": "ensayo-quintana-roo", "pestanas": {
                 "Escuelas": [["ID_Escuela", "Nombre_Escuela"], ["ESC-008", "Quintana Roo"]],
                 "Alumnos": [["ID_Alumno", "ID_Escuela"]],
@@ -205,4 +206,65 @@ def probar():
                 assert cliente.get(f"/api/expedientes/fic-{eid}").status_code == 200
         assert proyectar(engine, copia, aplicar=True)["tablas"]["Informes"]["conflictos_preservados"] == 1
         assert cliente.get("/api/informes/informe-historico").json()["avances"] == "Edición docente posterior"
+    probar_ichc(engine, password)
     print("Documentos históricos abiertos, exportados y aislados en PostgreSQL.")
+
+
+def probar_ichc(engine, password):
+    from tools.expedientes_b01 import conteo_ichc
+
+    responsables = (("ceci-ensayo", "ceci.ensayo"), ("mary-ensayo", "mary.ensayo"))
+    with engine.begin() as db:
+        for ident, cuenta in responsables:
+            db.execute(insert(Usuario).values(id=ident, usuario=cuenta, nombre="Responsable ficticia",
+                                             password=hash_password(password), rol="MAESTRA DE APOYO",
+                                             escuelas_permitidas="ESC-002"))
+    alumnos = ["ichc-ceci", "ichc-mary", "ichc-compartido", "ichc-pendiente"]
+    hojas = {
+        "Escuelas": [["ID_Escuela", "Nombre_Escuela"], ["ESC-002", "Ichcaanziho"]],
+        "Alumnos": [["ID_Alumno", "ID_Escuela", "Nombre_Completo"],
+                    *[[aid, "ESC-002", "Caso " + aid] for aid in alumnos]],
+        "Expedientes": [["ID_Expediente", "ID_Alumno", "Estatus", "Fecha_Apertura", "Ultima_Actualizacion"],
+                        ["exp-ceci", alumnos[0], "Abierto", "2026-01-01", "2026-01-02"]],
+        "Anexo5_Eventos": [["ID_Evento", "ID_Alumno", "Evento"],
+                          ["evento-ceci", alumnos[0], "Evento ficticio"]],
+        "Relaciones_Documentos": [["ID_Relacion", "Origen_Tipo", "Origen_ID", "Destino_Tipo", "Destino_ID"],
+                                 ["rel-ceci", "Expedientes", "exp-ceci", "Anexo5_Eventos", "evento-ceci"]],
+        "Asignaciones_Apoyo": [
+            ["ID_Asignacion", "ID_Alumno", "ID_Escuela", "ID_Cuenta", "Responsable", "Desde", "Hasta", "Compartida"],
+            ["a-ceci", alumnos[0], "ESC-002", "ceci-ensayo", "CECI", "2026-01-01", "", ""],
+            ["a-mary", alumnos[1], "ESC-002", "mary-ensayo", "MARYCRUZ", "2026-01-01", "", ""],
+            ["a-ambas1", alumnos[2], "ESC-002", "ceci-ensayo", "CECI", "", "", "SI"],
+            ["a-ambas2", alumnos[2], "ESC-002", "mary-ensayo", "MARYCRUZ", "", "", "SI"],
+            ["a-vencida", alumnos[0], "ESC-002", "mary-ensayo", "MARYCRUZ", "2025-01-01", "2025-12-31", ""],
+        ],
+    }
+    copia = {"marca": MARCA, "origen": "ichc-ficticio", "pestanas": hojas}
+    assert conteo_ichc(hojas) == {"ceci": 1, "marycruz": 1, "compartidos": 1, "pendientes": 1}
+    resultado = proyectar(engine, copia, aplicar=True)["tablas"]
+    assert resultado["Asignaciones_Apoyo"]["nuevas"] == 5, resultado
+    assert resultado["Relaciones_Documentos"]["nuevas"] == 1, resultado
+    assert proyectar(engine, copia, aplicar=True)["tablas"]["Relaciones_Documentos"]["iguales"] == 1
+    headers = {"X-USAER-Client": "browser"}
+    with TestClient(app, base_url="https://127.0.0.1") as cliente:
+        for i, (_, cuenta) in enumerate(responsables):
+            cliente.cookies.clear()
+            acceso = cliente.post("/api/auth/login", headers=headers, json={"usuario": cuenta, "password": password})
+            assert acceso.status_code == 200, acceso.text
+            assert {r["id"] for r in cliente.get("/api/alumnos").json()} == {alumnos[i], alumnos[2]}
+            ajeno = alumnos[1-i]
+            assert cliente.get(f"/api/expedientes/{ajeno}").status_code == 404
+            payload = {"revision": "rev-epp-inicial", "valor": vacia("Aprendizaje")}
+            assert cliente.put(f"/api/epp/{ajeno}/anexo/Aprendizaje", headers=headers, json=payload).status_code == 404
+            assert cliente.put(f"/api/alumnos/{ajeno}", headers=headers, json={"Nombre_Completo": "Cambio"}).status_code == 404
+            propio = cliente.put(f"/api/epp/{alumnos[i]}/anexo/Aprendizaje", headers=headers, json=payload)
+            assert propio.status_code == 200, propio.text
+        cliente.cookies.clear()
+        assert cliente.post("/api/auth/login", headers=headers, json={
+            "usuario": "direccion.historia", "password": password,
+        }).status_code == 200
+        exp = cliente.get("/api/expedientes/ichc-ceci").json()
+        assert exp["expedientes_historicos"][0]["id"] == "exp-ceci"
+        assert exp["relaciones_historicas"][0]["id"] == "rel-ceci"
+        assert cliente.get("/api/expedientes/ichc-pendiente").status_code == 200
+    print("Ichcaanziho: dos maestras, un caso compartido, una asignación pendiente y escrituras ajenas denegadas.")

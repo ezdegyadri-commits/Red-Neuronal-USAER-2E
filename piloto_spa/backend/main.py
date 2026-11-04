@@ -500,6 +500,8 @@ def logout_endpoint(request: Request, response: Response):
 # -------------------------------------------------------------
 
 def exigir_alumno(alumno_id: str, user: SessionUser):
+    if not user.director and not _alumnos_en_alcance(user, alumno_id=alumno_id):
+        raise HTTPException(status_code=404, detail="Alumno no disponible.")
     alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas, alumno_id=alumno_id)
     for alumno in alumnos:
         if alumno["id"] == alumno_id:
@@ -524,14 +526,15 @@ def _alumnos_en_planeacion(doc):
     return {aid for aid in ids if isinstance(aid, str) and aid}
 
 
-def _alumnos_en_alcance(user, *, sesion=None):
+def _alumnos_en_alcance(user, *, sesion=None, alumno_id=None):
     from data.database import Alumno, get_session
     from contextlib import nullcontext
+    from piloto_spa.backend.alcance_alumno import filtro
 
     with (nullcontext(sesion) if sesion is not None else get_session()) as db:
-        consulta = db.query(Alumno.id)
-        if not user.director and "TODAS" not in user.escuelas_permitidas:
-            consulta = consulta.filter(Alumno.id_escuela.in_(user.escuelas_permitidas))
+        consulta = db.query(Alumno.id).filter(filtro(user))
+        if alumno_id is not None:
+            consulta = consulta.filter(Alumno.id == alumno_id)
         return {aid for (aid,) in consulta}
 
 
@@ -567,6 +570,9 @@ def listar_alumnos(
         escuelas_permitidas=user.escuelas_permitidas,
         nombre_docente=user.nombre
     )
+    if not user.director:
+        ids = _alumnos_en_alcance(user)
+        alumnos = [a for a in alumnos if a["id"] in ids]
     if escuela:
         escuela_norm = escuela.strip().lower()
         alumnos = [a for a in alumnos if escuela_norm in str(a.get("escuela", "")).lower() or escuela_norm in str(a.get("id_escuela", "")).lower()]
@@ -636,7 +642,7 @@ def mover_alumno(alumno_id: str, payload: padron_nominal.MovimientoNominal,
 @app.get("/api/alumnos/exportar")
 def exportar_alumnos_csv(user: SessionUser = Depends(validar_token_sesion)):
     """Exporta el padrón autorizado en formato CSV para respaldos."""
-    alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas)
+    alumnos = listar_alumnos(user=user)
     df = pd.DataFrame(alumnos)
     csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
     return Response(
@@ -673,7 +679,7 @@ def exportar_padron_xlsx(user: SessionUser = Depends(validar_token_sesion)):
     alumnos = alumnos_sql()
     escuelas = obtener_catalogo_escuelas()
     if not user.director:
-        alumnos = alumnos[alumnos["ID_Escuela"].isin(user.escuelas_permitidas)]
+        alumnos = alumnos[alumnos["ID_Alumno"].isin(_alumnos_en_alcance(user))]
         escuelas = [e for e in escuelas if e["id"] in user.escuelas_permitidas]
     catalogo = pd.DataFrame([{"ID_Escuela": e["id"], "Nombre_Escuela": e["nombre"],
                               "CCT_Escuela": e["cct"], "Turno_Escuela": e["turno"]} for e in escuelas])
@@ -739,6 +745,25 @@ def ver_expediente(alumno_id: str, user: SessionUser = Depends(validar_token_ses
     expediente["seguimiento"].sort(key=lambda fila: (fila["fecha"], fila["tipo"], fila["id"]), reverse=True)
     expediente["comparativo_epp"] = sorted(comparativo, key=lambda fila: fila["ciclo"], reverse=True)
     expediente["total_documentos"] += len(informes) + len(planes) + len(actas)
+    from data.database import ExpedienteHistoricoSPA, RelacionHistoricaSPA, get_session
+    with get_session() as db:
+        fichas = db.query(ExpedienteHistoricoSPA).filter_by(alumno_id=alumno_id).order_by(
+            ExpedienteHistoricoSPA.apertura, ExpedienteHistoricoSPA.id,
+        )
+        expediente["expedientes_historicos"] = [
+            {"id": fila.id, "escuela_id": fila.escuela_id, "estado": fila.estado,
+             "apertura": fila.apertura, "actualizado": fila.actualizado}
+            for fila in fichas if user.director or fila.escuela_id == alumno["id_escuela"]
+        ]
+        if user.director:
+            ids = [f["id"] for f in expediente["expedientes_historicos"]]
+            expediente["relaciones_historicas"] = [
+                {"id": r.id, "expediente_id": r.expediente_id,
+                 "tipo": r.tipo_documento, "documento_id": r.documento_id,
+                 "documento_origen_id": r.documento_origen_id}
+                for r in db.query(RelacionHistoricaSPA).filter(RelacionHistoricaSPA.expediente_id.in_(ids))
+                .order_by(RelacionHistoricaSPA.id)
+            ]
     return expediente
 
 # -------------------------------------------------------------
@@ -941,10 +966,10 @@ def listar_planeaciones(user: SessionUser = Depends(validar_token_sesion)):
 
 @app.post("/api/planeaciones/nueva")
 def nueva_planeacion(payload: NuevaPlaneacion, user: SessionUser = Depends(validar_token_sesion)):
-    alcance_global = user.director or "TODAS" in user.escuelas_permitidas
+    alcance = _alumnos_en_alcance(user) if not user.director else None
     registros = [r for r in alumnos_sql().to_dict("records")
                  if r["ID_Alumno"] in payload.alumnos
-                 and (alcance_global or r["ID_Escuela"] in user.escuelas_permitidas)]
+                 and (alcance is None or r["ID_Alumno"] in alcance)]
     if {r["ID_Alumno"] for r in registros} != set(payload.alumnos):
         raise HTTPException(status_code=404, detail="Algún alumno no está disponible.")
     if len(set(payload.alumnos)) != len(payload.alumnos):
@@ -1019,7 +1044,9 @@ def actualizar_matricula_grupal(doc_id: str, payload: dict, user: SessionUser = 
         raise HTTPException(403, "La actualización de matrícula corresponde a Aprendizaje o Dirección.")
     if payload.get("revision") != doc["revision"]:
         raise HTTPException(409, "La guía cambió. Reabre el documento.")
-    ids = sincronizar_matricula(doc, alumnos_sql().to_dict("records"))
+    alcance = _alumnos_en_alcance(user) if not user.director else None
+    ids = sincronizar_matricula(doc, [r for r in alumnos_sql().to_dict("records")
+                                    if alcance is None or r["ID_Alumno"] in alcance])
     return guardar_planeacion_transaccional(doc, autor_cuenta=user.usuario, existente=True, alumnos_spa=ids)
 
 
@@ -1260,6 +1287,8 @@ def guardar_planeacion(payload: PlaneacionPayload, user: SessionUser = Depends(v
             if elegido not in {r["id"] for r in opciones(doc_dict, campo, grados(doc_dict))}:
                 raise HTTPException(status_code=422, detail="PDA fuera del catálogo autorizado.")
             doc_dict = vincular(doc_dict, campo, [], [elegido])
+    if not user.director and not _alumnos_en_planeacion(doc_dict) <= _alumnos_en_alcance(user):
+        raise HTTPException(404, "Planeación no disponible.")
     return guardar_planeacion_transaccional(doc_dict, autor_cuenta=user.usuario, existente=existente is not None)
 
 
@@ -1837,7 +1866,7 @@ def _padron_en_alcance_estadistico(user, escuela):
         raise HTTPException(404, "Escuela no disponible.")
     alumnos = alumnos_sql().drop_duplicates("ID_Alumno")
     if not user.director:
-        alumnos = alumnos[alumnos["ID_Escuela"].isin(user.escuelas_permitidas)]
+        alumnos = alumnos[alumnos["ID_Alumno"].isin(_alumnos_en_alcance(user))]
     if escuela:
         alumnos = alumnos[alumnos["ID_Escuela"].eq(escuela)]
     return alumnos

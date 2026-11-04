@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from data.sincronizacion_pg import DESTINOS, preparar as preparar_tablas
 from tools.migracion_paralela import MAX_BYTES, preparar, verificar_base_local, verificar_destino_local
 from tools.documentos_historicos import TABLAS_DOCUMENTOS, proyectar_documentos
+from tools.expedientes_b01 import TABLAS_B01, proyectar_asignaciones, proyectar_expedientes
 
 TABLAS = ("Escuelas", "Alumnos", "Anexo3_Deteccion", "Anexo4_Sugerencias",
           "Anexo5_Eventos", "Anexo7_Derivacion", "Registro_Visitas")
@@ -40,7 +41,7 @@ def proyectar(engine, copia, *, aplicar=False):
     for nombre in TABLAS[2:-1]:
         if any(r.get("id_alumno") not in alumnos_origen for r in plan.get(nombre, [])):
             raise ValueError(f"{nombre}: se requiere un alumno de origen conciliado.")
-    proyectadas = TABLAS_DOCUMENTOS | (ARCHIVOS if "Documentos_Expediente" in fuente else set())
+    proyectadas = TABLAS_DOCUMENTOS | TABLAS_B01 | (ARCHIVOS if "Documentos_Expediente" in fuente else set())
     resultado = {"aplicado": aplicar, "solo_archivo": sorted(set(fuente) - set(plan) - proyectadas), "tablas": {}}
     with engine.begin() as db:
         verificar_base_local(db, "proyeccion")
@@ -53,6 +54,8 @@ def proyectar(engine, copia, *, aplicar=False):
                                 "planeaciones", "spa_planeacion_alumnos", "spa_planeacion_grupos", "registro_visitas"))
             if ARCHIVOS & fuente.keys():
                 nombres.update(("spa_adjunto_expediente", "spa_cambios"))
+            if TABLAS_B01 & fuente.keys():
+                nombres.update(("spa_apoyo_alumno", "spa_expedientes_historicos", "spa_relaciones_historicas", "usuarios"))
             nombres = ", ".join(sorted(nombres))
             db.execute(text(f"LOCK TABLE {nombres} IN SHARE ROW EXCLUSIVE MODE"))
         alumnos_en_conflicto = set()
@@ -88,6 +91,9 @@ def proyectar(engine, copia, *, aplicar=False):
             resultado["tablas"][nombre] = cuenta
         alumnos_conciliados = {r["id"]: r for r in plan["Alumnos"] if r["id"] not in alumnos_en_conflicto}
         resultado["tablas"].update(proyectar_documentos(db, fuente, alumnos_conciliados, aplicar=aplicar))
+        if "Asignaciones_Apoyo" in fuente:
+            resultado["tablas"]["Asignaciones_Apoyo"] = proyectar_asignaciones(db, fuente, alumnos_conciliados, aplicar)
+        resultado["tablas"].update(proyectar_expedientes(db, fuente, alumnos_conciliados, aplicar))
     return resultado
 
 

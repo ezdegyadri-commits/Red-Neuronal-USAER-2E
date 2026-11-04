@@ -46,6 +46,10 @@ class MovimientoNominal(BaseModel):
 
 
 def _ficha(db, alumno_id, user):
+    from piloto_spa.backend.alcance_alumno import filtro
+
+    if not db.query(Alumno.id).filter(Alumno.id == alumno_id, filtro(user)).first():
+        raise HTTPException(404, "Alumno no disponible.")
     registros = alumnos_sql(alumno_id, sesion=db).to_dict("records")
     if not registros or (not user.director and registros[0]["ID_Escuela"] not in user.escuelas_permitidas):
         raise HTTPException(404, "Alumno no disponible.")
@@ -186,9 +190,11 @@ def editar_compatible(alumno_id, campos, user):
 
 
 def alta(registro, user):
+    from piloto_spa.backend.alcance_alumno import ICHC
+
     autorizar(user)
     escuela_id = registro["ID_Escuela"]
-    if not user.director and escuela_id not in user.escuelas_permitidas:
+    if not user.director and (escuela_id == ICHC or escuela_id not in user.escuelas_permitidas):
         raise HTTPException(403, "Escuela no autorizada para el alta.")
     identidad = _validar({k: registro[k] for k in ("Nombre_Completo", "CURP") if registro[k] or k != "CURP"})
     with get_session() as db:
