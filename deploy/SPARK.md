@@ -33,9 +33,12 @@ df -h ~/app
 du -x -h -d 1 ~/app ~/.cache 2>/dev/null | sort -h
 ```
 
-El perfil usa primero el secreto que Uppcoder inyecta para la conexión
-exacta a la base existente. Si la terminal no recibe ese secreto,
-el instalador lo pide sin eco y lo conserva solo en
+El instalador usa la cuenta del proveedor únicamente para migrar. Si la
+terminal no recibe su secreto para ese destino, lo pide sin eco. FastAPI
+usa `usaer_spark_runtime`, con permisos sobre las tablas USAER y sin
+`CREATE` en `public`. El instalador crea el rol si el proveedor lo permite.
+Si Uppcoder rechaza `CREATE ROLE`, crea ese rol restringido en el proveedor
+y vuelve a ejecutar el activador. Solo el secreto operativo se guarda en
 `~/.config/usaer-spark/config.json` con permisos `0600`. No pases
 contraseñas como argumentos ni imprimas variables de entorno. La clave
 inicial de `direccion.piloto` se pide solo en la primera migración y

@@ -98,14 +98,9 @@ class PostgreSQLAislado(unittest.TestCase):
                                                   user="spa_bootstrap", password=bootstrap)) as db:
                         db.autocommit = True
                         with db.cursor() as cur:
-                            cur.execute("CREATE ROLE ezdegyadri LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
+                            cur.execute("CREATE ROLE ezdegyadri LOGIN NOSUPERUSER NOCREATEDB CREATEROLE "
                                         "NOREPLICATION NOBYPASSRLS PASSWORD %s", (clave,))
-                            cur.execute("CREATE DATABASE usaer_2e_2_0")
-                            cur.execute("GRANT CONNECT ON DATABASE usaer_2e_2_0 TO ezdegyadri")
-                    with closing(psycopg2.connect(host="127.0.0.1", port=pg_port, dbname="usaer_2e_2_0",
-                                                  user="spa_bootstrap", password=bootstrap)) as db:
-                        with db, db.cursor() as cur:
-                            cur.execute("GRANT USAGE, CREATE ON SCHEMA public TO ezdegyadri")
+                            cur.execute("CREATE DATABASE usaer_2e_2_0 OWNER ezdegyadri")
                     prueba = URL.create("postgresql+psycopg2", username="ezdegyadri", password=clave,
                                         host="127.0.0.1", port=pg_port, database="usaer_2e_2_0")
                     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests",

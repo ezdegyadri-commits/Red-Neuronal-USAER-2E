@@ -6,6 +6,7 @@ from importlib.abc import MetaPathFinder
 import unittest
 from unittest.mock import patch
 
+from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from deploy import uppcoder
@@ -60,6 +61,7 @@ class UppcoderPostgres(unittest.TestCase):
         sys.meta_path.insert(0, guardia)
         self.addCleanup(sys.meta_path.remove, guardia)
         from fastapi.testclient import TestClient
+        from data import database
         from data.database import get_engine
 
         url_local = os.environ["USAER_UPPCODER_TEST_LOCAL_URL"]
@@ -69,7 +71,7 @@ class UppcoderPostgres(unittest.TestCase):
             "USAER_UPPCODER_PUBLIC_HOST": host, "USAER_UPPCODER_SYNTHETIC": "1",
             "USAER_UPPCODER_DB_PASSWORD": secrets.token_urlsafe(24),
             "USAER_UPPCODER_DIRECTOR_PASSWORD": clave,
-            "USAER_UPPCODER_SPARK": os.getenv("USAER_SPARK_PRUEBA", "0"),
+            "USAER_UPPCODER_SPARK": "1",
         }):
             uppcoder.configurar()
             url_esperada = os.environ["DATABASE_URL"]
@@ -79,11 +81,37 @@ class UppcoderPostgres(unittest.TestCase):
             os.environ["DATABASE_URL"] = make_url(url_local).set(drivername=driver).render_as_string(hide_password=False)
             engine = get_engine(initialize_schema=False)
             os.environ["DATABASE_URL"] = url_esperada
-            with engine.connect() as db, self.assertRaisesRegex(RuntimeError, "migración"):
-                uppcoder.verificar_instalacion(db)
-            uppcoder.migrar()
+            with engine.connect() as db:
+                with self.assertRaisesRegex(RuntimeError, "CREATEROLE"):
+                    uppcoder.verificar_instalacion(db)
+                with self.assertRaisesRegex(RuntimeError, "migración"):
+                    uppcoder.verificar_instalacion(db, migracion=True)
+            uppcoder.migrar(cuenta_migracion=True)
             del os.environ["USAER_UPPCODER_DIRECTOR_PASSWORD"]
-            uppcoder.migrar()
+            uppcoder.migrar(cuenta_migracion=True)
+            runtime = uppcoder.USUARIO_RUNTIME
+            clave_runtime = secrets.token_urlsafe(32)
+            with engine.begin() as db:
+                self.assertTrue(uppcoder.preparar_runtime(db, runtime, clave_runtime))
+                self.assertFalse(uppcoder.preparar_runtime(db, runtime, None))
+            engine.dispose()
+            database._ENGINE = database._SESSION_FACTORY = None
+            uppcoder.configurar_spark({"host": host, "db_host": uppcoder.HOST_DB,
+                                      "db_name": uppcoder.BASE_DB, "db_user": runtime,
+                                      "password": clave_runtime, "separado": True})
+            uppcoder.configurar()
+            url_esperada = os.environ["DATABASE_URL"]
+            os.environ["DATABASE_URL"] = make_url(url_local).set(
+                drivername=driver, username=runtime, password=clave_runtime,
+            ).render_as_string(hide_password=False)
+            engine = get_engine(initialize_schema=False)
+            os.environ["DATABASE_URL"] = url_esperada
+            with engine.connect() as db:
+                uppcoder.verificar_instalacion(db)
+                self.assertFalse(db.scalar(text("SELECT has_schema_privilege('public', 'CREATE')")))
+                self.assertFalse(db.scalar(text(
+                    "SELECT has_table_privilege('public.usaer_uppcoder_piloto', 'UPDATE')"
+                )))
             from piloto_spa.backend.main import app
 
             with TestClient(app, base_url=f"https://{host}") as cliente:

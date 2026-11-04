@@ -8,11 +8,12 @@ import sys
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import URL, make_url
-from sqlalchemy.exc import ArgumentError
+from sqlalchemy.exc import ArgumentError, DBAPIError
 
 HOST_DB = "zja3x8j3-postgresql-17"
 BASE_DB = "usaer_2e_2_0"
 USUARIO_DB = "ezdegyadri"
+USUARIO_RUNTIME = "usaer_spark_runtime"
 MARCA = "uppcoder-sintetico-v1"
 TABLA_MARCA = "usaer_uppcoder_piloto"
 CONFIG_SPARK = Path.home() / ".config" / "usaer-spark" / "config.json"
@@ -67,7 +68,10 @@ def configurar_spark(datos):
     os.environ["USAER_UPPCODER_PUBLIC_HOST"] = datos["host"]
     os.environ["USAER_UPPCODER_SYNTHETIC"] = "1"
     os.environ["USAER_UPPCODER_SPARK"] = "1"
-    if not password_conexion() and datos.get("password"):
+    if datos.get("separado"):
+        os.environ["USAER_UPPCODER_SEPARATED"] = "1"
+        os.environ["USAER_UPPCODER_DB_PASSWORD"] = datos["password"]
+    elif not password_conexion() and datos.get("password"):
         os.environ["USAER_UPPCODER_DB_PASSWORD"] = datos["password"]
 
 
@@ -103,37 +107,54 @@ def verificar_url():
         raise RuntimeError("Destino PostgreSQL fuera del perfil sintético autorizado de Uppcoder.")
 
 
-def verificar_conexion(db):
-    base, rol, esquema, version, privilegiado = db.execute(text("""
+def verificar_conexion(db, *, migracion=False):
+    base, rol, esquema, version, superuser, replication, bypassrls, createrole, createdb, miembro, crear = db.execute(text("""
         SELECT current_database(), current_user, current_schema(), current_setting('server_version_num')::int,
-               rolsuper OR rolreplication OR rolbypassrls OR rolcreaterole OR rolcreatedb
+               rolsuper, rolreplication, rolbypassrls, rolcreaterole, rolcreatedb,
+               EXISTS (SELECT 1 FROM pg_auth_members WHERE member = pg_roles.oid),
+               has_schema_privilege(current_user, 'public', 'CREATE')
         FROM pg_roles WHERE rolname = current_user
     """)).one()
     _, _, base_esperada, rol_esperado = destino_postgres()
-    if (base, rol, esquema) != (base_esperada, rol_esperado, "public") or not 170000 <= version < 180000 or privilegiado:
-        raise RuntimeError("Uppcoder requiere PostgreSQL 17 y el rol configurado sin privilegios elevados.")
+    for campo, actual, esperado in (("base", base, base_esperada), ("rol", rol, rol_esperado),
+                                    ("esquema", esquema, "public")):
+        if actual != esperado:
+            raise RuntimeError(f"PostgreSQL devolvió {campo}={actual!r}; se esperaba {esperado!r}.")
+    if not 170000 <= version < 180000:
+        raise RuntimeError(f"PostgreSQL debe ser 17. server_version_num={version}.")
+    flags = [nombre for nombre, activo in zip(
+        ("SUPERUSER", "REPLICATION", "BYPASSRLS", "CREATEROLE", "CREATEDB", "membresía de roles"),
+        (superuser, replication, bypassrls, createrole, createdb, miembro),
+    ) if activo]
+    if flags:
+        mensaje = f"Rol {rol}: " + ", ".join(flags)
+        if not migracion:
+            raise RuntimeError(mensaje + ". FastAPI requiere un rol operativo restringido.")
+        print(mensaje + ". Se usará solo para migrar.", flush=True)
+    if not migracion and os.getenv("USAER_UPPCODER_SEPARATED") == "1" and crear:
+        raise RuntimeError(f"El rol operativo {rol} tiene CREATE en public. Retira ese permiso efectivo.")
 
 
-def verificar_instalacion(db):
-    verificar_conexion(db)
+def verificar_instalacion(db, *, migracion=False):
+    verificar_conexion(db, migracion=migracion)
     if not inspect(db).has_table(TABLA_MARCA, schema="public"):
         raise RuntimeError("Ejecuta primero la migración sintética de Uppcoder.")
     if db.execute(text("SELECT perfil FROM public.usaer_uppcoder_piloto WHERE id = 1")).scalar() != MARCA:
         raise RuntimeError("La base de Uppcoder carece de la marca de instalación sintética.")
 
 
-def migrar():
+def migrar(*, cuenta_migracion=False):
     from data.database import Alumno, Base, Escuela, Usuario, get_engine
     from piloto_spa.backend.auth_service import hash_password
     from sqlalchemy.orm import Session
 
     verificar_url()
     with get_engine(initialize_schema=False).begin() as db:
-        verificar_conexion(db)
+        verificar_conexion(db, migracion=cuenta_migracion)
         db.execute(text("SELECT pg_advisory_xact_lock(17002200)"))
         presentes = set(inspect(db).get_table_names(schema="public"))
         if TABLA_MARCA in presentes:
-            verificar_instalacion(db)
+            verificar_instalacion(db, migracion=cuenta_migracion)
             Base.metadata.create_all(db)
             return
         if presentes & Base.metadata.tables.keys():
@@ -156,6 +177,38 @@ def migrar():
                                   grado="3°", grupo="A", estatus="Activo", tipo_atencion="Individual"))
             sesion.flush()
             sesion.commit()
+
+
+def preparar_runtime(db, usuario, clave_nueva):
+    from data.database import Base
+
+    verificar_instalacion(db, migracion=True)
+    existe = db.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :rol"), {"rol": usuario}).scalar()
+    citar = db.dialect.identifier_preparer.quote_identifier
+    rol = citar(usuario)
+    if not existe:
+        if not clave_nueva:
+            raise RuntimeError(f"Falta una contraseña para crear el rol operativo {usuario}.")
+        pgconn = db.connection.driver_connection.pgconn
+        verificador = pgconn.encrypt_password(clave_nueva.encode(), usuario.encode(), b"scram-sha-256").decode()
+        ddl = db.execute(text("SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
+                              "NOREPLICATION NOBYPASSRLS PASSWORD %L', CAST(:rol AS text), "
+                              "CAST(:verificador AS text))"),
+                         {"rol": usuario, "verificador": verificador}).scalar_one()
+        try:
+            db.exec_driver_sql(ddl)
+        except DBAPIError as exc:
+            if getattr(exc.orig, "sqlstate", None) == "42501":
+                raise RuntimeError(f"Uppcoder no permite CREATE ROLE a la cuenta de migración. "
+                                   f"Crea {usuario} desde el proveedor y vuelve a ejecutar.") from None
+            raise
+    base = citar(destino_postgres()[2])
+    db.exec_driver_sql(f"GRANT CONNECT ON DATABASE {base} TO {rol}")
+    db.exec_driver_sql(f"GRANT USAGE ON SCHEMA public TO {rol}")
+    tablas = ", ".join(f"public.{citar(tabla.name)}" for tabla in Base.metadata.sorted_tables)
+    db.exec_driver_sql(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {tablas} TO {rol}")
+    db.exec_driver_sql(f"GRANT SELECT ON public.{TABLA_MARCA} TO {rol}")
+    return not existe
 
 
 def proxies_confiables():

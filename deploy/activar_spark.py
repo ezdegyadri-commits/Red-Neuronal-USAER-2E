@@ -6,6 +6,7 @@ from importlib import metadata
 import json
 import os
 from pathlib import Path
+from secrets import token_urlsafe
 import shutil
 import subprocess
 import sys
@@ -120,6 +121,9 @@ def main():
         "db_name": uppcoder.BASE_DB if args.db_name is None else args.db_name,
         "db_user": uppcoder.USUARIO_DB if args.db_user is None else args.db_user,
     }
+    usuario = uppcoder.USUARIO_RUNTIME
+    if destino["db_user"] == usuario:
+        raise RuntimeError("Usa la cuenta del proveedor para migrar, separada del rol operativo.")
     datos = {"host": args.host, **destino}
     uppcoder.configurar_spark(datos)
     uppcoder.host_publico()
@@ -133,22 +137,47 @@ def main():
     uppcoder.configurar_spark(datos)
     uppcoder.configurar()
     from data.database import get_engine
-    from sqlalchemy import inspect
+    from sqlalchemy import create_engine, inspect
 
-    with get_engine(initialize_schema=False).connect() as db:
-        uppcoder.verificar_conexion(db)
+    motor_migracion = get_engine(initialize_schema=False)
+    with motor_migracion.connect() as db:
+        uppcoder.verificar_conexion(db, migracion=True)
         nueva = not inspect(db).has_table(uppcoder.TABLA_MARCA, schema="public")
     if nueva and not os.getenv("USAER_UPPCODER_DIRECTOR_PASSWORD"):
         os.environ["USAER_UPPCODER_DIRECTOR_PASSWORD"] = getpass("Contraseña inicial de direccion.piloto (mínimo 16): ")
     try:
-        uppcoder.migrar()
+        uppcoder.migrar(cuenta_migracion=True)
     finally:
         os.environ.pop("USAER_UPPCODER_DIRECTOR_PASSWORD", None)
+    clave_runtime = token_urlsafe(32)
+    with motor_migracion.begin() as db:
+        creado = uppcoder.preparar_runtime(db, usuario, clave_runtime)
+    motor_migracion.dispose()
+    datos = {"host": args.host, **destino, "db_user": usuario, "separado": True}
+    if not creado:
+        guardada = json.loads(cfg.read_text()) if cfg.is_file() and not cfg.stat().st_mode & 0o077 else {}
+        campos = ("db_host", "db_name", "db_user")
+        clave_runtime = guardada.get("password") if all(guardada.get(k) == datos[k] for k in campos) else None
+        clave_runtime = clave_runtime or getpass(f"Contraseña PostgreSQL del rol operativo {usuario}: ")
+    if not clave_runtime:
+        raise RuntimeError(f"Falta la contraseña del rol operativo {usuario}.")
+    datos["password"] = clave_runtime
+    uppcoder.configurar_spark(datos)
+    uppcoder.configurar()
+    uppcoder.verificar_url()
+    motor_runtime = create_engine(os.environ["DATABASE_URL"], hide_parameters=True,
+                                 connect_args={"connect_timeout": 5, "options": "-c search_path=public"})
+    try:
+        with motor_runtime.connect() as db:
+            uppcoder.verificar_instalacion(db)
+    finally:
+        motor_runtime.dispose()
     respaldo = cfg.parent / "main.original.py"
     if anterior != adaptador:
-        if respaldo.exists() or respaldo.is_symlink():
+        if respaldo.is_symlink() or (respaldo.exists() and respaldo.read_bytes() != anterior):
             raise RuntimeError("Ya existe un respaldo de main.py. Revísalo antes de sustituir el arranque.")
-        atomico(respaldo, anterior)
+        if not respaldo.exists():
+            atomico(respaldo, anterior)
     atomico(cfg, json.dumps(datos).encode())
     if anterior != adaptador:
         atomico(inicio, adaptador)
