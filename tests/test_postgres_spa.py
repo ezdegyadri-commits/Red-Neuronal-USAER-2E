@@ -92,6 +92,22 @@ class PostgreSQLAislado(unittest.TestCase):
                     url = urls[nombre].render_as_string(hide_password=False)
                     return dict(base_env, DATABASE_URL=url, USAER_SPA_POSTGRES_TEST_URL=url, USAER_SPA_PORT=str(puerto()))
 
+                if os.getenv("USAER_UPPCODER_PRUEBA") == "solo":
+                    clave = secrets.token_urlsafe(24)
+                    with closing(psycopg2.connect(host="127.0.0.1", port=pg_port, dbname="postgres",
+                                                  user="spa_bootstrap", password=bootstrap)) as db:
+                        db.autocommit = True
+                        with db.cursor() as cur:
+                            cur.execute("CREATE ROLE usaer_app LOGIN PASSWORD %s", (clave,))
+                            cur.execute("CREATE DATABASE usaer_2e_2_0 OWNER usaer_app")
+                    prueba = URL.create("postgresql+psycopg2", username="usaer_app", password=clave,
+                                        host="127.0.0.1", port=pg_port, database="usaer_2e_2_0")
+                    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests",
+                                    "-p", "test_uppcoder.py", "-v"], cwd=ROOT,
+                                   env=dict(base_env, USAER_UPPCODER_TEST_LOCAL_URL=prueba.render_as_string(hide_password=False)),
+                                   check=True)
+                    return
+
                 if os.getenv("USAER_MIGRACION_PRUEBA"):
                     script_proyeccion = """
 from data.database import Alumno, get_engine

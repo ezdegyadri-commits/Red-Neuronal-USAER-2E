@@ -411,15 +411,18 @@ def get_engine(*, initialize_schema=True):
             from sqlalchemy.pool import NullPool
             if db_url.startswith("sqlite"):
                 _ENGINE = create_engine(db_url, connect_args={"check_same_thread": False}, echo=False, hide_parameters=True)
-            elif os.getenv("USAER_SPA_MODE") in {"postgres-synthetic", "postgres-container-synthetic"} and os.getenv("USAER_SPA_ROLE") == "runtime":
-                _ENGINE = create_engine(db_url, connect_args={"connect_timeout": 5},
+            elif os.getenv("USAER_SPA_MODE") in {"postgres-synthetic", "postgres-container-synthetic", "uppcoder"} and os.getenv("USAER_SPA_ROLE") == "runtime":
+                args = {"connect_timeout": 5}
+                if os.getenv("USAER_SPA_MODE") == "uppcoder":
+                    args["options"] = "-c search_path=public"
+                _ENGINE = create_engine(db_url, connect_args=args,
                                         pool_size=12, max_overflow=4, pool_timeout=10,
                                         pool_pre_ping=True, echo=False, hide_parameters=True)
             else:
                 _ENGINE = create_engine(db_url, connect_args={"connect_timeout": 5}, poolclass=NullPool, pool_pre_ping=True, echo=False, hide_parameters=True)
             _SESSION_FACTORY = sessionmaker(bind=_ENGINE, class_=SafeSession, autoflush=False, expire_on_commit=False)
         if initialize_schema and not _SCHEMA_READY:
-            if os.getenv("USAER_SPA_MODE") in {"postgres-synthetic", "postgres-container-synthetic"} and os.getenv("USAER_SPA_ROLE") == "runtime":
+            if os.getenv("USAER_SPA_MODE") in {"postgres-synthetic", "postgres-container-synthetic", "uppcoder"} and os.getenv("USAER_SPA_ROLE") == "runtime":
                 faltantes = set(Base.metadata.tables) - set(inspect(_ENGINE).get_table_names())
                 if faltantes:
                     raise RuntimeError("El esquema del piloto requiere una migración previa.")

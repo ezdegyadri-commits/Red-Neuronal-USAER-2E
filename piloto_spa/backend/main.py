@@ -68,6 +68,13 @@ from documents.planeacion import generar_pdf as generar_pdf_planeacion
 def verificar_base_piloto():
     url = make_url(os.environ.get("DATABASE_URL", "sqlite://"))
     modo = os.environ.get("USAER_SPA_MODE")
+    if modo == "uppcoder":
+        from deploy.uppcoder import verificar_instalacion, verificar_url
+
+        verificar_url()
+        with get_engine(initialize_schema=False).connect() as connection:
+            verificar_instalacion(connection)
+        return
     if modo == "local-synthetic" and url.drivername == "sqlite" and url.database not in (None, "", ":memory:"):
         return
     perfil = os.environ.get("USAER_SPA_ROLE", "owner")
@@ -134,6 +141,11 @@ if os.environ.get("USAER_SPA_TLS_HOST") and os.environ.get("USAER_SPA_TLS_CERT")
     hosts_piloto.append(os.environ["USAER_SPA_TLS_HOST"])
 if os.environ.get("USAER_SPA_MODE") == "postgres-container-synthetic":
     hosts_piloto = [os.environ.get("USAER_PUBLIC_HOST", ""), "localhost"]
+es_uppcoder = os.environ.get("USAER_SPA_MODE") == "uppcoder"
+if es_uppcoder:
+    from deploy.uppcoder import host_publico
+
+    hosts_piloto = [host_publico(), "localhost", "127.0.0.1"]
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts_piloto)
 accesos_piloto = logging.getLogger("uvicorn.error")
 
@@ -149,7 +161,7 @@ async def cabeceras_piloto(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
-    if request.url.scheme == "https":
+    if request.url.scheme == "https" or es_uppcoder:
         response.headers["Strict-Transport-Security"] = "max-age=86400"
     if request.url.path == "/":
         response.headers["Content-Security-Policy"] = (
@@ -352,7 +364,7 @@ def login_endpoint(payload: LoginPayload, request: Request, response: Response):
     if request.headers.get("X-USAER-Client") == "browser":
         cerrar_sesion(token_solicitud(request))
         response.set_cookie(COOKIE_SESION, token, max_age=TOKEN_TTL_SECONDS, httponly=True,
-                            samesite="strict", secure=request.url.scheme == "https")
+                            samesite="strict", secure=es_uppcoder or request.url.scheme == "https")
         return LoginResponse(user=user)
     return LoginResponse(token=token, user=user)
 
