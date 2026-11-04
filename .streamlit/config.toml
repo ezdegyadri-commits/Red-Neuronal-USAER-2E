@@ -1,4 +1,6 @@
 [server]
+# Las actualizaciones de producción deben arrancar un proceso limpio.
+fileWatcherType = "none"
 enableStaticServing = true
 # Conserva la sesión 24 horas si el navegador pierde temporalmente la conexión.
 disconnectedSessionTTL = 86400
