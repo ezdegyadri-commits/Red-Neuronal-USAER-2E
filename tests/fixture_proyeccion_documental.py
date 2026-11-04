@@ -98,6 +98,7 @@ def probar():
     if url_preparacion := os.getenv("USAER_COPIA_TEST_URL"):
         from copy import deepcopy
         from sqlalchemy import create_engine, text
+        from tools.bloques_escuelas import catalogo, preparar_bloque
         from tools.copia_controlada import empaquetar, preparar_bd
 
         motor = create_engine(url_preparacion, hide_parameters=True)
@@ -119,6 +120,39 @@ def probar():
             with motor.connect() as db:
                 assert db.scalar(text("SELECT count(*) FROM copia_controlada.registro WHERE estado='cuarentena'")) == 2
                 assert db.scalar(text("SELECT to_regclass('public.alumnos')")) is None
+            paquetes = []
+            for plantel in catalogo()["USAER-B01"]:
+                eid = plantel["id"]
+                alumno_bloque = "fic-" + eid
+                copia_bloque = {"marca": MARCA, "origen": "bloque-ficticio", "pestanas": {
+                    "Escuelas": [["ID_Escuela", "Nombre_Escuela"], [eid, plantel["nombre"]]],
+                    "Alumnos": [["ID_Alumno", "ID_Escuela", "Nombre_Completo"],
+                                [alumno_bloque, eid, "Estudiante ficticio"]],
+                    "Expedientes": [["ID_Expediente", "ID_Alumno"], ["exp-" + eid, alumno_bloque]],
+                    "Anexo5_Eventos": [["ID_Evento", "ID_Alumno", "Evento"],
+                                      ["ev-" + eid, alumno_bloque, "Evento ficticio"]],
+                }}
+                paquetes.append(empaquetar(copia_bloque, eid, fecha, clase="ensayo"))
+            vista = preparar_bloque(motor, "USAER-B01", paquetes, clase="ensayo")
+            bloque = preparar_bloque(motor, "USAER-B01", paquetes, clase="ensayo", aplicar=True)
+            assert bloque["estados"] == vista["estados"] == {"nuevo": 16}
+            assert bloque["alumnos"] == 4 and not bloque["faltantes"]
+            assert sum(e["expedientes_explicitos"] for e in bloque["escuelas"].values()) == 4
+            assert preparar_bloque(motor, "USAER-B01", paquetes, clase="ensayo", aplicar=True)["estados"] == {"nuevo": 16}
+            for paquete in paquetes:
+                operativo = proyectar(engine, paquete["copia"], aplicar=True)
+                assert operativo["tablas"]["Alumnos"]["nuevas"] == 1
+                assert operativo["tablas"]["Anexo5_Eventos"]["nuevas"] == 1
+                assert "Expedientes" in operativo["solo_archivo"]
+            az = empaquetar({"marca": MARCA, "origen": "ensayo-quintana-roo", "pestanas": {
+                "Escuelas": [["ID_Escuela", "Nombre_Escuela"], ["ESC-008", "Quintana Roo"]],
+                "Alumnos": [["ID_Alumno", "ID_Escuela"]],
+            }}, "ESC-008", fecha, clase="ensayo")
+            assert preparar_bloque(motor, "USAER-B02", [az], clase="ensayo")["estados"] == {"nuevo": 1}
+            print("Bloque 1 sintético:", json.dumps({
+                "alumnos": bloque["alumnos"], "estados": bloque["estados"], "recursos": bloque["recursos"],
+                "ultima_conciliacion": bloque["ultima_conciliacion"],
+            }))
         finally:
             motor.dispose()
         print("Copia de una escuela: manifiesto, segunda captura, cuarentena e idempotencia verificados.")
@@ -166,6 +200,9 @@ def probar():
         assert cliente.get("/api/visitas/acta-historica/pdf").content.startswith(b"%PDF")
         expediente = cliente.get(f"/api/expedientes/{aid}").json()
         assert {"acta-historica", "informe-historico"} <= {r["id"] for r in expediente["seguimiento"]}
+        if url_preparacion:
+            for eid in ("ESC-001", "ESC-002", "ESC-003", "ESC-004"):
+                assert cliente.get(f"/api/expedientes/fic-{eid}").status_code == 200
         assert proyectar(engine, copia, aplicar=True)["tablas"]["Informes"]["conflictos_preservados"] == 1
         assert cliente.get("/api/informes/informe-historico").json()["avances"] == "Edición docente posterior"
     print("Documentos históricos abiertos, exportados y aislados en PostgreSQL.")

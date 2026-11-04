@@ -30,6 +30,9 @@ def proyectar(engine, copia, *, aplicar=False):
     plan, exclusiones = preparar_tablas({n: fuente[n] for n in TABLAS if n in fuente})
     if exclusiones:
         raise ValueError("La proyección no admite exclusiones automáticas de registros.")
+    for tabla, campo in (("Escuelas", "nombre_escuela"), ("Alumnos", "nombre_completo")):
+        if any(not fila.get(campo, "").strip() for fila in plan[tabla]):
+            raise ValueError(f"{tabla}: falta un nombre obligatorio. Conserva la fila en preparación.")
     alumnos_origen = {r["id"] for r in plan["Alumnos"]}
     curps = [r["curp"].strip().upper() for r in plan["Alumnos"] if r.get("curp", "").strip()]
     if len(curps) != len(set(curps)):

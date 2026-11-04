@@ -1,6 +1,7 @@
 """Captura acotada y preparación incremental en una base privada independiente."""
 import argparse
 from collections import Counter
+from contextlib import nullcontext
 import csv
 from datetime import datetime, timezone
 from getpass import getpass
@@ -46,8 +47,8 @@ def alcance_copia(copia, escuela):
                  for n, tabla in hojas.items()}
     alumnos = registros["Alumnos"]
     if (len(registros["Escuelas"]) != 1 or registros["Escuelas"][0].get("ID_Escuela") != escuela
-            or not 1 <= len(alumnos) <= 20 or any(r.get("ID_Escuela") != escuela for r in alumnos)):
-        raise ValueError("La copia debe corresponder a una escuela y a entre 1 y 20 alumnos.")
+            or len(alumnos) > 20 or any(r.get("ID_Escuela") != escuela for r in alumnos)):
+        raise ValueError("La copia debe corresponder a una escuela y a un máximo de 20 alumnos.")
     ids = {r.get("ID_Alumno") for r in alumnos}
     if None in ids or "" in ids:
         raise ValueError("El padrón del ensayo contiene una identidad sin conciliar.")
@@ -126,7 +127,7 @@ def verificar_paquete(paquete, *, clase=None):
     return m
 
 
-def preparar_bd(engine, paquete, *, aplicar=False, referencia=None):
+def preparar_bd(engine, paquete, *, aplicar=False, referencia=None, _conexion=None):
     m = verificar_paquete(paquete)
     clase = m["clase"]
     if clase == "real":
@@ -142,9 +143,19 @@ def preparar_bd(engine, paquete, *, aplicar=False, referencia=None):
         repetidas = Counter(claves)
         error_tabla = any(reporte[nombre]["errores"].values())
         for clave, fila in zip(claves, filas):
-            motivo = "identidad_repetida" if repetidas[clave] > 1 else "relacion_o_identidad" if error_tabla else ""
+            campo_nombre = {"Escuelas": "Nombre_Escuela", "Alumnos": "Nombre_Completo"}.get(nombre)
+            if repetidas[clave] > 1:
+                motivo = "identidad_repetida"
+            elif error_tabla:
+                motivo = "relacion_o_identidad"
+            elif campo_nombre and not fila.get(campo_nombre, "").strip():
+                motivo = "nombre_requerido_para_proyeccion"
+            else:
+                motivo = ""
             con_datos.append((nombre, clave, huella(fila), fila, motivo))
-    with engine.begin() as db:
+    if _conexion is not None and (not aplicar or _conexion.engine is not engine):
+        raise ValueError("La conexión de lote no corresponde al destino de escritura.")
+    with (engine.begin() if _conexion is None else nullcontext(_conexion)) as db:
         if not aplicar:
             db.execute(text("SET TRANSACTION READ ONLY"))
         marca, permitido = db.execute(text("""
@@ -175,7 +186,9 @@ def preparar_bd(engine, paquete, *, aplicar=False, referencia=None):
         existe = db.scalar(text("SELECT to_regclass('copia_controlada.lote')"))
         params = {"id": paquete["lote"], "origen": m["origen"], "escuela": m["escuela"]}
         if existe and db.scalar(text("SELECT 1 FROM copia_controlada.lote WHERE id=:id"), params):
-            return {"lote": params["id"], "repetido": True}
+            estados = dict(db.execute(text("""SELECT estado, count(*) FROM copia_controlada.registro
+                WHERE lote=:id GROUP BY estado"""), params).all())
+            return {"lote": params["id"], "repetido": True, "capturada": m["capturada"], "estados": estados}
         ultima = db.scalar(text("""SELECT max(capturada) FROM copia_controlada.lote
             WHERE origen=:origen AND escuela=:escuela"""), params) if existe else None
         if ultima and reloj(m["capturada"]) <= ultima:

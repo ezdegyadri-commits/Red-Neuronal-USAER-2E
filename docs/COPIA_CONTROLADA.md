@@ -21,7 +21,7 @@ credenciales de producción.
 En una carpeta cifrada **fuera del repositorio**, coloca CSV UTF-8 con los
 nombres de pestaña, como `Escuelas.csv` y `Alumnos.csv`, o un JSON con
 `marca: "USAER_SPA_COPIA_SINTETICA_V1"`, `origen` y `pestanas`.
-Incluye una escuela, entre 1 y 20 alumnos ficticios y solo sus documentos.
+Incluye una escuela, hasta 20 alumnos ficticios y solo sus documentos.
 Al anonimizar, sustituye identificadores de forma consistente y revisa
 texto libre, PDF, metadatos y firmas. Para el primer ensayo es preferible
 generar datos ficticios como los de `tests/fixture_proyeccion_documental.py`.
