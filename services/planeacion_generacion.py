@@ -1,0 +1,516 @@
+"""Prellenado documental, calendario y ensamble local del formato editable."""
+from copy import deepcopy
+from datetime import date,timedelta,datetime
+from zoneinfo import ZoneInfo
+import hashlib
+import json
+import re
+from services.planeacion_modelo import FORMATOS
+from services import planeacion_equipo as equipo
+from services.curriculo import contexto_ia, CAMPOS, opciones, vincular, campos_seleccionados
+from utils.text import normalizar_texto
+from ai.planeacion_completa import huella_completa, validar_completa
+
+DIAS=('Lunes','Martes','Miércoles','Jueves','Viernes')
+
+
+def configuracion(doc):
+    desde,hasta=doc['datos']['Periodo'].split(' / ')
+    hoy=datetime.now(ZoneInfo('America/Mexico_City')).date().isoformat()
+    inicio=max(desde,hoy) if hoy<=hasta else desde
+    cur=doc['metadatos'].get('curriculo',{})
+    grados=[r['grado'] for r in cur.get('registros',[])]
+    if not grados:
+        grados=[int(m[1]) for a in doc['datos']['Alumnos'] if (m:=re.match(r'^\s*([1-6])(?:\D|$)',str(a.get('Grado',''))))]
+    campo=cur.get('campo') or ('De lo Humano y lo Comunitario' if doc['datos']['Función'] in ('Psicología','Trabajo Social') else 'Lenguajes')
+    return {'duracion':45,'sesiones':6 if doc['datos']['Función']=='Psicología' else 12,
+            'dias':['Lunes','Jueves'],'inicio':inicio,'enfoque':'','apoyos':'','grado_referencia':min(grados) if grados else None,'campo_referencia':campo}
+
+
+def sugerir_curriculo(doc,ajustes):
+    cur=doc['metadatos'].get('curriculo',{})
+    grado=ajustes.get('grado_referencia');campo=ajustes.get('campo_referencia',cur.get('campo'))
+    if grado not in range(1,7) or campo not in CAMPOS:return deepcopy(doc)
+    # La elección docente prevalece sobre la sugerencia automática de un campo.
+    if cur.get('registros') and not cur.get('sugerido_automaticamente'):return deepcopy(doc)
+    contenido=str(ajustes.get('enfoque',''))+' '+doc['metadatos'].get('necesidades_confirmadas','')+' '+' '.join(f['texto'][:1500] for f in fuentes_pertinentes(doc))
+    texto=normalizar_texto(contenido)
+    familias={'LECTURA':('LECTURA','LECTO','LEER'),'ESCRITURA':('ESCRITURA','LECTO','ESCRIB'),
+              'EMOCIONES':('EMOCION','REGULACION','CONVIVENCIA'),'DIALOGO':('COMUNICACION','EXPRESION','DIALOG'),
+              'NUMEROS':('NUMER','MATEMAT','CONTEO'),'BIENESTAR':('BIENESTAR','FAMILIA','PARTICIPACION')}
+    tokens={k for k,variantes in familias.items() if any(v in texto for v in variantes)}
+    if not tokens:return deepcopy(doc)
+    rows=opciones(doc,campo,[grado])
+    valoradas=sorted(((sum(t in normalizar_texto(r['contenido']+' '+r['pda']) for t in tokens),r) for r in rows),key=lambda p:(-p[0],p[1]['id']))
+    elegidas=[r['id'] for score,r in valoradas if score>0][:3]
+    if not elegidas:return deepcopy(doc)
+    result=vincular(doc,campo,cur.get('ejes',['Inclusión']),elegidas,cur.get('contexto_local',''))
+    result['metadatos']['curriculo']['sugerido_automaticamente']=True
+    result['metadatos']['curriculo']['aviso']='Referentes oficiales sugeridos por coincidencia temática; revisa su pertinencia. No representan una evaluación del nivel del alumno.'
+    return result
+
+
+def fuentes_pertinentes(doc):
+    ids={a['ID_Alumno'] for a in doc['datos']['Alumnos']};resultado=[]
+    for fuente in doc['metadatos'].get('fuentes',[]):
+        alumnos=set(str(fuente.get('alumno','')).split(','))-{''}
+        material=fuente.get('tipo')=='MATERIAL'
+        if alumnos and not alumnos<=ids:continue
+        if not material and (not fuente.get('vinculo_verificado') or not alumnos or not alumnos<=ids):continue
+        if fuente.get('texto'):resultado.append(deepcopy(fuente))
+    return resultado
+
+
+def texto_curricular(doc):
+    cur=doc['metadatos'].get('curriculo',{});lineas=[]
+    if campos_seleccionados(cur):lineas.append('Campos formativos: '+', '.join(campos_seleccionados(cur)))
+    if cur.get('ejes'):lineas.append('Ejes: '+', '.join(cur['ejes']))
+    for r in cur.get('registros',[]):
+        lineas.append(f"{r['fuente']} · Fase {r['fase']} · {r['grado']}° · página PDF {r['pagina_pdf']}\nContenido: {r['contenido']}\nPDA oficial: {r['pda']}")
+        ajuste=cur.get('adaptaciones',{}).get(r['id'],{})
+        if ajuste:lineas.append('Adaptación docente: '+ajuste.get('contenido','')+'\nObjetivo adaptado: '+ajuste.get('pda',''))
+    if cur.get('contexto_local'):lineas.append('Contextualización declarada: '+cur['contexto_local'])
+    return '\n\n'.join(lineas)
+
+
+def prellenar(doc):
+    result=deepcopy(doc);meta=result['metadatos'];fuentes=fuentes_pertinentes(doc)
+    anteriores=meta.setdefault('campos_autoprellenados',{})
+    firma_fuentes=hashlib.sha256(json.dumps(fuentes,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    if meta.get('firma_fuentes_generacion')!=firma_fuentes:
+        meta.pop('resumen_ia_completo',None)
+        meta['firma_fuentes_generacion']=firma_fuentes
+    necesidades='\n\n'.join(f"{f.get('referencia','')} · {f.get('fecha','')} · Antecedente de apoyo registrado:\n{f['texto'][:1800]}" for f in fuentes if f['tipo']!='MATERIAL' or f.get('alumno'))[:10000]
+    valores={'necesidades_confirmadas':necesidades,'referente_curricular':texto_curricular(doc)}
+    for campo,value in valores.items():
+        if value and (not meta.get(campo) or meta.get(campo)==anteriores.get(campo)):
+            meta[campo]=value;anteriores[campo]=value
+    if not meta.get('resumen_educativo') and fuentes:
+        from services.planeacion import resumen_previo
+        meta['resumen_educativo']=resumen_previo(result,fuentes)
+    return result
+
+
+def fechas_sesiones(doc,ajustes):
+    desde,hasta=(date.fromisoformat(v) for v in doc['datos']['Periodo'].split(' / '))
+    inicio=date.fromisoformat(str(ajustes['inicio']))
+    if not desde<=inicio<=hasta:raise ValueError('La fecha inicial debe quedar dentro del trimestre.')
+    if not 15<=int(ajustes['duracion'])<=180:raise ValueError('Elige sesiones de 15 a 180 minutos.')
+    if not 1<=int(ajustes['sesiones'])<=36:raise ValueError('Elige de una a 36 sesiones.')
+    dias=set(ajustes['dias'])
+    if not dias or not dias<=set(DIAS):raise ValueError('Selecciona días de lunes a viernes.')
+    from services.cronogramas import DIAS_INHABILES
+    fechas=[];cursor=inicio
+    while cursor<=hasta and len(fechas)<int(ajustes['sesiones']):
+        if cursor.weekday()<5 and DIAS[cursor.weekday()] in dias and cursor.isoformat() not in DIAS_INHABILES:fechas.append(cursor.isoformat())
+        cursor+=timedelta(days=1)
+    if len(fechas)<int(ajustes['sesiones']):raise ValueError('No caben todas las sesiones en estos días del trimestre. Ajusta días, inicio o cantidad.')
+    return fechas
+
+
+def antecedentes_y_nee_individuales(doc, aliases, reversa):
+    lineas = []
+    catalogo_nee = doc.get('metadatos', {}).get('catalogo_nee_actual', [])
+    nee_por_alumno = {}
+    if isinstance(catalogo_nee, list):
+        for n in catalogo_nee:
+            aid = str(n.get('alumno', ''))
+            if aid in reversa:
+                label = reversa[aid]
+                txt = str(n.get('texto', '') or '').strip()
+                if txt:
+                    nee_por_alumno.setdefault(label, []).append(txt)
+
+    for i, a in enumerate(doc['datos']['Alumnos']):
+        aid = a.get('ID_Alumno')
+        label = reversa.get(aid, f"Alumno {i+1}")
+        datos_alumno = []
+        grado = a.get('Grado', '')
+        if grado:
+            datos_alumno.append(f"Grado escolar oficial: {grado}")
+        for k in ('Condicion', 'Condición', 'Discapacidad', 'Aptitud', 'Subclasificacion', 'Atencion_Previa'):
+            val = str(a.get(k, '') or '').strip()
+            if val and val.lower() not in ('ninguna', 'no', 'sin registro', 'nan'):
+                datos_alumno.append(f"Situación / condición documentada: {val}")
+        if label in nee_por_alumno:
+            datos_alumno.append("Necesidades Educativas Específicas (NEE) documentadas:\n• " + "\n• ".join(nee_por_alumno[label][:4]))
+        if datos_alumno:
+            lineas.append(f"[{label} · Antecedentes y Necesidades Educativas Específicas]:\n" + "\n".join(datos_alumno))
+    return "\n\n".join(lineas)
+
+
+def construir_payload_estructurado_xml(doc, aliases, reversa):
+    """Construye las secciones XML requeridas por el blindaje pedagógico:
+    <evaluacion_psicopedagogica>: Nivel de competencia curricular, estilo, diagnóstico y BAP.
+    <contexto_documentado>: Eventos significativos registrados, actas de visita y hojas de acuerdos.
+    <ediciones_manuales_docente>: Estado actual de tablas y campos definidos manualmente.
+    """
+    fuentes = fuentes_pertinentes(doc)
+
+    
+    # 1. EVALUACIÓN PSICOPEDAGÓGICA (EPP)
+    epp_items = []
+    for a in doc.get('datos', {}).get('Alumnos', []):
+        aid = a.get('ID_Alumno')
+        label = reversa.get(aid, 'Alumno')
+        datos_base = []
+        if a.get('Grado'):
+            datos_base.append(f"Grado escolar oficial: {a['Grado']}")
+        for k in ('Condicion', 'Condición', 'Discapacidad', 'Aptitud', 'Subclasificacion', 'Atencion_Previa'):
+            v = str(a.get(k, '') or '').strip()
+            if v and v.lower() not in ('ninguna', 'no', 'sin registro', 'nan'):
+                datos_base.append(f"{k}: {v}")
+        if datos_base:
+            epp_items.append(f"[{label} · Antecedentes]: " + ", ".join(datos_base))
+
+    for f in fuentes:
+        if f.get('tipo') in ('EPP', 'EPP_ESCANEADA'):
+            alumnos_f = [reversa[i] for i in str(f.get('alumno', '')).split(',') if i in reversa]
+            dest = ", ".join(alumnos_f) if alumnos_f else "General"
+            ref = f.get('referencia', 'EPP')
+            fecha = f.get('fecha', '')
+            texto_f = str(f.get('texto', '')).strip()
+            epp_items.append(f"[{ref} · {dest} · Fecha {fecha}]:\n{texto_f}")
+
+    xml_epp = (
+        "<evaluacion_psicopedagogica>\n"
+        + ("\n\n".join(epp_items) if epp_items else "Sin registros de EPP formal.")
+        + "\n</evaluacion_psicopedagogica>"
+    )
+
+    # 2. CONTEXTO DOCUMENTADO
+    contexto_items = []
+    for f in fuentes:
+        tipo = f.get('tipo')
+        if tipo in ('V', 'SEGUIMIENTO', 'DOCUMENTO_REVISADO', 'MATERIAL'):
+            alumnos_f = [reversa[i] for i in str(f.get('alumno', '')).split(',') if i in reversa]
+            dest = ", ".join(alumnos_f) if alumnos_f else "General"
+            ref = f.get('referencia', 'CTX')
+            fecha = f.get('fecha', '')
+            tipo_desc = 'Acta de visita / Hoja de sugerencias' if tipo == 'V' else ('Evento significativo registrado' if tipo == 'SEGUIMIENTO' else 'Documento de apoyo')
+            texto_f = str(f.get('texto', '')).strip()
+            aviso_nee = ""
+            if any(term in texto_f.lower() for term in ('nee', 'necesidad', 'requiere', 'presenta dificultad', 'apoyo prioritario')):
+                aviso_nee = " [Nota: Contiene NEE o prioridad detectada directamente por el docente/equipo]"
+            contexto_items.append(f"[{ref} · {tipo_desc}{aviso_nee} · {dest} · Fecha {fecha}]:\n{texto_f}")
+
+    xml_contexto = (
+        "<contexto_documentado>\n"
+        + ("\n\n".join(contexto_items) if contexto_items else "Sin eventos ni actas registradas.")
+        + "\n</contexto_documentado>"
+    )
+
+    # 3. EDICIONES MANUALES DEL DOCENTE
+    ediciones_items = []
+    intervenciones = doc.get('metadatos', {}).get('intervenciones_nee', [])
+    for idx, b in enumerate(intervenciones, 1):
+        campos = b.get('campos', {})
+        aid = b.get('alumno')
+        label = reversa.get(aid, 'Alumno')
+        partes = [f"{k}: {v}" for k, v in campos.items() if str(v).strip()]
+        if partes:
+            ediciones_items.append(f"[Intervención NEE {idx} fijada en pantalla · {label}]:\n" + "\n".join(partes))
+
+    for row in doc.get('tablas', {}).get('aprendizajes', []):
+        if any(str(row.get(k, '')).strip() for k in ('Necesidades educativas específicas', 'Aprendizaje y/u objetivo', 'Descriptor de logro')):
+            ediciones_items.append(
+                f"[Fila de Aprendizajes en Pantalla]:\n"
+                f"• NEE: {row.get('Necesidades educativas específicas', '')}\n"
+                f"• Objetivo: {row.get('Aprendizaje y/u objetivo', '')}\n"
+                f"• Descriptor: {row.get('Descriptor de logro', '')}"
+            )
+    for row in doc.get('tablas', {}).get('barreras', []):
+        if any(str(row.get(k, '')).strip() for k in ('Barreras para el Aprendizaje y la Participación', 'Apoyos y/o ajustes razonables')):
+            ediciones_items.append(
+                f"[Fila de Barreras en Pantalla]:\n"
+                f"• BAP: {row.get('Barreras para el Aprendizaje y la Participación', '')}\n"
+                f"• Apoyos/Ajustes: {row.get('Apoyos y/o ajustes razonables', '')}"
+            )
+    for row in doc.get('tablas', {}).get('necesidades', []):
+        if any(str(row.get(k, '')).strip() for k in ('NEE', 'Aprendizajes y/u Objetivos', 'Descriptor de Logro')):
+            ediciones_items.append(
+                f"[Fila de NEE en Pantalla]:\n"
+                f"• NEE: {row.get('NEE', '')}\n"
+                f"• Objetivo: {row.get('Aprendizajes y/u Objetivos', '')}\n"
+                f"• Descriptor: {row.get('Descriptor de Logro', '')}"
+            )
+
+    for rid, adapt in doc.get('metadatos', {}).get('curriculo', {}).get('adaptaciones', {}).items():
+        if adapt.get('contenido') or adapt.get('pda'):
+            ediciones_items.append(
+                f"[Adaptación Curricular Docente en Pantalla - Ref {rid}]:\n"
+                f"• Contenido adaptado: {adapt.get('contenido', '')}\n"
+                f"• PDA adaptado: {adapt.get('pda', '')}"
+            )
+
+    notas = doc.get('metadatos', {}).get('necesidades_confirmadas', '').strip()
+    if notas and notas != doc.get('metadatos', {}).get('campos_autoprellenados', {}).get('necesidades_confirmadas'):
+        ediciones_items.append(f"[Notas / Necesidades Confirmadas por el Docente]:\n{notas}")
+
+    if ediciones_items:
+        xml_ediciones = (
+            "<ediciones_manuales_docente>\n"
+            "DECISIONES DOCENTES A CONSERVAR: El docente definió los siguientes campos en pantalla. "
+            "Consérvalos sin sobrescribirlos. Contrástalos con evidencia individual y referentes oficiales; señala contradicciones sin inventar una conclusión:\n\n"
+            + "\n\n".join(ediciones_items)
+            + "\n</ediciones_manuales_docente>"
+        )
+    else:
+        xml_ediciones = (
+            "<ediciones_manuales_docente>\n"
+            "Sin ediciones manuales previas en tablas. Construir propuestas subordinadas estrictamente a <evaluacion_psicopedagogica> y <contexto_documentado>.\n"
+            "</ediciones_manuales_docente>"
+        )
+
+    return f"{xml_epp}\n\n{xml_contexto}\n\n{xml_ediciones}"
+
+
+def preparar_solicitud(doc,ajustes):
+    from services.planeacion import autorizar,resumen_previo
+    autorizar(doc,True)
+    if doc['formato'] not in ('XXIII','XXV'):raise ValueError('El generador completo trabaja los formatos trimestrales XXIII y XXV.')
+    fechas_sesiones(doc,ajustes)
+    aliases={'Alumno '+str(i+1):a['ID_Alumno'] for i,a in enumerate(doc['datos']['Alumnos'])}
+    reversa={v:k for k,v in aliases.items()}
+    evidencias={};fuentes=fuentes_pertinentes(doc)
+    for f in fuentes:
+        labels=[reversa[i] for i in str(f.get('alumno','')).split(',') if i in reversa]
+        if labels:evidencias[f['referencia']]=labels
+    notas=doc['metadatos'].get('necesidades_confirmadas','')
+    autollenado=doc['metadatos'].get('campos_autoprellenados',{}).get('necesidades_confirmadas')
+    if str(notas).strip() and notas!=autollenado:
+        evidencias['DOCENTE']=list(aliases)
+    if not evidencias:raise ValueError('Falta evidencia educativa del alumno. Actualiza el expediente, incorpora el informe o describe una necesidad documentada antes de generar.')
+    contexto=contexto_ia(sugerir_curriculo(doc,ajustes))
+    elegidos=ajustes.get('contextos_solicitados')
+    if elegidos is not None:
+        if not isinstance(elegidos,list) or not elegidos or any(c not in FORMATOS[doc['formato']]['contextos'] for c in elegidos):
+            raise ValueError('Elige al menos un contexto válido para las actividades.')
+        contexto['contextos_solicitados']=list(dict.fromkeys(elegidos))
+    if ajustes.get('actividades_solicitadas') is not None:
+        cantidad=ajustes['actividades_solicitadas']
+        if type(cantidad) is not int or not 1<=cantidad<=24:raise ValueError('Elige de una a 24 actividades distintas por propuesta.')
+        if cantidad>len(fechas_sesiones(doc,ajustes)):raise ValueError('Solicitaste más actividades que sesiones disponibles. Reduce la cantidad o amplía las sesiones y el periodo antes de solicitar IA.')
+        contexto['actividades_solicitadas']=cantidad
+    contexto['huella_evidencias']=hashlib.sha256(json.dumps(fuentes,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    # El contexto institucional no debe perderse al recuperar el expediente.
+    for campo in ('contextualizacion_docente',):
+        if contexto.get(campo):
+            contexto[campo]=resumen_previo(doc,[{'referencia':'CONTEXTO-ESCOLAR','alcance':'contexto declarado; no diagnóstico individual','texto':contexto[campo]}]).split('\n\n',1)[-1][:4000]
+    for adaptacion in contexto.get('adaptaciones_docentes',{}).values():
+        for campo,value in list(adaptacion.items()):
+            adaptacion[campo]=resumen_previo(doc,[{'referencia':'ADAPTACION','alcance':'redacción docente','texto':value}]).split('\n\n',1)[-1][:4000]
+    
+    # Payload estructurado XML inyectado directamente
+    payload_xml = construir_payload_estructurado_xml(doc, aliases, reversa)
+    resumen_custom = doc['metadatos'].get('resumen_ia_completo', '').strip()
+    if resumen_custom:
+        resumen = payload_xml + '\n\n' + resumen_custom
+    else:
+        resumen_educativo = doc['metadatos'].get('resumen_educativo', '').strip()
+        if not resumen_educativo:
+            resumen_educativo = resumen_previo(doc, fuentes)
+        resumen = payload_xml + '\n\n' + resumen_educativo
+    
+    bloques=[]
+    from services.planeacion_intervenciones_nee import aplica, bloques as intervenciones
+    for i,b in enumerate(intervenciones(doc) if aplica(doc) else [],1):
+        if b['alumno'] not in reversa or not str(b['campos'].get('NEE','')).strip():continue
+        ref='NEE-SELECCIONADA-'+str(i);evidencias[ref]=[reversa[b['alumno']]]
+        automaticos=doc['metadatos'].get('generacion_completa',{}).get('intervenciones_generadas',{}).get(b['id'],{})
+        texto='\n'.join(k+': '+str(b['campos'].get(k,'')) for k in ('NEE','Aprendizaje y/u objetivo','Descriptor de logro','Apoyos','Ajustes razonables','Contextos','Temporalidad','Recursos','Evaluación y seguimiento') if b['campos'].get(k) and b['campos'][k]!=automaticos.get(k))
+        bloques.append({'referencia':ref+' · '+reversa[b['alumno']],'alcance':'NEE y decisiones docentes confirmadas para intervención; no diagnóstico','texto':texto[:4500]})
+    if bloques:resumen=resumen_previo(doc,bloques)[:5000]+'\n\n'+resumen
+    safe=deepcopy(ajustes)
+    for campo in ('enfoque','apoyos'):
+        safe[campo]=resumen_previo(doc,[{'referencia':'AJUSTE','alcance':'configuración docente; no evidencia de logro','texto':str(ajustes.get(campo,''))}]).split('\n\n',1)[-1][:1500] if ajustes.get(campo) else ''
+    if contexto.get('contextualizacion_docente'):
+        # Visible en el resumen que la persona revisa, y parte de la huella/caché.
+        resumen=resumen[:7800]+'\n\n'+contexto['contextualizacion_docente']
+    anterior=doc['metadatos'].get('generacion_completa',{})
+    auto=anterior.get('filas_generadas',{}).get('dosificacion',[])
+    previas=[str(r.get('Actividades','')) for r in doc['tablas'].get('dosificacion',[]) if str(r.get('Actividades','')).strip() and not r.get('_sesion_equipo')]
+    previas.extend(str(r.get('actividad','')) for r in doc['metadatos'].get('equipo',{}).get('sesiones',[]) if r.get('actividad'))
+    previas.extend(str(r.get('campos',{}).get('Actividades','')) for r in doc['metadatos'].get('intervenciones_nee',[]) if r.get('campos',{}).get('Actividades') and r['campos']['Actividades']!=anterior.get('intervenciones_generadas',{}).get(r['id'],{}).get('Actividades'))
+    previas=list(dict.fromkeys(previas))
+    # El mismo anonimizado que el resumen; nunca enviar la tabla nominal.
+    contexto['actividades_previas']=[resumen_previo(doc,[{'referencia':'ACTIVIDAD-PREVIA','alcance':'propuesta registrada, no logro','texto':t}]).split('\n\n',1)[-1][:1000] for t in previas[-30:]]
+    if contexto['actividades_previas']:
+        resumen=resumen[:7000]+'\n\nActividades previas para evitar repetición:\n'+'\n'.join(contexto['actividades_previas'])[:4500]
+    from services.planeacion import anonimizar_texto
+    if doc.get('metadatos',{}).get('modalidad_planeacion')=='individual':
+        from services import memoria_pedagogica as memoria
+        needs=[str(b.get('campos',{}).get('NEE','')) for b in doc['metadatos'].get('intervenciones_nee',[])]
+        mem=memoria.construir(doc,necesidades=needs)
+        if any(not c['resuelta'] for c in mem['conflictos']):
+            raise ValueError('Hay registros contradictorios. Confirma cuál refleja el desempeño actual en «Memoria del alumno» antes de generar.')
+        contextual=memoria.para_ia(doc,mem,aliases)
+        contexto['memoria_pedagogica']=contextual
+        indices={r['referencia'] for r in mem['hechos'] if re.fullmatch(r'E[0-9]+',r.get('referencia',''))}
+        evidencias={k:v for k,v in evidencias.items() if k in indices or k.startswith('NEE-SELECCIONADA-') or k=='DOCENTE'}
+        for row in contextual['hechos']:evidencias[row['id']]=row['destinatarios']
+        # Solo las actividades previas acotadas se usan para evitar repeticiones.
+        contexto['actividades_previas']=list(dict.fromkeys(contexto['actividades_previas']+[
+            r['texto'] for r in mem['hechos'] if r['caracter']=='propuesta_anterior']))[-30:]
+        resumen=json.dumps({'memoria_del_alumno':contextual,'nee_y_decisiones_seleccionadas':[{**b,'texto':b['texto'][:700]} for b in bloques],
+            'orientacion_docente':safe.get('enfoque',''),'ajustes_solicitados':safe.get('apoyos','')},ensure_ascii=False)
+        resumen=resumen[:50000]
+        if str(doc['metadatos'].get('resumen_ia_completo','')).strip():
+            # Una corrección de privacidad del resumen también elimina el texto
+            # de la segunda vía contextual enviada al proveedor.
+            contexto['memoria_control_local']=deepcopy(contextual['hechos'])
+            contexto['memoria_pedagogica']={**contextual,'hechos':[{k:v for k,v in h.items() if k!='texto'} for h in contextual['hechos']]}
+            resumen=str(doc['metadatos']['resumen_ia_completo']).strip()[:50000]
+    resumen=anonimizar_texto(doc,resumen)
+    firma=huella_completa(resumen,doc['formato'],doc['datos']['Función'],contexto,safe,aliases,evidencias)
+    alcance=hashlib.sha256(json.dumps({'documento':doc.get('id',''),'cuenta':doc.get('cuenta',''),'alumnos':sorted(aliases.values()),'escuela':doc['datos']['ID_Escuela'],'formato':doc['formato']},sort_keys=True).encode()).hexdigest()
+    return {'resumen':resumen,'contexto':contexto,'ajustes':safe,'configuracion_original':deepcopy(ajustes),'aliases':aliases,'evidencias':evidencias,'huella':firma,'alcance':alcance}
+
+
+def _quitar_generado_sin_borrar_ediciones(rows,previas):
+    restantes=deepcopy(rows)
+    for previa in previas:
+        candidato=next((i for i,r in enumerate(restantes) if all(r.get(k,'')==v for k,v in previa.items() if not k.startswith('_'))),None)
+        if candidato is not None:restantes.pop(candidato)
+    return restantes
+
+
+def ensamblar(doc,respuesta,solicitud):
+    actual=preparar_solicitud(doc,solicitud['configuracion_original'])
+    if actual['alcance']!=solicitud['alcance'] or actual['huella']!=solicitud['huella']:raise ValueError('El expediente o los ajustes cambiaron. Revisa la información antes de aplicar la generación.')
+    anterior=doc.get('metadatos',{}).get('generacion_completa',{})
+    if respuesta==anterior.get('resultado'):
+        # Reenviar el mismo resultado ya aplicado es un no-op, no una nueva
+        # actividad. Conserva incluso las correcciones docentes posteriores.
+        return deepcopy(doc)
+    respuesta=validar_completa(respuesta,doc['formato'],doc['datos']['Función'],solicitud['contexto'],solicitud['aliases'],solicitud['evidencias'])
+    if not respuesta['unidades']:return deepcopy(doc)
+    result=prellenar(sugerir_curriculo(doc,solicitud['configuracion_original']));meta=result['metadatos'];anterior=meta.get('generacion_completa',{})
+    for key,rows in anterior.get('filas_generadas',{}).items():
+        result['tablas'][key]=_quitar_generado_sin_borrar_ediciones(result['tablas'][key],rows)
+    generadas={};unidades=respuesta['unidades'];aliases=solicitud['aliases'];fechas=fechas_sesiones(doc,solicitud['ajustes'])
+    if len(unidades)>len(fechas):raise ValueError('Se propusieron más secuencias que sesiones. Aumenta la cantidad o solicita menos secuencias; el borrador anterior se conserva.')
+    formato=doc['formato'];area=doc['datos']['Función'];es_equipo=equipo.aplica(result)
+    if es_equipo:
+        result=equipo.preparar(result);e=result['metadatos']['equipo']
+        bases=anterior.get('sesiones_generadas',[])
+        por_id={s['id']:s for s in e['sesiones']}
+        protegidas={i for i,s in enumerate(bases) if por_id.get(s['id'])!=s}
+        reemplazables={s['id'] for s in bases if por_id.get(s['id'])==s}
+        e['sesiones']=[s for s in e['sesiones'] if s['id'] not in reemplazables]
+        ids_conservados={s['id'] for s in e['sesiones']}
+        nuevas_sesiones=[]
+    grupos={};evaluaciones=[];necesidades_unidad={}
+    for n,u in enumerate(unidades):
+        destinatarios=[aliases[a] for a in u['destinatarios']]
+        # BLOQUEO Y AISLAMIENTO TOTAL DE LA TABLA 1:
+        # La tabla superior (aprendizajes / barreras) es ESTRICTAMENTE READ-ONLY durante la generación de actividades.
+        # No se hace append ni mutación a result['tablas']['aprendizajes'] ni 'barreras'.
+        # Las unidades se destinan EXCLUSIVAMENTE a la dosificación de sesiones (Tabla 2) y a la evaluación formativa.
+        necesidades_unidad[n]=u.get('necesidad', '')
+        evaluaciones.append(u['objetivo']+'\n'+u['evaluacion'])
+        if es_equipo:
+            identidad=tuple(sorted(destinatarios))
+            existente=next((g['nombre'] for g in e['subgrupos'] if tuple(sorted(g['alumnos']))==identidad),None)
+            grupo=existente or 'Subgrupo propuesto '+str(len(e['subgrupos'])+1)
+            while not existente and grupo in {g['nombre'] for g in e['subgrupos']}:grupo+=' nuevo'
+            if not existente:e['subgrupos'].append({'nombre':grupo,'alumnos':destinatarios})
+            grupos[n]=grupo
+    # Las secuencias se dosifican en las sesiones configuradas. Cada fecha es una
+    # propuesta de trabajo, no un registro de asistencia ni una reserva de horario.
+    filas_por_unidad={};sesiones_por_unidad={}
+    for i,(fecha,u) in enumerate(zip(fechas,unidades)):
+        n=i
+        actividad=u['actividad']
+        if not es_equipo:actividad+='\nApoyos: '+u['apoyos']+'\nSeguimiento: '+u['evaluacion']
+        if es_equipo:
+            nueva={'id':'ia-'+solicitud['huella'][:16]+'-'+str(i),'fecha':fecha,'subgrupo':grupos[n],'contexto':u['contexto'],
+                'competencias':u['competencias'],'objetivo':u['objetivo'],'actividad':actividad,'apoyos':u['apoyos'],
+                'recursos':u['recursos'],'seguimiento':u['evaluacion'],'duracion':int(solicitud['ajustes']['duracion']),'generada_ia':True}
+            if i in protegidas:
+                nuevas_sesiones.append(deepcopy(bases[i]))
+            elif nueva['id'] not in ids_conservados:
+                e['sesiones'].append(nueva);nuevas_sesiones.append(deepcopy(nueva))
+                sesiones_por_unidad[i]=nueva['id']
+        else:
+            row={'Contextos':u['contexto'],'Actividades':actividad,'Temporalidad':fecha+' · '+str(solicitud['ajustes']['duracion'])+' minutos','Recursos':u['recursos']}
+            row['_alumnos_planeacion']=[aliases[a] for a in u['destinatarios']]
+            result['tablas']['dosificacion'].append(row);generadas.setdefault('dosificacion',[]).append(row)
+            filas_por_unidad[i]=row
+    # Reutilizar el enlace explícito que devolvió la IA, nunca adivinar por nombre
+    # ni repartir actividades entre NEE por posición. Conservar campos docentes.
+    from services.planeacion_intervenciones_nee import aplica,bloques
+    if aplica(result):
+        intervenciones=bloques(result);previas=anterior.get('intervenciones_generadas',{})
+        generadas_nee={};ubicadas=set()
+        for i,b in enumerate(intervenciones,1):
+            alias=next((a for a,aid in aliases.items() if aid==b['alumno']),None)
+            asociadas=[(n,u) for n,u in enumerate(unidades) if 'NEE-SELECCIONADA-'+str(i) in u['evidencias'] and alias in u['destinatarios']]
+            if not asociadas:continue
+            nombre=next((a.get('Nombre del alumno','') for a in result['datos']['Alumnos'] if a['ID_Alumno']==b['alumno']),'')
+            def descriptor_real(text):
+                text=re.sub(r'^Alumno\s*\d+\s*', '',text,flags=re.I).strip()
+                return (nombre+' '+text).strip() if nombre and not text.startswith(nombre) else text
+            valores={'Aprendizaje y/u objetivo':'\n'.join(dict.fromkeys(u['objetivo'] for _,u in asociadas)),
+                'Descriptor de logro':'\n'.join(dict.fromkeys(descriptor_real(u['descriptor']) for _,u in asociadas)),
+                'Ajustes razonables':'\n'.join(dict.fromkeys(u['apoyos'] for _,u in asociadas)),
+                'Actividades':'\n\n'.join(u['actividad'] for _,u in asociadas),
+                'Apoyos':'\n'.join(dict.fromkeys(u['apoyos'] for _,u in asociadas)),
+                'Contextos':'\n'.join(dict.fromkeys(u['contexto'] for _,u in asociadas)),
+                'Recursos':'\n'.join(dict.fromkeys(u['recursos'] for _,u in asociadas)),
+                'Temporalidad':'\n'.join(fechas[n]+' · '+str(solicitud['ajustes']['duracion'])+' minutos' for n,_ in asociadas if n<len(fechas)),
+                'Evaluación y seguimiento':'\n'.join(dict.fromkeys(u['evaluacion'] for _,u in asociadas))}
+            for campo,value in valores.items():
+                actual=b['campos'].get(campo,'')
+                if not actual or actual==previas.get(b['id'],{}).get(campo):
+                    b['campos'][campo]=value;generadas_nee.setdefault(b['id'],{})[campo]=value
+                    if campo=='Actividades':ubicadas.update(n for n,_ in asociadas)
+        # Una sola representación editable de cada actividad nueva. Las tablas
+        # históricas y sesiones protegidas no se retiran ni se transforman.
+        if ubicadas:
+            retirar=[filas_por_unidad[n] for n in ubicadas if n in filas_por_unidad]
+            result['tablas']['dosificacion']=[r for r in result['tablas']['dosificacion'] if not any(r is x for x in retirar)]
+            if 'dosificacion' in generadas:generadas['dosificacion']=[r for r in generadas['dosificacion'] if not any(r is x for x in retirar)]
+            if es_equipo:
+                retirar_ids={sesiones_por_unidad[n] for n in ubicadas if n in sesiones_por_unidad}
+                e['sesiones']=[r for r in e['sesiones'] if r['id'] not in retirar_ids]
+                nuevas_sesiones=[r for r in nuevas_sesiones if r['id'] not in retirar_ids]
+        result['metadatos']['intervenciones_nee']=intervenciones
+    else:generadas_nee={}
+    if formato=='XXIII':
+        previo=anterior.get('evaluacion_generada','')
+        valor='\n\n'.join(dict.fromkeys(evaluaciones))
+        if not result['textos'].get('Evaluación') or result['textos']['Evaluación']==previo:result['textos']['Evaluación']=valor
+    else:valor=''
+    if es_equipo and area=='Psicología':
+        for c in e['competencias']:
+            asociadas=[u for u in unidades if c['Competencia'] in u['competencias']]
+            if asociadas and not any(c.get(k) for k in ('Necesidad documentada','Descriptor de logro','Actividad prevista')):
+                c.update({'Necesidad documentada':'\n'.join(dict.fromkeys(necesidades_unidad[n] for n,u in enumerate(unidades) if c['Competencia'] in u['competencias'])),
+                          'Descriptor de logro':'\n'.join(dict.fromkeys(u['descriptor'] for u in asociadas)),
+                          'Actividad prevista':'\n'.join(dict.fromkeys(u['actividad'] for u in asociadas))})
+        if not e.get('sugerencia_familia'):e['sugerencia_familia']=respuesta['sugerencia_familia']
+    grupal=e['grupal'] if es_equipo else meta.setdefault('grupal_zona',[{'ID_Alumno':a['ID_Alumno'],'Fecha derivación':'','Actividades':'','Situación inicial':'','Situación final':''} for a in doc['datos']['Alumnos']])
+    for r in grupal:
+        alias=next((a for a,i in aliases.items() if i==r['ID_Alumno']),None)
+        relevantes=[u for u in unidades if alias in u['destinatarios']]
+        if relevantes and not r.get('Actividades'):r['Actividades']='\n'.join(dict.fromkeys(u['objetivo']+' · '+u['actividad'] for u in relevantes))
+        fuentes=[f for f in fuentes_pertinentes(doc) if r['ID_Alumno'] in str(f.get('alumno','')).split(',') and f['tipo'] not in {'PLAN','MATERIAL'}]
+        if not r.get('Situación inicial'):
+            from services.planeacion_compartida import situacion_inicial
+            alumno=next((a for a in doc['datos']['Alumnos'] if a['ID_Alumno']==r['ID_Alumno']),{})
+            contexto=doc['metadatos'].get('contexto_padron_grupo',{}).get(r['ID_Alumno'],{})
+            r['Situación inicial']=situacion_inicial({**alumno,**{k:v for k,v in contexto.items() if v}},fuentes)
+    meta=result['metadatos']
+    meta['generacion_completa']={'huella':solicitud['huella'],'alcance':solicitud['alcance'],'ajustes':deepcopy(solicitud['ajustes']),
+       'resultado':deepcopy(respuesta),'configuracion_original':deepcopy(solicitud['configuracion_original']),'filas_generadas':deepcopy(generadas),'evaluacion_generada':valor,'pendientes':respuesta['faltantes'],
+       'requiere_revision_docente':True}
+    contexto_memoria=solicitud.get('contexto',{}).get('memoria_pedagogica',{})
+    meta['generacion_completa']['provisional']=bool(contexto_memoria.get('provisional'))
+    meta['generacion_completa']['faltantes_contexto']=deepcopy(contexto_memoria.get('faltantes',[]))
+    meta['generacion_completa']['intervenciones_generadas']=generadas_nee
+    if es_equipo:
+        meta['generacion_completa']['sesiones_generadas']=nuevas_sesiones
+        meta['generacion_completa']['sesiones_protegidas']=len(protegidas)
+    if es_equipo:result=equipo.sincronizar(result)
+    return result

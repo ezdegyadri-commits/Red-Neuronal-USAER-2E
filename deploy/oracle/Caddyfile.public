@@ -1,0 +1,4 @@
+{$USAER_PUBLIC_HOST} {
+	encode zstd gzip
+	reverse_proxy app:8000
+}

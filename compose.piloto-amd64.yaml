@@ -1,0 +1,11 @@
+services:
+  db:
+    mem_limit: 256m
+  migrar:
+    platform: linux/amd64
+    mem_limit: 384m
+  app:
+    platform: linux/amd64
+    mem_limit: 384m
+  caddy:
+    mem_limit: 96m

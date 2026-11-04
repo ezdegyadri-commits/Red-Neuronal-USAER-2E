@@ -1,0 +1,172 @@
+import re
+
+import pandas as pd
+
+from config.settings import ESCUELAS_USAER
+from utils.text import normalizar_texto
+
+
+DOCENTES_ICHC_AANZIHO = {
+    "PERSONAL FICTICIO 19",
+    "PERSONAL FICTICIO 15",
+}
+
+
+def _canonizar_docente_apoyo(valor):
+    """Alias completos conocidos; un apellido compartido no acredita identidad."""
+    docente = _nombre_docente(valor)
+    alias = {
+        "CECILIA SOLIS": "PERSONAL FICTICIO 15",
+        "CECILIA SOLIS VAZQUEZ": "PERSONAL FICTICIO 15",
+        "MARIA CECILIA SOLIS": "PERSONAL FICTICIO 15",
+        "MARYCRUZ CAAMAL": "PERSONAL FICTICIO 19",
+        "MARY CRUZ CAAMAL CORAL": "PERSONAL FICTICIO 19",
+    }
+    return alias.get(docente, docente)
+
+
+def _nombre_docente(valor):
+    """Compara la identidad completa sin títulos como Mtra. o Maestra."""
+    texto = normalizar_texto(valor)
+    texto = re.sub(r"^(?:MTRA|MTRO|MAESTRA|MAESTRO)\.?\s+", "", texto)
+    return " ".join(texto.replace(".", " ").split())
+
+
+def filtrar_alumnos_por_docente_compartido(df, nombre):
+    """Separa las dos cuentas de apoyo de Ichcaanziho por asignación central explícita."""
+    if df is None or df.empty:
+        return pd.DataFrame() if df is None else df
+    docente = _canonizar_docente_apoyo(nombre)
+    if docente not in DOCENTES_ICHC_AANZIHO:
+        return df
+    if "Maestra de Apoyo" not in df.columns:
+        return df.iloc[0:0].copy()
+    asignaciones = df["Maestra de Apoyo"].fillna("").astype(str).map(_canonizar_docente_apoyo)
+    coincidentes = df.loc[asignaciones.eq(docente)].copy()
+    # Una maestra sin alumnos asignados no hereda toda la matrícula de su compañera.
+    return coincidentes
+
+
+def _columnas_identidad_escuela(df):
+    """Devuelve solo las columnas que identifican la escuela del alumno."""
+    prioritarias = []
+    otras = []
+    for columna in df.columns:
+        nombre = normalizar_texto(columna).replace("_", " ").strip()
+        if nombre in {"ID ESCUELA", "NOMBRE ESCUELA", "ESCUELA", "CCT ESCUELA"}:
+            prioritarias.append(columna)
+        elif "ESCUELA" in nombre and not any(
+            excluir in nombre
+            for excluir in ("MAESTRA", "MAESTRO", "DOCENTE", "DIRECTOR")
+        ):
+            otras.append(columna)
+    return prioritarias + [col for col in otras if col not in prioritarias]
+
+
+def filtrar_alumnos_por_escuelas(df, escuelas):
+    """Resuelve escuelas por nombre, clave USAER o CCT en todo el padrón."""
+    if df is None or df.empty:
+        return pd.DataFrame(columns=[] if df is None else df.columns)
+    columnas = _columnas_identidad_escuela(df)
+    if not columnas:
+        return df.iloc[0:0].copy()
+    if isinstance(escuelas, str):
+        escuelas = [parte.strip() for parte in escuelas.split(",") if parte.strip()]
+
+    permitidas = set()
+    from services.planeacion_matricula import clave_escuela
+    for valor in escuelas or []:
+        valor_n = normalizar_texto(valor)
+        if not valor_n:
+            continue
+        permitidas.add(valor_n)
+        c = clave_escuela(valor)
+        if c:
+            permitidas.add(normalizar_texto(c))
+        for nombre, codigo in ESCUELAS_USAER.items():
+            if valor_n in {normalizar_texto(nombre), normalizar_texto(codigo)} or (c and c == codigo):
+                permitidas.update({normalizar_texto(nombre), normalizar_texto(codigo)})
+    if not permitidas:
+        return df.iloc[0:0].copy()
+
+    df_clean = df.copy()
+    mascara = pd.Series(False, index=df.index)
+    for columna in columnas:
+        valores = df_clean[columna].fillna("").astype(str).str.strip().str.upper().map(normalizar_texto)
+        mascara |= valores.isin(permitidas)
+        for escuela in permitidas:
+            if len(escuela) >= 5:
+                mascara |= valores.str.contains(escuela, regex=False, na=False)
+    for col in ("Nombre_Completo", "Nombre_Alumno", "Nombre del alumno"):
+        if col in df_clean.columns:
+            df_clean[col] = df_clean[col].astype(str).str.strip()
+    resultado = df_clean.loc[mascara].copy()
+    if "ID_Alumno" in resultado.columns:
+        return resultado.drop_duplicates(subset=["ID_Alumno"], keep="first")
+    return resultado.drop_duplicates()
+
+
+def columna_escuela(df):
+    """Encuentra de forma robusta la columna que identifica la escuela."""
+    if df is None or df.empty:
+        return None
+    for col in df.columns:
+        n = normalizar_texto(col).replace("_", " ")
+        if n in {"ID ESCUELA", "ESCUELA", "ESCUELA ASIGNADA", "NOMBRE ESCUELA"}:
+            return col
+    for col in df.columns:
+        n = normalizar_texto(col)
+        if "ID ESCUELA" in n or n == "ESCUELA" or "ESCUELA" in n:
+            return col
+    return None
+
+
+def columna_tipo_atencion(df):
+    """Encuentra la columna de tipo/modalidad de atención aunque cambie el encabezado."""
+    if df is None or df.empty:
+        return None
+    for col in df.columns:
+        n = normalizar_texto(col).replace("_", " ")
+        if n in {
+            "TIPO ATENCION",
+            "TIPO DE ATENCION",
+            "TIPO DE ATENCION DEL ALUMNO",
+            "MODALIDAD DE ATENCION",
+            "MODALIDAD ATENCION",
+        }:
+            return col
+    for col in df.columns:
+        n = normalizar_texto(col)
+        if "TIPO ATENCION" in n or "TIPO DE ATENCION" in n or "MODALIDAD" in n:
+            return col
+    return None
+
+
+def alumnos_de_escuela(df, nombre_escuela):
+    """
+    Devuelve TODOS los alumnos de una escuela.
+
+    La base histórica puede tener ID_Escuela almacenado unas veces como
+    código (ESC-001) y otras como nombre de la escuela. Por eso se consideran
+    simultáneamente ambas representaciones, además de coincidencias parciales.
+    Nunca se devuelve únicamente la primera coincidencia.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame(columns=[] if df is None else df.columns)
+
+    return filtrar_alumnos_por_escuelas(df, [nombre_escuela])
+
+
+def alumnos_individuales_de_escuela(df, nombre_escuela):
+    """Filtra alumnos con atención Individual después de resolver la escuela."""
+    resultado = alumnos_de_escuela(df, nombre_escuela)
+    if resultado.empty:
+        return resultado
+
+    col_atencion = columna_tipo_atencion(resultado)
+    if not col_atencion:
+        return resultado.iloc[0:0].copy()
+
+    atencion = resultado[col_atencion].fillna("").astype(str).map(normalizar_texto)
+    return resultado.loc[atencion.str.contains("INDIVIDUAL", regex=False, na=False)].copy()
+

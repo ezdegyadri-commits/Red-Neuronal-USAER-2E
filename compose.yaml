@@ -1,0 +1,104 @@
+x-app: &app
+  image: usaer-spa-sintetica:oracle
+  build: .
+  platform: ${USAER_PLATFORM:-linux/arm64}
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging: {driver: local}
+  mem_limit: 2g
+  cpus: 1.0
+  environment:
+    USAER_PUBLIC_HOST: ${USAER_PUBLIC_HOST:?Indica el DNS del piloto}
+
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    logging: {driver: local}
+    environment:
+      POSTGRES_USER: spa_bootstrap
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_bootstrap
+      POSTGRES_DB: usaer_spa_test_oracle
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=trust
+    secrets: [pg_bootstrap, pg_owner, pg_runtime]
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./deploy/oracle/roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    networks: [datos]
+    mem_limit: 2g
+    cpus: 1.0
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, spa_bootstrap, -d, usaer_spa_test_oracle]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  migrar:
+    <<: *app
+    command: [migrar]
+    secrets: [pg_owner, direccion_inicial]
+    networks: [datos]
+    depends_on:
+      db:
+        condition: service_healthy
+  app:
+    <<: *app
+    restart: unless-stopped
+    secrets: [pg_runtime]
+    networks: [datos, proxy]
+    depends_on:
+      migrar:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=4).read()"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: {driver: local}
+    environment:
+      USAER_PUBLIC_HOST: ${USAER_PUBLIC_HOST:?Indica el DNS del piloto}
+    ports:
+      - "${USAER_EDGE_BIND:-127.0.0.1}:443:443"
+      - "${USAER_EDGE_BIND:-127.0.0.1}:80:80"
+    volumes:
+      - ${USAER_CADDYFILE:-./deploy/oracle/Caddyfile.local}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      proxy:
+        ipv4_address: 172.29.83.2
+      borde: {}
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: 0.5
+
+networks:
+  datos:
+    internal: true
+  proxy:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.83.0/24
+  borde: {}
+
+volumes:
+  postgres:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  pg_bootstrap:
+    file: ${USAER_SECRET_DIR:?Indica una carpeta fuera de Git}/pg_bootstrap
+  pg_owner:
+    file: ${USAER_SECRET_DIR:?Indica una carpeta fuera de Git}/pg_owner
+  pg_runtime:
+    file: ${USAER_SECRET_DIR:?Indica una carpeta fuera de Git}/pg_runtime
+  direccion_inicial:
+    file: ${USAER_SECRET_DIR:?Indica una carpeta fuera de Git}/direccion_inicial

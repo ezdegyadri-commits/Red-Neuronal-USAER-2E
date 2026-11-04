@@ -1,0 +1,213 @@
+from datetime import date
+from pathlib import Path
+import unicodedata
+
+from documents.paginacion import texto_con_cierre
+from fpdf import FPDF
+from fpdf.enums import MethodReturnValue
+
+
+MESES = (
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+)
+RAIZ = Path(__file__).resolve().parents[1]
+
+
+DIRECTORIO_OFICIOS = {
+    "DAMIAN CARMONA": {
+        "Director_Escuela": "Mtra. Maribel Vargas Arana",
+        "Nivel_Escuela": "primaria",
+    },
+    "ICHCAANZIHO": {
+        "Director_Escuela": "Mtra. Rennaty Maribel Puga Jiménez",
+        "Nivel_Escuela": "primaria",
+    },
+    "GREGORIO TORRES QUINTERO": {
+        "Director_Escuela": "Mtro. Elmer Ariel Ontiveros Requena",
+        "Nivel_Escuela": "primaria",
+    },
+    "REMIGIO AGUILAR SOSA": {
+        "Director_Escuela": "Mtro. Carlos Esteban Heredia G. Cantón",
+        "Nivel_Escuela": "primaria",
+    },
+    "ELVIRA PARRA AVILA": {
+        "Director_Escuela": "Mtro. Manuel Jesús Alcocer Vázquez",
+        "Nivel_Escuela": "primaria",
+    },
+    "MANUEL SARRADO": {
+        "Director_Escuela": "Mtro. José Alberto Reyna Martínez",
+        "Nivel_Escuela": "primaria",
+    },
+    "DOMINGO SOLIS RODRIGUEZ": {
+        "Director_Escuela": "Mtra. Erika Basto Ek",
+        "Nivel_Escuela": "primaria",
+    },
+    "QUINTANA ROO": {
+        "Director_Escuela": "Mtro. Jorge Adrián Cetina Cach",
+        "Nivel_Escuela": "primaria",
+    },
+}
+
+
+def _normalizar(nombre):
+    texto = unicodedata.normalize("NFD", str(nombre or ""))
+    texto = "".join(caracter for caracter in texto if unicodedata.category(caracter) != "Mn")
+    return " ".join(texto.upper().replace("0", "O").split())
+
+
+def datos_oficio_escuela(nombre_escuela, catalogo=None):
+    """Combina el directorio institucional y, si existe, el catálogo de escuelas."""
+    datos = dict(DIRECTORIO_OFICIOS.get(_normalizar(nombre_escuela), {}))
+    if catalogo:
+        datos.update({clave: valor for clave, valor in catalogo.items() if str(valor).strip()})
+    return datos
+
+
+def es_mujer(nombre):
+    texto = _normalizar(nombre)
+    if any(marca in texto for marca in ("MTRA", "MAESTRA", "PROFRA", "LICDA")):
+        return True
+    nombres = (
+        "MARIBEL", "RENNATY", "ERIKA", "CINDY", "MARYCRUZ", "MARIA",
+        "CECILIA", "DOLORES", "DIANELY", "ZUEMMY", "ELMY", "ABRIL",
+    )
+    return any(f" {nombre}" in f" {texto}" for nombre in nombres)
+
+
+def cargo_direccion(nombre):
+    return "Directora" if es_mujer(nombre) else "Director"
+
+
+def cargo_apoyo(nombre):
+    return "maestra" if es_mujer(nombre) else "maestro"
+
+
+def nombre_con_tratamiento(nombre):
+    nombre = str(nombre or "").strip()
+    if not nombre:
+        return ""
+    titulo = _normalizar(nombre)
+    if any(marca in titulo for marca in ("MTRA", "MTRO", "MAESTRA", "MAESTRO", "PSIC", "LIC", "PROF")):
+        return nombre
+    return f"{'Mtra.' if es_mujer(nombre) else 'Mtro.'} {nombre}"
+
+
+def _fecha_larga(fecha):
+    if isinstance(fecha, str):
+        try:
+            fecha = date.fromisoformat(fecha)
+        except ValueError:
+            return fecha
+    return f"{fecha.day:02d} de {MESES[fecha.month - 1]} de {fecha.year}"
+
+
+def _archivo(nombre):
+    ruta = RAIZ / nombre
+    return str(ruta) if ruta.exists() else None
+
+
+class OficioInstitucional(FPDF):
+    def header(self):
+        encabezado = _archivo("encabezado.png")
+        if encabezado:
+            self.image(encabezado, x=10, y=8, w=190)
+        self.set_y(42)
+
+    def footer(self):
+        pie = _archivo("pie_pagina.png")
+        if pie:
+            self.image(pie, x=10, y=267, w=190)
+        self.set_y(-18)
+        self.set_font("Helvetica", size=8)
+        self.cell(0, 5, "C.c.p. Archivo de la USAER 02-E", new_x="LMARGIN", new_y="NEXT")
+
+
+def generar_oficio_comision(registro, *, incluir_firmas=True):
+    """Genera un oficio PDF institucional de comisión para una maestra de apoyo."""
+    pdf = OficioInstitucional(orientation="P", unit="mm", format="letter")
+    pdf.set_auto_page_break(auto=True, margin=38)
+    pdf.set_margins(25, 20, 25)
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=11)
+
+    fecha_emision = registro.get("Fecha_Emision") or str(date.today())
+    folio = int(registro.get("Folio", 0) or 0)
+    escuela = str(registro.get("Escuela", "")).strip()
+    director = str(registro.get("Director_Escuela", "")).strip()
+    if not director:
+        director = "Dirección de la escuela"
+    nivel = str(registro.get("Nivel_Escuela", "primaria")).strip().lower() or "primaria"
+    asunto = str(registro.get("Asunto", "COMISIÓN")).upper()
+
+    pdf.cell(
+        0, 6, f"Mérida, Yucatán, a {_fecha_larga(fecha_emision)}",
+        align="R", new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.cell(
+        0, 6, f"Oficio No. SE/DEE-USAER No. 02-E/{folio:03d}/26-27",
+        align="R", new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.ln(7)
+    pdf.set_font("Helvetica", style="B", size=11)
+    pdf.cell(0, 6, f"Asunto: {asunto}", align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+    pdf.cell(0, 6, director, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        0, 6, f"{cargo_direccion(director)} de la escuela {nivel}",
+        new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.cell(0, 6, f'"{escuela}"', new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, "PRESENTE", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+
+    pdf.set_font("Helvetica", size=11)
+    texto = cuerpo_comision(registro)
+    lineas_texto = max(1, len(pdf.multi_cell(0, 6, texto, dry_run=True, output=MethodReturnValue.LINES)))
+    # Anticipa el cierre con firma para que no se desprenda al final de página.
+    if pdf.get_y() + lineas_texto * 6 + 52 > pdf.page_break_trigger:
+        pdf.add_page()
+    texto_con_cierre(pdf, 0, 6, texto, 52)
+    pdf.ln(12)
+
+    firma = _archivo("firma.png") if incluir_firmas else None
+    sello = _archivo("sello.png") if incluir_firmas else None
+    y = pdf.get_y()
+    if firma:
+        pdf.image(firma, x=82, y=y, w=43)
+    if sello:
+        pdf.image(sello, x=138, y=y - 2, w=30)
+    pdf.ln(23)
+    pdf.cell(
+        0, 5, "________________________________________",
+        align="C", new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.set_font("Helvetica", style="B", size=11)
+    pdf.cell(
+        0, 5, "Psic. Personal ficticio 11" if incluir_firmas else "Documento de prueba · sin firma",
+        align="C", new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.set_font("Helvetica", size=11)
+    pdf.cell(
+        0, 5, "Director de la USAER 02-E",
+        align="C", new_x="LMARGIN", new_y="NEXT",
+    )
+    return bytes(pdf.output())
+
+
+def cuerpo_comision(registro):
+    """Redacción determinista sin inventar sede ni confundirla con el motivo."""
+    responsable=nombre_con_tratamiento(registro.get('Maestra_Apoyo',''))
+    actividad=' '.join(str(registro.get('Destino','')).split()).rstrip(' .;')
+    if not responsable or not actividad:raise ValueError('Indica el nombre del personal y la actividad o destino de la comisión.')
+    fecha=registro.get('Fecha_Comision','')
+    if not fecha:raise ValueError('Indica la fecha de la comisión.')
+    horario=' '.join(str(registro.get('Horario','') or 'en su horario laboral').split()).rstrip(' .;')
+    if not horario:horario='en su horario laboral'
+    return (
+        f'Por este medio le informo que {responsable}, docente de apoyo de la USAER 02-E, '
+        f'realizará la siguiente comisión de servicio: {actividad}.\n\n'
+        f'La comisión está programada para el día {_fecha_larga(fecha)}, {horario}. '
+        'Agradezco las facilidades que brinde para su cumplimiento.\n\n'
+        'Sin otro particular, reciba un cordial saludo.'
+    )

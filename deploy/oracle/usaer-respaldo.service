@@ -1,0 +1,12 @@
+[Unit]
+Description=Respaldo cifrado externo del piloto USAER
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/usaer
+EnvironmentFile=/etc/usaer/piloto.env
+EnvironmentFile=/etc/usaer/respaldo.env
+ExecStart=/bin/bash /opt/usaer/deploy/oracle/respaldar.sh
+UMask=0077
+TimeoutStartSec=15min

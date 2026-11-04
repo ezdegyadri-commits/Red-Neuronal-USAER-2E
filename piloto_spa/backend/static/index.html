@@ -1,0 +1,3032 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>USAER 02-E · Sistema Integral SPA 2.0</title>
+  <!-- Tailwind CSS -->
+
+  <!-- React 18 & ReactDOM -->
+
+
+  <!-- Babel Standalone para JSX -->
+
+  <style>
+    :root {
+      --primary: #0F172A;
+      --accent: #D97706;
+      --bg: #F8FAFC;
+    }
+    body {
+      background-color: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .animate-saving {
+      animation: pulse-subtle 1.2s infinite ease-in-out;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    import { abrirBoveda } from "./boveda.js";
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const API_BASE = window.location.origin;
+
+    // Cliente API seguro con Bearer Token y manejo de sesión
+    async function apiRequest(endpoint, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-USAER-Client': 'browser',
+        ...options.headers,
+      };
+      const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+      if (res.status === 401) {
+        window.dispatchEvent(new Event('auth_expired'));
+        throw new Error('Sesión expirada o credenciales inválidas');
+      }
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `Error ${res.status}`);
+      }
+      return await res.json();
+    }
+
+    // =============================================================
+    // COMPONENTE: PANTALLA DE INICIO DE SESIÓN (LOGIN REAL)
+    // =============================================================
+    async function descargarArchivo(endpoint, nombre) {
+      try {
+          const response = await fetch(`${API_BASE}${endpoint}`);
+        if (!response.ok) throw new Error(`Descarga rechazada (HTTP ${response.status})`);
+        const url = URL.createObjectURL(await response.blob());
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        enlace.download = nombre;
+        enlace.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+
+    function LoginScreen({ onLoginSuccess }) {
+      const [usuario, setUsuario] = useState('');
+      const [password, setPassword] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async (e) => {
+        if (e) e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-USAER-Client': 'browser' },
+            body: JSON.stringify({ usuario, password })
+          });
+          if (!res.ok) {
+            throw new Error('Usuario o contraseña incorrectos.');
+          }
+          const data = await res.json();
+          onLoginSuccess(data.user);
+        } catch (err) {
+          setError(err.message || 'Error de conexión');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 font-black text-3xl mb-2">
+                ◈
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">USAER 02-E · 2.0</h1>
+              <p className="text-xs text-slate-500 font-medium">Plataforma Pedagógica y Administrativa Desacoplada</p>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold">
+                ⚠️ {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Usuario</label>
+                <input
+                  type="text"
+                  required
+                  value={usuario}
+                  onChange={(e) => setUsuario(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  autoComplete="username"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Contraseña</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {loading ? <span>Iniciando sesión...</span> : <span>Entrar al Sistema →</span>}
+              </button>
+            </form>
+
+
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // COMPONENTE PRINCIPAL (APP CON NAVEGACIÓN SPA)
+    // =============================================================
+    const borradoresCeldas = new Map();
+
+    function App() {
+      const [user, setUser] = useState(null);
+      const [boveda, setBoveda] = useState(null);
+      const [cargandoSesion, setCargandoSesion] = useState(true);
+
+      useEffect(() => {
+        apiRequest('/api/me').then(setUser).catch(() => {}).finally(() => setCargandoSesion(false));
+      }, []);
+
+      const [currentView, setCurrentView] = useState('mis_documentos'); // 'mis_documentos' | 'editor' | 'expedientes' | 'informes' | 'visitas' | 'estadisticas'
+      const [activeDocId, setActiveDocId] = useState(null);
+      const [activeAlumnoId, setActiveAlumnoId] = useState(null);
+      const [metrics, setMetrics] = useState({ latency: 12, requests: 1 });
+
+      useEffect(() => {
+        const handleAuthExpired = () => {
+          borradoresCeldas.clear();
+          setBoveda(null);
+          setUser(null);
+        };
+        window.addEventListener('auth_expired', handleAuthExpired);
+        return () => window.removeEventListener('auth_expired', handleAuthExpired);
+      }, []);
+
+      const handleLogout = async () => {
+        borradoresCeldas.clear();
+        setBoveda(null);
+        try {
+          await apiRequest('/api/auth/logout', { method: 'POST' });
+          setUser(null);
+        } catch (error) {
+          alert(error.message);
+        }
+      };
+
+      if (cargandoSesion) return <p role="status">Comprobando sesión…</p>;
+
+      if (!user) {
+        return <LoginScreen onLoginSuccess={setUser} />;
+      }
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          {/* Barra de Navegación Superior Inmediata */}
+          <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
+            <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+              <div
+                className="flex items-center space-x-3 cursor-pointer"
+                onClick={() => setCurrentView('mis_documentos')}
+              >
+                <span className="text-amber-500 font-black text-xl">◈</span>
+                <span className="font-bold tracking-tight text-slate-100 text-lg">USAER 02-E</span>
+                <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded font-semibold hidden sm:inline">
+                  Zona 001 · SPA 2.0
+                </span>
+              </div>
+
+              {/* Pestañas de Acceso Rápido (1 Clic) */}
+              <nav className="hidden md:flex items-center space-x-1 text-sm font-medium">
+                <button
+                  onClick={() => setCurrentView('mis_documentos')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    currentView === 'mis_documentos' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📁 Mis Documentos
+                </button>
+                <button
+                  onClick={() => setCurrentView('expedientes')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    currentView === 'expedientes' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  👤 Alumnos y Expedientes
+                </button>
+                <button onClick={() => { setActiveAlumnoId(null); setCurrentView('informes'); }}
+                  className={`px-3 py-1.5 rounded-lg transition ${currentView === 'informes' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'}`}>
+                  📝 Informes
+                </button>
+                {user.director && <>
+                <button
+                  onClick={() => setCurrentView('visitas')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    currentView === 'visitas' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📋 Actas y Oficios
+                </button>
+                </>}
+                <button
+                  onClick={() => setCurrentView('estadisticas')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    currentView === 'estadisticas' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📊 Estadísticas
+                </button>
+              </nav>
+
+              <div className="flex items-center space-x-3">
+                <div className="hidden sm:flex items-center space-x-1.5 text-xs bg-slate-800/80 px-2.5 py-1 rounded border border-slate-700/50">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="text-slate-400">Latencia:</span>
+                  <strong className="text-emerald-300 font-mono">{metrics.latency} ms</strong>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <div className="text-right text-xs hidden lg:block">
+                    <div className="font-semibold text-slate-200">{user.nombre}</div>
+                    <div className="text-slate-400">{user.rol}</div>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded border border-slate-700 transition"
+                    title="Cerrar sesión"
+                  >
+                    Salir
+                  </button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Área de Contenido SPA */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+            {currentView === 'mis_documentos' && (
+              <MisDocumentosView
+                onOpenDoc={(id) => {
+                  setActiveDocId(id);
+                  setCurrentView('editor');
+                }}
+                onOpenExpediente={(id) => {
+                  setActiveAlumnoId(id);
+                  setCurrentView('expedientes');
+                }}
+                setMetrics={setMetrics}
+              />
+            )}
+
+            {currentView === 'editor' && (
+              <PlaneacionEditorView
+                docId={activeDocId}
+                cuenta={user.id_usuario} boveda={boveda} setBoveda={setBoveda}
+                onBack={() => setCurrentView('mis_documentos')}
+                setMetrics={setMetrics}
+              />
+            )}
+
+            {currentView === 'expedientes' && (
+              <ExpedientesView
+                initialAlumnoId={activeAlumnoId}
+                onOpenInformes={id => { setActiveAlumnoId(id); setCurrentView('informes'); }}
+                onBack={() => setCurrentView('mis_documentos')}
+                setMetrics={setMetrics}
+              />
+            )}
+
+            {currentView === 'informes' && (
+              <InformesView initialAlumnoId={activeAlumnoId}
+                onBack={() => setCurrentView(activeAlumnoId ? 'expedientes' : 'mis_documentos')} />
+            )}
+
+            {currentView === 'visitas' && (
+              <ActasYOficiosView
+                onBack={() => setCurrentView('mis_documentos')}
+                setMetrics={setMetrics}
+              />
+            )}
+
+            {currentView === 'estadisticas' && (
+              <EstadisticasView
+                director={user.director}
+                onBack={() => setCurrentView('mis_documentos')}
+                setMetrics={setMetrics}
+              />
+            )}
+          </main>
+
+          <footer className="border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-400">
+            USAER 02-E · Sistema Pedagógico Integrado 2.0 · React SPA + FastAPI + PostgreSQL (Cero Recargas)
+          </footer>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 1: MIS DOCUMENTOS (HUB CENTRAL EN 1 CLIC)
+    // =============================================================
+    function CrearPlaneacion({ alumnos, onOpenDoc, onCancel }) {
+      const [modalidad, setModalidad] = useState('individual');
+      const [formato, setFormato] = useState('XXIII');
+      const [seleccion, setSeleccion] = useState('');
+      const [ciclo, setCiclo] = useState(2026);
+      const [error, setError] = useState('');
+      const [enviando, setEnviando] = useState(false);
+      const grupos = new Map();
+      for (const alumno of alumnos) {
+        if (!alumno.grado || !alumno.grupo || !alumno.id_escuela) continue;
+        const clave = JSON.stringify([alumno.id_escuela, alumno.grado, alumno.grupo]);
+        if (!grupos.has(clave)) grupos.set(clave, { ids: [], nombre: `${alumno.escuela || alumno.id_escuela} · ${alumno.grado} ${alumno.grupo}` });
+        grupos.get(clave).ids.push(alumno.id);
+      }
+      async function crear(event) {
+        event.preventDefault();
+        setEnviando(true);
+        setError('');
+        try {
+          const ids = modalidad === 'grupal' ? grupos.get(seleccion).ids : [seleccion];
+          const doc = await apiRequest('/api/planeaciones/nueva', {
+            method: 'POST', body: JSON.stringify({ modalidad, formato, alumnos: ids, ciclo_inicio: Number(ciclo) })
+          });
+          onOpenDoc(doc.id);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setEnviando(false);
+        }
+      }
+      return (
+        <form onSubmit={crear} className="bg-white p-4 border rounded space-y-2">
+          <h2 className="font-bold">Crear planeación</h2>
+          <label className="block">Modalidad <select value={modalidad} onChange={e => {
+            setModalidad(e.target.value); setSeleccion(''); setFormato('XXIII');
+          }}><option value="individual">Individual</option><option value="grupal">Grupal anual</option></select></label>
+          <label className="block">{modalidad === 'grupal' ? 'Grupo' : 'Alumno'} <select aria-label={modalidad === 'grupal' ? 'Grupo' : 'Alumno'} required value={seleccion} onChange={e => setSeleccion(e.target.value)}>
+            <option value="">Seleccionar</option>
+            {modalidad === 'grupal'
+              ? Array.from(grupos, ([id, grupo]) => <option key={id} value={id}>{grupo.nombre}</option>)
+              : alumnos.map(a => <option key={a.id} value={a.id}>{a.nombre_completo}</option>)}
+          </select></label>
+          <label className="block">Formato <select value={formato} onChange={e => setFormato(e.target.value)}>
+            {modalidad === 'individual' && <option>XXI</option>}<option>XXIII</option><option>XXV</option>
+          </select></label>
+          <label className="block">Año de inicio del ciclo <input type="number" min="2000" max="2100" required value={ciclo} onChange={e => setCiclo(e.target.value)} /></label>
+          <button type="submit" disabled={enviando} className="px-3 py-2 bg-slate-800 text-white rounded">Crear documento</button>
+          <button type="button" onClick={onCancel} className="px-3">Cancelar</button>
+          {error && <p role="alert">{error}</p>}
+        </form>
+      );
+    }
+
+    function MisDocumentosView({ onOpenDoc, onOpenExpediente, setMetrics }) {
+      const [planeaciones, setPlaneaciones] = useState([]);
+      const [alumnos, setAlumnos] = useState([]);
+      const [creando, setCreando] = useState(false);
+      const [loading, setLoading] = useState(true);
+      const [busqueda, setBusqueda] = useState('');
+      const [modalAlumno, setModalAlumno] = useState(false);
+      const [deleteTargetId, setDeleteTargetId] = useState(null);
+
+      // Estado para nuevo alumno
+      const [nuevoNombre, setNuevoNombre] = useState('');
+      const [nuevoCURP, setNuevoCURP] = useState('');
+      const [nuevoGrado, setNuevoGrado] = useState('2');
+      const [nuevoGrupo, setNuevoGrupo] = useState('A');
+      const [nuevaEscuela, setNuevaEscuela] = useState('ESC-001');
+      const [nuevaCondicion, setNuevaCondicion] = useState('TDAH');
+
+      const loadHub = useCallback(async () => {
+        const t0 = performance.now();
+        try {
+          const [planesData, alumnosData] = await Promise.all([
+            apiRequest('/api/planeaciones'),
+            apiRequest('/api/alumnos')
+          ]);
+          setPlaneaciones(planesData);
+          setAlumnos(alumnosData);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 2 }));
+        } catch (e) {
+          console.error("Error cargando hub:", e);
+        } finally {
+          setLoading(false);
+        }
+      }, [setMetrics]);
+
+      useEffect(() => {
+        loadHub();
+      }, [loadHub]);
+
+      const handleCrearAlumno = async (e) => {
+        e.preventDefault();
+        try {
+          await apiRequest('/api/alumnos', {
+            method: 'POST',
+            body: JSON.stringify({
+              nombre_completo: nuevoNombre,
+              curp: nuevoCURP,
+              grado: nuevoGrado,
+              grupo: nuevoGrupo,
+              id_escuela: nuevaEscuela,
+              condicion_discapacidad: nuevaCondicion
+            })
+          });
+          setModalAlumno(false);
+          setNuevoNombre('');
+          setNuevoCURP('');
+          loadHub();
+        } catch (err) {
+          alert(`Error al crear alumno: ${err.message}`);
+        }
+      };
+
+      const handleConfirmarEliminar = async () => {
+        if (!deleteTargetId) return;
+        try {
+          await apiRequest(`/api/planeaciones/${deleteTargetId}`, { method: 'DELETE' });
+          setPlaneaciones(prev => prev.filter(p => p.id !== deleteTargetId));
+          setDeleteTargetId(null);
+        } catch (err) {
+          alert(`Error al eliminar: ${err.message}`);
+        }
+      };
+
+      const planesFiltrados = planeaciones.filter(p => {
+        const q = busqueda.toLowerCase();
+        return (p.metadatos?.titulo || '').toLowerCase().includes(q) ||
+               (p.datos?.Escuela || '').toLowerCase().includes(q) ||
+               (p.id || '').toLowerCase().includes(q);
+      });
+
+          if (creando) return <CrearPlaneacion alumnos={alumnos} onOpenDoc={onOpenDoc} onCancel={() => setCreando(false)} />;
+
+      return (
+        <div className="space-y-6">
+          {/* Encabezado y Acciones Rápidas */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Mis Documentos de Trabajo</h1>
+              <p className="text-sm text-slate-500">Acceso directo a tus planeaciones activas y expedientes de alumnos</p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setModalAlumno(true)}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold text-sm transition"
+              >
+                + Alta Rápida de Alumno
+              </button>
+              <button
+                onClick={() => setCreando(true)}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-semibold shadow-sm text-sm transition flex items-center space-x-2"
+              >
+                <span>+</span>
+                <span>Nueva Planeación (Anexo XXIII)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Barra de Búsqueda Instantánea en Memoria */}
+          <div className="relative">
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar documento por alumno, escuela, grado o aprendizaje esperado..."
+              className="w-full pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-sm"
+            />
+          </div>
+
+          {/* Sección de Planeaciones Recientes */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
+              <span>📝 Planeaciones y Planes de Intervención</span>
+              <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">{planesFiltrados.length}</span>
+            </h2>
+
+            {loading ? (
+              <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+                <div className="inline-block animate-spin text-amber-600 text-2xl mb-2">◈</div>
+                <p className="text-sm text-slate-500">Cargando documentos desde PostgreSQL...</p>
+              </div>
+            ) : planesFiltrados.length === 0 ? (
+              <div className="text-center py-8 bg-white rounded-xl border border-slate-200 text-slate-500 text-sm">
+                No hay planeaciones que coincidan con la búsqueda.
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {planesFiltrados.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className="bg-white p-4 rounded-xl border border-slate-200 hover:border-amber-500/50 hover:shadow-md transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                  >
+                    <div
+                      className="space-y-1 cursor-pointer flex-1"
+                      onClick={() => onOpenDoc(plan.id)}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-slate-900 group-hover:text-amber-700 transition">
+                          {plan.metadatos?.titulo || `Planeación Anexo ${plan.formato}`}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          plan.estado === 'APROBADO' || plan.estado === 'AUTORIZADA' ? 'bg-emerald-100 text-emerald-800' :
+                          plan.estado === 'REVISIÓN' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {plan.estado}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 flex items-center space-x-3">
+                        <span>🏫 {plan.datos?.Escuela || 'Primaria Oficial'}</span>
+                        <span>•</span>
+                        <span>Grado: {plan.datos?.Grado_Grupo || '2° A'}</span>
+                        <span>•</span>
+                        <span>Guardado: {plan.guardado_en || 'Reciente'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      {plan.observaciones_director && (
+                        <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 font-medium hidden sm:inline">
+                          💬 Con Vo. Bo.
+                        </span>
+                      )}
+                      <button
+                        onClick={() => onOpenDoc(plan.id)}
+                        className="text-xs font-semibold text-amber-600 hover:text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 hover:bg-amber-50 transition"
+                      >
+                        Abrir →
+                      </button>
+                      <button
+                        onClick={() => setDeleteTargetId(plan.id)}
+                        className="text-xs text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
+                        title="Eliminar planeación"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Sección de Alumnos Frecuentes / Expedientes */}
+          <div className="space-y-3 pt-4">
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
+              <span>👥 Expedientes de Alumnos Asignados</span>
+              <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">{alumnos.length}</span>
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {alumnos.map((al) => (
+                <div
+                  key={al.id}
+                  onClick={() => onOpenExpediente(al.id)}
+                  className="bg-white p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition cursor-pointer space-y-1.5"
+                >
+                  <div className="font-bold text-slate-800 text-sm">{al.nombre_completo}</div>
+                  <div className="text-xs text-slate-500">
+                    <span>{al.grado}° {al.grupo}</span>
+                    <span className="mx-1.5">•</span>
+                    <span>{al.escuela}</span>
+                  </div>
+                  <div className="pt-1 flex items-center justify-between">
+                    <span className="text-[11px] bg-amber-50 text-amber-800 font-semibold px-2 py-0.5 rounded border border-amber-200">
+                      {al.condicion || 'Atención USAER'}
+                    </span>
+                    <span className="text-xs text-slate-400 hover:text-slate-700 font-medium">Ver expediente →</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Modal de Confirmación para Eliminar */}
+          {deleteTargetId && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4">
+                <h3 className="font-bold text-slate-900 text-lg">¿Eliminar planeación?</h3>
+                <p className="text-xs text-slate-600">Esta acción removerá el borrador seleccionado de la base de datos de forma permanente.</p>
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button
+                    onClick={() => setDeleteTargetId(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmarEliminar}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-sm"
+                  >
+                    Eliminar Documento
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de Alta Rápida de Alumno */}
+          {modalAlumno && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-slate-900 text-base">Registrar Nuevo Alumno</h3>
+                  <button onClick={() => setModalAlumno(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <form onSubmit={handleCrearAlumno} className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Nombre Completo:</label>
+                    <input
+                      type="text"
+                      required
+                      value={nuevoNombre}
+                      onChange={(e) => setNuevoNombre(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      placeholder="ej. Personal ficticio 24"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">CURP:</label>
+                    <input
+                      type="text"
+                      value={nuevoCURP}
+                      onChange={(e) => setNuevoCURP(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 uppercase"
+                      placeholder="18 caracteres"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Grado:</label>
+                      <select
+                        value={nuevoGrado}
+                        onChange={(e) => setNuevoGrado(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg"
+                      >
+                        <option value="1">1° Primaria</option>
+                        <option value="2">2° Primaria</option>
+                        <option value="3">3° Primaria</option>
+                        <option value="4">4° Primaria</option>
+                        <option value="5">5° Primaria</option>
+                        <option value="6">6° Primaria</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Grupo:</label>
+                      <input
+                        type="text"
+                        value={nuevoGrupo}
+                        onChange={(e) => setNuevoGrupo(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg uppercase"
+                        placeholder="A, B, C"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Condición / BAP:</label>
+                    <input
+                      type="text"
+                      value={nuevaCondicion}
+                      onChange={(e) => setNuevaCondicion(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="ej. TDAH, TEA, Dificultades de Aprendizaje"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setModalAlumno(false)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-sm"
+                    >
+                      Guardar Alumno
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 2: EDITOR DE PLANEACIÓN INDIVIDUAL (ANEXO XXIII)
+    // =============================================================
+    function PropuestasLocales({ doc, mutarDoc }) {
+      const [enfoque, setEnfoque] = useState('');
+      const [referentes, setReferentes] = useState([]);
+      const [pdaId, setPdaId] = useState('');
+      const [neeId, setNeeId] = useState('');
+      const [campo, setCampo] = useState('Lenguajes');
+      const necesidades = doc.editor.nee_confirmadas;
+      const [resultado, setResultado] = useState(null);
+      const [error, setError] = useState('');
+      const [consultando, setConsultando] = useState(false);
+      const [aplicadas, setAplicadas] = useState([]);
+      const base = `/api/planeaciones/${doc.id}`;
+
+      useEffect(() => {
+        apiRequest(base + '/referentes?campo=' + encodeURIComponent(campo)).then(setReferentes).catch(e => setError(e.message));
+      }, [base, campo]);
+
+      async function preparar() {
+        setConsultando(true);
+        setError('');
+        setResultado(null);
+        setAplicadas([]);
+        try {
+          const propuesta = await apiRequest(base + '/propuesta', {
+            method: 'POST', body: JSON.stringify({ enfoque, pda_id: pdaId, nee_id: neeId, campo })
+          });
+          setResultado({ ...propuesta, pdaId, campo });
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setConsultando(false);
+        }
+      }
+
+      return (
+        <section className="border rounded p-3 space-y-2">
+          <h3 className="font-bold">Propuesta pedagógica para revisión docente</h3>
+          <p>Motor local basado en reglas y fuentes del expediente.</p>
+          {necesidades && <label className="block">NEE confirmada <select aria-label="NEE confirmada"
+            className="max-w-full border" value={neeId} onChange={e => setNeeId(e.target.value)}>
+            <option value="">Elegir NEE vigente</option>
+            {necesidades.map(nee => <option key={nee.id} value={nee.id}>{nee.texto}</option>)}
+          </select></label>}
+          <label className="block">Campo formativo <select className="border" value={campo} onChange={e => {
+            setCampo(e.target.value); setPdaId(''); setReferentes([]);
+          }}>
+            {['Lenguajes', 'Saberes y Pensamiento Científico', 'Ética, Naturaleza y Sociedades',
+              'De lo Humano y lo Comunitario'].map(c => <option key={c}>{c}</option>)}
+          </select></label>
+          <label className="block">Orientación docente <input className="border" value={enfoque} onChange={e => setEnfoque(e.target.value)} /></label>
+          <label className="block">PDA del catálogo <select aria-label="PDA del catálogo" className="max-w-full border" value={pdaId} onChange={e => setPdaId(e.target.value)}>
+            <option value="">Sin PDA seleccionado</option>
+            {referentes.map(r => <option key={r.id} value={r.id}>{r.grado}° · {r.pda}</option>)}
+          </select></label>
+          <button disabled={consultando} className="underline" onClick={preparar}>Preparar propuestas</button>
+          {error && <p role="alert">{error}</p>}
+          {resultado?.propuestas.map((p, i) => <div key={p.id} className="border rounded p-2">
+            <p>{p.nombre} · {p.orientacion}</p>
+            {p.pda && <p>PDA de referencia: {p.pda}</p>}
+            {p.nee && <p>{p.nee}</p>}
+            {p.nee && [['descriptor', 'Descriptor de logro'], ['apoyos', 'Apoyos y ajustes'],
+              ['temporalidad', 'Temporalidad'], ['recursos', 'Materiales'], ['evaluacion', 'Evaluación']].map(([k, etiqueta]) =>
+              <label key={k} className="block">{etiqueta}<textarea aria-label={etiqueta} className="block w-full border rounded" value={p[k]}
+                onChange={e => {
+                  const texto = e.target.value;
+                  setResultado(r => ({ ...r, propuestas: r.propuestas.map((v, j) => i === j ? { ...v, [k]: texto } : v) }));
+                }} /></label>)}
+            <textarea aria-label="Actividad propuesta" className="block w-full border rounded" rows="4" value={p.actividad}
+              onChange={e => {
+                const actividad = e.target.value;
+                setResultado(r => ({ ...r, propuestas: r.propuestas.map((v, j) => i === j ? { ...v, actividad } : v) }));
+              }} />
+            <button className="underline" disabled={aplicadas.includes(p.id) || doc.revision !== resultado.revision} onClick={() => {
+              mutarDoc(d => {
+                const tablas = { ...d.tablas };
+                const textos = { ...d.textos };
+                const agregar = (tabla, fila) => { tablas[tabla] = [...(tablas[tabla] || []), fila]; };
+                if (d.formato === 'XXI') {
+                  if (p.nee) agregar('necesidades', {
+                    NEE: p.nee, 'Aprendizajes y/u Objetivos': p.pda, 'Descriptor de Logro': p.descriptor,
+                    'Apoyos o ajustes': p.apoyos, Temporalidad: p.temporalidad,
+                    'Tipo de registro': p.evaluacion, Seguimiento: p.actividad + '\nMateriales: ' + p.recursos
+                  });
+                  else agregar('barreras', { 'Acciones para minimizarla o eliminarla': p.actividad });
+                } else {
+                  agregar('dosificacion', { Actividades: p.actividad + (p.apoyos ? '\nApoyos: ' + p.apoyos : ''),
+                    Contextos: p.contexto, Recursos: p.recursos, Temporalidad: p.temporalidad || '', Fecha: p.temporalidad || '',
+                    _alumnos_locales: [p.alumno], _actividad_local: p.id });
+                  if (d.formato === 'XXIII' && p.nee) agregar('aprendizajes', {
+                    'Necesidades educativas específicas': p.nee, 'Aprendizaje y/u objetivo': p.pda, 'Descriptor de logro': p.descriptor
+                  });
+                  if (p.evaluacion) {
+                    const clave = d.formato === 'XXV' ? 'Resultados obtenidos en los diferentes contextos' : 'Evaluación';
+                    textos[clave] = [textos[clave], p.evaluacion].filter(Boolean).join('\n\n');
+                  }
+                }
+                return { ...d, tablas, textos, metadatos: { ...d.metadatos,
+                  spa_pda_id: resultado.pdaId || d.metadatos.spa_pda_id || '',
+                  spa_campo_pda: resultado.pdaId ? resultado.campo : d.metadatos.spa_campo_pda || 'Lenguajes' } };
+              });
+              setAplicadas(ids => [...ids, p.id]);
+            }}>Incorporar propuesta revisada</button>
+          </div>)}
+          {resultado && <details><summary>Revisión de los 14 indicadores</summary>
+            <ol className="list-decimal pl-5">{resultado.indicadores.map(r => <li key={r.Número}>
+              {r.Indicador} · {r['Comprobación estructural']}
+            </li>)}</ol>
+          </details>}
+        </section>
+      );
+    }
+
+    function CeldaCompartida({ doc, fila, tabla, campo, editable, boveda }) {
+      const inicial = fila[campo] || '';
+      const version = doc.metadatos.revisiones_celda?.[tabla]?.[fila.ID_Alumno]?.[campo] || '';
+      const clave = JSON.stringify([doc.id, tabla, fila.ID_Alumno, campo]);
+      const [confirmado, confirmar] = useState(() => borradoresCeldas.get(clave)?.confirmado || { texto: inicial, revision: version });
+      const [texto, setTexto] = useState(() => borradoresCeldas.get(clave)?.texto ?? inicial);
+      const [ocupado, setOcupado] = useState(false);
+      const [error, setError] = useState('');
+      const [conflicto, setConflicto] = useState(null);
+      const [online, setOnline] = useState(navigator.onLine);
+      const pendiente = texto !== confirmado.texto;
+
+      const [vaultLeida, setVaultLeida] = useState(null);
+      const [copia, setCopia] = useState('');
+      const [errorCopia, setErrorCopia] = useState('');
+      const pendienteRef = useRef(pendiente);
+      pendienteRef.current = pendiente;
+
+      useEffect(() => {
+        if (!editable || !boveda) return;
+        let activa = true;
+        setErrorCopia('');
+        boveda.leer(clave).then(recuperado => {
+          if (!activa) return;
+          if (recuperado) {
+            if (pendienteRef.current) {
+              setErrorCopia('Hay una copia anterior y un cambio abierto. Reabre la guía para revisar la copia.');
+              return;
+            }
+            confirmar(recuperado.confirmado);
+            setTexto(recuperado.texto);
+            setCopia('Borrador cifrado recuperado');
+          }
+          setVaultLeida(boveda);
+        }).catch(e => { if (activa) setErrorCopia(e.message); });
+        return () => { activa = false; };
+      }, [boveda, clave, editable]);
+
+      useEffect(() => {
+        if (!editable || !boveda || vaultLeida !== boveda) return;
+        let activa = true;
+        if (pendiente) setCopia('');
+        const operacion = pendiente ? boveda.guardar(clave, { texto, confirmado }) : boveda.borrar(clave);
+        operacion.then(() => {
+          if (activa) setCopia(pendiente ? 'Copia cifrada disponible' : '');
+        }).catch(e => { if (activa) setErrorCopia(e.message); });
+        return () => { activa = false; };
+      }, [boveda, clave, editable, vaultLeida, pendiente, texto, confirmado]);
+
+      useEffect(() => {
+        if (editable && pendiente) borradoresCeldas.set(clave, { texto, confirmado });
+        else borradoresCeldas.delete(clave);
+      }, [clave, editable, pendiente, texto, confirmado]);
+
+      useEffect(() => {
+        const actualizar = () => setOnline(navigator.onLine);
+        window.addEventListener('online', actualizar);
+        window.addEventListener('offline', actualizar);
+        return () => {
+          window.removeEventListener('online', actualizar);
+          window.removeEventListener('offline', actualizar);
+        };
+      }, []);
+
+      useEffect(() => {
+        if (!pendiente) return;
+        const avisar = event => { event.preventDefault(); event.returnValue = ''; };
+        window.addEventListener('beforeunload', avisar);
+        return () => window.removeEventListener('beforeunload', avisar);
+      }, [pendiente]);
+
+      useEffect(() => {
+        if (!editable || !pendiente || ocupado || !online || conflicto || error) return;
+        const timer = setTimeout(async () => {
+          setOcupado(true);
+          try {
+            const acuse = await apiRequest(`/api/planeaciones/${doc.id}/celda`, {
+              method: 'PATCH',
+              body: JSON.stringify({ tabla, alumno: fila.ID_Alumno, campo, revision: confirmado.revision, texto })
+            });
+            confirmar(acuse);
+          } catch (e) {
+            let detalle;
+            try { detalle = JSON.parse(e.message).detail; } catch (_) {}
+            if (detalle && typeof detalle === 'object' && 'revision' in detalle) setConflicto(detalle);
+            else setError(typeof detalle === 'string' ? detalle : e.message);
+          } finally {
+            setOcupado(false);
+          }
+        }, 1500);
+        return () => clearTimeout(timer);
+      }, [editable, pendiente, ocupado, online, conflicto, error, doc.id, tabla, fila.ID_Alumno, campo, confirmado.revision, texto]);
+
+      return <div className="mb-2">
+        <label className="block">{campo}
+          <textarea readOnly={!editable} className="block w-full border rounded" value={editable ? texto : inicial}
+            onChange={event => setTexto(event.target.value)} />
+        </label>
+        {editable && (pendiente || confirmado.revision !== version) && <p role="status" className="text-xs text-slate-600">
+          {conflicto ? 'Esta celda tiene un conflicto.' : ocupado ? 'Guardando aporte…' : pendiente ?
+            (online ? 'Aporte pendiente' : 'Aporte pendiente, sin conexión') : 'Aporte guardado'}
+        </p>}
+        {pendiente && copia && <p className="text-xs" role="status">{copia}</p>}
+        {errorCopia && <p className="text-xs" role="alert">{errorCopia}</p>}
+        {error && <p role="alert">{error} <button type="button" className="underline" onClick={() => setError('')}>Reintentar</button></p>}
+        {conflicto && <div className="border p-2 text-sm">
+          <p>Texto guardado por otra persona</p>
+          <p className="whitespace-pre-wrap">{conflicto.texto || '(vacío)'}</p>
+          <p>Tu propuesta sigue en el cuadro. Puedes editarla para conciliar los textos.</p>
+          <button type="button" className="underline mr-3" onClick={() => {
+            confirmar(conflicto); setTexto(conflicto.texto); setConflicto(null);
+          }}>Usar texto guardado</button>
+          <button type="button" className="underline" onClick={() => {
+            confirmar(conflicto); setConflicto(null);
+          }}>Guardar mi propuesta revisada</button>
+        </div>}
+      </div>;
+    }
+
+    function CamposPlaneacion({ doc, mutarDoc, actualizarMatricula, saveStatus, cuenta, boveda, setBoveda }) {
+      const coordina = doc.editor.coordina !== false;
+      const editables = doc.editor.columnas_editables;
+      const columnas = doc.editor.columnas_grupales?.slice(2) || [];
+      const guia = doc.metadatos.guia_grupal_manual;
+      const [historial, setHistorial] = useState(null);
+
+      const [estadoBoveda, setEstadoBoveda] = useState('');
+      async function desbloquearBoveda(event) {
+        event.preventDefault();
+        const campo = event.currentTarget.elements.frase;
+        const frase = campo.value;
+        campo.value = '';
+        try {
+          setBoveda(await abrirBoveda(cuenta, frase));
+          setEstadoBoveda('');
+        } catch (error) {
+          setEstadoBoveda(error.message);
+        }
+      }
+
+      async function abrirHistorial() {
+        try {
+          setHistorial(await apiRequest(`/api/planeaciones/${doc.id}/historial`));
+        } catch (error) {
+          alert(error.message);
+        }
+      }
+
+      return (
+        <div className="space-y-4 bg-white p-4 rounded border">
+          <p>{doc.datos['Escuela regular']} · {doc.datos['Curso escolar']}</p>
+          <p>{doc.datos.Alumnos.map(a => a['Nombre del alumno']).join(', ')}</p>
+          {Object.entries(doc.editor.tablas).map(([tabla, campos]) => (
+            <section key={tabla} className="space-y-2 border-t pt-2">
+              <h3 className="font-bold">{tabla.replaceAll('_', ' ')}</h3>
+              {(doc.tablas[tabla] || []).map((fila, indice) => (
+                <fieldset key={indice} disabled={!coordina} className="grid md:grid-cols-3 gap-2 border p-2">
+                  {campos.map(campo => <label key={campo}>{campo}<textarea className="block w-full border rounded"
+                    value={fila[campo] || ''} onChange={event => {
+                      const value = event.target.value;
+                      mutarDoc(d => ({ ...d, tablas: { ...d.tablas, [tabla]:
+                        d.tablas[tabla].map((r, i) => i === indice ? { ...r, [campo]: value } : r) } }));
+                    }} /></label>)}
+                  <button onClick={() => mutarDoc(d => ({ ...d, tablas: { ...d.tablas,
+                    [tabla]: d.tablas[tabla].filter((_, i) => i !== indice) } }))}>Quitar fila</button>
+                </fieldset>
+              ))}
+              <button disabled={!coordina} onClick={() => mutarDoc(d => ({ ...d, tablas: { ...d.tablas,
+                [tabla]: [...(d.tablas[tabla] || []), {}] } }))}>Agregar fila</button>
+            </section>
+          ))}
+          {Object.entries(doc.textos).map(([campo, value]) => <label key={campo} className="block">{campo}
+            <textarea readOnly={!coordina} className="block w-full border rounded" value={value} onChange={event => {
+              const texto = event.target.value;
+              mutarDoc(d => ({ ...d, textos: { ...d.textos, [campo]: texto } }));
+            }} /></label>)}
+          {guia && <section className="space-y-2">
+            <h3 className="font-bold">Guía grupal anual · Anexo XIX</h3>
+            {editables && <details className="border p-2 rounded">
+              <summary>Recuperación de borradores en este navegador</summary>
+              {boveda ? <p>Bóveda abierta. La copia cifrada caduca para recuperación en 24 horas.</p> :
+                <form onSubmit={desbloquearBoveda} className="space-y-2">
+                  <p>Usa una frase distinta a tu contraseña. Se necesita la misma cuenta, navegador y frase para recuperar.</p>
+                  <label>Frase de recuperación <input name="frase" type="password" autoComplete="off" className="border" required /></label>
+                  <button type="submit" className="underline ml-2">Abrir bóveda</button>
+                </form>}
+              {estadoBoveda && <p role="alert">{estadoBoveda}</p>}
+            </details>}
+            {editables && coordina && <button className="underline" disabled={saveStatus !== 'saved'}
+              onClick={actualizarMatricula}>Actualizar matrícula</button>}
+            {guia.filas.map((fila, i) => <fieldset key={fila.ID_Alumno} className="border p-2">
+              <legend>{fila['Nombre alumno']}</legend>
+              {columnas.map(campo => editables
+                ? <CeldaCompartida key={campo} doc={doc} fila={fila} tabla="filas" campo={campo} boveda={boveda} editable={editables.includes(campo)} />
+                : <label key={campo} className="block">{campo}
+                <textarea readOnly={editables && !editables.includes(campo)} className="block w-full border rounded" value={fila[campo] || ''} onChange={event => {
+                  const texto = event.target.value;
+                  mutarDoc(d => {
+                    const actual = d.metadatos.guia_grupal_manual;
+                    return { ...d, metadatos: { ...d.metadatos, guia_grupal_manual: { ...actual,
+                      filas: actual.filas.map((r, j) => j === i ? { ...r, [campo]: texto } : r) } } };
+                  });
+                }} /></label>)}
+            </fieldset>)}
+          </section>}
+          {!!guia?.as?.length && doc.editor.columnas_as && <section className="space-y-2">
+            <h3 className="font-bold">Guía para aptitudes sobresalientes · Anexo XX</h3>
+            {guia.as.map((fila, i) => <fieldset key={fila.ID_Alumno || i} className="border p-2">
+              <legend>{fila['Nombre alumno']}</legend>
+              {doc.editor.columnas_as.slice(1).map(campo => editables && fila.ID_Alumno
+                ? <CeldaCompartida key={campo} doc={doc} fila={fila} tabla="as" campo={campo} boveda={boveda} editable={coordina} />
+                : <label key={campo} className="block">{campo}
+                <textarea readOnly={!coordina || !fila.ID_Alumno} className="block w-full border rounded"
+                  value={fila[campo] || ''} onChange={event => {
+                    const texto = event.target.value;
+                    mutarDoc(d => {
+                      const actual = d.metadatos.guia_grupal_manual;
+                      return { ...d, metadatos: { ...d.metadatos, guia_grupal_manual: { ...actual,
+                        as: actual.as.map((r, j) => j === i ? { ...r, [campo]: texto } : r) } } };
+                    });
+                  }} /></label>)}
+            </fieldset>)}
+          </section>}
+          <button className="underline" onClick={abrirHistorial}>Ver historial</button>
+          {historial && <ul>{historial.map(({ revision, autor, fecha, documento }) =>
+            <li key={revision}>{fecha} · {autor} {!editables && <button className="underline" onClick={() => {
+              if (confirm('¿Recuperar esta versión como una nueva revisión?')) {
+                mutarDoc(d => ({ ...d, tablas: documento.tablas, textos: documento.textos, metadatos: documento.metadatos }));
+              }
+            }}>Recuperar</button>}</li>)}</ul>}
+        </div>
+      );
+    }
+
+    function PlaneacionEditorView({ docId, onBack, setMetrics, cuenta, boveda, setBoveda }) {
+      const [doc, setDoc] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [activeTab, setActiveTab] = useState('aprendizajes'); // 'aprendizajes' | 'dosificacion' | 'evaluacion' | 'firmas'
+      const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'dirty' | 'offline' | 'error'
+      const [assistantOpen, setAssistantOpen] = useState(false);
+      const [isOnline, setIsOnline] = useState(navigator.onLine);
+      const enCurso = useRef(false);
+      const sincronizandoMatricula = useRef(false);
+      const cambios = useRef(0);
+      const [saveError, setSaveError] = useState('');
+
+      useEffect(() => {
+        const protegerSalida = (event) => {
+          if (saveStatus !== 'saved') event.preventDefault();
+        };
+        window.addEventListener('beforeunload', protegerSalida);
+        return () => window.removeEventListener('beforeunload', protegerSalida);
+      }, [saveStatus]);
+
+      useEffect(() => {
+        const handleOnline = () => {
+          setIsOnline(true);
+          setSaveStatus(status => status === 'offline' ? 'dirty' : status);
+        };
+        const handleOffline = () => {
+          setIsOnline(false);
+        };
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+        };
+      }, []);
+
+      // Cargar documento completo
+      useEffect(() => {
+        let mounted = true;
+        const fetchDoc = async () => {
+          const t0 = performance.now();
+          try {
+            const data = await apiRequest(`/api/planeaciones/${docId}`);
+            if (mounted) {
+              setDoc(data);
+              const t1 = performance.now();
+              setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+            }
+          } catch (e) {
+            console.error("Error abriendo planeación:", e);
+          } finally {
+            if (mounted) setLoading(false);
+          }
+        };
+        fetchDoc();
+        return () => { mounted = false; };
+      }, [docId, setMetrics]);
+
+      // Guardar con debounce
+      const persistir = useCallback(async (docActual) => {
+        if (!navigator.onLine) {
+          setSaveStatus('offline');
+          return;
+        }
+        if (enCurso.current) return;
+        enCurso.current = true;
+        const version = cambios.current;
+        setSaveError('');
+        setSaveStatus('saving');
+        const t0 = performance.now();
+        try {
+          const res = await apiRequest('/api/planeaciones', {
+            method: 'POST',
+            body: JSON.stringify(docActual)
+          });
+          setSaveStatus(cambios.current === version ? 'saved' : 'dirty');
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+          setDoc(d => ({ ...d, revision: res.revision, guardado_en: res.guardado_en, firmas_resueltas: res.firmas }));
+        } catch (e) {
+          console.error("Error al persistir:", e);
+          setSaveError(e.message);
+          setSaveStatus('error');
+        } finally {
+          enCurso.current = false;
+        }
+      }, [setMetrics]);
+
+      // Detectar cambios y programar autoguardado a 1.5s
+      const mutarDoc = (updater) => {
+        if (sincronizandoMatricula.current) return;
+        cambios.current += 1;
+        setDoc(prev => typeof updater === 'function' ? updater(prev) : { ...prev, ...updater });
+        if (!enCurso.current) setSaveStatus('dirty');
+      };
+
+      useEffect(() => {
+        if (saveStatus !== 'dirty' || !isOnline) return;
+        const timer = setTimeout(() => persistir(doc), 1500);
+        return () => clearTimeout(timer);
+      }, [doc, saveStatus, isOnline, persistir]);
+
+      if (!loading && !doc) {
+        return <div role="alert">La planeación no está disponible. <button onClick={onBack}>Volver</button></div>;
+      }
+
+      if (loading || !doc) {
+        return (
+          <div className="text-center py-24 bg-white rounded-xl border border-slate-200">
+            <div className="inline-block animate-spin text-amber-600 text-3xl mb-3">◈</div>
+            <p className="text-slate-600 text-sm font-medium">Abriendo planeación oficial...</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="space-y-4">
+          {/* Cabecera del Editor */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => { if (saveStatus === 'saved' || confirm('Hay cambios sin confirmar. ¿Salir?')) onBack(); }}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 text-xs font-semibold transition"
+              >
+                ← Volver a Mis Documentos
+              </button>
+              <div>
+                <input
+                  type="text"
+                  readOnly={doc.editor?.coordina === false}
+                  value={doc.metadatos?.titulo || ''}
+                  onChange={(e) => mutarDoc(d => ({ ...d, metadatos: { ...d.metadatos, titulo: e.target.value } }))}
+                  className="font-bold text-slate-900 text-base md:text-lg border-b border-transparent hover:border-slate-300 focus:border-amber-500 focus:outline-none px-1 w-full max-w-lg"
+                  placeholder="Título del Plan de Intervención"
+                />
+                <div className="text-xs text-slate-500 px-1 flex items-center space-x-2">
+                  <span>Escuela: {doc.datos?.Escuela || 'Primaria Oficial'}</span>
+                  <span>•</span>
+                  <span>Anexo {doc.formato}</span>
+                  <span>•</span>
+                  <span>Revisión: {doc.revision}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2.5">
+              {/* Indicador de Guardado */}
+              <div className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-slate-50 border-slate-200 flex items-center space-x-2">
+                {saveStatus === 'saved' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span className="text-slate-600">Guardado confirmado</span>
+                  </>
+                )}
+                {saveStatus === 'saving' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                    <span className="text-amber-700 font-semibold animate-saving">Guardando cambios...</span>
+                  </>
+                )}
+                {saveStatus === 'dirty' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                    <span className="text-slate-500">Cambios pendientes</span>
+                  </>
+                )}
+                {saveStatus === 'offline' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                    <span className="text-slate-600">Sin conexión (esperando red)</span>
+                  </>
+                )}
+                {saveStatus === 'error' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                    <span className="text-red-600 font-bold">Error de guardado</span>
+                  </>
+                )}
+              </div>
+
+              {saveStatus !== 'saved' && (
+                <button disabled={saveStatus === 'saving'} onClick={() => persistir(doc)} title={saveError}>
+                  Guardar ahora
+                </button>
+              )}
+              <button
+                onClick={() => descargarArchivo(`/api/planeaciones/${doc.id}/pdf`, 'Planeacion.pdf')}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5"
+              >
+                <span>Descargar PDF Oficial</span>
+                <span>📄</span>
+              </button>
+
+              <button
+                onClick={() => setAssistantOpen(!assistantOpen)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-sm transition flex items-center space-x-1.5 ${
+                  assistantOpen ? 'bg-amber-600 text-white ring-2 ring-amber-400' : 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100'
+                }`}
+              >
+                <span>{doc.editor ? 'Propuestas pedagógicas' : 'Asistente pedagógico · ejemplos locales'}</span>
+              </button>
+            </div>
+          </div>
+
+          {saveStatus === 'error' && saveError && <p role="alert" className="text-red-700">{saveError}</p>}
+          {doc.editor ? <>
+            <CamposPlaneacion doc={doc} mutarDoc={mutarDoc} saveStatus={saveStatus} cuenta={cuenta} boveda={boveda} setBoveda={setBoveda}
+              actualizarMatricula={async () => {
+                if (enCurso.current) return;
+                enCurso.current = true;
+                sincronizandoMatricula.current = true;
+                setSaveStatus('saving');
+                try {
+                  await apiRequest(`/api/planeaciones/${doc.id}/matricula`, {
+                    method: 'POST', body: JSON.stringify({ revision: doc.revision })
+                  });
+                  setDoc(await apiRequest(`/api/planeaciones/${doc.id}`));
+                  setSaveStatus('saved');
+                } catch (e) {
+                  setSaveStatus('error');
+                  setSaveError(e.message);
+                } finally {
+                  enCurso.current = false;
+                  sincronizandoMatricula.current = false;
+                }
+              }} />
+            {assistantOpen && doc.editor.coordina !== false && <PropuestasLocales doc={doc} mutarDoc={mutarDoc} />}
+          </> : <>
+          {/* Navegación por Pestañas del Formato Oficial */}
+          <div className="flex border-b border-slate-200 space-x-1 text-sm font-semibold">
+            {[
+              { id: 'aprendizajes', label: '1. NEE y Descriptores Observables' },
+              { id: 'dosificacion', label: '2. Dosificación y Actividades' },
+              { id: 'evaluacion', label: '3. Evaluación Formativa' },
+              { id: 'firmas', label: '4. Firmas y Vo. Bo. Oficial' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2.5 border-b-2 font-bold transition text-xs sm:text-sm ${
+                  activeTab === tab.id
+                    ? 'border-amber-600 text-amber-700 bg-amber-50/50'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Contenedor Principal: Editor + Drawer IA */}
+          <div className="flex gap-4 items-start">
+            <div className="flex-1 bg-white p-5 rounded-xl border border-slate-200 shadow-sm min-h-[420px]">
+              {/* TAB 1: NEE, BAP y Descriptores Observables */}
+              {activeTab === 'aprendizajes' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                        Barreras, PDA y Descriptores Individualizados
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Indicador 5: Redactar con <strong>Sujeto + Verbo en Presente + Complemento Observable</strong>.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const nuevaFila = {
+                          alumno: '',
+                          curp: '',
+                          barreras_o_necesidades: '',
+                          pda: '',
+                          descriptor: '',
+                          apoyos: ''
+                        };
+                        mutarDoc(d => ({
+                          ...d,
+                          tablas: { ...d.tablas, nee: [...(d.tablas?.nee || []), nuevaFila] }
+                        }));
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold"
+                    >
+                      + Agregar Alumno a Planeación
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold">
+                          <th className="p-2.5 w-1/5">Alumno</th>
+                          <th className="p-2.5 w-1/4">Barrera o Necesidad (BAP)</th>
+                          <th className="p-2.5 w-1/4">Descriptor Observable (Zona 001)</th>
+                          <th className="p-2.5 w-1/4">Apoyos y Ajustes Razonables</th>
+                          <th className="p-2.5 w-8"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {(doc.tablas?.nee || []).map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/70 transition">
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                value={row.alumno || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...d.tablas.nee];
+                                    copy[idx] = { ...copy[idx], alumno: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-slate-200 rounded font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <textarea
+                                rows="2"
+                                value={row.barreras_o_necesidades || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...d.tablas.nee];
+                                    copy[idx] = { ...copy[idx], barreras_o_necesidades: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <textarea
+                                rows="2"
+                                value={row.descriptor || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...d.tablas.nee];
+                                    copy[idx] = { ...copy[idx], descriptor: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-amber-300 bg-amber-50/30 rounded text-slate-900 font-medium focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <textarea
+                                rows="2"
+                                value={row.apoyos || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...d.tablas.nee];
+                                    copy[idx] = { ...copy[idx], apoyos: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                onClick={() => {
+                                  mutarDoc(d => ({
+                                    ...d,
+                                    tablas: { ...d.tablas, nee: d.tablas.nee.filter((_, i) => i !== idx) }
+                                  }));
+                                }}
+                                className="text-slate-400 hover:text-red-600 font-bold p-1"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: Dosificación de Actividades */}
+              {activeTab === 'dosificacion' && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Secuencia Didáctica y Modalidad</h3>
+                    <button
+                      onClick={() => {
+                        mutarDoc(d => ({
+                          ...d,
+                          tablas: {
+                            ...d.tablas,
+                            dosificacion: [
+                              ...(d.tablas?.dosificacion || []),
+                              { semana: '', actividad: '', recursos: '', modalidad: '' }
+                            ]
+                          }
+                        }));
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold"
+                    >
+                      + Agregar Sesión
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(doc.tablas?.dosificacion || []).map((dos, i) => (
+                      <div key={i} className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 space-y-2 text-xs">
+                        <div className="flex justify-between items-center">
+                          <input
+                            type="text"
+                            value={dos.semana || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              mutarDoc(d => {
+                                const copy = [...d.tablas.dosificacion];
+                                copy[i] = { ...copy[i], semana: val };
+                                return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
+                              });
+                            }}
+                            className="font-bold text-slate-800 bg-white px-2 py-1 border border-slate-200 rounded"
+                          />
+                          <button
+                            onClick={() => {
+                              mutarDoc(d => ({
+                                ...d,
+                                tablas: { ...d.tablas, dosificacion: d.tablas.dosificacion.filter((_, idx) => idx !== i) }
+                              }));
+                            }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <textarea
+                          rows="2"
+                          value={dos.actividad || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            mutarDoc(d => {
+                              const copy = [...d.tablas.dosificacion];
+                              copy[i] = { ...copy[i], actividad: val };
+                              return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
+                            });
+                          }}
+                          className="w-full p-2 border border-slate-200 rounded bg-white"
+                          placeholder="Descripción de la actividad pedagógica..."
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: Evaluación Formativa */}
+              {activeTab === 'evaluacion' && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Criterios e Instrumentos de Evaluación</h3>
+                  <textarea
+                    rows="6"
+                    value={doc.textos?.evaluacion || ''}
+                    onChange={(e) => mutarDoc(d => ({ ...d, textos: { ...d.textos, evaluacion: e.target.value } }))}
+                    className="w-full p-3 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                    placeholder="Registra los indicadores de logro formativo y rúbricas de la Zona 001..."
+                  />
+                </div>
+              )}
+
+              {/* TAB 4: Firmas y Vo. Bo. Oficial */}
+              {activeTab === 'firmas' && (
+                <div className="space-y-6 max-w-2xl mx-auto py-6">
+                  <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-xl text-xs text-slate-700 space-y-1">
+                    <div className="font-bold text-amber-900">Validación de Firmas Oficiales de Zona 001</div>
+                    <p>Las firmas se computan automáticamente desde el personal asignado a la escuela y la Dirección de USAER 2E.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6">
+                    <div className="p-4 border-2 border-dashed border-slate-300 rounded-xl text-center space-y-2">
+                      <div className="text-xs text-slate-400 uppercase font-semibold">Elaboró</div>
+                      <div className="font-bold text-slate-900 text-sm">
+                        {doc.firmas_resueltas?.especialista_nombre || doc.datos?.Docente_Especialista || 'Docente Especialista USAER'}
+                      </div>
+                      <div className="text-[11px] text-slate-500">Maestra de Apoyo / Área Especialista</div>
+                    </div>
+
+                    <div className="p-4 border-2 border-dashed border-amber-400 bg-amber-50/20 rounded-xl text-center space-y-2">
+                      <div className="text-xs text-amber-700 uppercase font-bold">Vo. Bo. Dirección USAER</div>
+                      <div className="font-bold text-slate-900 text-sm">
+                        {doc.firmas_resueltas?.vo_bo || 'Psic. Personal ficticio 11'}
+                      </div>
+                      <div className="text-[11px] text-slate-500">Director USAER 02-E</div>
+                    </div>
+                  </div>
+
+                  {doc.observaciones_director && (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                      <div className="font-bold text-slate-800">Observaciones del Director:</div>
+                      <div className="text-slate-600">{doc.observaciones_director}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* DRAWER LATERAL: ASISTENTE PEDAGÓGICO CONVERSACIONAL */}
+            {assistantOpen && (
+              <div className="w-80 md:w-96 bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex flex-col h-[520px]">
+                <PedagogicalChatComponent
+                  alumnoId="ALU-001"
+                  onInsertProposal={(propuesta) => {
+                    mutarDoc(d => ({
+                      ...d,
+                      tablas: {
+                        ...d.tablas,
+                        nee: [...(d.tablas?.nee || []), propuesta]
+                      }
+                    }));
+                  }}
+                />
+              </div>
+            )}
+          </div>
+          </>}
+        </div>
+      );
+    }
+
+    // =============================================================
+    // COMPONENTE: ASISTENTE PEDAGÓGICO IA CONVERSACIONAL
+    // =============================================================
+    function PedagogicalChatComponent({ alumnoId, onInsertProposal }) {
+      const [messages, setMessages] = useState([
+        {
+          sender: 'ai',
+          text: 'Hola. Soy el Asistente Pedagógico de USAER 02-E. Puedo sugerir descriptores observables para tus alumnos alineados a los 14 indicadores de la Zona 001. ¿En qué aprendizaje o ajuste estás trabajando?'
+        }
+      ]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [lastProposal, setLastProposal] = useState(null);
+
+      const handleSend = async (e) => {
+        if (e) e.preventDefault();
+        if (!input.trim()) return;
+
+        const userMsg = input.trim();
+        setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
+        setInput('');
+        setLoading(true);
+
+        try {
+          const res = await apiRequest('/api/ai/chat', {
+            method: 'POST',
+            body: JSON.stringify({
+              mensaje: userMsg,
+              alumno_id: alumnoId
+            })
+          });
+
+          setMessages(prev => [...prev, { sender: 'ai', text: res.respuesta }]);
+          if (res.propuesta_tabla) {
+            setLastProposal(res.propuesta_tabla);
+          }
+        } catch (err) {
+          setMessages(prev => [...prev, { sender: 'ai', text: 'Lo siento, ocurrió un error consultando el motor pedagógico.' }]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="flex flex-col h-full space-y-3">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-amber-600 font-bold">🤖</span>
+              <span className="font-bold text-xs text-slate-800">Asistente Pedagógico Zona 001</span>
+            </div>
+            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Activo</span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2 text-xs pr-1">
+            {messages.map((m, idx) => (
+              <div
+                key={idx}
+                className={`p-2.5 rounded-xl ${
+                  m.sender === 'user' ? 'bg-amber-600 text-white ml-6 font-medium' : 'bg-slate-50 text-slate-800 mr-2 border border-slate-200'
+                }`}
+              >
+                <div className="whitespace-pre-wrap">{m.text}</div>
+              </div>
+            ))}
+            {loading && (
+              <div className="p-2.5 bg-slate-50 rounded-xl text-slate-400 text-xs italic">
+                Elaborando propuesta contextualizada...
+              </div>
+            )}
+          </div>
+
+          {lastProposal && (
+            <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-1.5">
+              <div className="font-bold text-amber-900 text-[11px]">Propuesta lista para insertar:</div>
+              <div className="text-slate-600 text-[11px] truncate">"{lastProposal.descriptor}"</div>
+              <button
+                onClick={() => {
+                  onInsertProposal(lastProposal);
+                  setLastProposal(null);
+                }}
+                className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-xs shadow-sm transition"
+              >
+                + Insertar en Planeación (1 Clic)
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleSend} className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Escribe tu instrucción pedagógica..."
+              className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-amber-500"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition disabled:opacity-50"
+            >
+              Enviar
+            </button>
+          </form>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 3: EXPEDIENTES INTEGRALES DE ALUMNOS (CON HISTORIA Y EPP)
+    // =============================================================
+    function InstrumentoDigitalEPP({ base, query, doc, area, valor, onGuardado }) {
+      const [catalogo, setCatalogo] = useState({});
+      const [codigo, setCodigo] = useState('');
+      const [captura, setCaptura] = useState(null);
+      const [revisada, setRevisada] = useState(false);
+      const [ocupado, setOcupado] = useState(false);
+      const [mensaje, setMensaje] = useState('');
+      useEffect(() => {
+        let vigente = true;
+        apiRequest(base + '/instrumentos').then(datos => { if (vigente) setCatalogo(datos); })
+          .catch(e => { if (vigente) setMensaje(e.message); });
+        return () => { vigente = false; };
+      }, [base]);
+      const disponibles = Object.entries(catalogo).filter(([, d]) => d.area === area);
+      const definicion = catalogo[codigo];
+      async function guardar(incorporar) {
+        setOcupado(true); setMensaje('');
+        try {
+          const acuse = await apiRequest(base + '/instrumentos/' + codigo + query, {
+            method: 'PUT', body: JSON.stringify({ revision: doc.revision, captura, incorporar, revisada })
+          });
+          await onGuardado();
+          setRevisada(false);
+          setMensaje(`${incorporar ? 'Resultados incorporados' : 'Borrador confirmado'}. Respondidos: ${acuse.resultado.respondidos}/${acuse.resultado.total_registros}.`);
+        } catch (e) { setMensaje(e.message); }
+        finally { setOcupado(false); }
+      }
+      if (!disponibles.length) return mensaje ? <p role="alert">{mensaje}</p> : null;
+      function cambiar(id, campo, texto) {
+        setRevisada(false);
+        setCaptura(c => ({ ...c, respuestas: { ...c.respuestas, [id]: { ...c.respuestas[id], [campo]: texto } } }));
+      }
+      return <details className="border rounded p-2">
+        <summary>Aplicar instrumento digital</summary>
+        <fieldset disabled={ocupado} className="space-y-2">
+          <label>Protocolo <select value={codigo} className="border rounded" onChange={e => {
+            const seleccionado = e.target.value;
+            setCodigo(seleccionado); setRevisada(false); setMensaje('');
+            setCaptura(valor.aplicaciones_en_curso?.[seleccionado] || catalogo[seleccionado]?.plantilla || null);
+          }}><option value="">Elegir protocolo</option>
+            {disponibles.map(([k, d]) => <option key={k} value={k}>{d.nombre}</option>)}
+          </select></label>
+          {captura && definicion && <>
+            <p>{definicion.fuente} · pp. {definicion.paginas}. «No observado» queda pendiente.</p>
+            <label>Fecha de aplicación del protocolo <input type="date" className="border rounded" value={captura.fecha}
+              onChange={e => { setRevisada(false); setCaptura({ ...captura, fecha: e.target.value }); }} /></label>
+            {definicion.items.map(item => <fieldset key={item.id} className="rounded border p-2">
+              <legend>{item.id}. {item.texto}</legend>
+              <label>Respuesta {item.id} {item.opciones.length
+                ? <select className="border rounded" value={captura.respuestas[item.id].respuesta}
+                  onChange={e => cambiar(item.id, 'respuesta', e.target.value)}>
+                  {item.opciones.map(o => <option key={o}>{o}</option>)}</select>
+                : <input className="border rounded" maxLength={500} value={captura.respuestas[item.id].respuesta}
+                  onChange={e => cambiar(item.id, 'respuesta', e.target.value)} />}</label>
+              <label className="block">Observaciones {item.id}
+                <input className="border rounded" maxLength={500} value={captura.respuestas[item.id].observaciones}
+                  onChange={e => cambiar(item.id, 'observaciones', e.target.value)} /></label>
+            </fieldset>)}
+            <button type="button" className="underline" onClick={() => guardar(false)}>Guardar borrador de aplicación</button>
+            <label className="block"><input type="checkbox" checked={revisada} onChange={e => setRevisada(e.target.checked)} />
+              Revisé las respuestas y corresponden a este expediente</label>
+            <button type="button" disabled={!revisada} className="underline disabled:opacity-50"
+              onClick={() => guardar(true)}>Incorporar resultados al informe</button>
+          </>}
+          {mensaje && <p role="status">{mensaje}</p>}
+        </fieldset>
+      </details>;
+    }
+
+    function EvaluacionExterna({ alumnoId, base, query, doc, area, valor, onGuardado }) {
+      const [archivos, setArchivos] = useState(null);
+      const [entrada, setEntrada] = useState({ adjunto_id: '', nombre: '', fecha: '', resultados: '', revisada: false });
+      const [mensaje, setMensaje] = useState('');
+      const [ocupado, setOcupado] = useState(false);
+      const ruta = '/api/expedientes/' + encodeURIComponent(alumnoId) + '/adjuntos';
+      async function cargar(e) {
+        if (!e.currentTarget.open || archivos !== null) return;
+        try { setArchivos(await apiRequest(ruta)); }
+        catch (error) { setMensaje(error.message); }
+      }
+      function cambiar(k, v) { setEntrada(e => ({ ...e, revisada: false, [k]: v })); }
+      async function guardar() {
+        setOcupado(true); setMensaje('');
+        try {
+          await apiRequest(base + '/externa/' + encodeURIComponent(area) + query, {
+            method: 'PUT', body: JSON.stringify({ ...entrada, revision: doc.revision })
+          });
+          await onGuardado();
+          setEntrada(e => ({ ...e, revisada: false }));
+          setMensaje('Evaluación externa guardada.');
+        } catch (error) { setMensaje(error.message); }
+        finally { setOcupado(false); }
+      }
+      const adjunto = archivos?.find(a => a.id === entrada.adjunto_id);
+      return <details onToggle={cargar} className="border rounded p-2">
+        <summary>Vincular evaluación externa</summary>
+        <p>Usa el PDF original del archivo del expediente y registra solo los hallazgos cotejados.</p>
+        {archivos && !archivos.length && <p>Adjunta primero el PDF en el resumen del expediente.</p>}
+        <fieldset disabled={ocupado} className="space-y-2">
+          <label>PDF del expediente <select className="border rounded" value={entrada.adjunto_id} onChange={e => {
+            const id = e.target.value;
+            const anterior = valor.evaluaciones.find(r => r.adjunto_id === id);
+            setEntrada({ adjunto_id: id, nombre: anterior?.nombre || '', fecha: anterior?.fecha || '',
+              resultados: anterior?.resultados || '', revisada: false });
+          }}><option value="">Elegir archivo</option>{(archivos || []).map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label>
+          {adjunto && <>
+            <button type="button" className="underline" onClick={() => descargarArchivo(ruta + '/' + adjunto.id, adjunto.nombre)}>Descargar original</button>
+            <label className="block">Instrumento externo <input className="border rounded" maxLength={255}
+              value={entrada.nombre} onChange={e => cambiar('nombre', e.target.value)} /></label>
+            <label className="block">Fecha de evaluación externa <input type="date" className="border rounded"
+              value={entrada.fecha} onChange={e => cambiar('fecha', e.target.value)} /></label>
+            <label className="block">Resultados externos cotejados <textarea className="block w-full border rounded" maxLength={11000}
+              value={entrada.resultados} onChange={e => cambiar('resultados', e.target.value)} /></label>
+            <label className="block"><input type="checkbox" checked={entrada.revisada} onChange={e => cambiar('revisada', e.target.checked)} />
+              Verifiqué que el original y los resultados corresponden al alumno</label>
+            <button type="button" className="underline disabled:opacity-50"
+              disabled={!entrada.revisada || !entrada.nombre.trim() || !entrada.fecha || !entrada.resultados.trim()}
+              onClick={guardar}>Guardar evaluación externa</button>
+          </>}
+          {mensaje && <p role="status">{mensaje}</p>}
+        </fieldset>
+      </details>;
+    }
+
+    function AnexoEvaluacion({ alumnoId }) {
+      const [ciclo, setCiclo] = useState('2026-2027');
+      const [doc, setDoc] = useState(null);
+      const [area, setArea] = useState('Aprendizaje');
+      const [valor, setValor] = useState(null);
+      const [fundamentos, setFundamentos] = useState({});
+      const [mensaje, setMensaje] = useState('');
+      const [historial, setHistorial] = useState(null);
+      const [guardando, setGuardando] = useState(false);
+      const base = `/api/epp/${alumnoId}`;
+      const query = `?ciclo=${encodeURIComponent(ciclo)}`;
+
+      function abrir(datos, nombre) {
+        setDoc(datos);
+        setArea(nombre);
+        setValor(datos.partes[nombre].contenido);
+        setFundamentos(Object.fromEntries((datos.partes[nombre].nee_confirmadas || []).map(r => [r.texto, r])));
+      }
+
+      async function cargar() {
+        setMensaje('');
+        setHistorial(null);
+        try {
+          const datos = await apiRequest(base + '/anexo' + query);
+          abrir(datos, datos.editables[0] && datos.partes[datos.editables[0]] ? datos.editables[0] : 'Aprendizaje');
+        } catch (error) {
+          setMensaje(error.message);
+        }
+      }
+
+      async function guardar(event) {
+        event.preventDefault();
+        setGuardando(true);
+        setMensaje('');
+        try {
+          const nee = area === 'Conclusión' && valor.validada
+            ? valor.nee.filter(r => r.NEE?.trim()).map(r => ({ texto: r.NEE.trim(), ...fundamentos[r.NEE.trim()] }))
+            : [];
+          await apiRequest(base + '/anexo/' + encodeURIComponent(area) + query, {
+            method: 'PUT', body: JSON.stringify({ revision: doc.revision, valor, nee })
+          });
+          abrir(await apiRequest(base + '/anexo' + query), area);
+          setMensaje('Apartado guardado.');
+        } catch (error) {
+          setMensaje(error.message);
+        } finally {
+          setGuardando(false);
+        }
+      }
+
+      const editable = !!doc?.editables.includes(area);
+      const cambiarFila = (tabla, i, campo, texto) => setValor(v => ({
+        ...v, [tabla]: v[tabla].map((r, j) => j === i ? { ...r, [campo]: texto } : r)
+      }));
+      const tablaOficial = (tabla, titulo) => !!valor[tabla]?.length && <details>
+        <summary>{titulo}</summary>
+        {valor[tabla].map((fila, i) => <fieldset key={i} className="border p-2">
+          {Object.entries(fila).map(([campo, texto]) => <label className="block" key={campo}>{campo}
+            <textarea readOnly={!editable} className="block w-full border rounded" value={texto}
+              onChange={e => cambiarFila(tabla, i, campo, e.target.value)} />
+          </label>)}
+          {tabla === 'nee' && fila.NEE?.trim() && <div className="grid gap-2">
+            {[['fundamento', 'Fundamento documental', 'text'], ['desde', 'Vigente desde', 'date'], ['hasta', 'Vigente hasta', 'date']].map(([k, etiqueta, tipo]) =>
+              <label key={k}>{etiqueta}<input readOnly={!editable} className="block border" type={tipo}
+                value={fundamentos[fila.NEE.trim()]?.[k] || ''} onChange={e => {
+                  const texto = e.target.value;
+                  const id = fila.NEE.trim();
+                  setFundamentos(f => ({ ...f, [id]: { ...f[id], [k]: texto } }));
+                }} /></label>)}
+          </div>}
+        </fieldset>)}
+      </details>;
+
+      return <details className="bg-white border rounded p-3">
+        <summary className="font-bold">Anexo XVII · Evaluación interdisciplinaria</summary>
+        <div className="flex gap-2 my-2">
+          <label>Ciclo escolar <input className="border rounded" value={ciclo} disabled={guardando}
+            onChange={e => { setCiclo(e.target.value); setDoc(null); }} /></label>
+          <button type="button" onClick={cargar} className="underline">Abrir ciclo</button>
+        </div>
+        {doc && valor && <form onSubmit={guardar} className="space-y-3">
+          <fieldset disabled={guardando} className="space-y-3">
+            <label>Área <select className="border rounded" value={area} onChange={e => abrir(doc, e.target.value)}>
+              {Object.keys(doc.partes).map(nombre => <option key={nombre}>{nombre}</option>)}
+            </select></label>
+            <p>{doc.partes[area].autor ? `Último guardado: ${doc.partes[area].autor}` : 'Apartado sin captura'}</p>
+            {area === 'Conclusión' && <p>{doc.conclusion_vigente ? 'Conclusión vigente' : 'Conclusión pendiente o desactualizada'}</p>}
+            {Object.entries(valor.campos || {}).map(([campo, texto]) => <label key={campo} className="block">{campo}
+              <textarea readOnly={!editable} className="block w-full border rounded" value={texto} onChange={e => {
+                const nuevo = e.target.value;
+                setValor(v => ({ ...v, campos: { ...v.campos, [campo]: nuevo } }));
+              }} />
+            </label>)}
+            {area !== 'Conclusión' && <>
+              {editable && (valor === doc.partes[area].contenido
+                ? <React.Fragment key={area + ciclo}>
+                    <InstrumentoDigitalEPP base={base} query={query} doc={doc} area={area} valor={valor}
+                      onGuardado={async () => abrir(await apiRequest(base + '/anexo' + query), area)} />
+                    <EvaluacionExterna alumnoId={alumnoId} base={base} query={query} doc={doc} area={area} valor={valor}
+                      onGuardado={async () => abrir(await apiRequest(base + '/anexo' + query), area)} />
+                  </React.Fragment>
+                : <p>Guarda los cambios del apartado antes de aplicar un instrumento.</p>)}
+              <label className="block">Síntesis de resultados
+                <textarea readOnly={!editable} className="block w-full border rounded" value={valor.sintesis}
+                  onChange={e => { const sintesis = e.target.value; setValor(v => ({ ...v, sintesis })); }} />
+              </label>
+              <details><summary>Instrumentos aplicados y resultados</summary>
+                {valor.evaluaciones.map((r, i) => <fieldset key={r.id} className="border p-2">
+                  {[['nombre', 'Instrumento', 'text'], ['fecha', 'Fecha de aplicación', 'date'], ['texto', 'Resultados', 'text']].map(([k, etiqueta, tipo]) =>
+                    <label className="block" key={k}>{etiqueta}<input readOnly={!editable || r.entrada === 'EXTERNA_REVISADA'} className="block border w-full"
+                      type={tipo} value={r[k] || ''} onChange={e => cambiarFila('evaluaciones', i, k, e.target.value)} /></label>)}
+                  {editable && r.entrada !== 'EXTERNA_REVISADA' && <button type="button" onClick={() => setValor(v => ({
+                    ...v, evaluaciones: v.evaluaciones.filter((_, j) => j !== i)
+                  }))}>Quitar instrumento</button>}
+                </fieldset>)}
+                {editable && <button type="button" className="underline" onClick={() => setValor(v => ({
+                  ...v, evaluaciones: [...v.evaluaciones, { id: crypto.randomUUID(), nombre: '', fecha: '', texto: '' }]
+                }))}>Agregar instrumento aplicado</button>}
+              </details>
+            </>}
+            {area === 'Aprendizaje' && <details><summary>Datos generales</summary>
+              {Object.entries(valor.generales || {}).map(([campo, texto]) => <label key={campo} className="block">{campo}
+                <input readOnly={!editable} className="block border rounded w-full" value={texto} onChange={e => {
+                  const nuevo = e.target.value;
+                  setValor(v => ({ ...v, generales: { ...v.generales, [campo]: nuevo },
+                    generales_editados: [...new Set([...(v.generales_editados || []), campo])] }));
+                }} />
+              </label>)}
+            </details>}
+            {Object.entries(doc.columnas || {}).filter(([tabla]) => Array.isArray(valor[tabla])).map(([tabla, columnas]) =>
+              <details key={tabla}><summary>{tabla === 'familia' ? 'Composición familiar' : 'Historia escolar'}</summary>
+                {tablaOficial(tabla, 'Registros')}
+                {editable && <button type="button" className="underline" onClick={() => setValor(v => ({
+                  ...v, [tabla]: [...v[tabla], Object.fromEntries(columnas.map(k => [k, '']))]
+                }))}>Agregar registro</button>}
+              </details>)}
+            {tablaOficial('nee', 'Necesidades educativas especiales')}
+            {tablaOficial('bap', 'Barreras para el aprendizaje y la participación')}
+            {editable && <>
+              <label className="block"><input type="checkbox" checked={valor.validada}
+                onChange={e => { const validada = e.target.checked; setValor(v => ({ ...v, validada })); }} />
+                {area === 'Conclusión' ? 'Confirmar conclusión y NEE' : 'Validar hallazgos del área'}
+              </label>
+              <button type="submit" className="px-3 py-2 rounded bg-slate-800 text-white">Guardar apartado</button>
+            </>}
+            <button type="button" className="underline ml-2" onClick={() => descargarArchivo(base + '/pdf' + query, 'EPP-Anexo-XVII.pdf')}>Exportar Anexo XVII</button>
+            <button type="button" className="underline ml-2" onClick={async () => {
+              try { setHistorial(await apiRequest(base + '/historial' + query)); }
+              catch (error) { setMensaje(error.message); }
+            }}>Historial del ciclo</button>
+          </fieldset>
+          {historial && <ul>{historial.map(r => <li key={r.revision}>{r.fecha} · {r.autor}</li>)}</ul>}
+        </form>}
+        <p role="status">{mensaje}</p>
+      </details>;
+    }
+
+    function EditorEPP({ alumnoId }) {
+      const [doc, setDoc] = useState(null);
+      const [mensaje, setMensaje] = useState('');
+      const [guardando, setGuardando] = useState(false);
+
+      useEffect(() => {
+        let vigente = true;
+        apiRequest(`/api/epp/${alumnoId}`)
+          .then(data => { if (vigente) setDoc(data); })
+          .catch(error => { if (vigente) setMensaje(error.message); });
+        return () => { vigente = false; };
+      }, [alumnoId]);
+
+      async function guardar(event) {
+        event.preventDefault();
+        setGuardando(true);
+        try {
+          const acuse = await apiRequest('/api/epp', { method: 'POST', body: JSON.stringify(doc) });
+          setDoc(actual => ({ ...actual, revision: acuse.revision }));
+          setMensaje('EPP guardada.');
+        } catch (error) {
+          setMensaje(error.message);
+        } finally {
+          setGuardando(false);
+        }
+      }
+
+      if (!doc) return <p role="status">{mensaje || 'Abriendo EPP…'}</p>;
+
+      return (
+        <form onSubmit={guardar}>
+          <p>Ciclo escolar {doc.ciclo}</p>
+          <fieldset disabled={guardando} className="space-y-3">
+            {Object.entries(doc.partes || {}).filter(([area]) => area !== 'META').map(([area, datos]) => (
+              <section key={area} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <h3 className="font-bold">{area.replaceAll('_', ' ')}</h3>
+                {Object.entries(datos || {}).map(([campo, valor]) => (
+                  <label key={campo} className="block">
+                    {campo.replaceAll('_', ' ')}
+                    {typeof valor === 'string' ? (
+                      <textarea readOnly={!doc.areas_editables?.includes(area)} className="block w-full border rounded p-2" value={valor} onChange={event => {
+                        const texto = event.target.value;
+                        setMensaje('Cambios pendientes.');
+                        setDoc(actual => ({ ...actual, partes: {
+                          ...actual.partes, [area]: { ...actual.partes[area], [campo]: texto }
+                        } }));
+                      }} />
+                    ) : <pre>{JSON.stringify(valor, null, 2)}</pre>}
+                  </label>
+                ))}
+              </section>
+            ))}
+            <button type="submit" className="px-3 py-2 rounded bg-slate-800 text-white">Guardar EPP</button>
+          </fieldset>
+          <p role="status">{mensaje}</p>
+        </form>
+      );
+    }
+
+    const FORMULARIOS_ANEXOS = {
+      3: [['fecha','Fecha','date'], ['bap_fisicas','Barreras físicas'], ['bap_actitudinales','Barreras actitudinales'],
+          ['bap_pedagogicas','Barreras pedagógicas'], ['bap_organizativas','Barreras organizativas']],
+      4: [['fecha_elaboracion','Fecha de elaboración','date'], ['ciclo_escolar','Ciclo escolar','text'],
+          ['trimestre','Trimestre','text'], ['motivo','Motivo'], ['sugerencias','Sugerencias'],
+          ['fecha_seguimiento','Fecha de seguimiento','date'], ['nivel_cumplimiento_resultados','Resultados de seguimiento'],
+          ['observaciones','Observaciones']],
+      5: [['fecha','Fecha','date'], ['evento','Evento significativo']]
+    };
+
+    function AdjuntosExpediente({ alumnoId }) {
+      const url = `/api/expedientes/${alumnoId}/adjuntos`;
+      const [archivos, setArchivos] = useState([]);
+      const [mensaje, setMensaje] = useState('');
+      const [enviando, setEnviando] = useState(false);
+      useEffect(() => {
+        apiRequest(url).then(setArchivos).catch(e => setMensaje(e.message));
+      }, [url]);
+      async function enviar(event) {
+        event.preventDefault();
+        const formulario = event.currentTarget;
+        const archivo = new FormData(formulario).get('pdf');
+        if (!archivo?.size) return;
+        setEnviando(true);
+        try {
+          await apiRequest(url + '?nombre=' + encodeURIComponent(archivo.name), {
+            method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: archivo
+          });
+          setArchivos(await apiRequest(url));
+          formulario.reset();
+          setMensaje('PDF adjuntado.');
+        } catch (error) {
+          setMensaje(error.message);
+        } finally {
+          setEnviando(false);
+        }
+      }
+      return <details className="border rounded p-3">
+        <summary className="font-bold">Archivos del expediente</summary>
+        <form onSubmit={enviar} className="my-2">
+          <label>Adjuntar PDF <input name="pdf" type="file" accept="application/pdf,.pdf" required /></label>
+          <button disabled={enviando} className="underline ml-2">Guardar PDF</button>
+        </form>
+        <p role="status">{mensaje}</p>
+        <ul>{archivos.map(a => <li key={a.id}>
+          <button type="button" className="underline" onClick={() => descargarArchivo(url + '/' + a.id, a.nombre)}>{a.nombre}</button>
+          <span> · {a.autor} · {Math.ceil(a.bytes / 1024)} KiB</span>
+        </li>)}</ul>
+      </details>;
+    }
+
+    function EditorAnexos({ alumnoId, numero, onGuardado }) {
+      const [registros, setRegistros] = useState([]);
+      const [borrador, setBorrador] = useState(null);
+      const [historial, setHistorial] = useState(null);
+      const [buscar, setBuscar] = useState('');
+      const [desde, setDesde] = useState('');
+      const [mensaje, setMensaje] = useState('');
+      const [ocupado, setOcupado] = useState(false);
+      const campos = FORMULARIOS_ANEXOS[numero];
+      const url = `/api/expedientes/${alumnoId}/anexos/${numero}`;
+      const visibles = registros.filter(r =>
+        (!desde || (r.campos[campos[0][0]] || '') >= desde) &&
+        Object.values(r.campos).some(v => v.toLowerCase().includes(buscar.toLowerCase())));
+
+      useEffect(() => {
+        let activo = true;
+        apiRequest(url).then(datos => { if (activo) setRegistros(datos); })
+          .catch(e => { if (activo) setMensaje(e.message); });
+        return () => { activo = false; };
+      }, [url]);
+
+      async function guardar(event) {
+        event.preventDefault();
+        setOcupado(true);
+        setMensaje('');
+        try {
+          const id = borrador.id;
+          await apiRequest(url + (id ? '/' + id : ''), {
+            method: id ? 'PUT' : 'POST',
+            body: JSON.stringify({ campos: borrador.campos, revision: borrador.revision })
+          });
+          setRegistros(await apiRequest(url));
+          setBorrador(null);
+          setMensaje('Anexo guardado.');
+          onGuardado();
+        } catch (error) {
+          setMensaje(error.message);
+        } finally {
+          setOcupado(false);
+        }
+      }
+
+      return <section className="space-y-3">
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="underline" onClick={() => {
+            setHistorial(null); setBorrador({ campos: numero === 4 ? { ciclo_escolar: '2026-2027', trimestre: '1' } : {} });
+          }}>Nuevo registro</button>
+          <button type="button" className="underline" disabled={!registros.length}
+            onClick={() => descargarArchivo(url + '/pdf', `Anexo-${numero}.pdf`)}>Exportar anexo</button>
+          <label>Buscar <input className="border rounded" value={buscar} onChange={e => setBuscar(e.target.value)} /></label>
+          <label>Desde <input className="border rounded" type="date" value={desde} onChange={e => setDesde(e.target.value)} /></label>
+        </div>
+        {borrador && <form onSubmit={guardar}>
+          <fieldset disabled={ocupado} className="space-y-2 border rounded p-3">
+            {campos.map(([k, titulo, tipo]) => <label key={k} className="block">{titulo}
+              {tipo ? <input type={tipo} aria-label={titulo} className="block border rounded" value={borrador.campos[k] || ''}
+                  onChange={e => { const v = e.target.value; setBorrador(d => ({ ...d, campos: { ...d.campos, [k]: v } })); }} />
+                : <textarea aria-label={titulo} className="block w-full border rounded p-2" value={borrador.campos[k] || ''}
+                  onChange={e => { const v = e.target.value; setBorrador(d => ({ ...d, campos: { ...d.campos, [k]: v } })); }} />}
+            </label>)}
+            <button type="submit" className="px-3 py-2 rounded bg-slate-800 text-white">Guardar anexo</button>
+            <button type="button" className="ml-2" onClick={() => setBorrador(null)}>Cancelar</button>
+          </fieldset>
+        </form>}
+        <p role="status">{mensaje}</p>
+        {visibles.map(r => <article key={r.id} className="p-3 border rounded space-y-2">
+          {campos.map(([k, titulo]) => r.campos[k] && <p key={k} className="whitespace-pre-wrap"><strong>{titulo}</strong> {r.campos[k]}</p>)}
+          {r.autor && <p>Autoría: {r.autor}</p>}
+          <div className="flex gap-3">
+            {r.editable && <button type="button" className="underline" onClick={() => { setBorrador(r); setHistorial(null); }}>Editar</button>}
+            <button type="button" className="underline" onClick={async () => {
+              try { setHistorial({ id: r.id, cambios: await apiRequest(url + '/' + r.id + '/historial') }); }
+              catch (error) { setMensaje(error.message); }
+            }}>Historial</button>
+            <button type="button" className="underline" onClick={() => descargarArchivo(
+              url + '/pdf?registro=' + encodeURIComponent(r.id), `Anexo-${numero}.pdf`)}>Descargar PDF</button>
+          </div>
+          {historial?.id === r.id && <ul>{historial.cambios.map(c => <li key={c.revision}>
+            <details><summary>{c.fecha} · {c.autor}</summary>
+              {campos.map(([k, titulo]) => c.documento.campos[k] && <p key={k}>{titulo}: {c.documento.campos[k]}</p>)}
+            </details>
+          </li>)}</ul>}
+        </article>)}
+      </section>;
+    }
+
+    function ImportacionPadron({ onConfirmado }) {
+      const [permitido, setPermitido] = useState(false);
+      const [archivo, setArchivo] = useState(null);
+      const [vista, setVista] = useState(null);
+      const [confirmado, setConfirmado] = useState(false);
+      const [ocupado, setOcupado] = useState(false);
+      const [mensaje, setMensaje] = useState('');
+      const [error, setError] = useState('');
+      useEffect(() => {
+        apiRequest('/api/alumnos/importar-excel/permisos').then(r => setPermitido(r.permitido)).catch(() => {});
+      }, []);
+      if (!permitido) return null;
+
+      async function procesar(confirmar) {
+        setOcupado(true);
+        setError('');
+        setMensaje('');
+        if (!confirmar) { setVista(null); setConfirmado(false); }
+        try {
+          const respuesta = await apiRequest('/api/alumnos/importar-excel', {
+            method: 'POST', body: archivo,
+            headers: { 'Content-Type': 'application/octet-stream',
+              ...(confirmar ? { 'X-USAER-Revision': vista.revision } : {}) },
+          });
+          if (confirmar) {
+            setVista(null);
+            setConfirmado(false);
+            setMensaje(`Importación confirmada: ${respuesta.altas} altas y ${respuesta.actualizados} actualizaciones.`);
+            onConfirmado();
+          } else {
+            setVista(respuesta);
+          }
+        } catch (e) {
+          let detalle;
+          try { detalle = JSON.parse(e.message).detail; } catch {}
+          setError(typeof detalle === 'string' ? detalle : e.message);
+        } finally {
+          setOcupado(false);
+        }
+      }
+
+      return <details className="rounded-xl border bg-white p-4 text-sm space-y-3">
+        <summary className="cursor-pointer font-semibold">Importar padrón desde Excel</summary>
+        <p>La conciliación usa la CURP. Se conservan los expedientes y los campos vacíos no reemplazan los datos existentes.</p>
+        <label className="block">Archivo del padrón (.xlsx)
+          <input type="file" accept=".xlsx" disabled={ocupado} className="block mt-1"
+            onChange={e => {
+              setArchivo(e.target.files[0] || null); setVista(null); setConfirmado(false); setMensaje(''); setError('');
+            }} />
+        </label>
+        <button type="button" className="px-3 py-2 border rounded-lg disabled:opacity-50"
+          disabled={!archivo || ocupado} onClick={() => procesar(false)}>Revisar archivo y cambios</button>
+        {error && <p role="alert" className="text-red-700">{error}</p>}
+        {mensaje && <p role="status">{mensaje}</p>}
+        {vista && <div className="space-y-2">
+          <p>Hoja: {vista.hoja} · {vista.filas.length} registros revisados</p>
+          {!!vista.encabezados_no_reconocidos.length &&
+            <p>Encabezados omitidos: {vista.encabezados_no_reconocidos.join(', ')}</p>}
+          {!!vista.errores.length && <ul role="alert" className="text-red-700 list-disc pl-5">
+            {vista.errores.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>}
+          <ul className="max-h-64 overflow-y-auto divide-y border rounded-lg">
+            {vista.filas.map((fila, i) => <li key={i} className="p-2">
+              <strong>{fila.accion} · {fila.alumno}</strong>
+              {Object.entries(fila.cambios).map(([campo, valor]) =>
+                <div key={campo}>{campo}: {valor.anterior || '—'} → {valor.nuevo}</div>)}
+            </li>)}
+          </ul>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={confirmado} disabled={ocupado}
+              onChange={e => setConfirmado(e.target.checked)} /> Revisé y confirmo estas altas y actualizaciones
+          </label>
+          <button type="button" className="px-3 py-2 rounded-lg bg-amber-700 text-white disabled:opacity-50"
+            disabled={ocupado || !confirmado || !!vista.errores.length || !vista.filas.length}
+            onClick={() => procesar(true)}>Confirmar importación</button>
+        </div>}
+      </details>;
+    }
+
+    function FichaPadron({ alumnoId, onGuardado }) {
+      const ruta = '/api/alumnos/' + encodeURIComponent(alumnoId);
+      const [ficha, setFicha] = useState(null);
+      const [campos, setCampos] = useState({});
+      const [mov, setMov] = useState({ accion: 'baja', motivo: '' });
+      const [destinos, setDestinos] = useState([]);
+      const [historial, setHistorial] = useState(null);
+      const [mensaje, setMensaje] = useState('');
+      const [error, setError] = useState('');
+      const [ocupado, setOcupado] = useState(false);
+      const etiquetas = { Nombre_Completo: 'Nombre completo', CURP: 'CURP', Edad_1_Septiembre: 'Edad al 1 de septiembre',
+        Sexo: 'Sexo', Situacion_Alumno: 'Situación', Nivel_Educativo: 'Nivel educativo', Grado: 'Grado',
+        Grupo: 'Grupo', Condicion_Discapacidad: 'Condición o discapacidad', Tipo_Atencion: 'Tipo de atención',
+        Lengua_Indigena_Mayahablante: 'Lengua indígena', Afrodescendiente: 'Afrodescendiente', Migrante: 'Migrante',
+        Fecha_Nacimiento: 'Fecha de nacimiento', Fecha_Derivacion: 'Fecha de derivación',
+        Condiciones_Adicionales: 'Condiciones adicionales' };
+      function recibir(datos) {
+        setFicha(datos);
+        setCampos(datos.campos);
+        const activo = datos.estatus.trim().toUpperCase() === 'ACTIVO';
+        setMov({ accion: activo ? 'baja' : 'reactivacion', motivo: '', grado: datos.campos.Grado, grupo: datos.campos.Grupo });
+      }
+      async function abrir() {
+        setError(''); setMensaje(''); setOcupado(true);
+        try { recibir(await apiRequest(ruta + '/ficha')); }
+        catch (e) { setError(e.message); }
+        finally { setOcupado(false); }
+      }
+      async function guardar(evento, movimiento) {
+        evento.preventDefault();
+        setOcupado(true); setError(''); setMensaje('');
+        try {
+          const cambios = Object.fromEntries(Object.entries(campos).filter(([k, v]) => v !== ficha.campos[k]));
+          const datos = movimiento ? mov : { campos: cambios };
+          await apiRequest(ruta + (movimiento ? '/movimientos' : '/ficha'), {
+            method: movimiento ? 'POST' : 'PUT', body: JSON.stringify({ ...datos, revision: ficha.revision })
+          });
+          setHistorial(null);
+          if (movimiento && mov.accion === 'traslado') { setFicha(null); onGuardado(true); }
+          else { recibir(await apiRequest(ruta + '/ficha')); onGuardado(false); }
+          setMensaje('Cambios guardados en el padrón.');
+        } catch (e) { setError(e.message); }
+        finally { setOcupado(false); }
+      }
+      const opcionesDestino = destinos.find(e => e.id === mov.escuela)?.responsables || [];
+      const activo = ficha?.estatus.trim().toUpperCase() === 'ACTIVO';
+      return <section className="rounded-lg border p-3 text-sm space-y-3">
+        <button type="button" disabled={ocupado} className="font-semibold underline" onClick={abrir}>Abrir ficha del padrón</button>
+        {mensaje && <p role="status">{mensaje}</p>}
+        {error && <p role="alert" className="text-red-700">{error}</p>}
+        {ficha && <>
+          <p>Estatus: <strong>{ficha.estatus}</strong></p>
+          <form onSubmit={e => guardar(e, false)}>
+            <fieldset disabled={ocupado} className="grid sm:grid-cols-2 gap-2">
+              {Object.entries(etiquetas).map(([k, etiqueta]) => <label key={k}>{etiqueta}
+                {ficha.catalogos[k] ? <select className="block w-full border rounded p-1" value={campos[k]}
+                  onChange={e => setCampos({ ...campos, [k]: e.target.value })}>
+                  {[...new Set(['', campos[k], ...ficha.catalogos[k]])].map(v => <option key={v} value={v}>{v || 'Sin dato'}</option>)}
+                </select> : <input className="block w-full border rounded p-1" value={campos[k]}
+                  onChange={e => setCampos({ ...campos, [k]: e.target.value })} />}
+              </label>)}
+              <button className="rounded border p-2 font-semibold" type="submit">Guardar ficha nominal</button>
+            </fieldset>
+          </form>
+          <form onSubmit={e => guardar(e, true)}>
+            <fieldset disabled={ocupado} className="grid gap-2 border-t pt-3">
+              <legend className="font-semibold">Movimientos del padrón</legend>
+              <label>Acción <select value={mov.accion} className="border rounded" onChange={async e => {
+                const accion = e.target.value;
+                setMov({ ...mov, accion });
+                if (accion === 'traslado') {
+                  try { setDestinos(await apiRequest(ruta + '/destinos')); } catch (err) { setError(err.message); }
+                }
+              }}>
+                {activo ? <><option value="baja">Baja recuperable</option><option value="traslado">Traslado</option></>
+                  : <option value="reactivacion">Reactivar</option>}
+              </select></label>
+              {mov.accion === 'traslado' && <>
+                <label>Escuela de destino <select required className="border rounded" value={mov.escuela || ''}
+                  onChange={e => setMov({ ...mov, escuela: e.target.value, cuenta_destino: '' })}>
+                  <option value="">Elegir escuela</option>{destinos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                </select></label>
+                <label>Responsable de destino <select required className="border rounded" value={mov.cuenta_destino || ''}
+                  onChange={e => setMov({ ...mov, cuenta_destino: e.target.value })}>
+                  <option value="">Elegir responsable</option>{opcionesDestino.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                </select></label>
+                {['grado', 'grupo'].map(k => <label key={k}>{k === 'grado' ? 'Grado de destino' : 'Grupo de destino'}
+                  <input required className="block border rounded" value={mov[k]} onChange={e => setMov({ ...mov, [k]: e.target.value })} />
+                </label>)}
+              </>}
+              <label>Motivo del movimiento <textarea required minLength={8} maxLength={500} className="block w-full border rounded"
+                value={mov.motivo} onChange={e => setMov({ ...mov, motivo: e.target.value })} /></label>
+              <button className="rounded border p-2 font-semibold" type="submit">Confirmar movimiento</button>
+            </fieldset>
+          </form>
+          <button type="button" className="underline" onClick={async () => {
+            try { setHistorial(await apiRequest(ruta + '/movimientos')); } catch (e) { setError(e.message); }
+          }}>Ver historial del padrón</button>
+          {historial && <ul className="divide-y">{historial.map(r => <li key={r.revision} className="py-2">
+            <strong>{r.documento.accion}</strong> · {r.fecha.split('T')[0]} · {r.autor}
+            {r.documento.motivo && <p>{r.documento.motivo}</p>}
+            {Object.entries(r.documento.despues).map(([k, v]) => <p key={k}>
+              {etiquetas[k] || k}: {r.documento.antes[k] || '—'} → {v || '—'}
+            </p>)}
+          </li>)}</ul>}
+        </>}
+      </section>;
+    }
+
+    function ExpedientesView({ initialAlumnoId, onBack, onOpenInformes, setMetrics }) {
+      const [alumnos, setAlumnos] = useState([]);
+      const [selectedId, setSelectedId] = useState(initialAlumnoId || null);
+      const [expediente, setExpediente] = useState(null);
+      const [loadingExp, setLoadingExp] = useState(false);
+      const [errorExp, setErrorExp] = useState('');
+      const [activeExpTab, setActiveExpTab] = useState('resumen'); // 'resumen' | 'epp' | 'bap' | 'sugerencias' | 'eventos' | 'derivacion'
+
+      const [versionExpediente, actualizarExpediente] = useState(0);
+      const [versionPadron, actualizarPadron] = useState(0);
+
+      useEffect(() => {
+        apiRequest('/api/alumnos').then(data => {
+          setAlumnos(data);
+          if (!selectedId && data.length > 0) {
+            setSelectedId(data[0].id);
+          }
+        });
+      }, [versionPadron]);
+
+      useEffect(() => {
+        if (!selectedId) return;
+        let vigente = true;
+        setLoadingExp(true);
+        setErrorExp('');
+        const t0 = performance.now();
+        apiRequest(`/api/expedientes/${selectedId}`).then(exp => {
+          if (!vigente) return;
+          setExpediente(exp);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+        }).catch(error => { if (vigente) setErrorExp(error.message); })
+          .finally(() => { if (vigente) setLoadingExp(false); });
+        return () => { vigente = false; };
+      }, [selectedId, setMetrics, versionExpediente]);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+                ← Volver a Mis Documentos
+              </button>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Expedientes de Alumnos</h1>
+            </div>
+            <div className="flex gap-2">
+            <button
+              onClick={() => descargarArchivo('/api/alumnos/exportar.xlsx', 'Padron_USAER_2E.xlsx')}
+              className="text-xs px-3 py-1.5 bg-slate-100 rounded-lg font-semibold border border-slate-300"
+            >
+              Exportar Padrón Excel
+            </button>
+            <button
+              onClick={() => descargarArchivo('/api/alumnos/exportar', 'Padron.csv')}
+              className="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border border-slate-300 transition"
+            >
+              Exportar Padrón CSV 📥
+            </button>
+            </div>
+          </div>
+
+          <ImportacionPadron onConfirmado={() => {
+            actualizarPadron(v => v + 1); actualizarExpediente(v => v + 1);
+          }} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Lista Izquierda de Alumnos */}
+            <div className="lg:col-span-4 bg-white p-4 rounded-xl border border-slate-200 space-y-2 self-start">
+              <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">Matrícula de Atención</h3>
+              <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                {alumnos.map(al => (
+                  <div
+                    key={al.id}
+                    onClick={() => setSelectedId(al.id)}
+                    className={`p-2.5 rounded-lg text-xs cursor-pointer transition ${
+                      selectedId === al.id ? 'bg-amber-100/70 border border-amber-300 font-bold text-slate-900' : 'hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div>{al.nombre_completo}</div>
+                    <div className="text-[11px] text-slate-500">{al.grado}° {al.grupo} • {al.escuela}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Vista Derecha del Expediente Integral */}
+            <div className="lg:col-span-8 bg-white p-6 rounded-xl border border-slate-200 space-y-5">
+              {errorExp ? <p role="alert" className="text-red-700">{errorExp}</p> :
+                !selectedId && !alumnos.length ? <p>No hay expedientes en esta asignación.</p> :
+                !expediente || expediente.alumno?.id !== selectedId ? (
+                <div className="text-center py-16 text-slate-500 text-sm">Cargando expediente integral desde base relacional...</div>
+              ) : (
+                <>
+                  {loadingExp && <p className="text-xs text-slate-500">Actualizando expediente…</p>}
+                  <div className="border-b border-slate-200 pb-4 flex justify-between items-start">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">{expediente.alumno?.nombre_completo}</h2>
+                      <div className="text-xs text-slate-500 mt-1">
+                        <span>CURP: {expediente.alumno?.curp || 'No registrada'}</span>
+                        <span className="mx-2">•</span>
+                        <span>{expediente.alumno?.escuela}</span>
+                        <span className="mx-2">•</span>
+                        <span>Grado: {expediente.alumno?.grado}° {expediente.alumno?.grupo}</span>
+                      </div>
+                    </div>
+                    <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
+                      {expediente.alumno?.condicion || 'Atención USAER'}
+                    </span>
+                  </div>
+
+                  {/* Sub-pestañas de Expediente */}
+                  <button onClick={() => onOpenInformes(expediente.alumno.id)}
+                    className="px-3 py-2 rounded-lg border text-sm font-semibold">Informes del expediente</button>
+                  <div className="flex border-b border-slate-200 space-x-1 text-xs font-bold">
+                    {[
+                      { id: 'resumen', label: 'Resumen' },
+                      { id: 'epp', label: 'Evaluación Psicopedagógica (EPP)' },
+                      { id: 'bap', label: `BAP (${expediente.anexo3_bap?.length || 0})` },
+                      { id: 'sugerencias', label: `Sugerencias (${expediente.anexo4_sugerencias?.length || 0})` },
+                      { id: 'eventos', label: `Eventos (${expediente.anexo5_eventos?.length || 0})` },
+                      { id: 'seguimiento', label: 'Seguimiento' },
+                      { id: 'derivacion', label: 'Derivación y Salud' },
+                    ].map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => setActiveExpTab(t.id)}
+                        className={`px-3 py-2 border-b-2 transition ${
+                          activeExpTab === t.id ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-400 hover:text-slate-700'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* SUB-TAB: RESUMEN */}
+                  {activeExpTab === 'seguimiento' && <section className="space-y-2 text-sm">
+                    <h3 className="font-semibold">Seguimiento longitudinal</h3>
+                    {!!expediente.comparativo_epp?.length && <details>
+                      <summary className="font-semibold">Comparar EPP por ciclo</summary>
+                      <p>Las NEE corresponden a la conclusión registrada de cada ciclo.</p>
+                      <div className="overflow-x-auto"><table className="w-full text-left">
+                        <thead><tr>{['Ciclo', 'Áreas validadas', 'Evaluaciones', 'Conclusión', 'NEE confirmadas'].map(t =>
+                          <th key={t} className="p-2">{t}</th>)}</tr></thead>
+                        <tbody>{expediente.comparativo_epp.map(r => <tr key={r.ciclo} className="border-t">
+                          <th className="p-2">{r.ciclo}</th><td className="p-2">{r.areas_validadas.join(', ') || '—'}</td>
+                          <td className="p-2">{r.evaluaciones}</td>
+                          <td className="p-2">{r.conclusion_confirmada ? 'Confirmada' : 'Pendiente de validación'}</td>
+                          <td className="p-2">{r.nee_confirmadas.join(' · ') || '—'}</td>
+                        </tr>)}</tbody>
+                      </table></div>
+                    </details>}
+                    {!(expediente.seguimiento || []).length && <p>El expediente todavía no tiene registros vinculados.</p>}
+                    <ul className="divide-y">
+                      {(expediente.seguimiento || []).map(fila => <li key={fila.tipo + ':' + fila.id} className="py-2">
+                        <strong>{fila.tipo}</strong> · {fila.fecha ? fila.fecha.split('T')[0] : 'Sin fecha'}
+                        <p className="whitespace-pre-wrap">{fila.detalle}</p>
+                      </li>)}
+                    </ul>
+                  </section>}
+                  {activeExpTab === 'resumen' && <AdjuntosExpediente key={selectedId} alumnoId={selectedId} />}
+                  {activeExpTab === 'resumen' && <FichaPadron key={expediente.alumno.id} alumnoId={expediente.alumno.id}
+                    onGuardado={traslado => {
+                      if (traslado) { setSelectedId(null); setExpediente(null); }
+                      actualizarPadron(v => v + 1); actualizarExpediente(v => v + 1);
+                    }} />}
+                  {activeExpTab === 'resumen' && (
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-bold text-slate-700">Maestra de Apoyo Asignada</div>
+                        <div className="text-slate-900">{expediente.alumno?.maestra_apoyo || 'Por asignar'}</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-bold text-slate-700">Tipo de Atención</div>
+                        <div className="text-slate-900">{expediente.alumno?.tipo_atencion || 'Atención Focalizada'}</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-bold text-slate-700">Turno y CCT</div>
+                        <div className="text-slate-900">{expediente.alumno?.turno} • {expediente.alumno?.cct}</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-bold text-slate-700">Documentos Vinculados</div>
+                        <div className="text-amber-700 font-bold">{expediente.total_documentos} registros en expediente</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: EPP MULTI-ÁREA */}
+                  {activeExpTab === 'epp' && <div className="space-y-3">
+                    <AnexoEvaluacion key={selectedId} alumnoId={selectedId} />
+                    <details><summary>Notas breves del expediente</summary><EditorEPP key={selectedId} alumnoId={selectedId} /></details>
+                  </div>}
+
+                  {/* SUB-TAB: BAP */}
+                  {['bap', 'sugerencias', 'eventos'].includes(activeExpTab) &&
+                    <EditorAnexos key={selectedId + activeExpTab} alumnoId={selectedId}
+                      numero={{ bap: 3, sugerencias: 4, eventos: 5 }[activeExpTab]} onGuardado={() => {
+                        apiRequest(`/api/expedientes/${selectedId}`).then(setExpediente).catch(() => {});
+                      }} />}
+
+                  {activeExpTab === 'derivacion' && (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                      <div className="font-bold text-slate-900">Anexo VII — Formato de Derivación</div>
+                      <div><strong>Docente Regular:</strong> {expediente.anexo7_derivacion?.docente_regular || 'No registrado'}</div>
+                      <div><strong>Salud:</strong> {expediente.anexo7_derivacion?.salud || 'Buena salud reportada'}</div>
+                      <div><strong>Seguimiento Médico:</strong> {expediente.anexo7_derivacion?.seguimiento_medico || 'Sin seguimiento activo'}</div>
+                      <div><strong>Aspecto Relevante:</strong> {expediente.anexo7_derivacion?.aspecto_relevante || 'Ninguno'}</div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 4: ACTAS DE VISITA Y OFICIOS DE COMISIÓN
+    // =============================================================
+    function EditorOficio({ listado, onGuardado }) {
+      const [oficio, setOficio] = useState(null);
+      const [historial, setHistorial] = useState(null);
+      const [ocupado, setOcupado] = useState(false);
+      const [mensaje, setMensaje] = useState('');
+      const [error, setError] = useState('');
+      const campos = [
+        ['fecha_emision', 'Fecha de emisión', 'date'], ['fecha_comision', 'Fecha de comisión', 'date'],
+        ['escuela', 'Escuela destinataria'], ['director_escuela', 'Dirección destinataria'],
+        ['maestra_apoyo', 'Personal comisionado'], ['asunto', 'Asunto'], ['destino', 'Destino o actividad'],
+        ['horario', 'Horario'],
+      ];
+      async function ejecutar(tarea) {
+        setOcupado(true); setError(''); setMensaje('');
+        try { await tarea(); } catch (e) { setError(e.message); }
+        finally { setOcupado(false); }
+      }
+      async function guardar(e) {
+        e.preventDefault();
+        await ejecutar(async () => {
+          const ruta = '/api/oficios' + (oficio.id ? '/' + encodeURIComponent(oficio.id) : '');
+          setOficio(await apiRequest(ruta, { method: oficio.id ? 'PUT' : 'POST', body: JSON.stringify(oficio) }));
+          setHistorial(null); setMensaje('Oficio guardado.');
+          await onGuardado();
+        });
+      }
+      return <section className="space-y-3">
+        <button type="button" className="underline" disabled={ocupado} onClick={() => {
+          setOficio({ clave_operacion: crypto.randomUUID() }); setHistorial(null); setMensaje(''); setError('');
+        }}>Nuevo oficio de comisión</button>
+        {error && <p role="alert" className="text-red-700">{error}</p>}
+        {mensaje && <p role="status">{mensaje}</p>}
+        {oficio && <form onSubmit={guardar} className="bg-white border rounded-xl p-3">
+          <fieldset disabled={ocupado} className="grid gap-2">
+            <legend className="font-semibold">{oficio.folio ? 'Oficio ' + oficio.folio : 'Nuevo oficio'}</legend>
+            {campos.map(([k, etiqueta, tipo]) => <label key={k}>{etiqueta}
+              <input type={tipo || 'text'} className="block w-full border rounded" value={oficio[k] || ''}
+                required={['fecha_comision', 'escuela', 'maestra_apoyo', 'asunto', 'destino'].includes(k)}
+                onChange={e => setOficio({ ...oficio, [k]: e.target.value })} />
+            </label>)}
+            <button type="submit" className="underline">Guardar oficio</button>
+            {oficio.id && <>
+              <button type="button" className="underline" onClick={() =>
+                descargarArchivo('/api/oficios/' + oficio.id + '/pdf', 'Oficio-Comision.pdf')}>Exportar oficio PDF</button>
+              <button type="button" className="underline" onClick={() => ejecutar(async () => {
+                setHistorial(await apiRequest('/api/oficios/' + oficio.id + '/historial'));
+              })}>Historial del oficio</button>
+            </>}
+          </fieldset>
+        </form>}
+        {historial && <ul className="divide-y">{historial.map(r => <li key={r.revision}>
+          <details><summary>{r.fecha} · {r.autor}</summary>
+            {campos.map(([k, etiqueta]) => <p key={k}>{etiqueta}: {r.documento[k]}</p>)}
+          </details>
+        </li>)}</ul>}
+        {listado.map(o => <div key={o.ID_Oficio} className="p-4 bg-white rounded-xl border text-sm">
+          <strong>Folio {o.Folio} · {o.Asunto}</strong>
+          <p>{o.Escuela} · {o.Maestra_Apoyo} · {o.Fecha_Comision}</p>
+          <button type="button" className="underline" disabled={ocupado} onClick={() => ejecutar(async () => {
+            setOficio(await apiRequest('/api/oficios/' + encodeURIComponent(o.ID_Oficio))); setHistorial(null);
+          })}>Abrir oficio {o.Folio}</button>
+        </div>)}
+      </section>;
+    }
+
+    function ActasYOficiosView({ onBack, setMetrics }) {
+      const [visitas, setVisitas] = useState([]);
+      const [oficios, setOficios] = useState([]);
+      const [subTab, setSubTab] = useState('visitas'); // 'visitas' | 'oficios'
+
+      const [acta, setActa] = useState(null);
+      const [actaError, setActaError] = useState('');
+      const [guardandoActa, setGuardandoActa] = useState(false);
+      const [historialActa, setHistorialActa] = useState(null);
+      const [alumnosActa, setAlumnosActa] = useState([]);
+      const camposActa = [
+        ['tipo_acta','Tipo de acta'], ['fecha','Fecha'], ['escuela','Escuela o sede'], ['lugar','Lugar'],
+        ['personal','Personal'], ['motivo','Motivos y actividades'], ['observaciones','Observaciones'],
+        ['acuerdos','Acuerdos'], ['responsable','Responsable'], ['seguimiento','Seguimiento']
+      ];
+
+      async function abrirActa(id) {
+        setActaError('');
+        setHistorialActa(null);
+        try { setActa(await apiRequest('/api/visitas/' + id)); }
+        catch (error) { setActaError(error.message); }
+      }
+
+      async function guardarActa(event) {
+        event.preventDefault();
+        setGuardandoActa(true);
+        setActaError('');
+        try {
+          const acuse = await apiRequest('/api/visitas' + (acta.id ? '/' + acta.id : ''), {
+            method: acta.id ? 'PUT' : 'POST', body: JSON.stringify(acta)
+          });
+          await abrirActa(acuse.id);
+          setVisitas(await apiRequest('/api/visitas'));
+        } catch (error) {
+          setActaError(error.message);
+        } finally {
+          setGuardandoActa(false);
+        }
+      }
+
+      useEffect(() => {
+        const t0 = performance.now();
+        Promise.all([
+          apiRequest('/api/visitas'),
+          apiRequest('/api/oficios'),
+          apiRequest('/api/alumnos')
+        ]).then(([v, o, alumnos]) => {
+          setVisitas(v);
+          setOficios(o);
+          setAlumnosActa(alumnos);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 2 }));
+        });
+      }, [setMetrics]);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Actas de Visita y Oficios de Comisión</h1>
+          </div>
+
+          <div className="flex border-b border-slate-200 space-x-2 text-xs font-bold">
+            <button
+              onClick={() => setSubTab('visitas')}
+              className={`px-4 py-2 border-b-2 transition ${
+                subTab === 'visitas' ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-500'
+              }`}
+            >
+              📋 Actas de Visita de Acompañamiento ({visitas.length})
+            </button>
+            <button
+              onClick={() => setSubTab('oficios')}
+              className={`px-4 py-2 border-b-2 transition ${
+                subTab === 'oficios' ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-500'
+              }`}
+            >
+              📜 Oficios de Comisión ({oficios.length})
+            </button>
+          </div>
+
+          {subTab === 'visitas' && (
+            <div className="space-y-3">
+                              <button className="underline" type="button" onClick={() => {
+                  setActa({ tipo_acta: 'Acta de visita' }); setActaError(''); setHistorialActa(null);
+                }}>Nueva acta</button>
+                {actaError && <p role="alert">{actaError}</p>}
+                {acta && <form onSubmit={guardarActa} className="p-4 bg-white border rounded space-y-2">
+                  <fieldset disabled={guardandoActa} className="grid gap-2">
+                    <label>Vincular a un expediente
+                      <select className="block w-full border rounded" value={acta.alumno_id || ''}
+                        onChange={e => {
+                          const id = e.target.value;
+                          const alumno = alumnosActa.find(a => a.id === id);
+                          setActa(d => ({ ...d, alumno_id: id, escuela: alumno?.escuela || d.escuela }));
+                        }}>
+                        <option value="">Sin expediente vinculado</option>
+                        {alumnosActa.map(a => <option key={a.id} value={a.id}>{a.nombre_completo} · {a.escuela}</option>)}
+                      </select>
+                    </label>
+                    {camposActa.map(([k, etiqueta]) => <label key={k}>{etiqueta}
+                      {['motivo', 'observaciones', 'acuerdos', 'seguimiento'].includes(k) ?
+                        <textarea className="block w-full border rounded" value={acta[k] || ''} onChange={e => {
+                          const valor = e.target.value; setActa(d => ({ ...d, [k]: valor }));
+                        }} /> :
+                        <input type={k === 'fecha' ? 'date' : 'text'} className="block w-full border rounded"
+                          readOnly={k === 'escuela' && !!acta.alumno_id}
+                          value={acta[k] || ''} onChange={e => {
+                            const valor = e.target.value; setActa(d => ({ ...d, [k]: valor }));
+                          }} />}
+                    </label>)}
+                    <button type="submit" className="underline">Guardar acta</button>
+                    <button type="button" onClick={() => setActa(null)}>Cerrar</button>
+                    {acta.id && <>
+                      <button type="button" className="underline" onClick={() =>
+                        descargarArchivo('/api/visitas/' + acta.id + '/pdf', 'Acta-USAER.pdf')}>Exportar PDF</button>
+                      <button type="button" className="underline" onClick={async () => {
+                        try { setHistorialActa(await apiRequest('/api/visitas/' + acta.id + '/historial')); }
+                        catch (e) { setActaError(e.message); }
+                      }}>Ver historial</button>
+                    </>}
+                  </fieldset>
+                  {historialActa && <ul>{historialActa.map(r => <li key={r.revision}>
+                    <details><summary>{r.fecha} · {r.autor}</summary>
+                      {camposActa.map(([k, etiqueta]) => r.documento[k] &&
+                        <p key={k} className="whitespace-pre-wrap">{etiqueta} {r.documento[k]}</p>)}
+                    </details>
+                  </li>)}</ul>}
+                </form>}
+{visitas.map((v, i) => (
+                <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-1 shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-900 text-sm">Escuela: {v.Escuela}</span>
+                    <span className="text-slate-400">{v.Fecha}</span>
+                  </div>
+                  <div><strong>Personal de Acompañamiento:</strong> {v.Personal}</div>
+                  <div><strong>Motivo:</strong> {v.Motivo}</div>
+                  {v.Observaciones && <div className="text-slate-600"><strong>Observaciones:</strong> {v.Observaciones}</div>}
+                    <button type="button" className="underline" onClick={() => abrirActa(v.ID_Visita)}>Abrir acta</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {subTab === 'oficios' && (
+            <EditorOficio listado={oficios} onGuardado={async () => setOficios(await apiRequest('/api/oficios'))} />
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================
+    // INFORMES EDUCATIVOS — EDITOR DIRECTO CON HISTORIAL SQL
+    // =============================================================
+    function InformesView({ initialAlumnoId, onBack }) {
+      const [alumnos, setAlumnos] = useState([]);
+      const [alumnoId, setAlumnoId] = useState(initialAlumnoId || '');
+      const [lista, setLista] = useState([]);
+      const [actual, setActual] = useState(null);
+      const [estado, setEstado] = useState('');
+      const [error, setError] = useState('');
+      const [busy, setBusy] = useState(false);
+      const campos = ['antecedentes','avances','dificultades','intervenciones','recomendaciones'];
+      const labels = {antecedentes:'Antecedentes', avances:'Avances', dificultades:'Dificultades', intervenciones:'Intervenciones', recomendaciones:'Recomendaciones'};
+      const [ciclo,setCiclo] = useState('2026-2027');
+      const [versionLista, recargarLista] = useState(0);
+      useEffect(() => { apiRequest('/api/alumnos').then(rows => setAlumnos(rows)).catch(e => setError(e.message)); }, []);
+      useEffect(() => {
+        if (!alumnoId) return;
+        let vigente = true;
+        apiRequest('/api/informes?alumno_id=' + encodeURIComponent(alumnoId))
+          .then(rows => { if (vigente) setLista(rows); })
+          .catch(e => { if (vigente) setError(e.message); });
+        return () => { vigente = false; };
+      }, [alumnoId, versionLista]);
+      const nuevo = () => {
+        if (!alumnoId) return;
+        setActual({alumno_id:alumnoId,ciclo,tipo:'seguimiento',titulo:'Informe de seguimiento',
+          antecedentes:'',avances:'',dificultades:'',intervenciones:'',recomendaciones:'',revision:null});
+        setEstado('Nuevo informe sin guardar');
+      };
+      const guardar = async () => {
+        if (!actual || busy) return;
+        setBusy(true); setEstado('Guardando…');
+        try {
+          const esNuevo = !actual.id;
+          const r = await apiRequest(esNuevo ? '/api/informes' : '/api/informes/' + actual.id,
+            {method:esNuevo ? 'POST':'PUT',body:JSON.stringify(actual)});
+          const actualizado = {...actual,id:r.id,revision:r.revision};
+          setActual(actualizado); recargarLista(n => n + 1);
+          setEstado('Guardado confirmado'); setError('');
+        } catch(e) { setEstado('Cambios no guardados'); setError(e.message); }
+        finally { setBusy(false); }
+      };
+      return <div className="space-y-4">
+        <div className="flex gap-3 items-center"><button onClick={onBack} className="px-3 py-2 bg-slate-100 rounded-lg">← Volver</button><h1 className="text-2xl font-bold">Informes educativos</h1></div>
+        <div className="bg-white rounded-xl border p-4 flex flex-wrap gap-3 items-end">
+          <label className="flex-1 min-w-56 text-sm">Alumno
+            <select disabled={busy} value={alumnoId} onChange={e=>{
+              setAlumnoId(e.target.value); setActual(null); setLista([]); setError(''); setEstado('');
+            }}
+              className="mt-1 w-full border rounded-lg p-2"><option value="">Seleccionar alumno</option>
+              {alumnos.map(a=><option key={a.id} value={a.id}>{a.nombre_completo}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Ciclo<input value={ciclo} onChange={e=>setCiclo(e.target.value)} className="block mt-1 border rounded-lg p-2 w-32"/></label>
+          <button disabled={!alumnoId || busy} onClick={nuevo} className="px-4 py-2 bg-amber-600 disabled:opacity-50 text-white rounded-lg">+ Nuevo informe</button>
+        </div>
+        {error && <div role="alert" className="bg-red-50 text-red-700 p-3 rounded-lg">{error}</div>}
+        {lista.length>0 && <div className="bg-white rounded-xl border p-3"><strong>Informes existentes</strong><div className="flex flex-wrap gap-2 mt-2">
+          {lista.map(inf=><button key={inf.id} disabled={busy} onClick={()=>{setActual(inf);setEstado('Informe recuperado');}} className="border rounded-lg px-3 py-2 text-sm hover:bg-slate-50">{inf.titulo} · {inf.ciclo}</button>)}
+        </div></div>}
+        {actual && <fieldset disabled={busy} className="bg-white rounded-xl border p-5 space-y-4">
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="text-sm">Título<input value={actual.titulo} onChange={e=>{setActual({...actual,titulo:e.target.value});setEstado('Cambios pendientes');}} className="block border rounded-lg p-2 w-full mt-1"/></label>
+            <label className="text-sm">Tipo<select value={actual.tipo} onChange={e=>{setActual({...actual,tipo:e.target.value});setEstado('Cambios pendientes');}} className="block border rounded-lg p-2 w-full mt-1">
+              <option value="seguimiento">Seguimiento</option><option value="evaluacion">Evaluación</option><option value="intervencion">Intervención</option><option value="otro">Otro</option></select></label>
+          </div>
+          {campos.map(k=><label key={k} className="block font-semibold text-sm">{labels[k]}
+            <textarea value={actual[k]||''} onChange={e=>{setActual({...actual,[k]:e.target.value});setEstado('Cambios pendientes');}} rows="3" className="block w-full mt-1 border rounded-lg p-2 font-normal"/>
+          </label>)}
+          <div className="flex items-center flex-wrap gap-3"><button disabled={busy} onClick={guardar} className="bg-emerald-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">{busy?'Guardando…':'Guardar informe'}</button>
+            {actual.id && <button onClick={() => descargarArchivo('/api/informes/' + actual.id + '/pdf', 'Informe-USAER-2E.pdf').catch(e => setError(e.message))}
+              className="border rounded-lg px-4 py-2">Exportar PDF</button>}
+            <span role="status" className="text-sm text-slate-500">{estado}</span></div>
+        </fieldset>}
+      </div>;
+    }
+
+    // =============================================================
+    // VISTA 5: ESTADÍSTICAS INSTITUCIONALES DE ZONA
+    // =============================================================
+    function EstadisticasView({ director, onBack, setMetrics }) {
+      const [stats, setStats] = useState(null);
+      const [escuela, setEscuela] = useState('');
+      const [bajas, setBajas] = useState(false);
+      const [ciclo, setCiclo] = useState('2026-2027');
+      const [error, setError] = useState('');
+      const [gestion, setGestion] = useState(null);
+      useEffect(() => {
+        if (director) apiRequest('/api/estadisticas/zona').then(setGestion).catch(() => {});
+      }, [director]);
+
+      useEffect(() => {
+        let vigente = true;
+        const t0 = performance.now();
+        const consulta = new URLSearchParams({ escuela, incluir_bajas: bajas, ciclo });
+        apiRequest('/api/estadisticas/padron?' + consulta).then(data => {
+          if (!vigente) return;
+          setStats(data);
+          setError('');
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+        }).catch(e => { if (vigente) { setStats(null); setError(e.message); } });
+        return () => { vigente = false; };
+      }, [escuela, bajas, ciclo, setMetrics]);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Estadísticas de Zona 001</h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <label>Escuela <select value={escuela} onChange={e => setEscuela(e.target.value)} className="border rounded p-1">
+              <option value="">Todas las escuelas autorizadas</option>
+              {(stats?.escuelas || []).map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+            </select></label>
+            <label>Ciclo EPP <select value={ciclo} onChange={e => setCiclo(e.target.value)} className="border rounded p-1">
+              {['2024-2025', '2025-2026', '2026-2027', '2027-2028'].map(c => <option key={c}>{c}</option>)}
+            </select></label>
+            <label><input type="checkbox" checked={bajas} onChange={e => setBajas(e.target.checked)} /> Incluir bajas</label>
+          </div>
+          {error && <p role="alert" className="text-red-700">{error}</p>}
+          {!stats && !error && <p>Calculando indicadores relacionales…</p>}
+          {stats && <>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Total Alumnos en Padrón</div>
+              <div className="text-2xl font-black text-slate-900 mt-1">{stats.total_alumnos}</div>
+              <div className="text-[11px] text-emerald-600 mt-1">{stats.alumnos_activos} activos</div>
+            </div>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Escuelas de la Zona</div>
+              <div className="text-2xl font-black text-amber-600 mt-1">{stats.total_escuelas}</div>
+              <div className="text-[11px] text-slate-400 mt-1">Primarias públicas</div>
+            </div>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Alumnado activo con EPP registrada</div>
+              <div className="text-2xl font-black text-emerald-600 mt-1">{stats.cumplimiento_epp}</div>
+              <div className="text-[11px] text-slate-400 mt-1">Avance curricular</div>
+            </div>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Edad promedio al 1 de septiembre</div>
+              <div className="text-2xl font-black text-slate-900 mt-1">{stats.edad?.media ?? '—'}</div>
+              {stats.edad && <div className="text-[11px] text-slate-400 mt-1">Mín. {stats.edad.minima} · Máx. {stats.edad.maxima}</div>}
+            </div>
+          </div>
+          <p className="text-sm">Hombres: {stats.sexo.hombres} · Mujeres: {stats.sexo.mujeres} · Sin dato: {stats.sexo.sin_dato}</p>
+          {director && gestion && <p className="text-sm">Totales de zona · Actas: {gestion.visitas_registradas} · Oficios: {gestion.oficios_emitidos}</p>}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-5 bg-white rounded-xl border border-slate-200 space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm">Distribución por Condición o Discapacidad</h3>
+              <div className="space-y-2 text-xs">
+                {Object.entries(stats.distribucion_condicion || {}).map(([cond, count]) => (
+                  <div key={cond} className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-700">{cond}</span>
+                    <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-5 bg-white rounded-xl border border-slate-200 space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm">Matrícula por Escuela</h3>
+              <div className="space-y-2 text-xs">
+                {Object.entries(stats.distribucion_escuela || {}).map(([esc, count]) => (
+                  <div key={esc} className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-700">{esc}</span>
+                    <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          </>}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

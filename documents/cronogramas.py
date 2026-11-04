@@ -1,0 +1,147 @@
+"""Generación del PDF oficial mensual de cronogramas para especialistas."""
+
+from __future__ import annotations
+
+from io import BytesIO
+from pathlib import Path
+
+from fpdf import FPDF
+from fpdf.enums import MethodReturnValue
+from PIL import Image
+
+from config.settings import CRONOGRAMAS_FOLDER_ID
+from documents.anexos import _fpdf_text
+
+
+ROOT = Path(__file__).resolve().parents[1]
+ANCHO_UTIL = 180
+
+
+def generar_cronograma_pdf(perfil: dict, mes_label: str, filas: list[dict], firma_especialista=None,
+                           firma_direccion=None, sello=None) -> bytes:
+    """Crea una versión descargable con encabezado, pie, tabla y área de firmas."""
+    pdf = FPDF(orientation="P", unit="mm", format="letter")
+    pdf.set_margins(15, 15, 15)
+    pdf.set_auto_page_break(auto=True, margin=24)
+
+    def encabezado():
+        ruta = ROOT / "encabezado.png"
+        if ruta.exists():
+            pdf.image(str(ruta), x=15, y=7, w=ANCHO_UTIL)
+        pdf.set_y(35)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(247, 127, 35)
+        pdf.cell(ANCHO_UTIL, 8, _fpdf_text("CRONOGRAMA DE ACTIVIDADES"), align="C",
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(ANCHO_UTIL, 6, _fpdf_text(f"{perfil.get('nombre_profesional', perfil['nombre'])}  |  {perfil['area']}"), align="C",
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(ANCHO_UTIL, 6, _fpdf_text(f"Mes: {mes_label}"), align="C",
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+
+    def pie():
+        ruta = ROOT / "pie_pagina.png"
+        if ruta.exists():
+            with Image.open(ruta) as original:
+                alto_pie = ANCHO_UTIL * original.height / original.width
+            pdf.image(str(ruta), x=15, y=pdf.h - alto_pie - 5, w=ANCHO_UTIL)
+
+    def nueva_pagina():
+        pdf.add_page()
+        encabezado()
+
+    def encabezado_tabla():
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_fill_color(235, 238, 242)
+        for ancho, texto in ((31, "Fecha"), (54, "Escuela"), (95, "Actividad")):
+            pdf.cell(ancho, 6, _fpdf_text(texto), border=1, align="C", fill=True)
+        pdf.ln()
+        pdf.set_font("Helvetica", "", 8)
+
+    nueva_pagina()
+    encabezado_tabla()
+    for indice, item in enumerate(filas):
+        fecha = _fpdf_text(item.get("fecha", ""))
+        escuela = _fpdf_text(item.get("escuela", ""))
+        actividad = _fpdf_text(item.get("actividad", ""))
+        alturas = [
+            len(pdf.multi_cell(28, 4, fecha, dry_run=True, output=MethodReturnValue.LINES)),
+            len(pdf.multi_cell(51, 4, escuela, dry_run=True, output=MethodReturnValue.LINES)),
+            len(pdf.multi_cell(92, 4, actividad, dry_run=True, output=MethodReturnValue.LINES)),
+        ]
+        alto = max(alturas + [1]) * 4 + 2
+        reserva_firma = 54 if indice == len(filas) - 1 else 0
+        if pdf.get_y() + alto + reserva_firma > 250:
+            pie()
+            nueva_pagina()
+            encabezado_tabla()
+        x0, y0 = pdf.get_x(), pdf.get_y()
+        for ancho, texto in zip((31, 54, 95), (fecha, escuela, actividad)):
+            x = pdf.get_x()
+            pdf.rect(x, y0, ancho, alto)
+            pdf.set_xy(x + 1.5, y0 + 1.5)
+            pdf.multi_cell(ancho - 3, 4, texto, border=0)
+            pdf.set_xy(x + ancho, y0)
+        pdf.set_xy(x0, y0 + alto)
+
+    pdf.ln(5)
+    y_firma = pdf.get_y()
+    pdf.set_font("Helvetica", "", 9)
+    if perfil.get("area") == "Dirección":
+        bloques_firma = [
+            (15, "Elaboró", perfil.get("nombre_profesional", perfil["nombre"]) + "\nDirector de la USAER 02-E", firma_especialista or firma_direccion),
+            (109, "Vo. Bo.", "Dra. Diana Durán González\nSupervisora de la Zona 001", None),
+        ]
+    else:
+        bloques_firma = [
+            (15, "Elaboró", perfil.get("nombre_profesional", perfil["nombre"]) + "\n" + perfil["area"], firma_especialista),
+            (109, "Vo. Bo.", "Psic. Personal ficticio 11\nDirector de la USAER 02-E", firma_direccion),
+        ]
+    for x, titulo, nombre, imagen in bloques_firma:
+        ancho_firma = 86
+        # El sello corresponde a Dirección: a la izquierda cuando el director
+        # elabora, a la derecha cuando da visto bueno a un especialista.
+        lleva_sello = x == (15 if perfil.get("area") == "Dirección" else 109)
+        pdf.set_xy(x, y_firma)
+        pdf.cell(ancho_firma, 5, _fpdf_text(titulo), align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_xy(x, y_firma + 6)
+        if imagen:
+            try:
+                with Image.open(BytesIO(imagen)) as original:
+                    iw, ih = original.size
+                escala = min((48 if lleva_sello else 60) / iw, 22 / ih)
+                ancho, alto = iw * escala, ih * escala
+                centro = x + (36 if lleva_sello else 43)
+                pdf.image(BytesIO(imagen), x=centro - ancho / 2,
+                          y=y_firma + 29 - alto, w=ancho, h=alto)
+            except Exception:
+                pass
+        pdf.line(x + 8, y_firma + 30, x + 78, y_firma + 30)
+        pdf.set_xy(x, y_firma + 33)
+        pdf.multi_cell(ancho_firma, 4.5, _fpdf_text(nombre), align="C")
+        if lleva_sello and sello:
+            try:
+                pdf.image(BytesIO(sello), x=x + 67, y=y_firma + 10, w=17, h=19, keep_aspect_ratio=True)
+            except Exception:
+                pass
+    pie()
+    return bytes(pdf.output())
+
+
+def guardar_pdf_drive(pdf_bytes: bytes, nombre_archivo: str) -> str:
+    """Guarda una copia en la carpeta institucional; el PDF también se descarga desde la app."""
+    from googleapiclient.http import MediaIoBaseUpload
+    from data.google import drive_service
+
+    servicio = drive_service()
+    archivo = servicio.files().create(
+        body={"name": nombre_archivo, "mimeType": "application/pdf", "parents": [CRONOGRAMAS_FOLDER_ID]},
+        media_body=MediaIoBaseUpload(BytesIO(pdf_bytes), mimetype="application/pdf", resumable=False),
+        fields="id,webViewLink",
+        supportsAllDrives=True,
+    ).execute()
+    return str(archivo.get("webViewLink", ""))

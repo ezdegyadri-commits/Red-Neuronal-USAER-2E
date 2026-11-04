@@ -1,0 +1,8 @@
+{
+  "name": "usaer-spa-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {"build": "node build.cjs"},
+  "dependencies": {"react": "18.3.1", "react-dom": "18.3.1"},
+  "devDependencies": {"esbuild": "0.25.12", "tailwindcss": "3.4.19"}
+}
