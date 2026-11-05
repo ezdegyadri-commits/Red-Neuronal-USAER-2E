@@ -123,7 +123,7 @@ class OficioInstitucional(FPDF):
         self.cell(0, 5, "C.c.p. Archivo de la USAER 02-E", new_x="LMARGIN", new_y="NEXT")
 
 
-def generar_oficio_comision(registro, *, incluir_firmas=True):
+def generar_oficio_comision(registro, *, incluir_firmas=True, para_revision=False):
     """Genera un oficio PDF institucional de comisión para una maestra de apoyo."""
     pdf = OficioInstitucional(orientation="P", unit="mm", format="letter")
     pdf.set_auto_page_break(auto=True, margin=38)
@@ -183,8 +183,11 @@ def generar_oficio_comision(registro, *, incluir_firmas=True):
         align="C", new_x="LMARGIN", new_y="NEXT",
     )
     pdf.set_font("Helvetica", style="B", size=11)
+    nombre_firma = str(registro.get("Nombre_Direccion", "")).strip()
+    if not incluir_firmas:
+        nombre_firma = "Nombre y firma de Dirección" if para_revision else "Documento de prueba · sin firma"
     pdf.cell(
-        0, 5, "Psic. Personal ficticio 11" if incluir_firmas else "Documento de prueba · sin firma",
+        0, 5, nombre_firma,
         align="C", new_x="LMARGIN", new_y="NEXT",
     )
     pdf.set_font("Helvetica", size=11)

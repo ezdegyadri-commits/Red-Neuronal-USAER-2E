@@ -256,16 +256,14 @@
                   className={`px-3 py-1.5 rounded-lg transition ${currentView === 'informes' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'}`}>
                   📝 Informes
                 </button>
-                {user.director && <>
                 <button
                   onClick={() => setCurrentView('visitas')}
                   className={`px-3 py-1.5 rounded-lg transition ${
                     currentView === 'visitas' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  📋 Actas y Oficios
+                  📋 {user.director ? 'Actas y Oficios' : 'Actas'}
                 </button>
-                </>}
                 <button
                   onClick={() => setCurrentView('estadisticas')}
                   className={`px-3 py-1.5 rounded-lg transition ${
@@ -340,7 +338,7 @@
             )}
 
             {currentView === 'visitas' && (
-              <ActasYOficiosView
+              <ActasYOficiosView director={user.director}
                 onBack={() => setCurrentView('mis_documentos')}
                 setMetrics={setMetrics}
               />
@@ -988,6 +986,84 @@
       </div>;
     }
 
+
+
+    function ReutilizarPerfilGrupal({ doc, mutarDoc }) {
+      const [guias, setGuias] = useState([]);
+      const [error, setError] = useState('');
+      useEffect(() => {
+        let activa = true;
+        apiRequest('/api/planeaciones/' + doc.id + '/contextos-grupales')
+          .then(r => { if (activa) setGuias(r); })
+          .catch(e => { if (activa) setError(e.message); });
+        return () => { activa = false; };
+      }, [doc.id]);
+      const ref = doc.metadatos.contexto_grupal_ref;
+      return <details className="border rounded p-2">
+        <summary>Reutilizar perfil y contexto grupal</summary>
+        {error && <p role="alert">{error}</p>}
+        <select aria-label="Guía grupal de referencia" className="border" value={ref?.id || ''}
+          onChange={e => {
+            const elegida = guias.find(g => g.id === e.target.value);
+            mutarDoc(d => ({ ...d, metadatos: { ...d.metadatos,
+              contexto_grupal_ref: elegida ? { id: elegida.id, revision: elegida.revision } : null } }));
+          }}>
+          <option value="">Sin guía vinculada</option>
+          {guias.map(g => <option key={g.id} value={g.id}>{g.titulo}</option>)}
+        </select>
+        {ref && <p>La guía se incorpora como fuente al guardar. Conserva su revisión de origen.</p>}
+        {!guias.length && <p>No hay una guía grupal autorizada del mismo alumnado y ciclo.</p>}
+      </details>;
+    }
+
+
+    function ContextoAulico({ doc, mutarDoc, coordina, saveStatus }) {
+      const captura = doc.metadatos.contexto_aulico || { fecha: '', observaciones: '', respuestas: {} };
+      const actualizar = valores => mutarDoc(d => ({ ...d, metadatos: { ...d.metadatos,
+        contexto_aulico: { ...captura, ...valores } } }));
+      const respuesta = (clave, valores) => actualizar({ respuestas: {
+        ...captura.respuestas, [clave]: { ...(captura.respuestas[clave] || {}), ...valores }
+      } });
+      return <details className="border rounded p-3">
+        <summary>Contexto áulico · Instrumento original del Anexo III</summary>
+        <p>La captura queda vinculada a esta guía, su matrícula y su historial.</p>
+        <label>Fecha de observación
+          <input className="border block" type="date" readOnly={!coordina} value={captura.fecha || ''}
+            onChange={e => actualizar({ fecha: e.target.value })} />
+        </label>
+        <label>Observaciones cualitativas y estrategias previas
+          <textarea aria-label="Observaciones cualitativas y estrategias previas" className="border block w-full" readOnly={!coordina} value={captura.observaciones || ''}
+            onChange={e => actualizar({ observaciones: e.target.value })} />
+        </label>
+        {doc.editor.items_contexto.map((pregunta, i) => {
+          const clave = 'Item_' + (i + 1);
+          const r = captura.respuestas[clave] || {};
+          return <fieldset key={clave} disabled={!coordina} className="border p-2 my-2">
+            <legend>{pregunta}</legend>
+            <label>Frecuencia
+              <select aria-label="Frecuencia" className="border mx-2" value={r.frecuencia || ''}
+                onChange={e => respuesta(clave, { frecuencia: e.target.value,
+                  ...(e.target.value ? {} : { orientacion: false, observacion: '' }) })}>
+                <option value="">Pendiente de observar</option>
+                {doc.editor.frecuencias_contexto.map(f => <option key={f}>{f}</option>)}
+              </select>
+            </label>
+            <label><input type="checkbox" disabled={!r.frecuencia} checked={!!r.orientacion}
+              onChange={e => respuesta(clave, { orientacion: e.target.checked })} /> Requiere orientación</label>
+            <label className="block">Observación específica
+              <textarea aria-label="Observación específica" className="border block w-full" disabled={!r.frecuencia} value={r.observacion || ''}
+                onChange={e => respuesta(clave, { observacion: e.target.value })} />
+            </label>
+          </fieldset>;
+        })}
+        <button type="button" className="underline" disabled={saveStatus !== 'saved' || !Object.keys(captura.respuestas).length}
+          onClick={() => descargarArchivo('/api/planeaciones/' + doc.id + '/contexto-aulico/pdf', 'Contexto-aulico-Anexo-III.pdf')}>
+          Exportar instrumento Anexo III
+        </button>
+      </details>;
+    }
+
+
     function CamposPlaneacion({ doc, mutarDoc, actualizarMatricula, saveStatus, cuenta, boveda, setBoveda }) {
       const coordina = doc.editor.coordina !== false;
       const editables = doc.editor.columnas_editables;
@@ -1021,6 +1097,7 @@
         <div className="space-y-4 bg-white p-4 rounded border">
           <p>{doc.datos['Escuela regular']} · {doc.datos['Curso escolar']}</p>
           <p>{doc.datos.Alumnos.map(a => a['Nombre del alumno']).join(', ')}</p>
+          {doc.metadatos.modalidad_planeacion === 'individual' && <ReutilizarPerfilGrupal doc={doc} mutarDoc={mutarDoc} />}
           {Object.entries(doc.editor.tablas).map(([tabla, campos]) => (
             <section key={tabla} className="space-y-2 border-t pt-2">
               <h3 className="font-bold">{tabla.replaceAll('_', ' ')}</h3>
@@ -1046,7 +1123,8 @@
               mutarDoc(d => ({ ...d, textos: { ...d.textos, [campo]: texto } }));
             }} /></label>)}
           {guia && <section className="space-y-2">
-            <h3 className="font-bold">Guía grupal anual · Anexo XIX</h3>
+            <h3 className="font-bold">Perfil y seguimiento grupal · Guía anual Anexo XIX</h3>
+            {doc.editor.items_contexto && <ContextoAulico doc={doc} mutarDoc={mutarDoc} coordina={coordina} saveStatus={saveStatus} />}
             {editables && <details className="border p-2 rounded">
               <summary>Recuperación de borradores en este navegador</summary>
               {boveda ? <p>Bóveda abierta. La copia cifrada caduca para recuperación en 24 horas.</p> :
@@ -1740,6 +1818,81 @@
     // =============================================================
     // VISTA 3: EXPEDIENTES INTEGRALES DE ALUMNOS (CON HISTORIA Y EPP)
     // =============================================================
+    function ContextosExpediente({ alumnoId }) {
+      const [ciclo, setCiclo] = useState('2026-2027');
+      const [tipo, setTipo] = useState('escolar');
+      const [doc, setDoc] = useState(null);
+      const [mensaje, setMensaje] = useState('');
+      const [ocupado, setOcupado] = useState(false);
+      const [historial, setHistorial] = useState(null);
+      const [anterior, setAnterior] = useState(null);
+      const base = '/api/epp/' + encodeURIComponent(alumnoId);
+      const query = '?ciclo=' + encodeURIComponent(ciclo);
+      async function abrir() {
+        setMensaje(''); setOcupado(true); setHistorial(null); setAnterior(null);
+        try { setDoc(await apiRequest(base + '/contextos/' + tipo + query)); }
+        catch (e) { setMensaje(e.message); setDoc(null); }
+        finally { setOcupado(false); }
+      }
+      async function guardar(e) {
+        e.preventDefault(); setOcupado(true); setMensaje('');
+        try {
+          setDoc(await apiRequest(base + '/contextos/' + tipo + query, {method:'PUT',
+            body:JSON.stringify({revision:doc.revision, campos:doc.campos, filas:doc.filas})}));
+          setHistorial(null); setAnterior(null); setMensaje('Contexto guardado en la EPP.');
+        } catch (error) { setMensaje(error.message); }
+        finally { setOcupado(false); }
+      }
+      async function historia() {
+        try { setHistorial(await apiRequest(base + '/historial' + query)); }
+        catch (e) { setMensaje(e.message); }
+      }
+      async function version(revision) {
+        try {
+          const r = await apiRequest(base + '/historial/' + revision + query);
+          const p = r.documento.partes.META.anexo_xvii[doc.area];
+          setAnterior({revision, fecha:p.fecha || '', campos:Object.fromEntries(Object.keys(doc.campos).map(k=>[k,p.contenido.campos[k] || ''])),
+            filas:p.contenido[doc.tabla] || []});
+        } catch (e) { setMensaje(e.message); }
+      }
+      return <details className="border rounded p-3">
+        <summary className="font-bold">Contextos escolar y sociofamiliar</summary>
+        <p>Captura única del Anexo XVII. La edición corresponde a Aprendizaje o Trabajo Social y Dirección; la consulta interdisciplinaria respeta el alcance del expediente.</p>
+        <fieldset disabled={ocupado} className="space-y-2">
+          <label>Ciclo del contexto <input className="border rounded" value={ciclo} onChange={e=>{setCiclo(e.target.value);setDoc(null);setHistorial(null);setAnterior(null);}} /></label>
+          <label>Contexto a consultar <select aria-label="Contexto a consultar" className="border rounded" value={tipo} onChange={e=>{setTipo(e.target.value);setDoc(null);setHistorial(null);setAnterior(null);}}>
+            <option value="escolar">Escolar</option><option value="sociofamiliar">Sociofamiliar y social</option>
+          </select></label>
+          <button type="button" className="underline" onClick={abrir}>Abrir contexto</button>
+          {doc && <form onSubmit={guardar} className="space-y-2">
+            <p>{doc.fecha ? 'Última captura: '+doc.fecha+' · '+doc.autor : 'Sin captura en este ciclo'}</p>
+            {Object.entries(doc.campos).map(([k,v])=><label className="block" key={k}>{k}
+              <textarea aria-label={k} className="block border rounded w-full" maxLength={12000} readOnly={!doc.editable} value={v}
+                onChange={e=>setDoc(d=>({...d,campos:{...d.campos,[k]:e.target.value}}))} /></label>)}
+            <details><summary>{doc.tabla==='familia'?'Composición familiar oficial':'Trayectoria escolar'}</summary>
+              {doc.filas.map((fila,i)=><fieldset className="border rounded p-2" key={i}>
+                {[...new Set([...doc.columnas,...Object.keys(fila)])].map(k=><label className="block" key={k}>{k}
+                  <input className="border rounded" readOnly={!doc.editable} maxLength={12000} value={fila[k] || ''} onChange={e=>{
+                    const texto=e.target.value;setDoc(d=>({...d,filas:d.filas.map((r,j)=>j===i?{...r,[k]:texto}:r)}));
+                  }} /></label>)}
+                {doc.editable && <button type="button" onClick={()=>setDoc(d=>({...d,filas:d.filas.filter((_,j)=>j!==i)}))}>Quitar fila</button>}
+              </fieldset>)}
+              {doc.editable && <button type="button" className="underline" onClick={()=>setDoc(d=>({...d,filas:[...d.filas,Object.fromEntries(d.columnas.map(k=>[k,'']))]}))}>Agregar fila de contexto</button>}
+            </details>
+            {doc.editable && <button className="underline" type="submit">Guardar contexto</button>}
+            <button type="button" className="underline ml-3" onClick={historia}>Historial del contexto</button>
+            <button type="button" className="underline ml-3" onClick={()=>descargarArchivo(base+'/pdf'+query,'EPP-contextos.pdf')}>Exportar EPP con contextos</button>
+          </form>}
+          {historial && <><p>Revisiones recientes del ciclo; el historial completo está disponible en la EPP.</p>{historial.map(v=><button key={v.revision} type="button" className="block underline" onClick={()=>version(v.revision)}>{v.fecha} · {v.autor}</button>)}</>}
+          {anterior && <section><h4>Contexto histórico · {anterior.fecha}</h4>{Object.entries(anterior.campos).map(([k,v])=><p className="whitespace-pre-wrap" key={k}>{k}: {v || 'Sin captura'}</p>)}
+            {anterior.filas.map((f,i)=><p key={i}>{Object.entries(f).map(([k,v])=>k+': '+v).join(' · ')}</p>)}
+            <button type="button" className="underline" onClick={()=>descargarArchivo(base+'/historial/'+anterior.revision+'/pdf'+query,'Contextos-historicos.pdf')}>Exportar contexto histórico en EPP</button>
+          </section>}
+          {mensaje && <p role="status">{mensaje}</p>}
+        </fieldset>
+      </details>;
+    }
+
     function InstrumentoDigitalEPP({ base, query, doc, area, valor, onGuardado }) {
       const [catalogo, setCatalogo] = useState({});
       const [codigo, setCodigo] = useState('');
@@ -1775,10 +1928,10 @@
       return <details className="border rounded p-2">
         <summary>Aplicar instrumento digital</summary>
         <fieldset disabled={ocupado} className="space-y-2">
-          <label>Protocolo <select value={codigo} className="border rounded" onChange={e => {
+          <label>Protocolo <select aria-label="Protocolo" value={codigo} className="border rounded" onChange={e => {
             const seleccionado = e.target.value;
             setCodigo(seleccionado); setRevisada(false); setMensaje('');
-            setCaptura(valor.aplicaciones_en_curso?.[seleccionado] || catalogo[seleccionado]?.plantilla || null);
+            setCaptura(catalogo[seleccionado] ? {...(valor.aplicaciones_en_curso?.[seleccionado] || catalogo[seleccionado].plantilla),vigente_hasta:valor.vigencias_instrumentos?.[seleccionado] || ''} : null);
           }}><option value="">Elegir protocolo</option>
             {disponibles.map(([k, d]) => <option key={k} value={k}>{d.nombre}</option>)}
           </select></label>
@@ -1786,6 +1939,17 @@
             <p>{definicion.fuente} · pp. {definicion.paginas}. «No observado» queda pendiente.</p>
             <label>Fecha de aplicación del protocolo <input type="date" className="border rounded" value={captura.fecha}
               onChange={e => { setRevisada(false); setCaptura({ ...captura, fecha: e.target.value }); }} /></label>
+            <label className="block">Vigencia del protocolo hasta (opcional) <input type="date" className="border rounded" value={captura.vigente_hasta || ''}
+              onChange={e=>{setRevisada(false);setCaptura({...captura,vigente_hasta:e.target.value});}} /></label>
+            <button type="button" className="underline" onClick={()=>descargarArchivo(base+'/instrumentos/'+codigo+'/respaldo'+query,'aplicacion-'+codigo+'.json')}>Exportar respuestas guardadas</button>
+            <label className="block">Recuperar respaldo de este instrumento <input type="file" accept="application/json,.json" onChange={async e=>{
+              try {
+                const f=e.target.files[0];if(!f)return;if(f.size>100000)throw Error('Respaldo demasiado grande.');
+                const b=JSON.parse(await f.text());
+                if(b.tipo!=='USAER-aplicacion-v1'||b.documento!==doc.id||b.area!==area||b.instrumento!==codigo)throw Error('El respaldo corresponde a otro alumno, área o instrumento.');
+                const recuperada={...b.captura,vigente_hasta:b.vigente_hasta || b.captura?.vigente_hasta || ''};await apiRequest(base+'/instrumentos/'+codigo+query,{method:'PUT',body:JSON.stringify({revision:doc.revision,captura:recuperada,incorporar:false,revisada:false})});await onGuardado();setCaptura(recuperada);setRevisada(false);setMensaje('Borrador recuperado y validado. Revisa antes de incorporar.');
+              } catch(error){setMensaje(error.message);} finally{e.target.value='';}
+            }} /></label>
             {definicion.items.map(item => <fieldset key={item.id} className="rounded border p-2">
               <legend>{item.id}. {item.texto}</legend>
               <label>Respuesta {item.id} {item.opciones.length
@@ -1825,7 +1989,7 @@
         setOcupado(true); setMensaje('');
         try {
           await apiRequest(base + '/externa/' + encodeURIComponent(area) + query, {
-            method: 'PUT', body: JSON.stringify({ ...entrada, revision: doc.revision })
+            method: 'PUT', body: JSON.stringify({ ...entrada, vigente_hasta: entrada.vigente_hasta || null, revision: doc.revision })
           });
           await onGuardado();
           setEntrada(e => ({ ...e, revisada: false }));
@@ -1843,7 +2007,7 @@
             const id = e.target.value;
             const anterior = valor.evaluaciones.find(r => r.adjunto_id === id);
             setEntrada({ adjunto_id: id, nombre: anterior?.nombre || '', fecha: anterior?.fecha || '',
-              resultados: anterior?.resultados || '', revisada: false });
+              resultados: anterior?.resultados || '', vigente_hasta: anterior?.vigente_hasta || '', revisada: false });
           }}><option value="">Elegir archivo</option>{(archivos || []).map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label>
           {adjunto && <>
             <button type="button" className="underline" onClick={() => descargarArchivo(ruta + '/' + adjunto.id, adjunto.nombre)}>Descargar original</button>
@@ -1851,6 +2015,7 @@
               value={entrada.nombre} onChange={e => cambiar('nombre', e.target.value)} /></label>
             <label className="block">Fecha de evaluación externa <input type="date" className="border rounded"
               value={entrada.fecha} onChange={e => cambiar('fecha', e.target.value)} /></label>
+            <label className="block">Vigencia externa hasta (opcional) <input type="date" className="border rounded" value={entrada.vigente_hasta || ''} onChange={e=>cambiar('vigente_hasta',e.target.value)} /></label>
             <label className="block">Resultados externos cotejados <textarea className="block w-full border rounded" maxLength={11000}
               value={entrada.resultados} onChange={e => cambiar('resultados', e.target.value)} /></label>
             <label className="block"><input type="checkbox" checked={entrada.revisada} onChange={e => cambiar('revisada', e.target.checked)} />
@@ -1975,6 +2140,7 @@
                   {[['nombre', 'Instrumento', 'text'], ['fecha', 'Fecha de aplicación', 'date'], ['texto', 'Resultados', 'text']].map(([k, etiqueta, tipo]) =>
                     <label className="block" key={k}>{etiqueta}<input readOnly={!editable || r.entrada === 'EXTERNA_REVISADA'} className="block border w-full"
                       type={tipo} value={r[k] || ''} onChange={e => cambiarFila('evaluaciones', i, k, e.target.value)} /></label>)}
+                  <p>Vigencia: {r.vigente_hasta ? 'hasta '+r.vigente_hasta : 'No indicada; requiere criterio profesional'}</p>
                   {editable && r.entrada !== 'EXTERNA_REVISADA' && <button type="button" onClick={() => setValor(v => ({
                     ...v, evaluaciones: v.evaluaciones.filter((_, j) => j !== i)
                   }))}>Quitar instrumento</button>}
@@ -2015,11 +2181,53 @@
               catch (error) { setMensaje(error.message); }
             }}>Historial del ciclo</button>
           </fieldset>
-          {historial && <ul>{historial.map(r => <li key={r.revision}>{r.fecha} · {r.autor}</li>)}</ul>}
+          {historial && <div>{historial.map(r => <VersionHistoricaEPP key={r.revision} base={base} query={query} version={r} />)}
+            {historial.length > 0 && historial.length % 30 === 0 && <button type="button" className="underline" onClick={async () => {
+              try {
+                const pagina = await apiRequest(base + '/historial' + query + (query ? '&' : '?') + 'offset=' + historial.length);
+                setHistorial(h => [...h, ...pagina]);
+              } catch (e) { setMensaje(e.message); }
+            }}>Más revisiones del ciclo</button>}
+          </div>}
         </form>}
         <p role="status">{mensaje}</p>
       </details>;
     }
+
+
+    function VersionHistoricaEPP({ base, query, version }) {
+      const [datos, setDatos] = useState(null);
+      const [error, setError] = useState('');
+      const areas = datos?.documento.partes.META?.anexo_xvii || datos?.documento.partes || {};
+      return <details onToggle={async e => {
+        if (e.currentTarget.open && !datos) {
+          try { setDatos(await apiRequest(base + '/historial/' + encodeURIComponent(version.revision) + query)); }
+          catch (err) { setError(err.message); }
+        }
+      }}>
+        <summary>{version.fecha} · {version.autor}</summary>
+        {error && <p role="alert">{error}</p>}
+        {datos && <article className="border p-3 space-y-2">
+          <p>Versión histórica de solo lectura · {datos.documento.ciclo}</p>
+          {datos.documento.partes.META?.anexo_xvii && <button type="button" className="underline"
+            onClick={() => descargarArchivo(base + '/historial/' + encodeURIComponent(version.revision) + '/pdf' + query, 'EPP-version-historica.pdf')}>
+            Exportar esta revisión PDF
+          </button>}
+          {Object.entries(areas).filter(([k]) => k !== 'META').map(([area, apartado]) => {
+            const contenido = apartado.contenido || apartado;
+            return <section key={area}><h4 className="font-bold">{area}</h4>
+              {Object.entries(contenido.campos || contenido).filter(([,v])=>typeof v==='string').map(([k,v])=>
+                <p className="whitespace-pre-wrap" key={k}><strong>{k}</strong> {v}</p>)}
+              {contenido.evaluaciones?.map((r,i)=><p key={r.id||i}>{r.nombre} · {r.texto}</p>)}
+              {datos.conclusion_confirmada && apartado.nee_confirmadas?.map(r=><p key={r.id}>
+                NEE confirmada en esta revisión: {r.texto} · {r.desde} a {r.hasta} · {r.fundamento}
+              </p>)}
+            </section>;
+          })}
+        </article>}
+      </details>;
+    }
+
 
     function EditorEPP({ alumnoId }) {
       const [doc, setDoc] = useState(null);
@@ -2405,6 +2613,52 @@
       </section>;
     }
 
+    function OriginalesB01({ alumnoId }) {
+      const [filas, setFilas] = useState(null);
+      const [error, setError] = useState('');
+      const ruta = '/api/expedientes/' + encodeURIComponent(alumnoId) + '/originales-b01';
+      const etiquetas = { Planeaciones_Versiones: 'Planeación', EPP_Versiones: 'EPP',
+        Movimientos_Alumnos: 'Movimiento de alumno' };
+      return <details className="my-3" onToggle={async e => {
+        if (e.currentTarget.open && filas === null) {
+          try { setFilas(await apiRequest(ruta)); setError(''); }
+          catch (err) { setError(err.message); }
+        }
+      }}>
+        <summary>Originales históricos B01 · solo lectura</summary>
+        {error && <p role="alert">{error}</p>}
+        {filas?.length === 0 && <p>Sin originales adicionales para este expediente.</p>}
+        {filas?.map(fila => <p key={fila.id}>
+          {etiquetas[fila.tipo] || fila.tipo} {fila.ciclo} · {fila.versiones} filas de origen
+          {' · '}<a className="underline" href={ruta + '?original=' + encodeURIComponent(fila.id)}>Descargar original JSON</a>
+        </p>)}
+      </details>;
+    }
+
+
+    function ExportarPadronOficial() {
+      const [resumen, setResumen] = useState(null);
+      const [error, setError] = useState('');
+      return <span>
+        <button type="button" className="text-xs px-3 py-1.5 border rounded-lg" onClick={async () => {
+          try { setResumen(await apiRequest('/api/reportes/padron-oficial/resumen')); setError(''); }
+          catch (e) { setError(e.message); }
+        }}>Padrón oficial XLSX</button>
+        {error && <p role="alert">{error}</p>}
+        {resumen && <span className="block text-xs my-2">
+          Registros exportables: {resumen.incluidos} de {resumen.detectados}.
+          {resumen.pendientes > 0 && <span> Pendientes: {resumen.pendientes}.
+            Inactivos: {resumen.inactivos}. CURP no exportables: {resumen.curp_no_exportables}.
+            Registros con CURP duplicada: {resumen.curp_duplicadas}.</span>}
+          <button type="button" className="underline ml-2" disabled={!resumen.incluidos || resumen.curp_duplicadas > 0}
+            onClick={() => descargarArchivo('/api/reportes/padron-oficial.xlsx', 'Padron-oficial-USAER.xlsx')}>
+            Descargar registros válidos
+          </button>
+        </span>}
+      </span>;
+    }
+
+
     function ExpedientesView({ initialAlumnoId, onBack, onOpenInformes, setMetrics }) {
       const [alumnos, setAlumnos] = useState([]);
       const [selectedId, setSelectedId] = useState(initialAlumnoId || null);
@@ -2463,6 +2717,7 @@
             >
               Exportar Padrón CSV 📥
             </button>
+            <ExportarPadronOficial />
             </div>
           </div>
 
@@ -2515,6 +2770,8 @@
                     </span>
                   </div>
 
+                  <ContextosExpediente key={selectedId} alumnoId={selectedId} />
+
                   {/* Sub-pestañas de Expediente */}
                   <button onClick={() => onOpenInformes(expediente.alumno.id)}
                     className="px-3 py-2 rounded-lg border text-sm font-semibold">Informes del expediente</button>
@@ -2543,6 +2800,7 @@
                   {/* SUB-TAB: RESUMEN */}
                   {activeExpTab === 'seguimiento' && <section className="space-y-2 text-sm">
                     <h3 className="font-semibold">Seguimiento longitudinal</h3>
+                    {expediente.originales_b01_disponibles && <OriginalesB01 key={selectedId} alumnoId={selectedId} />}
                     {!!expediente.comparativo_epp?.length && <details>
                       <summary className="font-semibold">Comparar EPP por ciclo</summary>
                       <p>Las NEE corresponden a la conclusión registrada de cada ciclo.</p>
@@ -2690,7 +2948,136 @@
       </section>;
     }
 
-    function ActasYOficiosView({ onBack, setMetrics }) {
+
+    function RelatoriasView() {
+      const [lista, setLista] = useState([]);
+      const [doc, setDoc] = useState(null);
+      const [error, setError] = useState('');
+      const [historial, setHistorial] = useState(null);
+      const [ocupada, setOcupada] = useState(false);
+      const cargar = async () => setLista(await apiRequest('/api/relatorias'));
+      useEffect(() => { cargar().catch(e => setError(e.message)); }, []);
+      const abrir = async id => {
+        try { setDoc(await apiRequest('/api/relatorias/' + id)); setHistorial(null); setError(''); }
+        catch (e) { setError(e.message); }
+      };
+      return <section className="space-y-3">
+        <button className="underline" type="button" onClick={() => {
+          setDoc({fecha:'',tipo_junta:'Junta de USAER',modalidad_junta:'Junta Académica',num_asistentes:6,contenido:''});
+          setHistorial(null);setError('');
+        }}>Nueva relatoría</button>
+        {error && <p role="alert">{error}</p>}
+        {doc && <form className="border rounded p-3 space-y-2" onSubmit={async e => {
+          e.preventDefault();setOcupada(true);setError('');
+          try {
+            const r=await apiRequest('/api/relatorias'+(doc.id?'/'+doc.id:''),{
+              method:doc.id?'PUT':'POST',body:JSON.stringify(doc)});
+            await abrir(r.id);await cargar();
+          } catch (err) { setError(err.message); }
+          finally {setOcupada(false);}
+        }}>
+          <fieldset disabled={ocupada} className="grid gap-2">
+            <label>Fecha de la sesión<input className="block border" type="date" required value={doc.fecha}
+              onChange={e=>setDoc(d=>({...d,fecha:e.target.value}))}/></label>
+            <label>Tipo de junta<select className="block border" value={doc.tipo_junta}
+              onChange={e=>setDoc(d=>({...d,tipo_junta:e.target.value,modalidad_junta:e.target.value==='Junta de Zona'?'Junta de Zona':'Junta Académica'}))}>
+              <option>Junta de USAER</option><option>Junta de Zona</option>
+            </select></label>
+            {doc.tipo_junta==='Junta de USAER' && <label>Modalidad de la junta
+              <select className="block border" value={doc.modalidad_junta}
+                onChange={e=>setDoc(d=>({...d,modalidad_junta:e.target.value}))}>
+                <option>Junta Académica</option><option>Sesión de CTE</option>
+              </select>
+            </label>}
+            {[['sesion','Sesión de CTE'],['tema','Tema central']].map(([k,t])=>
+              <label key={k}>{t}<input className="block w-full border" value={doc[k]||''}
+                onChange={e=>setDoc(d=>({...d,[k]:e.target.value}))}/></label>)}
+            <label>Renglones para firmas<input className="block border" type="number" min="1" max="30" required value={doc.num_asistentes}
+              onChange={e=>setDoc(d=>({...d,num_asistentes:Number(e.target.value)}))}/></label>
+            <label>Contenido de la relatoría<textarea aria-label="Contenido de la relatoría" className="block border w-full" rows="14" required maxLength="50000"
+              value={doc.contenido} onChange={e=>setDoc(d=>({...d,contenido:e.target.value}))}/></label>
+            {doc.tipo_junta==='Junta de USAER' && <label>Nombre de Dirección para el pie de firma (opcional)
+              <input className="block border w-full" value={doc.nombre_director||''}
+                onChange={e=>setDoc(d=>({...d,nombre_director:e.target.value}))}/>
+            </label>}
+            <button className="underline" type="submit">Guardar relatoría</button>
+            {doc.id && <div className="space-x-3">
+              <button className="underline" type="button" onClick={()=>descargarArchivo('/api/relatorias/'+doc.id+'/pdf','Relatoria-USAER.pdf')}>Exportar relatoría PDF</button>
+              <button className="underline" type="button" onClick={async()=>{
+                try{setHistorial(await apiRequest('/api/relatorias/'+doc.id+'/historial'));}
+                catch(e){setError(e.message);}
+              }}>Historial de la relatoría</button>
+            </div>}
+            <button type="button" onClick={()=>setDoc(null)}>Cerrar relatoría</button>
+          </fieldset>
+          {historial?.map(r=><details key={r.revision}><summary>{r.fecha} · {r.autor}</summary>
+            <p className="whitespace-pre-wrap">{r.documento.contenido}</p></details>)}
+        </form>}
+        {lista.map(r=><article className="border rounded p-3" key={r.id}>
+          <p>{r.fecha} · {r.tema}</p><button className="underline" type="button" onClick={()=>abrir(r.id)}>Abrir relatoría</button>
+        </article>)}
+      </section>;
+    }
+
+
+    function TramitesExpedientes({ director }) {
+      const [lista,setLista]=useState([]),[alumnos,setAlumnos]=useState([]),[doc,setDoc]=useState(null);
+      const [nuevo,setNuevo]=useState(null),[mensaje,setMensaje]=useState(''),[ocupado,setOcupado]=useState(false);
+      const [respuesta,setRespuesta]=useState({destinatario:'',texto:'',ciclo:'2026-2027',nombre_direccion:''});
+      const [archivos,setArchivos]=useState([]),[tipoArchivo,setTipoArchivo]=useState('Oficio recibido'),[historia,setHistoria]=useState(null);
+      async function listar(){setLista(await apiRequest('/api/tramites'));}
+      useEffect(()=>{Promise.all([listar(),apiRequest('/api/alumnos').then(setAlumnos)]).catch(e=>setMensaje(e.message));},[]);
+      async function tarea(fn){setOcupado(true);setMensaje('');try{await fn();}catch(e){setMensaje(e.message);}finally{setOcupado(false);}}
+      async function abrir(id){await tarea(async()=>{const d=await apiRequest('/api/tramites/'+id);setDoc(d);setNuevo(null);setHistoria(null);setArchivos(await apiRequest('/api/tramites/'+id+'/adjuntos'));setRespuesta(d.respuesta?{destinatario:d.respuesta.Director_Escuela,texto:d.respuesta.Destino,ciclo:d.respuesta.Ciclo,nombre_direccion:d.respuesta.Nombre_Direccion}:{destinatario:'',texto:'',ciclo:'2026-2027',nombre_direccion:''});});}
+      async function crear(e){e.preventDefault();await tarea(async()=>{const d=await apiRequest('/api/tramites',{method:'POST',body:JSON.stringify(nuevo)});setDoc(d);setNuevo(null);setArchivos([]);setHistoria(null);await listar();setMensaje('Solicitud registrada.');});}
+      async function guardar(e){e.preventDefault();await tarea(async()=>{setDoc(await apiRequest('/api/tramites/'+doc.id,{method:'PUT',body:JSON.stringify({revision:doc.revision,estado:doc.estado,seguimiento:doc.seguimiento})}));await listar();setMensaje('Seguimiento guardado.');});}
+      async function emitir(){await tarea(async()=>{setDoc(await apiRequest('/api/tramites/'+doc.id+'/respuesta',{method:'POST',body:JSON.stringify({...respuesta,revision:doc.revision})}));await listar();setMensaje('Respuesta conservada con folio central.');});}
+      async function adjuntar(e){const f=e.target.files[0];e.target.value='';if(!f)return;await tarea(async()=>{if(f.size>5*1024*1024)throw Error('Límite de 5 MB por comprobante.');await apiRequest('/api/tramites/'+doc.id+'/adjuntos?tipo='+encodeURIComponent(tipoArchivo)+'&nombre='+encodeURIComponent(f.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});setArchivos(await apiRequest('/api/tramites/'+doc.id+'/adjuntos'));setMensaje('Comprobante guardado.');});}
+      return <section className="space-y-3">
+        <h3 className="font-bold">Solicitudes y entrega de expedientes</h3>
+        <p>Las maestras solicitan sus expedientes; Dirección da seguimiento y prepara el oficio para firma. No se envían documentos fuera de la plataforma.</p>
+        <fieldset disabled={ocupado} className="space-y-2">
+          <button className="underline" onClick={()=>{setDoc(null);setHistoria(null);setNuevo({clave:crypto.randomUUID().replaceAll('-',''),tipo:'Interna',alumnos:[],origen:'',expedientes:'',referencia:'',solicitud:''});}}>Nueva solicitud de expedientes</button>
+          <div>{lista.map(r=><button className="block underline text-left" key={r.id} onClick={()=>abrir(r.id)}>{r.fecha.slice(0,10)} · {r.tipo} · {r.estado} · {r.solicitud.slice(0,90)}</button>)}</div>
+          {nuevo && <form onSubmit={crear} className="border rounded p-3 space-y-2">
+            {director && <label>Tipo de solicitud <select value={nuevo.tipo} onChange={e=>setNuevo({...nuevo,tipo:e.target.value,alumnos:[]})}><option>Interna</option><option>Externa</option></select></label>}
+            {nuevo.tipo==='Interna'?<label className="block">Alumnos de la solicitud<select aria-label="Alumnos de la solicitud" className="block border rounded" multiple value={nuevo.alumnos} onChange={e=>setNuevo({...nuevo,alumnos:[...e.target.selectedOptions].map(o=>o.value)})}>{alumnos.map(a=><option key={a.id} value={a.id}>{a.nombre_completo} · {a.escuela}</option>)}</select></label>:<>
+              <label className="block">USAER o CAM que solicita<input className="block border rounded" value={nuevo.origen} maxLength={250} onChange={e=>setNuevo({...nuevo,origen:e.target.value})} /></label>
+              <label className="block">Alumnos o expedientes externos requeridos<textarea className="block border rounded w-full" value={nuevo.expedientes} maxLength={4000} onChange={e=>setNuevo({...nuevo,expedientes:e.target.value})} /></label>
+            </>}
+            <label className="block">Número y fecha del oficio recibido<input className="block border rounded" maxLength={500} value={nuevo.referencia} onChange={e=>setNuevo({...nuevo,referencia:e.target.value})} /></label>
+            <label className="block">Qué necesitas y para qué<textarea className="block border rounded w-full" maxLength={4000} required value={nuevo.solicitud} onChange={e=>setNuevo({...nuevo,solicitud:e.target.value})} /></label>
+            <button className="underline" type="submit">Registrar solicitud</button>
+          </form>}
+          {doc && <div className="border rounded p-3 space-y-2">
+            <p>{doc.tipo} · {doc.fecha} · {doc.autor}</p><p className="whitespace-pre-wrap">{doc.solicitud}</p>
+            <p>{doc.origen} · {doc.expedientes} · {doc.referencia}</p>
+            {!!doc.alumnos.length && <ul>{doc.alumnos.map(id=><li key={id}>{alumnos.find(a=>a.id===id)?.nombre_completo || id}</li>)}</ul>}
+            <form onSubmit={guardar}>
+              <label className="block">Estado del trámite<select aria-label="Estado del trámite" className="border rounded" disabled={!director} value={doc.estado} onChange={e=>setDoc({...doc,estado:e.target.value})}>{['Recibida','En revisión','En preparación','Respondida','Entregada'].map(k=><option key={k}>{k}</option>)}</select></label>
+              <label className="block">Seguimiento del trámite<textarea aria-label="Seguimiento del trámite" className="block border rounded w-full" readOnly={!director} maxLength={4000} value={doc.seguimiento} onChange={e=>setDoc({...doc,seguimiento:e.target.value})} /></label>
+              {director && <button className="underline" type="submit">Guardar seguimiento del trámite</button>}
+            </form>
+            {director && <details><summary>Oficio de respuesta institucional</summary>
+              {doc.respuesta && <p>Folio {doc.respuesta.Folio}; respuesta emitida e inmutable.</p>}
+              <label className="block">Destinatario y cargo de la respuesta<input className="block border rounded" readOnly={!!doc.respuesta} maxLength={250} value={respuesta.destinatario} onChange={e=>setRespuesta({...respuesta,destinatario:e.target.value})} /></label>
+              <label className="block">Respuesta institucional<textarea aria-label="Respuesta institucional" className="block border rounded w-full" readOnly={!!doc.respuesta} maxLength={4000} value={respuesta.texto} onChange={e=>setRespuesta({...respuesta,texto:e.target.value})} /></label>
+              <label>Ciclo del oficio<input className="border rounded" readOnly={!!doc.respuesta} value={respuesta.ciclo} onChange={e=>setRespuesta({...respuesta,ciclo:e.target.value})} /></label>
+              <label className="block">Nombre de Dirección para firma manual (opcional)<input className="border rounded" readOnly={!!doc.respuesta} maxLength={250} value={respuesta.nombre_direccion} onChange={e=>setRespuesta({...respuesta,nombre_direccion:e.target.value})} /></label>
+              {!doc.respuesta && <button className="underline" type="button" onClick={emitir}>Preparar respuesta y reservar folio</button>}
+            </details>}
+            {doc.respuesta && <button className="underline" onClick={()=>descargarArchivo('/api/tramites/'+doc.id+'/pdf','Respuesta-expedientes.pdf')}>Exportar respuesta PDF</button>}
+            {director && <label className="block">Comprobante del trámite<select value={tipoArchivo} onChange={e=>setTipoArchivo(e.target.value)}><option>Oficio recibido</option><option>Acuse de recibido</option></select><input type="file" accept="image/jpeg,image/png,image/webp" onChange={adjuntar} /></label>}
+            {archivos.map(f=><button key={f.id} className="block underline" onClick={()=>descargarArchivo('/api/tramites/'+doc.id+'/adjuntos/'+f.id,f.nombre)}>{f.tipo}: {f.nombre}</button>)}
+            <button className="underline" onClick={()=>tarea(async()=>setHistoria(await apiRequest('/api/tramites/'+doc.id+'/historial')))}>Historial del trámite</button>
+            {historia?.map(v=><details key={v.revision}><summary>{v.fecha} · {v.autor}</summary><p>{v.documento.estado}</p><p className="whitespace-pre-wrap">{v.documento.seguimiento}</p>{v.documento.respuesta && <p>Respuesta: {v.documento.respuesta.Destino}</p>}</details>)}
+          </div>}
+        </fieldset>
+        {mensaje && <p role="status">{mensaje}</p>}
+      </section>;
+    }
+
+    function ActasYOficiosView({ onBack, setMetrics, director }) {
       const [visitas, setVisitas] = useState([]);
       const [oficios, setOficios] = useState([]);
       const [subTab, setSubTab] = useState('visitas'); // 'visitas' | 'oficios'
@@ -2734,7 +3121,7 @@
         const t0 = performance.now();
         Promise.all([
           apiRequest('/api/visitas'),
-          apiRequest('/api/oficios'),
+          director ? apiRequest('/api/oficios') : Promise.resolve([]),
           apiRequest('/api/alumnos')
         ]).then(([v, o, alumnos]) => {
           setVisitas(v);
@@ -2742,8 +3129,8 @@
           setAlumnosActa(alumnos);
           const t1 = performance.now();
           setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 2 }));
-        });
-      }, [setMetrics]);
+        }).catch(error => setActaError(error.message));
+      }, [setMetrics, director]);
 
       return (
         <div className="space-y-6">
@@ -2751,7 +3138,7 @@
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
               ← Volver
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Actas de Visita y Oficios de Comisión</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{director ? 'Actas de Visita y Oficios de Comisión' : 'Actas y seguimiento de expedientes'}</h1>
           </div>
 
           <div className="flex border-b border-slate-200 space-x-2 text-xs font-bold">
@@ -2763,16 +3150,20 @@
             >
               📋 Actas de Visita de Acompañamiento ({visitas.length})
             </button>
-            <button
+            {director && <button
               onClick={() => setSubTab('oficios')}
               className={`px-4 py-2 border-b-2 transition ${
                 subTab === 'oficios' ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-500'
               }`}
             >
               📜 Oficios de Comisión ({oficios.length})
-            </button>
+            </button>}
+            <button className={'px-4 py-2 border-b-2 '+(subTab==='tramites'?'border-amber-600 text-amber-800':'border-transparent')} onClick={()=>setSubTab('tramites')}>Trámites de expedientes</button>
+            {director && <button className={'px-4 py-2 border-b-2 '+(subTab==='relatorias'?'border-amber-600 text-amber-800':'border-transparent')}
+              onClick={()=>setSubTab('relatorias')}>Relatorías institucionales</button>}
           </div>
 
+          {subTab === 'tramites' && <TramitesExpedientes director={director} />}
           {subTab === 'visitas' && (
             <div className="space-y-3">
                               <button className="underline" type="button" onClick={() => {
@@ -2788,16 +3179,16 @@
                           const alumno = alumnosActa.find(a => a.id === id);
                           setActa(d => ({ ...d, alumno_id: id, escuela: alumno?.escuela || d.escuela }));
                         }}>
-                        <option value="">Sin expediente vinculado</option>
+                        <option value="">{director ? 'Sin expediente vinculado' : 'Selecciona un expediente autorizado'}</option>
                         {alumnosActa.map(a => <option key={a.id} value={a.id}>{a.nombre_completo} · {a.escuela}</option>)}
                       </select>
                     </label>
                     {camposActa.map(([k, etiqueta]) => <label key={k}>{etiqueta}
                       {['motivo', 'observaciones', 'acuerdos', 'seguimiento'].includes(k) ?
-                        <textarea className="block w-full border rounded" value={acta[k] || ''} onChange={e => {
+                        <textarea aria-label={etiqueta} className="block w-full border rounded" value={acta[k] || ''} onChange={e => {
                           const valor = e.target.value; setActa(d => ({ ...d, [k]: valor }));
                         }} /> :
-                        <input type={k === 'fecha' ? 'date' : 'text'} className="block w-full border rounded"
+                        <input aria-label={etiqueta} type={k === 'fecha' ? 'date' : 'text'} className="block w-full border rounded"
                           readOnly={k === 'escuela' && !!acta.alumno_id}
                           value={acta[k] || ''} onChange={e => {
                             const valor = e.target.value; setActa(d => ({ ...d, [k]: valor }));
@@ -2836,7 +3227,8 @@
             </div>
           )}
 
-          {subTab === 'oficios' && (
+          {director && subTab === 'relatorias' && <RelatoriasView />}
+          {director && subTab === 'oficios' && (
             <EditorOficio listado={oficios} onGuardado={async () => setOficios(await apiRequest('/api/oficios'))} />
           )}
         </div>

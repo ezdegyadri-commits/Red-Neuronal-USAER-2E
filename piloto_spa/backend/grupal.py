@@ -8,9 +8,9 @@ from utils.text import normalizar_texto
 
 
 def area_compartida(user):
-    rol = normalizar_texto(user.rol)
+    rol = normalizar_texto(user.rol).replace("_", " ")
     return user.director or (
-        rol in {"MAESTRA DE APOYO", "MAESTRO DE APOYO", "APRENDIZAJE", "PARADOCENTE",
+        rol in {"MAESTRA DE APOYO", "MAESTRO DE APOYO", "APOYO", "APRENDIZAJE", "PARADOCENTE",
                 "PSICOLOGIA", "COMUNICACION", "TRABAJO SOCIAL"}
     )
 
@@ -84,6 +84,11 @@ def editar_grupo(actual, cambios, user):
     coordina = puede_coordinar(user)
     _editar_filas(guia["filas"], edicion.get("filas", []), columnas_editables(user))
     _editar_filas(guia["as"], edicion.get("as", []), GUIA_XX[1:] if coordina else [])
+    if "contexto_aulico" in entrada and entrada["contexto_aulico"] != meta.get("contexto_aulico"):
+        if not coordina:
+            raise HTTPException(403, "La observación áulica corresponde a la coordinación de la guía.")
+        from piloto_spa.backend.contexto_aulico import validar
+        meta["contexto_aulico"] = validar(entrada["contexto_aulico"], user.usuario)
     if coordina:
         doc["tablas"] = cambios["tablas"]
         doc["textos"] = cambios["textos"]

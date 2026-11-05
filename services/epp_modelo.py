@@ -116,11 +116,31 @@ def validar_parte(area, value):
         if not isinstance(apps,dict) or len(apps)>6:raise ValueError('Aplicaciones en curso no válidas.')
         for code,cap in apps.items():
             if code not in DEFINICIONES or DEFINICIONES[code]['area']!=area:raise PermissionError('Aplicación de otra función.')
-            apps[code]=validar(code,cap)
+            apps[code]={k:v for k,v in validar(code,cap).items() if k!='vigente_hasta'}
+    if 'vigencias_instrumentos' in result:
+        from services.epp_instrumentos import DEFINICIONES
+        from datetime import date
+        vigencias=result['vigencias_instrumentos']
+        if not isinstance(vigencias,dict) or len(vigencias)>6:raise ValueError('Vigencias no válidas.')
+        for codigo,hasta in vigencias.items():
+            if codigo not in DEFINICIONES or DEFINICIONES[codigo]['area']!=area:raise ValueError('Vigencia de otra función.')
+            if not isinstance(hasta,str):raise ValueError('Vigencia no válida.')
+            if hasta:
+                try:
+                    fecha=result.get('aplicaciones_en_curso',{}).get(codigo,{}).get('fecha','')
+                    if date.fromisoformat(hasta)<date.fromisoformat(fecha):raise ValueError
+                except (TypeError,ValueError):raise ValueError('Vigencia anterior a la aplicación o fecha no válida.')
     for ev in result['evaluaciones']:
         if not isinstance(ev,dict) or not all(isinstance(ev.get(k),str) for k in ('id','texto','nombre')):
             raise ValueError('Evaluación no válida.')
         if len(ev['texto'])>12000:raise ValueError('Resume los hallazgos del instrumento a 12000 caracteres.')
+        if ev.get('vigente_hasta'):
+            try:
+                from datetime import date
+                inicio=date.fromisoformat(ev.get('fecha',''))
+                fin=date.fromisoformat(ev['vigente_hasta'])
+                if fin<inicio:raise ValueError
+            except (TypeError,ValueError):raise ValueError('Vigencia del instrumento no válida.')
     if 'generales' in result:
         if not isinstance(result['generales'],dict) or not set(result['generales'])<=set(GENERALES):
             raise ValueError('Datos generales no válidos.')
@@ -163,7 +183,7 @@ def recuperar_campos_guiados(area, value):
                 if 'Ocupación y sueldo' in r and not r.get('Ocupación'):
                     r['Ocupación'] = r['Ocupación y sueldo'].split('-')[0].strip()
                 if 'Estado Civil' not in r:
-                    r['Estado Civil'] = 'Soltera' if 'nna' in str(r.get('Parentesco', '')).lower() else ''
+                    r['Estado Civil'] = ''
     if area == 'Conclusión' and isinstance(result.get('nee'), list):
         col_desc = 'Descripción de las características más relevantes del alumno que afectan su desempeño académico y social'
         for r in result['nee']:

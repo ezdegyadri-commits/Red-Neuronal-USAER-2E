@@ -13,7 +13,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import HTTPException, Request, status
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as insert_pg
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
@@ -22,6 +22,7 @@ from data.database import IntentoAccesoSPA, SesionSPA, Usuario, get_session
 TOKEN_TTL_SECONDS = 8 * 3600  # 8 horas de jornada laboral
 
 COOKIE_SESION = "usaer_spa_session"
+ESQUEMA_EXACTO = "pbkdf2_sha256_exact"
 
 class SessionUser(BaseModel):
     id_usuario: str
@@ -32,17 +33,26 @@ class SessionUser(BaseModel):
     director: bool
     area: str
 
-def hash_password(password: str) -> str:
+def hash_password(password: str, *, exacto=False) -> str:
     salt = secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 600_000)
-    return f"pbkdf2_sha256${salt}${digest.hex()}"
+    esquema = ESQUEMA_EXACTO if exacto else "pbkdf2_sha256"
+    return f"{esquema}${salt}${digest.hex()}"
+
+
+def formato_password(stored: str, esquema: str) -> bool:
+    if not isinstance(stored, str):
+        return False
+    partes = stored.split("$")
+    return (len(partes) == 3 and partes[0] == esquema and len(partes[1]) == 32
+            and len(partes[2]) == 64 and all(c in "0123456789abcdef" for c in partes[1] + partes[2]))
 
 
 def verificar_password(password: str, stored: str) -> bool:
+    if not any(formato_password(stored, s) for s in ("pbkdf2_sha256", ESQUEMA_EXACTO)):
+        return False
     try:
-        scheme, salt, digest = stored.split("$")
-        if scheme != "pbkdf2_sha256" or len(salt) != 32 or len(digest) != 64:
-            return False
+        _, salt, digest = stored.split("$")
         candidate = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 600_000)
         return hmac.compare_digest(candidate, bytes.fromhex(digest))
     except ValueError:
@@ -66,7 +76,7 @@ def _perfil(row: Usuario) -> SessionUser:
     return SessionUser(
         id_usuario=row.id,
         nombre=row.nombre or "",
-        usuario=row.usuario.strip().lower(),
+        usuario=row.usuario if formato_password(row.password, ESQUEMA_EXACTO) else row.usuario.strip().lower(),
         rol=rol,
         escuelas_permitidas=escuelas,
         director=es_director,
@@ -120,9 +130,10 @@ def restablecer_password(user: SessionUser, usuario_id: str, actual: str, nueva:
             raise HTTPException(409, "La cuenta cambió; vuelve a iniciar sesión.")
         if usuario_id != user.id_usuario and not _perfil(actor).director:
             raise HTTPException(403, "Solo Dirección puede restablecer otra cuenta.")
-        result = db.execute(update(Usuario).where(Usuario.id == usuario_id).values(password=hash_password(nueva)))
-        if not result.rowcount:
+        destino = actor if usuario_id == actor.id else db.get(Usuario, usuario_id, with_for_update=True)
+        if destino is None:
             raise HTTPException(404, "Cuenta no disponible.")
+        destino.password = hash_password(nueva, exacto=formato_password(destino.password, ESQUEMA_EXACTO))
         db.execute(delete(SesionSPA).where(SesionSPA.usuario_id == usuario_id))
         db.commit()
 
@@ -130,15 +141,19 @@ def restablecer_password(user: SessionUser, usuario_id: str, actual: str, nueva:
 def autenticar_usuario(usuario: str, password: str) -> Optional[tuple[SessionUser, str]]:
     with get_session() as db:
         coincidencias = db.scalars(select(Usuario).where(
-            func.lower(func.trim(Usuario.usuario)) == usuario.strip().lower()
+            or_(Usuario.usuario == usuario, func.lower(func.trim(Usuario.usuario)) == usuario.strip().lower())
         )).all()
         if len(coincidencias) != 1:
             return None
         row = coincidencias[0]
         hash_guardado = row.password or ""
         perfil = _perfil(row)
+        exacto = formato_password(hash_guardado, ESQUEMA_EXACTO)
+        if exacto and usuario != row.usuario:
+            return None
     # PBKDF2 no necesita mantener ocupada una conexión del pool.
-    if not password.strip() or not verificar_password(password.strip(), hash_guardado):
+    clave = password if exacto else password.strip()
+    if not clave or not verificar_password(clave, hash_guardado):
         return None
     return perfil, _huella(hash_guardado)
 

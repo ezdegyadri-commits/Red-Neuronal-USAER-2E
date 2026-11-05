@@ -91,7 +91,7 @@ def generar_pdf(doc, alumno, incluir_firmas=True, *, incluir_trazabilidad=False)
                           table(["Área", "Instrumento", "Fecha", "Resultados"], hallazgos)])
         registros = doc["partes"].get("Conclusión", {}).get("nee_confirmadas", []) if epp_oficial_concluida else []
         if registros:
-            rows = [{"NEE": r["texto"], "Fundamento": r["fundamento"], "Profesional": r["profesional"],
+            rows = [{"NEE": r["texto"], "Fundamento": r["fundamento"], "Profesional": r.get("profesional", ""),
                      "Vigencia": f'{r["desde"]} a {r["hasta"]}'} for r in registros]
             story.extend([p("Trazabilidad de las NEE confirmadas", styles["Heading2"]),
                           table(["NEE", "Fundamento", "Profesional", "Vigencia"], rows)])
@@ -227,4 +227,3 @@ def generar_pdf(doc, alumno, incluir_firmas=True, *, incluir_trazabilidad=False)
         c.setFont('Helvetica', 7); c.drawRightString(576, 54, 'Página ' + str(d.page))
     SimpleDocTemplate(out, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=74, bottomMargin=70).build(story, onFirstPage=page, onLaterPages=page)
     return out.getvalue()
-

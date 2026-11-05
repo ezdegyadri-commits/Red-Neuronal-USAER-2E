@@ -804,7 +804,7 @@ def candidatos_grupo_spa_sql(clave):
         return candidatos
 
 
-def planeaciones_resumen_sql(cuenta: str, es_director: bool = False, *, escuelas_spa=None, compartir_grupos=False) -> List[Dict[str, Any]]:
+def planeaciones_resumen_sql(cuenta: str, es_director: bool = False, *, escuelas_spa=None, compartir_grupos=False, limite=50) -> List[Dict[str, Any]]:
     """Carga EXCLUSIVAMENTE la vista resumida de los documentos del usuario activo (o todos para Director).
     
     Optimización crítica: No descarga el historial completo de la BD ni los payloads pesados de tablas/textos;
@@ -836,7 +836,7 @@ def planeaciones_resumen_sql(cuenta: str, es_director: bool = False, *, escuelas
                 propios = propios | PlaneacionDoc.id.in_(grupos.statement)
             query = query.filter(propios)
 
-        query = query.order_by(PlaneacionDoc.actualizado_en.desc()).limit(50)
+        query = query.order_by(PlaneacionDoc.actualizado_en.desc(), PlaneacionDoc.id).limit(limite)
         rows = query.all()
         
         res = []
@@ -1038,6 +1038,19 @@ def epp_listar_sql(ids_alumnos: Optional[List[str]] = None) -> List[Dict[str, An
                 "partes": partes,
             })
         return docs
+
+
+def cobertura_epp_sql(ids_alumnos, ciclos):
+    """Cuenta expedientes EPP distintos sin recuperar sus contenidos."""
+    from sqlalchemy import func, select
+
+    if not ids_alumnos:
+        return {}
+    with get_session() as session:
+        consulta = (select(EPPDoc.ciclo, func.count(EPPDoc.alumno.distinct()))
+                    .where(EPPDoc.alumno.in_(ids_alumnos), EPPDoc.ciclo.in_(ciclos))
+                    .group_by(EPPDoc.ciclo))
+        return {ciclo: total for ciclo, total in session.execute(consulta)}
 
 
 def guardar_epp_sql(doc: Dict[str, Any], *, revision_esperada=None, verificar_revision=False, actor_spa=None) -> str:

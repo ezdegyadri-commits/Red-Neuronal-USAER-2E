@@ -85,12 +85,20 @@ DEFINICIONES={
 
 def plantilla(codigo):
     if codigo not in DEFINICIONES:raise ValueError('No hay reglas digitales verificadas para este instrumento.')
-    return {'version':VERSION,'fecha':'','respuestas':{q['id']:{'respuesta':'No observado' if q['opciones'] else '', 'observaciones':''} for q in DEFINICIONES[codigo]['items']}}
+    return {'version':VERSION,'fecha':'','vigente_hasta':'','respuestas':{q['id']:{'respuesta':'No observado' if q['opciones'] else '', 'observaciones':''} for q in DEFINICIONES[codigo]['items']}}
 
 
 def validar(codigo,captura):
     expected=plantilla(codigo)
-    if not isinstance(captura,dict) or set(captura)!=set(expected) or captura['version']!=VERSION:raise ValueError('Versión de aplicación no válida.')
+    if not isinstance(captura,dict) or not {'version','fecha','respuestas'}<=set(captura) or not set(captura)<=set(expected) or captura['version']!=VERSION:raise ValueError('Versión de aplicación no válida.')
+    captura=deepcopy(captura)
+    captura.setdefault('vigente_hasta','')
+    hasta=captura['vigente_hasta']
+    if not isinstance(hasta,str):raise ValueError('Vigencia no válida.')
+    if hasta:
+        try:date.fromisoformat(hasta)
+        except ValueError:raise ValueError('Indica una fecha de vigencia válida.')
+        if not captura.get('fecha') or hasta<captura['fecha']:raise ValueError('La vigencia no puede preceder a la aplicación.')
     if not isinstance(captura['fecha'],str):raise ValueError('La fecha de aplicación debe ser texto ISO.')
     if captura['fecha']:
         try:date.fromisoformat(captura['fecha'])
@@ -142,11 +150,13 @@ def incorporar(doc,area,codigo,captura,revisada=False):
     application=hashlib.sha256(json.dumps([doc['id'],area,codigo,c['fecha']]).encode()).hexdigest()
     body=d['nombre']+' · '+c['fecha']+'\n'+FUENTE+', pp. '+d['paginas']+' · '+VERSION+'\n'+result['alcance']+'\n'
     body+='Aplicación '+('parcial' if result['pendientes'] else 'completa')+'. Respondidos: '+str(result['respondidos'])+'/'+str(result['total_registros'])+'.\n'
+    if c.get('vigente_hasta'):body+='Vigencia profesional indicada hasta: '+c['vigente_hasta']+'\n'
     body+='\n'.join(result['hallazgos'])
     if len(body)>12000:raise ValueError('La aplicación es demasiado extensa. Resume las observaciones antes de incorporar.')
-    ev={'id':hashlib.sha256((application+body).encode()).hexdigest(),'aplicacion_id':application,'nombre':d['nombre'],'fecha':c['fecha'],'texto':body,'entrada':'DIGITAL','codigo':codigo,'version':VERSION,'conteos':result['conteos'],'respuestas':c['respuestas']}
+    ev={'id':hashlib.sha256((application+body).encode()).hexdigest(),'aplicacion_id':application,'nombre':d['nombre'],'fecha':c['fecha'],'texto':body,'entrada':'DIGITAL','codigo':codigo,'version':VERSION,'vigente_hasta':c.get('vigente_hasta',''),'conteos':result['conteos'],'respuestas':c['respuestas']}
     value['evaluaciones']=[e for e in value.get('evaluaciones',[]) if e.get('aplicacion_id')!=application]+[ev]
-    value.setdefault('aplicaciones_en_curso',{})[codigo]=c
+    value.setdefault('aplicaciones_en_curso',{})[codigo]={k:v for k,v in c.items() if k!='vigente_hasta'}
+    value.setdefault('vigencias_instrumentos',{})[codigo]=c.get('vigente_hasta','')
     field=d['destino']
     if not value['campos'].get(field,'').strip():value['campos'][field]='Fuente: '+d['nombre']+' ('+c['fecha']+').\n'+body
     value['validada']=False

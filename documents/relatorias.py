@@ -88,6 +88,8 @@ def generar_pdf_oficial(
     tema="",
     tipo_junta="Junta de USAER",
     modalidad_junta="Junta Académica",
+    nombre_director="",
+    incluir_sello=False,
 ):
     """Crea la relatoría oficial carta con membrete, sello y espacios de asistencia."""
     estilos = getSampleStyleSheet()
@@ -157,11 +159,11 @@ def generar_pdf_oficial(
     if str(tipo_junta).strip().casefold() != "junta de zona":
         columna_firma = [
             Paragraph("___________________________________", firma_estilo),
-            Paragraph("Psic. Personal ficticio 11", firma_negrita),
+            Paragraph(escape(str(nombre_director or "")), firma_negrita),
             Paragraph("Director de la USAER 02 Estatal", firma_estilo),
         ]
         sello_path = ROOT / "sello.png"
-        if sello_path.exists():
+        if incluir_sello and sello_path.exists():
             sello = Image(str(sello_path), width=1.15 * inch, height=1.15 * inch)
             sello.hAlign = "CENTER"
         else:

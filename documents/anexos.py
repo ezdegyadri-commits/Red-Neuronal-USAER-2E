@@ -331,7 +331,7 @@ def _anexo3_target_label(alumno, registro):
     return str(alumno.get("Nombre_Completo", "Alumno"))
 
 
-def anexo3_pdf(alumno, rows):
+def anexo3_pdf(alumno, rows, *, contexto=""):
     """Genera el Anexo III BAP en PDF carta listo para impresión."""
     if rows is None or rows.empty:
         rows = pd.DataFrame([{}])
@@ -440,6 +440,12 @@ def anexo3_pdf(alumno, rows):
                 new_x="LMARGIN", new_y="NEXT",
             )
 
+    if contexto:
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.multi_cell(0, 5, "Observaciones cualitativas y estrategias previas", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 9)
+        pdf.multi_cell(0, 5, _fpdf_text(contexto), new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
 
 

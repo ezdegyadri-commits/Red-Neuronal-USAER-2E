@@ -2,6 +2,7 @@
 
 from hashlib import sha256
 import json
+import os
 from uuid import uuid4
 from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile
@@ -23,6 +24,8 @@ LIMITE = 16 * 1024 * 1024
 
 def puede_importar(user):
     rol = normalizar_texto(user.rol)
+    if os.getenv("USAER_SPA_MODE") == "usaer-private-local" and rol == "APOYO":
+        return bool(user.escuelas_permitidas)
     return user.director or (bool(user.escuelas_permitidas) and rol in {
         "MAESTRA DE APOYO", "MAESTRO DE APOYO", "DOCENTE DE APOYO",
     })
@@ -34,6 +37,12 @@ def autorizar(user):
 
 
 def procesar(data, user, revision=None):
+    from piloto_spa.backend.alcance_alumno import ICHC
+
+    if os.getenv("USAER_SPA_MODE") == "usaer-private-local" and not user.director:
+        raise HTTPException(403, "La importación nominal consolidada corresponde a Dirección.")
+    if not user.director and (ICHC in user.escuelas_permitidas or "TODAS" in user.escuelas_permitidas):
+        raise HTTPException(403, "La importación del padrón compartido corresponde a Dirección.")
     escuelas = [
         {"ID_Escuela": e["id"], "Nombre_Escuela": e["nombre"], "CCT_Escuela": e["cct"]}
         for e in obtener_catalogo_escuelas() if user.director or e["id"] in user.escuelas_permitidas
