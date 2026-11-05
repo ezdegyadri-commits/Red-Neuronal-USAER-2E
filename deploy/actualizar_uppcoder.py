@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-RELEASE='usaer-rc1-spark-20261105'
+RELEASE='usaer-docente-spark-20261105'
 
 
 def git(repo,*args):
@@ -108,7 +108,7 @@ def comprobar_https(cliente,host,usuario,clave):
     creado,_=solicitar(cliente,host,'/api/planeaciones/nueva',{'modalidad':'individual','alumnos':[ficticios[0]['id']]},token)
     ruta='/api/planeaciones/'+json.loads(creado)['id']
     doc=json.loads(solicitar(cliente,host,ruta,token=token)[0])
-    marca='Comprobación ficticia RC1 '+datetime.now(timezone.utc).isoformat()
+    marca='Comprobación ficticia docente '+datetime.now(timezone.utc).isoformat()
     doc['metadatos']['titulo']=marca
     _,guardar=solicitar(cliente,host,'/api/planeaciones',doc,token)
     reabierto=json.loads(solicitar(cliente,host,ruta,token=token)[0])
@@ -120,6 +120,23 @@ def comprobar_https(cliente,host,usuario,clave):
             'apertura_ms':apertura,'cambio_escuela_api_ms':tiempos,'guardado_ms':guardar}
 
 
+
+def recursos_spark(repo):
+    resultado={'disco_libre_bytes':shutil.disk_usage(repo).free}
+    # Medición del cgroup visible; no representa por sí sola la cuota diaria del proveedor.
+    raiz=Path('/sys/fs/cgroup')
+    try:
+        for linea in Path('/proc/self/cgroup').read_text().splitlines():
+            if linea.startswith('0::'):
+                sub=(raiz/linea[3:].lstrip('/')).resolve()
+                if sub.is_relative_to(raiz) and (sub/'cpu.stat').is_file():raiz=sub
+                break
+        campos=dict(linea.split() for linea in (raiz/'cpu.stat').read_text().splitlines())
+        resultado['cpu_cgroup_usec']=int(campos['usage_usec'])
+        resultado['ram_cgroup_bytes']=int((raiz/'memory.current').read_text())
+    except (OSError,ValueError,KeyError):pass
+    return resultado
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--repo',type=Path,required=True)
@@ -130,6 +147,7 @@ def main():
     if git(repo,'rev-parse',args.revision)!=args.revision:raise RuntimeError('El commit no está disponible.')
     if git(repo,'status','--porcelain') or git(repo,'branch','--show-current')=='main':raise RuntimeError('El clon debe estar limpio y fuera de main; no se descartan cambios.')
     original=git(repo,'rev-parse','HEAD')
+    recursos_antes=recursos_spark(repo)
     inicio=repo.parent/'main.py'
     if inicio.is_symlink() or inicio.read_bytes()!=(ROOT/'deploy/main_spark.py').read_bytes():raise RuntimeError('El adaptador del supervisor no coincide; se conserva sin cambios.')
     from deploy import uppcoder
@@ -147,7 +165,7 @@ def main():
     carpeta=uppcoder.CONFIG_SPARK.parent/'respaldos';carpeta.mkdir(mode=0o700,exist_ok=True)
     if carpeta.is_symlink():raise RuntimeError('El directorio de respaldo no admite enlaces.')
     carpeta.chmod(0o700)
-    respaldo=carpeta/('antes-rc1-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')+'.dump')
+    respaldo=carpeta/('antes-docente-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')+'.dump')
     from deploy.respaldo_spark import respaldar
     from sqlalchemy.engine import make_url
     respaldar(make_url(os.environ['DATABASE_URL']),respaldo,pg_dump=dump)
@@ -192,6 +210,10 @@ def main():
             time.sleep(2)
         if not confirmado:raise RuntimeError('El supervisor no recargó la candidata; requiere Restart de FastAPI en el panel.')
         resultado=comprobar_https(cliente,host,usuario,clave)
+        recursos_despues=recursos_spark(repo)
+        if 'cpu_cgroup_usec' in recursos_antes and 'cpu_cgroup_usec' in recursos_despues:
+            resultado['cpu_cgroup_segundos_delta']=round(max(0,recursos_despues['cpu_cgroup_usec']-recursos_antes['cpu_cgroup_usec'])/1000000,3)
+        resultado['recursos_antes']=recursos_antes;resultado['recursos_despues']=recursos_despues
         print(json.dumps({**resultado,'commit':args.revision,'respaldo':str(respaldo),'reversion_codigo':str(reversion),'sha256_respaldo':resumen},ensure_ascii=False),flush=True)
     except Exception:
         if cambiado:

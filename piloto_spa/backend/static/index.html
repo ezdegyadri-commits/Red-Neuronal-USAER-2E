@@ -368,6 +368,7 @@
       const [formato, setFormato] = useState('XXIII');
       const [seleccion, setSeleccion] = useState('');
       const [ciclo, setCiclo] = useState(2026);
+      const [trimestre, setTrimestre] = useState(1);
       const [error, setError] = useState('');
       const [enviando, setEnviando] = useState(false);
       const grupos = new Map();
@@ -384,7 +385,7 @@
         try {
           const ids = modalidad === 'grupal' ? grupos.get(seleccion).ids : [seleccion];
           const doc = await apiRequest('/api/planeaciones/nueva', {
-            method: 'POST', body: JSON.stringify({ modalidad, formato, alumnos: ids, ciclo_inicio: Number(ciclo) })
+            method: 'POST', body: JSON.stringify({ modalidad, formato, alumnos: ids, ciclo_inicio: Number(ciclo), trimestre: Number(trimestre) })
           });
           onOpenDoc(doc.id);
         } catch (err) {
@@ -409,6 +410,9 @@
             {modalidad === 'individual' && <option>XXI</option>}<option>XXIII</option><option>XXV</option>
           </select></label>
           <label className="block">Año de inicio del ciclo <input type="number" min="2000" max="2100" required value={ciclo} onChange={e => setCiclo(e.target.value)} /></label>
+          {modalidad === 'individual' && <label className="block">Trimestre <select aria-label="Trimestre" value={trimestre} onChange={e=>setTrimestre(e.target.value)}>
+            {[1,2,3].map(t=><option key={t} value={t}>{t}</option>)}
+          </select></label>}
           <button type="submit" disabled={enviando} className="px-3 py-2 bg-slate-800 text-white rounded">Crear documento</button>
           <button type="button" onClick={onCancel} className="px-3">Cancelar</button>
           {error && <p role="alert">{error}</p>}
@@ -758,9 +762,12 @@
     function PropuestasLocales({ doc, mutarDoc }) {
       const [enfoque, setEnfoque] = useState('');
       const [referentes, setReferentes] = useState([]);
-      const [pdaId, setPdaId] = useState('');
-      const [neeId, setNeeId] = useState('');
-      const [campo, setCampo] = useState('Lenguajes');
+      const [pdaId, setPdaId] = useState(doc.metadatos.spa_pda_id || '');
+      const [neeId, setNeeId] = useState(doc.editor.nee_confirmadas?.some(n=>n.id===doc.metadatos.spa_nee_id) ? doc.metadatos.spa_nee_id : '');
+      const [campo, setCampo] = useState(doc.metadatos.spa_campo_pda || 'Lenguajes');
+      const [metodo, setMetodo] = useState(doc.metadatos.metodo_docente || '');
+      const [materiales, setMateriales] = useState(doc.metadatos.materiales_docentes || '');
+      const continuidad = doc.metadatos.continuidad_trimestral;
       const necesidades = doc.editor.nee_confirmadas;
       const [resultado, setResultado] = useState(null);
       const [error, setError] = useState('');
@@ -769,19 +776,24 @@
       const base = `/api/planeaciones/${doc.id}`;
 
       useEffect(() => {
-        apiRequest(base + '/referentes?campo=' + encodeURIComponent(campo)).then(setReferentes).catch(e => setError(e.message));
+        let vigente=true;
+        apiRequest(base + '/referentes?campo=' + encodeURIComponent(campo)).then(rows=>{if(vigente){setReferentes(rows);setPdaId(id=>rows.some(r=>r.id===id)?id:'');}}).catch(e => {if(vigente)setError(e.message);});
+        return ()=>{vigente=false;};
       }, [base, campo]);
 
-      async function preparar() {
+      async function preparar(objetivo=null) {
         setConsultando(true);
         setError('');
-        setResultado(null);
-        setAplicadas([]);
+        if (!objetivo) { setResultado(null); setAplicadas([]); }
         try {
           const propuesta = await apiRequest(base + '/propuesta', {
-            method: 'POST', body: JSON.stringify({ enfoque, pda_id: pdaId, nee_id: neeId, campo })
+            method: 'POST', body: JSON.stringify({ enfoque, pda_id: pdaId, nee_id: neeId, campo, metodo, materiales, alumno_id:objetivo?.alumno || '', variante:objetivo ? ((objetivo.variante || 0)+1)%3 : 0 })
           });
-          setResultado({ ...propuesta, pdaId, campo });
+          const candidatas=propuesta.propuestas.map(p=>({...p, revision:propuesta.revision,pdaId,campo,neeId,metodo,materiales}));
+          if (objetivo) {
+            const elegida=candidatas.find(p=>p.alumno===objetivo.alumno && p.campo===objetivo.campo) || candidatas[0];
+            if (elegida) setResultado(r=>({...r,propuestas:r.propuestas.map(p=>p.id===objetivo.id?elegida:p)}));
+          } else setResultado({...propuesta,propuestas:candidatas});
         } catch (e) {
           setError(e.message);
         } finally {
@@ -792,7 +804,14 @@
       return (
         <section className="border rounded p-3 space-y-2">
           <h3 className="font-bold">Propuesta pedagógica para revisión docente</h3>
-          <p>Motor local basado en reglas y fuentes del expediente.</p>
+          <p>Propuestas opcionales con reglas locales y antecedentes autorizados. Revisa y edita antes de incorporar.</p>
+          {continuidad && <details><summary>Continuidad del trimestre {continuidad.trimestre}</summary>
+            <p>Decisiones de tu planeación anterior; confirma que siguen siendo pertinentes.</p>
+            {continuidad.apoyos.map((t,i)=><p key={'a'+i}>Apoyo anterior: {t}</p>)}
+            {continuidad.seguimiento.map((t,i)=><p key={'s'+i}>Seguimiento anterior: {t}</p>)}
+          </details>}
+          <label className="block">Método docente <input className="border" maxLength={500} value={metodo} onChange={e=>setMetodo(e.target.value)} /></label>
+          <label className="block">Materiales disponibles elegidos <input className="border" maxLength={500} value={materiales} onChange={e=>setMateriales(e.target.value)} /></label>
           {necesidades && <label className="block">NEE confirmada <select aria-label="NEE confirmada"
             className="max-w-full border" value={neeId} onChange={e => setNeeId(e.target.value)}>
             <option value="">Elegir NEE vigente</option>
@@ -809,7 +828,12 @@
             <option value="">Sin PDA seleccionado</option>
             {referentes.map(r => <option key={r.id} value={r.id}>{r.grado}° · {r.pda}</option>)}
           </select></label>
-          <button disabled={consultando} className="underline" onClick={preparar}>Preparar propuestas</button>
+          <button disabled={consultando} className="underline" onClick={()=>preparar()}>Preparar propuestas</button>
+          {doc.metadatos.modalidad_planeacion==='individual' && <button type="button" className="underline ml-3" onClick={()=>{
+            const alumno=doc.datos.Alumnos[0];
+            const manual={id:crypto.randomUUID(),alumno:alumno.ID_Alumno,nombre:alumno['Nombre del alumno'],actividad:'',orientacion:'Actividad de autoría docente',recursos:materiales,contexto:doc.formato==='XXV'?'Escuela':'Aula regular',revision:doc.revision,metodo,materiales,manual:true};
+            setResultado(r=>r?{...r,propuestas:[...r.propuestas,manual]}:{propuestas:[manual],indicadores:[]});
+          }}>Redactar o pegar actividad</button>}
           {error && <p role="alert">{error}</p>}
           {resultado?.propuestas.map((p, i) => <div key={p.id} className="border rounded p-2">
             <p>{p.nombre} · {p.orientacion}</p>
@@ -827,7 +851,10 @@
                 const actividad = e.target.value;
                 setResultado(r => ({ ...r, propuestas: r.propuestas.map((v, j) => i === j ? { ...v, actividad } : v) }));
               }} />
-            <button className="underline" disabled={aplicadas.includes(p.id) || doc.revision !== resultado.revision} onClick={() => {
+            {!p.manual && <button type="button" className="underline mr-3" disabled={consultando || aplicadas.includes(p.id)} onClick={()=>{
+              if (window.confirm('¿Regenerar solo esta propuesta sin guardar? No cambia las actividades de tu planeación.')) preparar(p);
+            }}>Regenerar esta actividad</button>}
+            <button className="underline" disabled={!p.actividad.trim() || aplicadas.includes(p.id) || doc.revision !== p.revision} onClick={() => {
               mutarDoc(d => {
                 const tablas = { ...d.tablas };
                 const textos = { ...d.textos };
@@ -852,8 +879,12 @@
                   }
                 }
                 return { ...d, tablas, textos, metadatos: { ...d.metadatos,
-                  spa_pda_id: resultado.pdaId || d.metadatos.spa_pda_id || '',
-                  spa_campo_pda: resultado.pdaId ? resultado.campo : d.metadatos.spa_campo_pda || 'Lenguajes' } };
+                  spa_pda_id: p.pdaId || d.metadatos.spa_pda_id || '',
+                  spa_nee_id: p.neeId || d.metadatos.spa_nee_id || '',
+                  spa_campo_pda: p.pdaId ? p.campo : d.metadatos.spa_campo_pda || 'Lenguajes',
+                  metodo_docente: p.metodo || d.metadatos.metodo_docente || '',
+                  materiales_docentes: p.materiales || d.metadatos.materiales_docentes || '',
+                  apoyos_docentes: p.apoyos || p.apoyos_acceso || d.metadatos.apoyos_docentes || '' } };
               });
               setAplicadas(ids => [...ids, p.id]);
             }}>Incorporar propuesta revisada</button>

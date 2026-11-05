@@ -230,6 +230,7 @@ class NuevaPlaneacion(BaseModel):
     formato: Literal["XXI", "XXIII", "XXV"] = "XXIII"
     alumnos: list[str] = Field(min_length=1, max_length=100)
     ciclo_inicio: int = Field(default=2026, ge=2000, le=2100)
+    trimestre: int = Field(default=1, ge=1, le=3)
 
 
 class PropuestaPlaneacion(BaseModel):
@@ -237,6 +238,10 @@ class PropuestaPlaneacion(BaseModel):
     enfoque: str = Field(default="", max_length=1500)
     pda_id: str = Field(default="", max_length=100)
     campo: str = Field(default="Lenguajes", max_length=80)
+    alumno_id: str = Field(default="", max_length=64)
+    variante: int = Field(default=0, ge=0, le=2)
+    metodo: str = Field(default="", max_length=500)
+    materiales: str = Field(default="", max_length=500)
 
 
 class ActividadCurricularExterna(BaseModel):
@@ -356,7 +361,7 @@ def healthcheck():
     """Monitoreo de estado y keep-alive de disponibilidad."""
     with get_engine().connect() as connection:
         connection.execute(text("SELECT 1"))
-    return {"status": "ok", "version": "2.0.0", "release": "usaer-rc1-spark-20261105", "timestamp": time.time()}
+    return {"status": "ok", "version": "2.0.0", "release": "usaer-docente-spark-20261105", "timestamp": time.time()}
 
 
 @app.post("/api/auth/login", response_model=LoginResponse, response_model_exclude_none=True)
@@ -1139,6 +1144,52 @@ def listar_planeaciones(user: SessionUser = Depends(validar_token_sesion)):
             and _alumnos_en_planeacion(doc) <= alumnos]
 
 
+def _continuidad_trimestral(doc, alumno_id, user):
+    """Solo trae decisiones del mismo docente, alumno, escuela, función y ciclo."""
+    from services.curriculo import grados, opciones
+    datos, meta = doc["datos"], doc["metadatos"]
+    epp = obtener_epp_documento(alumno_id, datos["Curso escolar"])
+    necesidades = nee_vigentes(epp)
+    if len(necesidades) == 1:
+        meta["spa_nee_id"] = necesidades[0]["id"]
+    def anterior(p):
+        d = p["datos"]
+        return (p.get("formato") == doc["formato"] and d.get("Curso escolar") == datos["Curso escolar"]
+                and d.get("ID_Escuela") == datos["ID_Escuela"] and d.get("Función") == datos["Función"]
+                and str(d.get("Trimestre")) in {str(t) for t in range(1, datos["Trimestre"])})
+    if datos["Trimestre"] == 1:
+        return
+    previos = planes_previos_spa_sql(alumno_id, doc["id"], user.usuario, filtro=anterior)
+    if not previos:
+        return
+    previo = max(previos, key=lambda p: int(p["datos"]["Trimestre"]))
+    m = previo.get("metadatos", {})
+    if m.get("spa_nee_id") in {n["id"] for n in necesidades}:
+        meta["spa_nee_id"] = m["spa_nee_id"]
+    campo = m.get("spa_campo_pda", "Lenguajes")
+    if isinstance(campo, str) and m.get("spa_pda_id") in {r["id"] for r in opciones(doc, campo, grados(doc))}:
+        meta.update(spa_pda_id=m["spa_pda_id"], spa_campo_pda=campo)
+    for k in ("metodo_docente", "materiales_docentes"):
+        if isinstance(m.get(k), str):
+            meta[k] = m[k][:500]
+    apoyos, avances = [], []
+    if isinstance(m.get("apoyos_docentes"), str) and m["apoyos_docentes"].strip():
+        apoyos.append(m["apoyos_docentes"][:500])
+    for k in ("Evaluación", "Observaciones", "Resultados obtenidos en los diferentes contextos"):
+        t = previo.get("textos", {}).get(k)
+        if isinstance(t, str) and t.strip():
+            avances.append(k + " registrada: " + t[:500])
+    for tabla in ("necesidades", "curriculo", "barreras", "dosificacion", "evaluacion_final"):
+        for fila in previo.get("tablas", {}).get(tabla, [])[:10]:
+            for k in ("Apoyos", "Ajustes razonables", "Apoyos o ajustes", "Apoyos y/o ajustes razonables"):
+                if fila.get(k): apoyos.append(str(fila[k])[:500])
+            for k in ("Seguimiento", "Situación final del alumno en relación con sus NEE", "Resultados de la implementación de las acciones para minimizar o eliminar las barreras"):
+                if fila.get(k): avances.append(str(fila[k])[:500])
+    meta["continuidad_trimestral"] = {"id": previo["id"], "revision": previo["revision"],
+        "trimestre": previo["datos"]["Trimestre"], "apoyos": list(dict.fromkeys(apoyos))[:6],
+        "seguimiento": list(dict.fromkeys(avances))[:6]}
+
+
 @app.post("/api/planeaciones/nueva")
 def nueva_planeacion(payload: NuevaPlaneacion, user: SessionUser = Depends(validar_token_sesion)):
     alcance = _alumnos_en_alcance(user) if not user.director else None
@@ -1179,7 +1230,7 @@ def nueva_planeacion(payload: NuevaPlaneacion, user: SessionUser = Depends(valid
                                                    existente=True, grupo_spa=clave)
     try:
         doc = crear_plantilla(payload.formato, payload.alumnos, registros, autor=user.nombre,
-                              funcion=user.area, ciclo_inicio=payload.ciclo_inicio)
+                              funcion=user.area, ciclo_inicio=payload.ciclo_inicio, trimestre=payload.trimestre)
     except (ValueError, PermissionError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     doc["id"] = f"plan-{uuid.uuid4().hex}"
@@ -1192,6 +1243,8 @@ def nueva_planeacion(payload: NuevaPlaneacion, user: SessionUser = Depends(valid
             fuentes.setdefault(epp["alumno"], {"alumno": epp["alumno"], "documento": epp["id"],
                                                 "revision": epp["revision"], "tipo": "EPP"})
     doc["metadatos"]["vinculos_documentales"] = list(fuentes.values())
+    if payload.modalidad == "individual":
+        _continuidad_trimestral(doc, payload.alumnos[0], user)
     if payload.modalidad == "grupal":
         doc["datos"]["Vigencia"] = doc["datos"]["Curso escolar"]
         doc["datos"].pop("Trimestre", None)
@@ -1253,10 +1306,13 @@ def referentes_planeacion(doc_id: str, campo: str = "Lenguajes",
 def propuesta_planeacion(doc_id: str, payload: PropuestaPlaneacion,
                          user: SessionUser = Depends(validar_token_sesion)):
     from services.curriculo import grados, opciones, vincular
+    from services.epp_modelo import conclusion_vigente
     from services.planeacion_calidad import revisar
     from services.planeacion_local import preparar_documento_autorizado, vincular_cadena_nee
 
     doc = exigir_plantilla(doc_id, user)
+    if payload.alumno_id and payload.alumno_id not in _alumnos_en_planeacion(doc):
+        raise HTTPException(404, "Alumno no disponible en esta planeación.")
     doc["metadatos"]["fuentes"] = []
     necesidad = None
     oficial = None
@@ -1277,6 +1333,8 @@ def propuesta_planeacion(doc_id: str, payload: PropuestaPlaneacion,
         })
     for alumno in doc["datos"]["Alumnos"]:
         aid = alumno["ID_Alumno"]
+        if payload.alumno_id and aid != payload.alumno_id:
+            continue
         autorizado = exigir_alumno(aid, user)
         expediente = obtener_expediente_completo(aid, alumno=autorizado)
         fuentes = [
@@ -1293,7 +1351,15 @@ def propuesta_planeacion(doc_id: str, payload: PropuestaPlaneacion,
             epp = None
         if epp:
             fuentes.extend(contextos_epp.fuentes(epp))
+            fuentes.extend(("NEE", f"{n['id']} · EPP {epp['id']}", n["texto"] + " · " + n["fundamento"])
+                           for n in nee_vigentes(epp) if not necesidad or n["id"] != necesidad["id"])
             anexo = anexo_epp(epp)
+            if conclusion_vigente(anexo):
+                for fila in anexo["partes"]["Conclusión"]["contenido"].get("bap", [])[:8]:
+                    texto_bap = " · ".join(str(fila.get(k) or "").strip() for k in
+                        ("Contextos", "Tipo de barrera", "Acciones generales", "Apoyos", "Ajustes razonables"))
+                    if texto_bap.strip(" ·"):
+                        fuentes.append(("BAP", f"EPP {epp['id']} · rev. {epp['revision']}", texto_bap))
             for area, apartado in anexo["partes"].items():
                 if user.director or area == user.area:
                     contenido = apartado["contenido"]
@@ -1305,11 +1371,16 @@ def propuesta_planeacion(doc_id: str, payload: PropuestaPlaneacion,
                     textos = " · ".join(v for v in campos.values() if isinstance(v, str) and v.strip())
                     fuentes.append(("EPP", epp["id"], textos))
         for previo in planes_previos_spa_sql(aid, doc_id, user.usuario, direccion=user.director):
+            try:
+                exigir_planeacion(previo["id"], user)
+            except HTTPException as exc:
+                if exc.status_code in (403,404): continue
+                raise
             tipo = "Plan de intervención" if previo["formato"] == "XXI" else "Planeación previa"
             partes = [v for v in previo.get("textos", {}).values() if isinstance(v, str)]
             for tabla in ("aprendizajes", "necesidades", "dosificacion"):
                 for fila in previo.get("tablas", {}).get(tabla, [])[:5]:
-                    partes.extend(str(fila[k]) for k in ("Descriptor de logro", "Descriptor de Logro", "Actividades", "Seguimiento") if fila.get(k))
+                    partes.extend(str(fila[k]) for k in ("Descriptor de logro", "Descriptor de Logro", "Actividades", "Seguimiento", "Apoyos", "Apoyos o ajustes", "Ajustes razonables") if fila.get(k))
             fuentes.append((tipo, f"{previo['id']} · rev. {previo['revision']}", " · ".join(partes)))
         for informe in _listar_informes_autorizados(autorizado, user, limite=3):
             resumen = " · ".join(informe[k] for k in CAMPOS_INFORME)
@@ -1347,7 +1418,9 @@ def propuesta_planeacion(doc_id: str, payload: PropuestaPlaneacion,
             raise HTTPException(status_code=422, detail="El PDA no pertenece al catálogo del grado y campo.")
         doc = vincular(doc, payload.campo, [], [payload.pda_id])
     try:
-        propuesta = preparar_documento_autorizado(doc, payload.enfoque)
+        propuesta = preparar_documento_autorizado(doc, payload.enfoque, alumno_id=payload.alumno_id,
+            variante=payload.variante, metodo=payload.metodo or str(doc["metadatos"].get("metodo_docente", ""))[:500],
+            materiales_docentes=payload.materiales or str(doc["metadatos"].get("materiales_docentes", ""))[:500])
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if necesidad:

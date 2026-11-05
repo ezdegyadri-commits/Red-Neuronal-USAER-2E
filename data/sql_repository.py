@@ -750,7 +750,7 @@ def sync_from_sheets_if_empty(table_name: str, df: pd.DataFrame) -> None:
         logger.warning("Error en sincronización inicial de %s: %s", table_name, exc)
 
 
-def planes_previos_spa_sql(alumno_id, excluir, cuenta, *, direccion=False):
+def planes_previos_spa_sql(alumno_id, excluir, cuenta, *, direccion=False, filtro=None):
     """Recupera solo planes individuales enlazados al alumno y visibles para el actor."""
     with get_session() as db:
         query = db.query(PlaneacionDoc).join(PlaneacionAlumnoSPA).filter(
@@ -759,14 +759,15 @@ def planes_previos_spa_sql(alumno_id, excluir, cuenta, *, direccion=False):
         if not direccion:
             query = query.filter(PlaneacionDoc.cuenta == cuenta)
         previos = []
-        for row in query.order_by(PlaneacionDoc.actualizado_en.desc()).limit(20):
+        for row in query.order_by(PlaneacionDoc.actualizado_en.desc()).limit(100 if filtro else 20):
             try:
                 doc = json.loads(row.payload_json or "{}")
             except ValueError:
                 continue
             if (doc.get("metadatos", {}).get("modalidad_planeacion") == "individual"
                     and [a.get("ID_Alumno") for a in doc.get("datos", {}).get("Alumnos", [])] == [alumno_id]):
-                previos.append(doc)
+                if filtro is None or filtro(doc):
+                    previos.append(doc)
             if len(previos) >= 3:
                 break
         return previos
