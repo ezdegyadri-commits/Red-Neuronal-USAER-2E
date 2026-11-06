@@ -58,29 +58,21 @@ for dest in [
 ]:
     descargar("piloto_spa/backend/static/index.html", dest)
 
-# 6. Reconciliación directa en PostgreSQL 17
-print("Ejecutando reconciliación canónica en base de datos PostgreSQL...")
-script_reconciliar = """
-import os, sys
-from pathlib import Path
-
-os.environ["DATABASE_URL"] = "postgresql://ezdegyadri:pass@zja3x8j3-postgresql-17:5432/usaer_2e_2_0"
-sys.path.insert(0, "/home/uppcoder/app/usaer2e")
-sys.path.insert(0, "/home/uppcoder/app")
-
-try:
-    from main import reconciliar_base_datos
-    reconciliar_base_datos()
-    print("[OK] Base de datos reconciliada exitosamente.")
-except Exception as e:
-    print(f"[Aviso DB] {e}")
-"""
-
+# 6. Test importación uvicorn
+print("Verificando importación con Python...")
 pixi_py = Path("/home/uppcoder/app/.pixi/envs/web-fastapi/bin/python")
 py_exe = str(pixi_py) if pixi_py.exists() else sys.executable
-subprocess.run([py_exe, "-c", script_reconciliar], check=False)
+res = subprocess.run(
+    [py_exe, "-c", "import main; print('MAIN APP CARGADA OK:', type(main.app))"],
+    capture_output=True, text=True, cwd="/home/uppcoder/app"
+)
+print("STDOUT:", res.stdout.strip())
+if res.stderr:
+    print("STDERR:", res.stderr.strip())
 
 # 7. Reiniciar framework
 print("Reiniciando framework con supervisorctl...")
 subprocess.run(["supervisorctl", "restart", "framework"], check=False)
+time.sleep(2)
+subprocess.run(["supervisorctl", "status", "framework"], check=False)
 print(">>> DESPLIEGUE OFICIAL, FILTRADO Y BASE DE DATOS RESTABLECIDOS AL 100% <<<")

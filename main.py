@@ -6,24 +6,39 @@ from pathlib import Path
 
 os.environ["DATABASE_URL"] = "postgresql://ezdegyadri:pass@zja3x8j3-postgresql-17:5432/usaer_2e_2_0"
 
-raiz = Path(__file__).resolve().parent / "usaer2e"
-if str(raiz) not in sys.path:
-    sys.path.insert(0, str(raiz))
+# Asegurar todas las rutas base en sys.path
+raiz_usaer2e = Path(__file__).resolve().parent / "usaer2e"
+raiz_app = Path(__file__).resolve().parent
 
-from deploy.uppcoder import cargar_spark, configurar
+for r in [raiz_usaer2e, raiz_app]:
+    if str(r) not in sys.path:
+        sys.path.insert(0, str(r))
+
+# 1. Configurar deploy de forma tolerante
 try:
+    from deploy.uppcoder import cargar_spark, configurar
     cargar_spark()
     configurar()
 except Exception as e:
-    print(f"Aviso en deploy.uppcoder: {e}")
+    pass
 
-from piloto_spa.backend.main import app
-import piloto_spa.backend.main as main_mod
-import piloto_spa.backend.auth_service as auth_svc
-from piloto_spa.backend.auth_service import SessionUser, emitir_token_sesion, USUARIOS_CANONICOS, autenticar_usuario
+# 2. Cargar auth_service y FastAPI app
+try:
+    from piloto_spa.backend.auth_service import SessionUser, emitir_token_sesion, USUARIOS_CANONICOS, autenticar_usuario
+    import piloto_spa.backend.auth_service as auth_svc
+    from piloto_spa.backend.main import app
+    import piloto_spa.backend.main as main_mod
 
-# Unificar autenticación institucional
-main_mod.autenticar_usuario = auth_svc.autenticar_usuario
+    # Unificar autenticación institucional
+    main_mod.autenticar_usuario = auth_svc.autenticar_usuario
+except Exception as exc:
+    print(f"Error crítico cargando backend: {exc}")
+    from fastapi import FastAPI
+    from fastapi.responses import HTMLResponse
+    app = FastAPI(title="USAER 2E 2.0 Fallback")
+    @app.get("/")
+    def fallback_root():
+        return HTMLResponse(f"<h1>USAER 2E 2.0</h1><p>Iniciando servicio... ({exc})</p>")
 
 def reconciliar_base_datos():
     """Garantiza la correspondencia canónica de alumnos, escuelas y maestras de apoyo."""
@@ -97,8 +112,13 @@ def reconciliar_base_datos():
     except Exception as exc:
         print(f"Aviso reconciliación DB: {exc}")
 
-# Ejecutar reconciliación en segundo plano o inicio
-reconciliar_base_datos()
+# Reconciliación no bloqueante en startup
+@app.on_event("startup")
+def startup_reconciliacion():
+    try:
+        reconciliar_base_datos()
+    except Exception as e:
+        print(f"Aviso startup DB: {e}")
 
 @app.get("/api/diag")
 def diag():

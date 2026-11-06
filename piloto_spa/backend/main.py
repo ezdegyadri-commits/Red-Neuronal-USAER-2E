@@ -706,7 +706,18 @@ INDEX_HTML = SPA_STATIC_DIR / "index.html"
 
 @app.get("/", response_class=HTMLResponse)
 def index_spa():
-    """Punto de entrada de la SPA React 18."""
-    if INDEX_HTML.exists():
-        return HTMLResponse(content=INDEX_HTML.read_text(encoding="utf-8"))
+    """Punto de entrada de la SPA React 18 con resolución robusta de rutas."""
+    posibles_rutas = [
+        SPA_STATIC_DIR / "index.html",
+        Path(__file__).resolve().parent / "static" / "index.html",
+        Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static/index.html"),
+        Path("/home/uppcoder/app/piloto_spa/backend/static/index.html"),
+        Path("/home/uppcoder/app/static/index.html")
+    ]
+    for p in posibles_rutas:
+        if p.exists():
+            return HTMLResponse(
+                content=p.read_text(encoding="utf-8"),
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+            )
     return HTMLResponse("<h1>USAER 2E 2.0</h1><p>Compilando frontend...</p>")
