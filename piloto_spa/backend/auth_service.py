@@ -345,3 +345,9 @@ def cerrar_sesion(authorization: Optional[str] = Header(None)) -> bool:
     if token in _ACTIVE_SESSIONS:
         del _ACTIVE_SESSIONS[token]
     return True
+
+
+def _perfil(authorization: Optional[str] = Header(None)) -> SessionUser:
+    """Alias de compatibilidad para módulos extendidos del servidor."""
+    return validar_token_sesion(authorization)
+

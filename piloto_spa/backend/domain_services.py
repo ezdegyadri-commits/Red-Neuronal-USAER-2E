@@ -88,6 +88,7 @@ def obtener_catalogo_escuelas() -> List[Dict[str, Any]]:
             "nivel": str(r.get("Nivel") or r.get("nivel") or "Primaria"),
         }
         for r in records
+        if not str(r.get("ID_Escuela") or r.get("id") or "").startswith("esc-uppcoder")
     ]
 
 # -------------------------------------------------------------
@@ -106,6 +107,9 @@ def obtener_alumnos_autorizados(
     records = df.to_dict(orient="records")
     alumnos = []
     for r in records:
+        alu_id = str(r.get("ID_Alumno", "")).strip()
+        if alu_id.startswith("alu-uppcoder"):
+            continue
         nom_esc = str(r.get("Nombre_Escuela", "")).strip().upper()
         eid = str(r.get("ID_Escuela", "")).strip()
 
