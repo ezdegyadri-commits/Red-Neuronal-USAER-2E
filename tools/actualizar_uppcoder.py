@@ -28,8 +28,11 @@ if not db_url:
 codigo_main = f'''"""Modulo main:app para USAER 2E 2.0 en Uppcoder."""
 import os
 import sys
-import json
+import time
+import secrets
 from pathlib import Path
+from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 
 os.environ["DATABASE_URL"] = "{db_url}"
 
@@ -45,9 +48,8 @@ except Exception as e:
     print(f"Aviso en deploy.uppcoder: {{e}}")
 
 from piloto_spa.backend.main import app
-import piloto_spa.backend.main as main_mod
 import piloto_spa.backend.auth_service as auth_svc
-from piloto_spa.backend.auth_service import SessionUser, emitir_token_sesion
+from piloto_spa.backend.auth_service import SessionUser
 
 # Diccionario directo de credenciales institucionales oficiales
 CREDENCIALES = {{
@@ -69,25 +71,42 @@ CREDENCIALES = {{
     "cecilia.solis": ("Usaer2E*Cecilia", "Mtra. Maria Cecilia Solis Vazquez", "APOYO", ["ESC-002"], "Aprendizaje"),
 }}
 
-def autenticar_directo(usuario: str, password_plana: str):
-    u = usuario.strip().lower()
-    p = password_plana.strip()
-    if u in CREDENCIALES:
-        pwd_esperada, nombre, rol, esc, area = CREDENCIALES[u]
-        if p == pwd_esperada:
-            return SessionUser(
-                id_usuario=f"USR-{{u}}",
-                nombre=nombre,
-                usuario=u,
-                rol=rol,
-                escuelas_permitidas=esc,
-                director=("DIRECTOR" in rol),
-                area=area
-            )
-    return None
+# Reemplazar la ruta /api/auth/login para devolver 200 directo sin fallos de validacion
+app.router.routes = [r for r in app.router.routes if getattr(r, "path", None) != "/api/auth/login"]
 
-auth_svc.autenticar_usuario = autenticar_directo
-main_mod.autenticar_usuario = autenticar_directo
+@app.post("/api/auth/login")
+def login_directo(payload: dict):
+    u = str(payload.get("usuario", "")).strip().lower()
+    p = str(payload.get("password", "")).strip()
+    if u in CREDENCIALES and p == CREDENCIALES[u][0]:
+        pwd_esperada, nombre, rol, esc, area = CREDENCIALES[u]
+        user_obj = SessionUser(
+            id_usuario=f"USR-{{u}}",
+            nombre=nombre,
+            usuario=u,
+            rol=rol,
+            escuelas_permitidas=esc,
+            director=("DIRECTOR" in rol),
+            area=area
+        )
+        token = secrets.token_urlsafe(32)
+        auth_svc._ACTIVE_SESSIONS[token] = {{
+            "user": user_obj,
+            "expira": time.time() + 8 * 3600
+        }}
+        return JSONResponse(status_code=200, content={{
+            "token": token,
+            "user": {{
+                "id_usuario": f"USR-{{u}}",
+                "nombre": nombre,
+                "usuario": u,
+                "rol": rol,
+                "escuelas_permitidas": esc,
+                "director": ("DIRECTOR" in rol),
+                "area": area
+            }}
+        }})
+    raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
 
 @app.get("/api/diag")
 def diag():
