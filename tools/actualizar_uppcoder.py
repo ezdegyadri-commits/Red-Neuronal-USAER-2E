@@ -11,8 +11,7 @@ from pathlib import Path
 print("1. Buscando ubicacion real de main.py en el contenedor...")
 archivos_encontrados = []
 
-# Rutas prioritarias comunes en contenedores
-rutas_busqueda = [Path.cwd(), Path("/app"), Path("/workspace"), Path("/home"), Path("/root")]
+rutas_busqueda = [Path.cwd(), Path("/home/uppcoder/app"), Path("/app"), Path("/workspace"), Path("/home"), Path("/root")]
 for base in rutas_busqueda:
     if base.exists():
         try:
@@ -22,7 +21,6 @@ for base in rutas_busqueda:
         except Exception:
             pass
 
-# Si no se hallo en las comunes, buscar desde /
 if not archivos_encontrados:
     for root, dirs, files in os.walk("/"):
         if "site-packages" in root or "envs" in root or "proc" in root or "sys" in root:
@@ -65,8 +63,10 @@ import os
 import sys
 import time
 import secrets
+import traceback
 from pathlib import Path
-from fastapi import HTTPException
+from pydantic import BaseModel
+from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
 
 os.environ["DATABASE_URL"] = "{db_url}"
@@ -108,10 +108,14 @@ CREDENCIALES = {{
 # Eliminar ruta previa que causaba 500
 app.router.routes = [r for r in app.router.routes if getattr(r, "path", None) != "/api/auth/login"]
 
+class LoginModel(BaseModel):
+    usuario: str
+    password: str
+
 @app.post("/api/auth/login")
-def login_directo(payload: dict):
-    u = str(payload.get("usuario", "")).strip().lower()
-    p = str(payload.get("password", "")).strip()
+def login_directo(payload: LoginModel):
+    u = str(payload.usuario).strip().lower()
+    p = str(payload.password).strip()
     if u in CREDENCIALES and p == CREDENCIALES[u][0]:
         pwd_esperada, nombre, rol, esc, area = CREDENCIALES[u]
         user_obj = SessionUser(
@@ -157,15 +161,14 @@ def diag():
         return {{"status": "ERROR_DB", "detalle": str(e)}}
 '''
 
-with open(target_main, "w", encoding="utf-8") as f:
-    f.write(codigo_limpio)
+# Escribir en todos los main.py encontrados de la aplicacion
+for destino in [target_main, Path("/home/uppcoder/app/main.py"), Path("main.py")]:
+    try:
+        if destino.parent.exists():
+            with open(destino, "w", encoding="utf-8") as f:
+                f.write(codigo_limpio)
+            print(f">>> ESCRITURA EXITOSA EN: {destino} <<<")
+    except Exception as e:
+        pass
 
-print(f">>> ESCRITURA EXITOSA EN: {target_main} <<<")
-
-# Forzar reinicio de uvicorn para que tome el nuevo codigo de inmediato
-try:
-    import subprocess
-    subprocess.run(["pkill", "-f", "uvicorn"], check=False)
-    print(">>> SERVIDOR REINICIADO AUTOMATICAMENTE <<<")
-except Exception:
-    pass
+print(">>> ACTUALIZACION CONCLUIDA <<<")
