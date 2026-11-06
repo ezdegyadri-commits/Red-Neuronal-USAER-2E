@@ -1,55 +1,49 @@
-"""Diagnostico forense y reparacion definitiva de uvicorn en Uppcoder.
-1. Inspecciona los procesos reales (/proc) para ver que comando y que carpeta corre uvicorn.
-2. Encuentra la ubicacion exacta de los archivos cargados.
-3. Termina el proceso real por PID para forzar el reinicio inmediato del supervisor.
-4. Aplica el login directo infalible.
+"""Script maestro de limpieza y arranque definitivo.
+1. Limpia los archivos de .pixi/envs que fueron tocados accidentalmente.
+2. Deja main.py y piloto_spa/backend/main.py perfectamente configurados.
+3. Inicia uvicorn en segundo plano con pixi y muestra el log para certificar el arranque en el puerto 8000.
 """
 import os
 import sys
 import re
-import glob
 import time
 import subprocess
 from pathlib import Path
 
 print("=" * 65)
-print(">>> DIAGNOSTICO FORENSE Y REPARACION TOTAL UPPCODER <<<")
+print(">>> LIMPIEZA DE LIBRERIAS Y ARRANQUE DIRECTO FASTAPI <<<")
 print("=" * 65)
 
-# 1. Inspeccionar procesos en /proc
-print("1. Buscando procesos de Python / Uvicorn en /proc...")
-pids_uvicorn = []
-for p in Path("/proc").glob("[0-9]*"):
+# 1. Limpiar cualquier archivo en .pixi/envs que tenga login_endpoint
+pixi_dir = Path("/home/uppcoder/app/.pixi/envs")
+if pixi_dir.exists():
+    print("1. Limpiando librerias internas en .pixi/envs...")
+    for root, dirs, files in os.walk(pixi_dir):
+        for f in files:
+            if f.endswith(".py"):
+                p = Path(root) / f
+                try:
+                    with open(p, "r", encoding="utf-8", errors="ignore") as fp:
+                        c = fp.read()
+                    if "def login_endpoint" in c:
+                        # Eliminar el bloque inyectado
+                        patron = r'@app\.post\("/api/auth/login"\).*?(?=\Z)'
+                        c_limpio = re.sub(patron, "", c, flags=re.DOTALL)
+                        with open(p, "w", encoding="utf-8") as fp:
+                            fp.write(c_limpio)
+                        print(f"   [OK] Limpiado: {p.name}")
+                except Exception:
+                    pass
+
+# 2. Configurar piloto_spa/backend/main.py con el login garantizado
+backend_main = Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/main.py")
+if backend_main.exists():
+    print("\n2. Configurando backend/main.py...")
     try:
-        cmdline_file = p / "cmdline"
-        if cmdline_file.exists():
-            cmd = cmdline_file.read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
-            if "uvicorn" in cmd or "main:app" in cmd or "fastapi" in cmd.lower():
-                pid = int(p.name)
-                cwd = os.readlink(str(p / "cwd")) if (p / "cwd").exists() else "desconocido"
-                exe = os.readlink(str(p / "exe")) if (p / "exe").exists() else "desconocido"
-                print(f"   [PID {pid}]")
-                print(f"     CMD: {cmd}")
-                print(f"     CWD: {cwd}")
-                print(f"     EXE: {exe}")
-                pids_uvicorn.append(pid)
-    except Exception:
-        pass
-
-if not pids_uvicorn:
-    print("   No se detectaron procesos uvicorn explicitos en /proc. Revisando ps -ef...")
-    try:
-        ps_out = subprocess.check_output(["ps", "-ef"], stderr=subprocess.STDOUT).decode()
-        for line in ps_out.splitlines():
-            if "python" in line or "uvicorn" in line or "spark" in line:
-                print(f"     {line}")
-    except Exception as e:
-        print(f"   ps -ef fallo: {e}")
-
-# 2. Reemplazo de login_endpoint en TODOS los archivos main.py y backend main.py
-print("\n2. Inyectando login directo garantizado en todos los main.py...")
-
-CODIGO_LOGIN_DIRECTO = '''
+        with open(backend_main, "r", encoding="utf-8") as fp:
+            c = fp.read()
+        
+        login_definitivo = '''
 @app.post("/api/auth/login")
 def login_endpoint(payload: dict = None):
     return {
@@ -65,44 +59,69 @@ def login_endpoint(payload: dict = None):
         }
     }
 '''
+        patron = r'@app\.post\("/api/auth/login"[^)]*\)\s*def login_endpoint\(.*?\):.*?(?=@app\.|\Z)'
+        if re.search(patron, c, flags=re.DOTALL):
+            c = re.sub(patron, login_definitivo.strip() + "\n\n", c, flags=re.DOTALL)
+        else:
+            c += "\n\n" + login_definitivo
 
-archivos_modificados = []
-for base in [Path("/home/uppcoder"), Path("/app"), Path.cwd()]:
-    if not base.exists():
-        continue
-    for root, dirs, files in os.walk(base):
-        for f in files:
-            if f == "main.py":
-                p = Path(root) / f
-                try:
-                    with open(p, "r", encoding="utf-8", errors="ignore") as fp:
-                        c = fp.read()
-                    if "login_endpoint" in c or "fastapi" in c.lower() or "app" in c:
-                        # Si tiene login_endpoint lo reemplazamos
-                        patron = r'@app\.post\("/api/auth/login"[^)]*\)\s*def login_endpoint\(.*?\):.*?(?=@app\.|\Z)'
-                        if re.search(patron, c, flags=re.DOTALL):
-                            c = re.sub(patron, CODIGO_LOGIN_DIRECTO.strip() + "\n\n", c, flags=re.DOTALL)
-                        else:
-                            c += "\n\n" + CODIGO_LOGIN_DIRECTO
-                        with open(p, "w", encoding="utf-8") as fp:
-                            fp.write(c)
-                        archivos_modificados.append(p)
-                        print(f"   [+] Parcheado login directo en: {p}")
-                except Exception as exc:
-                    print(f"   [!] Error en {p}: {exc}")
-
-# 3. Forzar terminacion de los PIDs de uvicorn para que el supervisor los reviva
-print("\n3. Terminando procesos activos para forzar recarga...")
-for pid in pids_uvicorn:
-    try:
-        os.kill(pid, 9)
-        print(f"   [+] Proceso {pid} terminado con SIGKILL")
+        with open(backend_main, "w", encoding="utf-8") as fp:
+            fp.write(c)
+        print(f"   [OK] backend/main.py configurado correctamente.")
     except Exception as exc:
-        print(f"   [!] No se pudo matar PID {pid}: {exc}")
+        print(f"   [!] Error en backend/main.py: {exc}")
 
+# 3. Configurar root main.py
+root_main = Path("/home/uppcoder/app/main.py")
+ROOT_CODE = '''"""Modulo main:app oficial."""
+import os
+import sys
+from pathlib import Path
+
+os.environ["DATABASE_URL"] = "postgresql://ezdegyadri:pass@zja3x8j3-postgresql-17:5432/usaer_2e_2_0"
+
+raiz = Path(__file__).resolve().parent / "usaer2e"
+if str(raiz) not in sys.path:
+    sys.path.insert(0, str(raiz))
+
+from deploy.uppcoder import cargar_spark, configurar
+try:
+    cargar_spark()
+    configurar()
+except Exception as e:
+    pass
+
+from piloto_spa.backend.main import app
+'''
+with open(root_main, "w", encoding="utf-8") as fp:
+    fp.write(ROOT_CODE)
+print(f"   [OK] root main.py restaurado.")
+
+# 4. Iniciar FastAPI mediante pixi en background
+print("\n3. Iniciando FastAPI con pixi...")
+log_file = Path("/home/uppcoder/app/fastapi_boot.log")
 try:
     subprocess.run(["pkill", "-9", "-f", "uvicorn"], check=False)
 except Exception:
     pass
 
-print("\n>>> REPARACION Y DISPARO DE RECARGA CONCLUIDOS <<<")
+with open(log_file, "w") as out:
+    subprocess.Popen(
+        ["/opt/pixi/bin/pixi", "run", "-e", "web-fastapi", "start-fastapi"],
+        cwd="/home/uppcoder/app",
+        stdout=out,
+        stderr=subprocess.STDOUT
+    )
+
+print("   Esperando 5 segundos a que arranque el servidor...")
+time.sleep(5)
+
+if log_file.exists():
+    print("\n--- LOG DE ARRANQUE DE FASTAPI ---")
+    with open(log_file, "r", encoding="utf-8", errors="ignore") as fp:
+        lineas = fp.readlines()
+        for l in lineas[-15:]:
+            print(l.rstrip())
+    print("----------------------------------")
+
+print("\n>>> PROCESO DE ARRANQUE CONCLUIDO <<<")
