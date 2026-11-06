@@ -106,17 +106,74 @@ def obtener_alumnos_autorizados(
     records = df.to_dict(orient="records")
     alumnos = []
     for r in records:
+        nom_esc = str(r.get("Nombre_Escuela", "")).strip().upper()
+        eid = str(r.get("ID_Escuela", "")).strip()
+
+        # Canonización canónica escuela <-> ID
+        if "CARMONA" in nom_esc:
+            eid = "ESC-001"
+            esc_oficial = "Damián Carmona"
+        elif "ICHCAAN" in nom_esc:
+            eid = "ESC-002"
+            esc_oficial = "Ichcaanziho"
+        elif "TORRES" in nom_esc:
+            eid = "ESC-003"
+            esc_oficial = "Gregorio Torres Quintero"
+        elif "REMIGIO" in nom_esc:
+            eid = "ESC-004"
+            esc_oficial = "Remigio Aguilar Sosa"
+        elif "ELVIRA" in nom_esc or "PARRA" in nom_esc:
+            eid = "ESC-005"
+            esc_oficial = "Elvira Parra Ávila"
+        elif "SARRADO" in nom_esc:
+            eid = "ESC-006"
+            esc_oficial = "Manuel Sarrado"
+        elif "DOMINGO" in nom_esc or "SOLIS" in nom_esc or "SOLÍS" in nom_esc:
+            eid = "ESC-007"
+            esc_oficial = "Domingo Solís Rodríguez"
+        elif "QUINTANA" in nom_esc:
+            eid = "ESC-008"
+            esc_oficial = "Quintana Roo"
+        else:
+            esc_oficial = str(r.get("Nombre_Escuela", ""))
+
+        # Maestra de apoyo canónica si no vino registrada
+        maestra = str(r.get("Maestra de Apoyo", "") or r.get("maestra_apoyo", "")).strip()
+        grado_str = str(r.get("Grado", "")).strip()
+
+        if not maestra:
+            if eid == "ESC-001":
+                maestra = "Mtra. Cindy Mayanín Burgos González"
+            elif eid == "ESC-002":
+                # Ichcaanziho: Marycruz (1°, 2°, 3°) y Cecilia (4°, 5°, 6°)
+                if grado_str in ("1", "2", "3", "1°", "2°", "3°"):
+                    maestra = "Mtra. Marycruz Caamal Coral"
+                else:
+                    maestra = "Mtra. María Cecilia Solís Vázquez"
+            elif eid == "ESC-003":
+                maestra = "Mtra. Dolores Eugenia Cortázar Navarrete"
+            elif eid == "ESC-004":
+                maestra = "Mtra. Dianely de Sugeidy Caamal Tamay"
+            elif eid == "ESC-005":
+                maestra = "Mtro. Luis Jorge García Herrera"
+            elif eid == "ESC-006":
+                maestra = "Mtra. María del Rosario Pérez Vitorin"
+            elif eid == "ESC-007":
+                maestra = "Mtra. Zuemmy del Carmen Pérez Basto"
+            elif eid == "ESC-008":
+                maestra = "Mtro. Pedro Manuel Torres May"
+
         alumnos.append({
             "id": str(r.get("ID_Alumno", "")),
             "nombre_completo": str(r.get("Nombre_Completo", "")),
             "curp": str(r.get("CURP", "")),
-            "grado": str(r.get("Grado", "")),
+            "grado": grado_str,
             "grupo": str(r.get("Grupo", "")),
-            "escuela": str(r.get("Nombre_Escuela", "")),
-            "id_escuela": str(r.get("ID_Escuela", "")),
+            "escuela": esc_oficial,
+            "id_escuela": eid,
             "condicion": str(r.get("Condicion_Discapacidad", "")),
             "estatus": str(r.get("Estatus", "ACTIVO")),
-            "maestra_apoyo": str(r.get("Maestra de Apoyo", "")),
+            "maestra_apoyo": maestra,
             "tipo_atencion": str(r.get("Tipo_Atencion", "Atención Focalizada")),
             "turno": str(r.get("Turno_Escuela", "Matutino")),
             "cct": str(r.get("CCT_Escuela", "")),
@@ -124,12 +181,37 @@ def obtener_alumnos_autorizados(
             "edad": str(r.get("Edad_1_Septiembre", "")),
         })
 
-    # Filtrar por rol y escuelas permitidas
-    if "DIRECTOR" in usuario_rol or "TODAS" in escuelas_permitidas:
+    # 1. Dirección y Trabajo Social: Acceso integral al padrón
+    rol_clean = usuario_rol.strip().upper()
+    if "DIRECTOR" in rol_clean or "TRABAJO" in rol_clean or "TODAS" in escuelas_permitidas:
         return alumnos
 
+    # 2. Filtrado por escuelas asignadas
     permitidas_set = {str(e).strip() for e in escuelas_permitidas}
-    return [a for a in alumnos if a.get("id_escuela") in permitidas_set]
+    alumnos_escuela = [a for a in alumnos if a.get("id_escuela") in permitidas_set]
+
+    # 3. Especialistas clínicos (Psicología y Comunicación): ven todos los alumnos de su cluster asignado
+    if "PSIC" in rol_clean or "COM" in rol_clean:
+        return alumnos_escuela
+
+    # 4. Maestras de Apoyo en Ichcaanziho (ESC-002): división canónica entre Marycruz y Cecilia
+    nom_doc_clean = nombre_docente.strip().upper()
+    if "ESC-002" in permitidas_set and ("CECILIA" in nom_doc_clean or "MARYCRUZ" in nom_doc_clean):
+        es_ceci = "CECILIA" in nom_doc_clean or "SOLIS" in nom_doc_clean or "SOLÍS" in nom_doc_clean
+        es_mary = "MARYCRUZ" in nom_doc_clean or "CAAMAL" in nom_doc_clean
+
+        alumnos_filtrados = []
+        for a in alumnos_escuela:
+            m = a.get("maestra_apoyo", "").upper()
+            if es_ceci and ("CECILIA" in m or "SOLIS" in m or "SOLÍS" in m):
+                alumnos_filtrados.append(a)
+            elif es_mary and ("MARYCRUZ" in m or "CAAMAL" in m):
+                alumnos_filtrados.append(a)
+
+        return alumnos_filtrados if alumnos_filtrados else alumnos_escuela
+
+    # 5. Resto de maestras de apoyo: ven exclusivamente su escuela
+    return alumnos_escuela
 
 def guardar_alumno_nuevo(payload: Dict[str, Any]) -> str:
     """Registra un nuevo alumno en la base de datos validando CURP única."""

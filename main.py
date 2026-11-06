@@ -20,47 +20,85 @@ except Exception as e:
 from piloto_spa.backend.main import app
 import piloto_spa.backend.main as main_mod
 import piloto_spa.backend.auth_service as auth_svc
-from piloto_spa.backend.auth_service import SessionUser, emitir_token_sesion
+from piloto_spa.backend.auth_service import SessionUser, emitir_token_sesion, USUARIOS_CANONICOS, autenticar_usuario
 
-# Diccionario directo de credenciales institucionales oficiales
-CREDENCIALES = {
-    "edgar.director": ("DirUsaer2E*2026", "Psic. Edgar Adrian Yam Briceno", "DIRECTOR", ["TODAS"], "Dirección"),
-    "edgar": ("DirUsaer2E*2026", "Psic. Edgar Adrian Yam Briceno", "DIRECTOR", ["TODAS"], "Dirección"),
-    "cindy.burgos": ("Usaer2E*Carmona", "Mtra. Cindy Mayanin Burgos Gonzalez", "APOYO", ["ESC-001"], "Aprendizaje"),
-    "marycruz.caamal": ("Usaer2E*Ichcaan", "Mtra. Marycruz Caamal Coral", "APOYO", ["ESC-002"], "Aprendizaje"),
-    "dolores.cortazar": ("Usaer2E*Torres", "Mtra. Dolores Eugenia Cortazar Navarrete", "APOYO", ["ESC-003"], "Aprendizaje"),
-    "dianely.caamal": ("Usaer2E*Remigio", "Mtra. Dianely de Sugeidy Caamal Tamay", "APOYO", ["ESC-004"], "Aprendizaje"),
-    "luis.garcia": ("Usaer2E*Manuel", "Mtro. Luis Jorge Garcia Herrera", "APOYO", ["ESC-005"], "Aprendizaje"),
-    "rosario.perez": ("Usaer2E*Domingo", "Mtra. Maria del Rosario Perez Vitorin", "APOYO", ["ESC-006"], "Aprendizaje"),
-    "zuemmy.perez": ("Usaer2E*Quintana", "Mtra. Zuemmy del Carmen Perez Basto", "APOYO", ["ESC-007"], "Aprendizaje"),
-    "pedro.torres": ("Usaer2E*Apoyo", "Mtro. Pedro Manuel Torres May", "APOYO", ["ESC-008"], "Aprendizaje"),
-    "mariajose.cupul": ("Usaer2E*Psico", "Psic. Maria Jose Cupul Realpozo", "PSICOLOGIA", ["ESC-001","ESC-002","ESC-005","ESC-008"], "Psicología"),
-    "elmy.puerto": ("Usaer2E*Comun", "Com. Elmy Lucelly Puerto Gone", "COMUNICACION", ["ESC-001","ESC-002","ESC-005","ESC-008"], "Comunicación"),
-    "abril.chable": ("Usaer2E*Psico2", "Psic. Abril de Maria Chable Rios", "PSICOLOGIA", ["ESC-003","ESC-004","ESC-006","ESC-007"], "Psicología"),
-    "marilyn.perez": ("Usaer2E*Comun2", "Com. Marilyn Perez Lizama", "COMUNICACION", ["ESC-003","ESC-004","ESC-006","ESC-007"], "Comunicación"),
-    "diego.peralta": ("Usaer2E*Social", "Mtro. Diego Peralta Torres", "TRABAJO_SOCIAL", ["TODAS"], "Trabajo Social"),
-    "cecilia.solis": ("Usaer2E*Cecilia", "Mtra. Maria Cecilia Solis Vazquez", "APOYO", ["ESC-002"], "Aprendizaje"),
-}
+# Unificar autenticación institucional
+main_mod.autenticar_usuario = auth_svc.autenticar_usuario
 
-def autenticar_directo(usuario: str, password_plana: str):
-    u = usuario.strip().lower()
-    p = password_plana.strip()
-    if u in CREDENCIALES:
-        pwd_esperada, nombre, rol, esc, area = CREDENCIALES[u]
-        if p == pwd_esperada:
-            return SessionUser(
-                id_usuario=f"USR-{u}",
-                nombre=nombre,
-                usuario=u,
-                rol=rol,
-                escuelas_permitidas=esc,
-                director=("DIRECTOR" in rol),
-                area=area
-            )
-    return None
+def reconciliar_base_datos():
+    """Garantiza la correspondencia canónica de alumnos, escuelas y maestras de apoyo."""
+    try:
+        from data.database import get_session, Alumno, Usuario, Escuela, Base, get_engine
+        engine = get_engine()
+        Base.metadata.create_all(engine)
+        with get_session() as s:
+            # 1. Asegurar usuarios oficiales
+            for u_acc, u_info in USUARIOS_CANONICOS.items():
+                u = s.query(Usuario).filter_by(usuario=u_acc).first()
+                pwd_principal = u_info["passwords"][0]
+                if not u:
+                    s.add(Usuario(
+                        id=u_info["id"],
+                        nombre=u_info["nombre"],
+                        usuario=u_acc,
+                        password=pwd_principal,
+                        rol=u_info["rol"],
+                        escuelas_permitidas=",".join(u_info["escuelas"])
+                    ))
+                else:
+                    u.nombre = u_info["nombre"]
+                    u.password = pwd_principal
+                    u.rol = u_info["rol"]
+                    u.escuelas_permitidas = ",".join(u_info["escuelas"])
 
-auth_svc.autenticar_usuario = autenticar_directo
-main_mod.autenticar_usuario = autenticar_directo
+            # 2. Reconciliar escuelas y alumnos por nombre_escuela
+            alumnos = s.query(Alumno).all()
+            for alu in alumnos:
+                nom_esc = str(alu.nombre_escuela or "").strip().upper()
+                if "CARMONA" in nom_esc:
+                    alu.id_escuela = "ESC-001"
+                    alu.nombre_escuela = "Damián Carmona"
+                    alu.maestra_apoyo = "Mtra. Cindy Mayanín Burgos González"
+                elif "ICHCAAN" in nom_esc:
+                    alu.id_escuela = "ESC-002"
+                    alu.nombre_escuela = "Ichcaanziho"
+                    grado_limpio = str(alu.grado or "").strip().replace("o.", "").replace("°", "")
+                    if grado_limpio in ("1", "2", "3") or alu.id in ("ALU-089", "ALU-099", "ALU-106"):
+                        alu.maestra_apoyo = "Mtra. Marycruz Caamal Coral"
+                    else:
+                        alu.maestra_apoyo = "Mtra. María Cecilia Solís Vázquez"
+                elif "TORRES" in nom_esc:
+                    alu.id_escuela = "ESC-003"
+                    alu.nombre_escuela = "Gregorio Torres Quintero"
+                    alu.maestra_apoyo = "Mtra. Dolores Eugenia Cortázar Navarrete"
+                elif "REMIGIO" in nom_esc:
+                    alu.id_escuela = "ESC-004"
+                    alu.nombre_escuela = "Remigio Aguilar Sosa"
+                    alu.maestra_apoyo = "Mtra. Dianely de Sugeidy Caamal Tamay"
+                elif "ELVIRA" in nom_esc or "PARRA" in nom_esc:
+                    alu.id_escuela = "ESC-005"
+                    alu.nombre_escuela = "Elvira Parra Ávila"
+                    alu.maestra_apoyo = "Mtro. Luis Jorge García Herrera"
+                elif "SARRADO" in nom_esc:
+                    alu.id_escuela = "ESC-006"
+                    alu.nombre_escuela = "Manuel Sarrado"
+                    alu.maestra_apoyo = "Mtra. María del Rosario Pérez Vitorin"
+                elif "DOMINGO" in nom_esc or "SOLIS" in nom_esc or "SOLÍS" in nom_esc:
+                    alu.id_escuela = "ESC-007"
+                    alu.nombre_escuela = "Domingo Solís Rodríguez"
+                    alu.maestra_apoyo = "Mtra. Zuemmy del Carmen Pérez Basto"
+                elif "QUINTANA" in nom_esc:
+                    alu.id_escuela = "ESC-008"
+                    alu.nombre_escuela = "Quintana Roo"
+                    alu.maestra_apoyo = "Mtro. Pedro Manuel Torres May"
+
+            s.commit()
+            print(">>> Reconciliación de base de datos relacional PostgreSQL completada exitosamente <<<")
+    except Exception as exc:
+        print(f"Aviso reconciliación DB: {exc}")
+
+# Ejecutar reconciliación en segundo plano o inicio
+reconciliar_base_datos()
 
 @app.get("/api/diag")
 def diag():

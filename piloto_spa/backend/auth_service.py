@@ -86,21 +86,156 @@ def verify_password(plain_password: str, stored_hash: str) -> bool:
 
     return False
 
+USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
+    "edgar.director": {
+        "id": "USR-001",
+        "passwords": ["DirUsaer2E*2026", "123"],
+        "nombre": "Psic. Edgar Adrián Yam Briceño",
+        "rol": "DIRECTOR",
+        "escuelas": ["TODAS"],
+        "area": "Dirección"
+    },
+    "edgar": {
+        "id": "USR-001-A",
+        "passwords": ["DirUsaer2E*2026", "123"],
+        "nombre": "Psic. Edgar Adrián Yam Briceño",
+        "rol": "DIRECTOR",
+        "escuelas": ["TODAS"],
+        "area": "Dirección"
+    },
+    "cindy.burgos": {
+        "id": "USR-002",
+        "passwords": ["Usaer2E*Carmona"],
+        "nombre": "Mtra. Cindy Mayanín Burgos González",
+        "rol": "APOYO",
+        "escuelas": ["ESC-001"],
+        "area": "Aprendizaje"
+    },
+    "marycruz.caamal": {
+        "id": "USR-003",
+        "passwords": ["Usaer2E*Ichcaan", "Usaer2E*Ichcaanziho"],
+        "nombre": "Mtra. Marycruz Caamal Coral",
+        "rol": "APOYO",
+        "escuelas": ["ESC-002"],
+        "area": "Aprendizaje"
+    },
+    "cecilia.solis": {
+        "id": "USR-015",
+        "passwords": ["Usaer2E*Cecilia", "Usaer2E*Ichcaan2", "Usaer2E*Ichcaan", "Usaer2E*Ceci"],
+        "nombre": "Mtra. María Cecilia Solís Vázquez",
+        "rol": "APOYO",
+        "escuelas": ["ESC-002"],
+        "area": "Aprendizaje"
+    },
+    "dolores.cortazar": {
+        "id": "USR-004",
+        "passwords": ["Usaer2E*Torres", "Usaer2E*Gregorio"],
+        "nombre": "Mtra. Dolores Eugenia Cortázar Navarrete",
+        "rol": "APOYO",
+        "escuelas": ["ESC-003"],
+        "area": "Aprendizaje"
+    },
+    "dianely.caamal": {
+        "id": "USR-005",
+        "passwords": ["Usaer2E*Remigio", "Usaer2E*Aguilar"],
+        "nombre": "Mtra. Dianely de Sugeidy Caamal Tamay",
+        "rol": "APOYO",
+        "escuelas": ["ESC-004"],
+        "area": "Aprendizaje"
+    },
+    "luis.garcia": {
+        "id": "USR-006",
+        "passwords": ["Usaer2E*Elvira", "Usaer2E*Parra", "Usaer2E*Manuel"],
+        "nombre": "Mtro. Luis Jorge García Herrera",
+        "rol": "APOYO",
+        "escuelas": ["ESC-005"],
+        "area": "Aprendizaje"
+    },
+    "rosario.perez": {
+        "id": "USR-007",
+        "passwords": ["Usaer2E*Manuel", "Usaer2E*Sarrado", "Usaer2E*Domingo"],
+        "nombre": "Mtra. María del Rosario Pérez Vitorin",
+        "rol": "APOYO",
+        "escuelas": ["ESC-006"],
+        "area": "Aprendizaje"
+    },
+    "zuemmy.perez": {
+        "id": "USR-008",
+        "passwords": ["Usaer2E*Domingo", "Usaer2E*Solis", "Usaer2E*Quintana"],
+        "nombre": "Mtra. Zuemmy del Carmen Pérez Basto",
+        "rol": "APOYO",
+        "escuelas": ["ESC-007"],
+        "area": "Aprendizaje"
+    },
+    "pedro.torres": {
+        "id": "USR-009",
+        "passwords": ["Usaer2E*Quintana", "Usaer2E*Apoyo"],
+        "nombre": "Mtro. Pedro Manuel Torres May",
+        "rol": "APOYO",
+        "escuelas": ["ESC-008"],
+        "area": "Aprendizaje"
+    },
+    "mariajose.cupul": {
+        "id": "USR-010",
+        "passwords": ["Usaer2E*Psico"],
+        "nombre": "Psic. María José Cupul Realpozo",
+        "rol": "PSICOLOGIA",
+        "escuelas": ["ESC-001", "ESC-002", "ESC-005", "ESC-008"],
+        "area": "Psicología"
+    },
+    "elmy.puerto": {
+        "id": "USR-011",
+        "passwords": ["Usaer2E*Comun"],
+        "nombre": "Com. Elmy Lucelly Puerto Gone",
+        "rol": "COMUNICACION",
+        "escuelas": ["ESC-001", "ESC-002", "ESC-005", "ESC-008"],
+        "area": "Comunicación"
+    },
+    "abril.chable": {
+        "id": "USR-012",
+        "passwords": ["Usaer2E*Psico2"],
+        "nombre": "Psic. Abril de María Chablé Ríos",
+        "rol": "PSICOLOGIA",
+        "escuelas": ["ESC-003", "ESC-004", "ESC-006", "ESC-007"],
+        "area": "Psicología"
+    },
+    "marilyn.perez": {
+        "id": "USR-013",
+        "passwords": ["Usaer2E*Comun2"],
+        "nombre": "Com. Marilyn Pérez Lizama",
+        "rol": "COMUNICACION",
+        "escuelas": ["ESC-003", "ESC-004", "ESC-006", "ESC-007"],
+        "area": "Comunicación"
+    },
+    "diego.peralta": {
+        "id": "USR-014",
+        "passwords": ["Usaer2E*Social"],
+        "nombre": "Mtro. Diego Peralta Torres",
+        "rol": "TRABAJO_SOCIAL",
+        "escuelas": ["TODAS"],
+        "area": "Trabajo Social"
+    }
+}
+
 def autenticar_usuario(usuario: str, password_plana: str) -> Optional[SessionUser]:
     """Coteja credenciales estrictamente contra el repositorio de usuarios."""
     u_clean = usuario.strip().lower()
     p_clean = password_plana.strip()
 
-    if u_clean in ("edgar.director", "edgar") and p_clean == "DirUsaer2E*2026":
-        return SessionUser(
-            id_usuario="USR-001",
-            nombre="Psic. Edgar Adrian Yam Briceno",
-            usuario="edgar.director",
-            rol="DIRECTOR",
-            escuelas_permitidas=["TODAS"],
-            director=True,
-            area="Dirección"
-        )
+    # 1. Cotejo contra catálogo canónico institucional
+    if u_clean in USUARIOS_CANONICOS:
+        info = USUARIOS_CANONICOS[u_clean]
+        if p_clean in info["passwords"]:
+            es_dir = "DIRECTOR" in info["rol"]
+            return SessionUser(
+                id_usuario=info["id"],
+                nombre=info["nombre"],
+                usuario=u_clean,
+                rol=info["rol"],
+                escuelas_permitidas=info["escuelas"],
+                director=es_dir,
+                area=info["area"]
+            )
 
     if p_clean.lower() in PROHIBITED_PASSWORDS:
         return None

@@ -42,7 +42,31 @@
   </style>
 </head>
 <body class="text-slate-800 antialiased min-h-screen">
-  <div id="root"></div>
+  <div id="root">
+    <div class="flex items-center justify-center min-h-screen bg-slate-900 text-amber-400 font-sans">
+      <div class="text-center p-8 bg-slate-800/80 rounded-2xl border border-slate-700 shadow-2xl max-w-sm w-full mx-4">
+        <div class="text-4xl font-black mb-3 text-amber-400 tracking-wider">USAER 02-E</div>
+        <p class="text-slate-300 text-sm animate-pulse mb-4">Cargando plataforma pedagógica 2.0...</p>
+        <div class="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+          <div class="bg-amber-400 h-full w-2/3 animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      console.error("Error global frontend:", message, source, lineno);
+      const root = document.getElementById('root');
+      if (root && root.innerHTML.includes('Cargando plataforma')) {
+        root.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;background:#0F172A;color:#F87171;min-height:100vh;">' +
+          '<h2 style="font-size:24px;font-weight:bold;margin-bottom:12px;">⚠️ Aviso de Carga de Plataforma</h2>' +
+          '<p style="color:#CBD5E1;max-width:500px;margin:0 auto 20px;">' + (message || 'Hubo un retraso conectando con los módulos interactivos.') + '</p>' +
+          '<button onclick="location.reload()" style="background:#D97706;color:#FFF;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;">Reintentar Carga</button>' +
+          '</div>';
+      }
+    };
+  </script>
 
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
@@ -1329,6 +1353,8 @@
     // =============================================================
     function ExpedientesView({ initialAlumnoId, onBack, setMetrics }) {
       const [alumnos, setAlumnos] = useState([]);
+      const [busqueda, setBusqueda] = useState('');
+      const [filtroMaestra, setFiltroMaestra] = useState('TODAS');
       const [selectedId, setSelectedId] = useState(initialAlumnoId || null);
       const [expediente, setExpediente] = useState(null);
       const [loadingExp, setLoadingExp] = useState(false);
@@ -1355,6 +1381,20 @@
         });
       }, [selectedId, setMetrics]);
 
+      // Extraer maestras disponibles en la lista de alumnos
+      const maestrasDisponibles = Array.from(new Set(
+        alumnos.map(a => a.maestra_apoyo).filter(Boolean)
+      )).sort();
+
+      const alumnosFiltrados = alumnos.filter(al => {
+        const matchesBusqueda = !busqueda || 
+          al.nombre_completo.toLowerCase().includes(busqueda.toLowerCase()) ||
+          (al.curp && al.curp.toLowerCase().includes(busqueda.toLowerCase())) ||
+          al.escuela.toLowerCase().includes(busqueda.toLowerCase());
+        const matchesMaestra = filtroMaestra === 'TODAS' || al.maestra_apoyo === filtroMaestra;
+        return matchesBusqueda && matchesMaestra;
+      });
+
       return (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
@@ -1374,10 +1414,42 @@
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Lista Izquierda de Alumnos */}
-            <div className="lg:col-span-4 bg-white p-4 rounded-xl border border-slate-200 space-y-2 self-start">
-              <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">Matrícula de Atención</h3>
+            <div className="lg:col-span-4 bg-white p-4 rounded-xl border border-slate-200 space-y-3 self-start">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">Matrícula de Atención</h3>
+                <span className="text-[11px] font-bold bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
+                  {alumnosFiltrados.length} alumnos
+                </span>
+              </div>
+
+              {/* Buscador de alumnos */}
+              <input
+                type="text"
+                placeholder="Buscar por nombre, CURP..."
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                className="w-full text-xs p-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+
+              {/* Filtro por Maestra si hay más de una (ej. Ichcaanziho: Ceci y Marycruz) */}
+              {maestrasDisponibles.length > 1 && (
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400">Filtrar por Maestra:</label>
+                  <select
+                    value={filtroMaestra}
+                    onChange={e => setFiltroMaestra(e.target.value)}
+                    className="w-full text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 font-medium text-slate-700 focus:outline-none"
+                  >
+                    <option value="TODAS">Todas las maestras de la escuela</option>
+                    {maestrasDisponibles.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
-                {alumnos.map(al => (
+                {alumnosFiltrados.map(al => (
                   <div
                     key={al.id}
                     onClick={() => setSelectedId(al.id)}
@@ -1387,8 +1459,12 @@
                   >
                     <div>{al.nombre_completo}</div>
                     <div className="text-[11px] text-slate-500">{al.grado}° {al.grupo} • {al.escuela}</div>
+                    <div className="text-[10px] text-amber-700 font-semibold mt-0.5">👤 {al.maestra_apoyo}</div>
                   </div>
                 ))}
+                {alumnosFiltrados.length === 0 && (
+                  <div className="text-center py-6 text-slate-400 text-xs">No se encontraron alumnos con los filtros seleccionados.</div>
+                )}
               </div>
             </div>
 
