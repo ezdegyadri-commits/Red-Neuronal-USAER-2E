@@ -19,6 +19,25 @@ ROOT_DIR = str(Path(__file__).resolve().parents[2])
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+try:
+    import streamlit as _st
+except ImportError:
+    import types as _types
+    _st = _types.ModuleType("streamlit")
+    def _noop_cache(func=None, **kwargs):
+        if callable(func):
+            func.clear = getattr(func, "clear", lambda: None)
+            return func
+        def _decorator(f):
+            f.clear = getattr(f, "clear", lambda: None)
+            return f
+        return _decorator
+    _st.cache_data = _noop_cache
+    _st.cache_resource = _noop_cache
+    _st.secrets = {}
+    _st.session_state = {}
+    sys.modules["streamlit"] = _st
+
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse

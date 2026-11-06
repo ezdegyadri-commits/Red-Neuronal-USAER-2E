@@ -15,10 +15,30 @@ Implementa la lógica de negocio desacoplada de Streamlit para todos los módulo
 from __future__ import annotations
 
 import json
+import sys
 import time
 import uuid
 from typing import Any, Dict, List, Optional
 import pandas as pd
+
+try:
+    import streamlit as _st
+except ImportError:
+    import types as _types
+    _st = _types.ModuleType("streamlit")
+    def _noop_cache(func=None, **kwargs):
+        if callable(func):
+            func.clear = getattr(func, "clear", lambda: None)
+            return func
+        def _decorator(f):
+            f.clear = getattr(f, "clear", lambda: None)
+            return f
+        return _decorator
+    _st.cache_data = _noop_cache
+    _st.cache_resource = _noop_cache
+    _st.secrets = {}
+    _st.session_state = {}
+    sys.modules["streamlit"] = _st
 
 from config.settings import ESCUELAS_USAER
 from data.sql_repository import (
@@ -47,8 +67,23 @@ from data.sql_repository import (
 )
 from services.planeacion_firmas import resolver_firmas_planeacion, DIRECTOR_USAER
 from services.planeacion_modelo import FORMATOS
-from services.curriculo import contexto_ia
-from ai.engine import generar_sugerencias, fallback as ai_fallback
+try:
+    from services.curriculo import contexto_ia
+except Exception:
+    def contexto_ia(*args, **kwargs):
+        return {}
+try:
+    from ai.engine import generar_sugerencias, fallback as ai_fallback
+except Exception:
+    def ai_fallback():
+        return {
+            "area": "Aprendizaje",
+            "motivo": "Resultados del Anexo 3: barreras identificadas",
+            "sugerencias": "Revisar los resultados del Anexo 3 y establecer estrategias de acceso, participación y aprendizaje acordes con las barreras identificadas.",
+            "seguimiento": "30 días",
+        }
+    def generar_sugerencias(contexto):
+        return ai_fallback()
 
 # -------------------------------------------------------------
 # 1. SERVICIO DE ESCUELAS

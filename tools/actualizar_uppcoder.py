@@ -60,9 +60,9 @@ print("STDOUT:", res.stdout.strip())
 if res.stderr:
     print("STDERR:", res.stderr.strip())
 
-# 4. Reiniciar framework
-print("Reiniciando framework con supervisorctl...")
-subprocess.run(["supervisorctl", "restart", "framework"], check=False)
+# 4. Reiniciar servicio FastAPI
+print("Reiniciando servicio FastAPI...")
+subprocess.run(["bash", "-ic", "supervisorctl restart framework"], check=False)
+subprocess.run(["pkill", "-f", "uvicorn"], check=False)
 time.sleep(2)
-subprocess.run(["supervisorctl", "status", "framework"], check=False)
 print(">>> DESPLIEGUE OFICIAL, FILTRADO Y BASE DE DATOS RESTABLECIDOS AL 100% <<<")

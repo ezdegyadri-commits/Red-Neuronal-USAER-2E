@@ -6,6 +6,26 @@ from pathlib import Path
 
 os.environ["DATABASE_URL"] = "postgresql://ezdegyadri:pass@zja3x8j3-postgresql-17:5432/usaer_2e_2_0"
 
+# Shim ligero de streamlit para el entorno FastAPI puro (web-fastapi) donde streamlit no está instalado
+try:
+    import streamlit as _st
+except ImportError:
+    import types as _types
+    _st = _types.ModuleType("streamlit")
+    def _noop_cache(func=None, **kwargs):
+        if callable(func):
+            func.clear = getattr(func, "clear", lambda: None)
+            return func
+        def _decorator(f):
+            f.clear = getattr(f, "clear", lambda: None)
+            return f
+        return _decorator
+    _st.cache_data = _noop_cache
+    _st.cache_resource = _noop_cache
+    _st.secrets = {}
+    _st.session_state = {}
+    sys.modules["streamlit"] = _st
+
 # Eliminar cualquier directorio parcial piloto_spa en /home/uppcoder/app que pueda sombrear a /home/uppcoder/app/usaer2e/piloto_spa
 raiz_app = Path(__file__).resolve().parent
 raiz_usaer2e = raiz_app / "usaer2e"
@@ -58,10 +78,6 @@ def reconciliar_base_datos():
         engine = get_engine()
         Base.metadata.create_all(engine)
         with get_session() as s:
-            # 0. Limpiar registros ficticios de prueba de Uppcoder si existen
-            s.query(Alumno).filter(Alumno.id.in_(["alu-uppcoder-a", "alu-uppcoder-b"])).delete(synchronize_session=False)
-            s.query(Escuela).filter(Escuela.id.in_(["esc-uppcoder-a", "esc-uppcoder-b"])).delete(synchronize_session=False)
-
             # 1. Asegurar usuarios oficiales
             for u_acc, u_info in USUARIOS_CANONICOS.items():
                 u = s.query(Usuario).filter_by(usuario=u_acc).first()
