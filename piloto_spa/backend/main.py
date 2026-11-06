@@ -21,7 +21,7 @@ if ROOT_DIR not in sys.path:
 
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 import pandas as pd
 
@@ -69,6 +69,97 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def inicializar_base_datos():
+    """Inicializa el esquema relacional y asegura la presencia de los datos reales desde la semilla."""
+    try:
+        from data.database import (
+            get_session,
+            Alumno,
+            Escuela,
+            Personal,
+            Usuario,
+            PlaneacionDoc,
+            EPPDoc,
+            Anexo3Deteccion,
+        )
+        with get_session() as session:
+            num_alumnos = session.query(Alumno).count()
+            if num_alumnos == 0:
+                seed_path = Path(__file__).resolve().parents[2] / "data" / "semilla_datos_reales.json"
+                if seed_path.exists():
+                    import json
+                    with open(seed_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    for item in data.get("escuelas", []):
+                        if not session.query(Escuela).filter_by(id=item["id"]).first():
+                            session.add(Escuela(**item))
+                    for item in data.get("personal", []):
+                        if not session.query(Personal).filter_by(id=item["id"]).first():
+                            session.add(Personal(**item))
+                    for item in data.get("usuarios", []):
+                        if not session.query(Usuario).filter_by(id=item["id"]).first():
+                            session.add(Usuario(**item))
+                    for item in data.get("alumnos", []):
+                        if not session.query(Alumno).filter_by(id=item["id"]).first():
+                            session.add(Alumno(**item))
+                    for item in data.get("planeaciones", []):
+                        if not session.query(PlaneacionDoc).filter_by(id=item["id"]).first():
+                            session.add(PlaneacionDoc(**item))
+                    for item in data.get("epp", []):
+                        if not session.query(EPPDoc).filter_by(id=item["id"]).first():
+                            session.add(EPPDoc(**item))
+                    for item in data.get("anexo3", []):
+                        if not session.query(Anexo3Deteccion).filter_by(id=item["id"]).first():
+                            session.add(Anexo3Deteccion(**item))
+                    session.commit()
+    except Exception as exc:
+        import logging
+        logging.getLogger("uvicorn").error("Error inicializando semilla relacional: %s", exc)
+
+
+@app.get("/api/admin/status-bd")
+def estado_base_datos():
+    """Diagnóstico en vivo del motor de base de datos relacional y conteo de registros."""
+    from data.database import (
+        get_session,
+        Alumno,
+        Escuela,
+        Personal,
+        Usuario,
+        PlaneacionDoc,
+        EPPDoc,
+        Anexo3Deteccion,
+        is_postgres,
+        get_database_url,
+    )
+    from sqlalchemy.engine import make_url
+
+    url_str = get_database_url()
+    try:
+        parsed = make_url(url_str)
+        host_repr = parsed.host or "local"
+        db_repr = parsed.database or "local"
+    except Exception:
+        host_repr = "desconocido"
+        db_repr = "desconocido"
+
+    with get_session() as session:
+        return {
+            "motor": "PostgreSQL 17" if is_postgres() else "SQLite Local",
+            "host": host_repr,
+            "database": db_repr,
+            "escuelas": session.query(Escuela).count(),
+            "personal": session.query(Personal).count(),
+            "usuarios": session.query(Usuario).count(),
+            "alumnos": session.query(Alumno).count(),
+            "planeaciones": session.query(PlaneacionDoc).count(),
+            "epp": session.query(EPPDoc).count(),
+            "anexo3_bap": session.query(Anexo3Deteccion).count(),
+            "estado": "OK - Base de datos operativa y sincronizada",
+        }
 
 # -------------------------------------------------------------
 # MODELOS PYDANTIC PARA CONTRATOS DE ENTRADA Y SALIDA
@@ -300,13 +391,33 @@ def exportar_alumnos_csv(user: SessionUser = Depends(validar_token_sesion)):
         headers={"Content-Disposition": 'attachment; filename="Padron_Alumnos_USAER_2E.csv"'}
     )
 
+def _verificar_acceso_alumno(alumno_id: str, user: SessionUser) -> Dict[str, Any]:
+    """Valida autorización en backend según rol y escuelas permitidas."""
+    alumnos = obtener_alumnos_autorizados("DIRECTOR", ["TODAS"])
+    alumno = next((a for a in alumnos if str(a.get("id")) == str(alumno_id)), None)
+    if not alumno:
+        raise HTTPException(status_code=404, detail=f"Alumno {alumno_id} no encontrado en el padrón central.")
+
+    if user.director:
+        return alumno
+
+    escuela_alumno = str(alumno.get("id_escuela", "")).strip()
+    permitidas = {str(e).strip() for e in user.escuelas_permitidas}
+    if "TODAS" not in permitidas and escuela_alumno not in permitidas:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Acceso denegado: el alumno {alumno_id} pertenece a un centro de trabajo no asignado a su cuenta ({escuela_alumno})."
+        )
+    return alumno
+
 # -------------------------------------------------------------
 # 3. EXPEDIENTES Y SEGUIMIENTO EDUCATIVO
 # -------------------------------------------------------------
 
 @app.get("/api/expedientes/{alumno_id}")
 def ver_expediente(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    """Expediente integral (BAP, sugerencias, eventos cronológicos, derivación, EPP)."""
+    """Expediente integral con verificación estricta de autorización por escuela."""
+    _verificar_acceso_alumno(alumno_id, user)
     return obtener_expediente_completo(alumno_id)
 
 # -------------------------------------------------------------
@@ -315,13 +426,15 @@ def ver_expediente(alumno_id: str, user: SessionUser = Depends(validar_token_ses
 
 @app.get("/api/epp/{alumno_id}")
 def consultar_epp(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    """Recupera el informe EPP con sus cuatro áreas integradas."""
+    """Recupera el informe EPP verificando pertenencia del alumno a la escuela del usuario."""
+    _verificar_acceso_alumno(alumno_id, user)
     return obtener_epp_documento(alumno_id)
 
 
 @app.post("/api/epp")
 def guardar_epp(payload: EPPPayload, user: SessionUser = Depends(validar_token_sesion)):
-    """Guarda o actualiza el informe EPP con hash de revisión atómico."""
+    """Guarda o actualiza el informe EPP verificando permisos sobre el alumno."""
+    _verificar_acceso_alumno(payload.alumno, user)
     return guardar_epp_documento(payload.model_dump(), autor_cuenta=user.usuario)
 
 # -------------------------------------------------------------
@@ -337,8 +450,19 @@ def listar_planeaciones(user: SessionUser = Depends(validar_token_sesion)):
 
 @app.get("/api/planeaciones/{doc_id}")
 def obtener_planeacion(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    """Documento de planeación completo con cálculo oficial de firmas."""
-    return obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
+    """Documento de planeación completo con cálculo oficial de firmas y verificación de permisos."""
+    doc = obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
+    if not user.director:
+        doc_cuenta = str(doc.get("cuenta", "")).strip()
+        doc_escuela = str(doc.get("datos", {}).get("Escuela", "")).strip()
+        alumnos_user = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas)
+        escuelas_nombres = {str(a.get("escuela", "")).strip() for a in alumnos_user}
+        if doc_cuenta != user.usuario and doc_escuela not in escuelas_nombres and "TODAS" not in user.escuelas_permitidas:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: esta planeación pertenece a otro docente o centro de trabajo no autorizado."
+            )
+    return doc
 
 
 @app.post("/api/planeaciones")
@@ -381,6 +505,7 @@ def descargar_planeacion_pdf(doc_id: str, user: SessionUser = Depends(validar_to
 @app.post("/api/anexo3")
 def crear_anexo3(payload: Anexo3Payload, user: SessionUser = Depends(validar_token_sesion)):
     """Guarda registro de detección de BAP (Anexo III)."""
+    _verificar_acceso_alumno(payload.id_alumno, user)
     doc = {
         "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
         "ID_Alumno": payload.id_alumno,
@@ -399,6 +524,7 @@ def crear_anexo3(payload: Anexo3Payload, user: SessionUser = Depends(validar_tok
 @app.post("/api/anexo4")
 def crear_anexo4(payload: Anexo4Payload, user: SessionUser = Depends(validar_token_sesion)):
     """Guarda sugerencias técnico pedagógicas a docente regular (Anexo IV)."""
+    _verificar_acceso_alumno(payload.id_alumno, user)
     doc = {
         "ID_Alumno": payload.id_alumno,
         "Fecha_Elaboracion": payload.fecha_elaboracion or time.strftime("%Y-%m-%d"),
@@ -418,6 +544,22 @@ def crear_anexo4(payload: Anexo4Payload, user: SessionUser = Depends(validar_tok
 
 @app.post("/api/anexo5")
 def crear_anexo5(payload: Anexo5Payload, user: SessionUser = Depends(validar_token_sesion)):
+    """Guarda hoja de evento significativo (Anexo V)."""
+    _verificar_acceso_alumno(payload.id_alumno, user)
+    doc = {
+        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
+        "Nombre_Alumno": payload.nombre_alumno,
+        "Grado_Grupo": payload.grado_grupo,
+        "Especialista": payload.especialista or user.nombre,
+        "Evento": payload.evento,
+        "Estado": "ACTIVO",
+        "ID_Alumno": payload.id_alumno,
+        "ID_Escuela": payload.id_escuela,
+        "Escuela": payload.escuela,
+    }
+    aid = guardar_anexo5_documento(doc)
+    return {"status": "success", "id": aid, "mensaje": "Evento significativo registrado correctamente."}
+
     """Guarda hoja de evento significativo (Anexo V)."""
     doc = {
         "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
@@ -493,6 +635,8 @@ def crear_oficio(payload: OficioPayload, user: SessionUser = Depends(validar_tok
 @app.post("/api/ai/chat")
 def chat_asistente(payload: AIChatPayload, user: SessionUser = Depends(validar_token_sesion)):
     """Asistente conversacional con recuperación contextual del alumno y reglas Zona 001."""
+    if payload.alumno_id:
+        _verificar_acceso_alumno(payload.alumno_id, user)
     return chat_asistente_pedagogico(
         mensaje_docente=payload.mensaje,
         alumno_id=payload.alumno_id,
@@ -525,7 +669,25 @@ def estadisticas_zona(user: SessionUser = Depends(validar_token_sesion)):
     return obtener_estadisticas_zona()
 
 # -------------------------------------------------------------
-# 10. SERVIR FRONTEND SPA ESTÁTICO DIRECTO
+# 10. DESCARGA OFICIAL DE CONCENTRADO EN EXCEL
+# -------------------------------------------------------------
+
+@app.get("/descargar-concentrado")
+@app.get("/api/descargar-concentrado")
+def descargar_concentrado():
+    """Descarga directa del Concentrado de Revisión de Planificaciones en Excel."""
+    excel_path = Path(ROOT_DIR) / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx"
+    if not excel_path.exists():
+        from tools.generar_concentrado_excel import crear_libro_concentrado
+        crear_libro_concentrado()
+    return FileResponse(
+        path=str(excel_path),
+        filename="Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+# -------------------------------------------------------------
+# 11. SERVIR FRONTEND SPA ESTÁTICO DIRECTO
 # -------------------------------------------------------------
 
 SPA_STATIC_DIR = Path(__file__).resolve().parent / "static"

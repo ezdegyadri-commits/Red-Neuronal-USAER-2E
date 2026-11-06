@@ -4,6 +4,7 @@ cd /d "%~dp0"
 echo ========================================================
 echo   Iniciando Piloto SPA USAER 02-E...
 echo   Servidor en: http://localhost:8000
+echo   (Se abrira automaticamente en tu navegador)
 echo ========================================================
 python iniciar_piloto.py
 pause

@@ -411,6 +411,7 @@ def chat_asistente_pedagogico(
     - Valida contra los 14 indicadores oficiales de la Zona 001.
     """
     fuentes_consultadas = []
+    detalles_contexto = []
     alumno_info = None
 
     if alumno_id:
@@ -418,12 +419,24 @@ def chat_asistente_pedagogico(
         alumno_info = exp.get("alumno")
         if exp.get("anexo3_bap"):
             fuentes_consultadas.append("Anexo III (Detección de BAP)")
+            bap_ped = [b.get("pedagogicas") for b in exp.get("anexo3_bap") if b.get("pedagogicas")]
+            if bap_ped:
+                detalles_contexto.append(f"BAP Pedagógica: {bap_ped[0]}")
         if exp.get("anexo4_sugerencias"):
             fuentes_consultadas.append("Anexo IV (Sugerencias a Docente Regular)")
+            sug_prev = [s.get("sugerencias") for s in exp.get("anexo4_sugerencias") if s.get("sugerencias")]
+            if sug_prev:
+                detalles_contexto.append(f"Sugerencia previa: {sug_prev[0]}")
         if exp.get("anexo5_eventos"):
             fuentes_consultadas.append("Anexo V (Eventos Significativos)")
         if exp.get("epp"):
             fuentes_consultadas.append("Evaluación Psicopedagógica (EPP)")
+            epp_apoyos = exp.get("epp", {}).get("partes", {}).get("APRENDIZAJE", {}).get("apoyos_requeridos")
+            epp_psic = exp.get("epp", {}).get("partes", {}).get("PSICOLOGIA", {}).get("atencion_y_memoria")
+            if epp_apoyos:
+                detalles_contexto.append(f"EPP Apoyos: {epp_apoyos}")
+            if epp_psic:
+                detalles_contexto.append(f"EPP Atención: {epp_psic}")
 
     nombre = alumno_info.get("nombre_completo") if alumno_info else "El alumno"
     condicion = alumno_info.get("condicion", "General") if alumno_info else "General"
@@ -431,7 +444,7 @@ def chat_asistente_pedagogico(
 
     prompt_contexto = {
         "area": "Aprendizaje",
-        "barreras_o_necesidades": mensaje_docente,
+        "barreras_o_necesidades": f"{mensaje_docente}. Contexto documentado: {'; '.join(detalles_contexto)}",
         "grado": str(grado),
         "condicion": condicion
     }
@@ -443,14 +456,22 @@ def chat_asistente_pedagogico(
 
     pda_sugerido = sug.get("pda") or "Identifica y formula preguntas sobre los textos leídos."
     descriptor_formato = f"{nombre} identifica los elementos centrales y formula 2 preguntas con apoyo de material visual."
-    apoyos = sug.get("estrategias") or "Uso de cronómetro visual de 15 minutos, tarjetas léxicas y retroalimentación inmediata."
+    apoyos_base = sug.get("estrategias") or "Uso de cronómetro visual de 15 minutos, tarjetas léxicas y retroalimentación inmediata."
+    if detalles_contexto:
+        apoyos_con_contexto = f"{apoyos_base} (Alineado a {'; '.join(detalles_contexto[:2])})"
+    else:
+        apoyos_con_contexto = apoyos_base
+
+    bloque_fuentes = ""
+    if detalles_contexto:
+        bloque_fuentes = "\n\n**Evidencia Documental Recuperada del Expediente:**\n" + "\n".join([f"- 📌 *{d}*" for d in detalles_contexto])
 
     respuesta_texto = (
-        f"Analicé el contexto para **{nombre}** ({condicion}).\n\n"
+        f"Analicé el contexto para **{nombre}** ({condicion}).{bloque_fuentes}\n\n"
         f"**Descriptor propuesto (Sujeto + Verbo presente + Observable):**\n"
         f"> *\"{descriptor_formato}\"*\n\n"
         f"**PDA Oficial Alineado:** {pda_sugerido}\n\n"
-        f"**Ajustes Razonables:** {apoyos}\n\n"
+        f"**Ajustes Razonables:** {apoyos_con_contexto}\n\n"
         f"*Indicadores Zona 001 verificados:* Coherencia curricular (Ind. 3) y Descriptores observables (Ind. 5)."
     )
 
@@ -460,7 +481,7 @@ def chat_asistente_pedagogico(
         "barreras_o_necesidades": mensaje_docente,
         "pda": pda_sugerido,
         "descriptor": descriptor_formato,
-        "apoyos": apoyos
+        "apoyos": apoyos_con_contexto
     }
 
     return {

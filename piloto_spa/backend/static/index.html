@@ -76,7 +76,7 @@
     // =============================================================
     function LoginScreen({ onLoginSuccess }) {
       const [usuario, setUsuario] = useState('edgar');
-      const [password, setPassword] = useState('123');
+      const [password, setPassword] = useState('Usaer2E!Dir#2026');
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
 
@@ -159,11 +159,11 @@
             </form>
 
             <div className="border-t border-slate-100 pt-4 space-y-2">
-              <div className="text-[11px] font-bold uppercase text-slate-400 tracking-wider text-center">Cuentas Institucionales Rápidas</div>
+              <div className="text-[11px] font-bold uppercase text-slate-400 tracking-wider text-center">Cuentas Institucionales con PBKDF2</div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <button
                   type="button"
-                  onClick={() => selectDemoAccount('edgar', '123')}
+                  onClick={() => selectDemoAccount('edgar', 'Usaer2E!Dir#2026')}
                   className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
                 >
                   <div className="font-bold text-slate-800">Dirección</div>
@@ -171,7 +171,7 @@
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectDemoAccount('cindy.burgos', '123')}
+                  onClick={() => selectDemoAccount('cindy.burgos', 'Usaer2E!Cindy#2026')}
                   className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
                 >
                   <div className="font-bold text-slate-800">Maestra de Apoyo</div>
@@ -179,7 +179,7 @@
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectDemoAccount('laura.pech', '123')}
+                  onClick={() => selectDemoAccount('laura.pech', 'Usaer2E!Laura#2026')}
                   className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
                 >
                   <div className="font-bold text-slate-800">Psicología</div>
@@ -187,7 +187,7 @@
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectDemoAccount('mariana.solis', '123')}
+                  onClick={() => selectDemoAccount('mariana.solis', 'Usaer2E!Mariana#2026')}
                   className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
                 >
                   <div className="font-bold text-slate-800">Comunicación</div>
@@ -221,10 +221,32 @@
 
       useEffect(() => {
         const handleAuthExpired = () => {
+          sessionStorage.clear();
           setUser(null);
         };
         window.addEventListener('auth_expired', handleAuthExpired);
-        return () => window.removeEventListener('auth_expired', handleAuthExpired);
+
+        // Temporizador de inactividad de 30 minutos para aulas compartidas
+        let idleTimer;
+        const resetIdle = () => {
+          clearTimeout(idleTimer);
+          idleTimer = setTimeout(() => {
+            sessionStorage.clear();
+            setUser(null);
+          }, 30 * 60 * 1000);
+        };
+        window.addEventListener('mousemove', resetIdle);
+        window.addEventListener('keydown', resetIdle);
+        window.addEventListener('click', resetIdle);
+        resetIdle();
+
+        return () => {
+          window.removeEventListener('auth_expired', handleAuthExpired);
+          clearTimeout(idleTimer);
+          window.removeEventListener('mousemove', resetIdle);
+          window.removeEventListener('keydown', resetIdle);
+          window.removeEventListener('click', resetIdle);
+        };
       }, []);
 
       const handleLoginSuccess = (userData, token) => {
