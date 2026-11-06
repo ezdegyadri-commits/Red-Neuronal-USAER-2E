@@ -1,60 +1,40 @@
-"""Parche definitivo de validar_token_sesion y reinicio automatico de framework.
+"""Descarga directa de los modulos limpios y reinicio de framework.
 """
-import os
-import re
+import urllib.request
 import subprocess
+import time
 from pathlib import Path
 
-print("1. Actualizando validar_token_sesion en todos los auth_service.py...")
+BASE_RAW = "https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USAER-2E/piloto-spa"
 
-codigo_validador = '''
-# --- VALIDACION INMEDIATA DIRECTOR ---
-_orig_validar = globals().get("validar_token_sesion")
+def descargar(rel_url, dest_path):
+    url = f"{BASE_RAW}/{rel_url}?v={int(time.time())}"
+    print(f"Descargando {rel_url} -> {dest_path}")
+    urllib.request.urlretrieve(url, str(dest_path))
 
-def validar_token_sesion(authorization: Optional[str] = Header(None)) -> SessionUser:
-    if authorization:
-        partes = authorization.split()
-        token = partes[1] if len(partes) == 2 and partes[0].lower() == "bearer" else authorization.strip()
-        if "token_oficial_edgar_director_2026" in token or "edgar" in token:
-            return SessionUser(
-                id_usuario="USR-001",
-                nombre="Psic. Edgar Adrian Yam Briceno",
-                usuario="edgar.director",
-                rol="DIRECTOR",
-                escuelas_permitidas=["TODAS"],
-                director=True,
-                area="Dirección"
-            )
-    if _orig_validar:
-        return _orig_validar(authorization)
-    return SessionUser(
-        id_usuario="USR-001",
-        nombre="Psic. Edgar Adrian Yam Briceno",
-        usuario="edgar.director",
-        rol="DIRECTOR",
-        escuelas_permitidas=["TODAS"],
-        director=True,
-        area="Dirección"
-    )
-'''
+# 1. auth_service.py
+for dest in [
+    Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/auth_service.py"),
+    Path("/home/uppcoder/.config/usaer-spark/releases/docente.ro1nC8K2/piloto_spa/backend/auth_service.py"),
+    Path("/home/uppcoder/.config/usaer-spark/releases/rc1.lnrnPKKs/piloto_spa/backend/auth_service.py")
+]:
+    if dest.parent.exists():
+        descargar("piloto_spa/backend/auth_service.py", dest)
 
-for base in [Path("/home/uppcoder/app"), Path("/home/uppcoder/.config/usaer-spark/releases")]:
-    if not base.exists():
-        continue
-    for root, dirs, files in os.walk(base):
-        for f in files:
-            if f == "auth_service.py":
-                p = Path(root) / f
-                try:
-                    with open(p, "r", encoding="utf-8") as fp:
-                        c = fp.read()
-                    if "_orig_validar" not in c:
-                        with open(p, "a", encoding="utf-8") as fp:
-                            fp.write("\n" + codigo_validador + "\n")
-                        print(f"   [+] Validacion inyectada en: {p}")
-                except Exception as exc:
-                    print(f"   [!] Error en {p}: {exc}")
+# 2. backend main.py
+for dest in [
+    Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/main.py"),
+    Path("/home/uppcoder/.config/usaer-spark/releases/docente.ro1nC8K2/piloto_spa/backend/main.py"),
+    Path("/home/uppcoder/.config/usaer-spark/releases/rc1.lnrnPKKs/piloto_spa/backend/main.py")
+]:
+    if dest.parent.exists():
+        descargar("piloto_spa/backend/main.py", dest)
 
-print("\n2. Reiniciando framework con supervisorctl...")
+# 3. root main.py
+descargar("main.py", Path("/home/uppcoder/app/main.py"))
+
+# 4. restart framework
+print("Reiniciando framework con supervisorctl...")
 subprocess.run(["supervisorctl", "restart", "framework"], check=False)
-print(">>> REINICIO COMPLETADO <<<")
+time.sleep(2)
+print(">>> DESPLIEGUE OFICIAL CONCLUIDO AL 100% <<<")
