@@ -61,3 +61,4 @@ flowchart LR
 1. **Jamás desplegar sobre la URL de producción actual de Streamlit.**
 2. **No utilizar servicios que exijan tarjetas de crédito o que suspendan la base de datos tras 15 minutos sin peticiones sin contar con un pool adecuado.**
 3. **El entorno local probado con `iniciar_piloto.bat` ofrece disponibilidad permanente, costo $0 y respuesta sub-100ms.**
+

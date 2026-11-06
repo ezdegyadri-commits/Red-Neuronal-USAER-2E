@@ -34,7 +34,16 @@ if releases_root.exists():
         if b_dir.exists():
             backend_dirs.append(b_dir)
 
-# 1. Actualizar archivos del backend y frontend en todas las rutas activas
+# 1. Actualizar archivos del backend, repositorios de datos y semilla histórica en todas las rutas activas
+data_dirs = [
+    Path("/home/uppcoder/app/data"),
+    Path("/home/uppcoder/app/usaer2e/data"),
+]
+for d_dir in data_dirs:
+    descargar("data/database.py", d_dir / "database.py")
+    descargar("data/sql_repository.py", d_dir / "sql_repository.py")
+    descargar("data/semilla_historica_completa.json.gz", d_dir / "semilla_historica_completa.json.gz")
+
 for b_dir in backend_dirs:
     descargar("piloto_spa/backend/auth_service.py", b_dir / "auth_service.py")
     descargar("piloto_spa/backend/domain_services.py", b_dir / "domain_services.py")

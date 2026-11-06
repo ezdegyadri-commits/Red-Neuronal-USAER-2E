@@ -19,22 +19,26 @@ class TestUSAER2ESPAIntegral(unittest.TestCase):
     def setUpClass(cls):
         cls.client = TestClient(app)
 
-        # Login como Director
-        res_dir = cls.client.post("/api/auth/login", json={"usuario": "edgar", "password": "123"})
+        # Login como Director (con contraseña robusta PBKDF2)
+        res_dir = cls.client.post("/api/auth/login", json={"usuario": "edgar", "password": "Usaer2E!Dir#2026"})
         assert res_dir.status_code == 200, f"Login director failed: {res_dir.text}"
         data_dir = res_dir.json()
         cls.token_dir = data_dir["token"]
         cls.headers_dir = {"Authorization": f"Bearer {cls.token_dir}"}
 
         # Login como Maestra de Apoyo (Cindy Burgos - ESC-001, ESC-003)
-        res_doc = cls.client.post("/api/auth/login", json={"usuario": "cindy.burgos", "password": "123"})
+        res_doc = cls.client.post("/api/auth/login", json={"usuario": "cindy.burgos", "password": "Usaer2E!Cindy#2026"})
         assert res_doc.status_code == 200, f"Login docente failed: {res_doc.text}"
         data_doc = res_doc.json()
         cls.token_doc = data_doc["token"]
         cls.headers_doc = {"Authorization": f"Bearer {cls.token_doc}"}
 
     def test_01_seguridad_autenticacion_estricta(self):
-        """Verifica rechazo de credenciales incorrectas y acceso anónimo."""
+        """Verifica rechazo de credenciales incorrectas, contraseñas triviales y acceso anónimo."""
+        # Intento con contraseña trivial prohibida '123'
+        res_trivial = self.client.post("/api/auth/login", json={"usuario": "edgar", "password": "123"})
+        self.assertEqual(res_trivial.status_code, 401)
+
         # Intento de login inválido
         res_bad = self.client.post("/api/auth/login", json={"usuario": "edgar", "password": "wrongpassword"})
         self.assertEqual(res_bad.status_code, 401)
@@ -206,6 +210,31 @@ class TestUSAER2ESPAIntegral(unittest.TestCase):
         # Intentar consultar con el token revocado -> debe dar 401
         res_rev = self.client.get("/api/me", headers=self.headers_dir)
         self.assertEqual(res_rev.status_code, 401)
+
+    def test_11_aislamiento_entre_escuelas_403_forbidden(self):
+        """Verifica que un docente no pueda acceder a expedientes ni EPP de otra escuela no autorizada."""
+        # ALU-004 pertenece a ESC-002 (Ichcaanziho). Cindy sólo tiene ESC-001 y ESC-003.
+        res_exp_cross = self.client.get("/api/expedientes/ALU-004", headers=self.headers_doc)
+        self.assertEqual(res_exp_cross.status_code, 403)
+        self.assertIn("Acceso denegado", res_exp_cross.json()["detail"])
+
+        # Intento de ver EPP de otra escuela
+        res_epp_cross = self.client.get("/api/epp/ALU-004", headers=self.headers_doc)
+        self.assertEqual(res_epp_cross.status_code, 403)
+
+        # Intento de agregar BAP a alumno de otra escuela
+        res_bap_cross = self.client.post("/api/anexo3", json={
+            "id_alumno": "ALU-004",
+            "bap_pedagogicas": "Intento de mutación no autorizada"
+        }, headers=self.headers_doc)
+        self.assertEqual(res_bap_cross.status_code, 403)
+
+        # Intento de consultar IA con alumno de otra escuela
+        res_ai_cross = self.client.post("/api/ai/chat", json={
+            "mensaje": "Sugerir adecuación curricular",
+            "alumno_id": "ALU-004"
+        }, headers=self.headers_doc)
+        self.assertEqual(res_ai_cross.status_code, 403)
 
 if __name__ == "__main__":
     unittest.main()

@@ -56,3 +56,4 @@ Si durante las primeras 48 horas de una eventual transición ocurriera cualquier
 2. **Reversión de Git en 1 comando:**  
    `git checkout main && git push origin main`
 3. **Restablecimiento del servicio:** En menos de 5 minutos, la plataforma Streamlit previa vuelve a tomar el tráfico sin pérdida de registros.
+

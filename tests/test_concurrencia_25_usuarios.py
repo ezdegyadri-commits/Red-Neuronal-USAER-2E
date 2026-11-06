@@ -21,8 +21,8 @@ class TestConcurrencia25Usuarios(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.client = TestClient(app)
-        # Login general
-        res = cls.client.post("/api/auth/login", json={"usuario": "edgar", "password": "123"})
+        # Login general (con contraseña robusta PBKDF2)
+        res = cls.client.post("/api/auth/login", json={"usuario": "edgar", "password": "Usaer2E!Dir#2026"})
         cls.token = res.json()["token"]
         cls.headers = {"Authorization": f"Bearer {cls.token}"}
 
@@ -83,3 +83,4 @@ class TestConcurrencia25Usuarios(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>USAER 02-E · Sistema Integral SPA 2.0</title>
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React 18 & ReactDOM (CDN Global jsDelivr) -->
+  <!-- React 18 & ReactDOM CDN -->
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <!-- Babel Standalone para JSX -->
@@ -70,10 +70,9 @@
 
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
-
     const API_BASE = window.location.origin;
 
-    // Cliente API seguro con Bearer Token y manejo de sesión
+    // Cliente API con Bearer Token y manejo de sesión
     async function apiRequest(endpoint, options = {}) {
       const token = sessionStorage.getItem('usaer_token');
       const headers = {
@@ -96,11 +95,11 @@
     }
 
     // =============================================================
-    // COMPONENTE: PANTALLA DE INICIO DE SESIÓN (LOGIN REAL)
+    // COMPONENTE: PANTALLA DE INICIO DE SESIÓN
     // =============================================================
     function LoginScreen({ onLoginSuccess }) {
-      const [usuario, setUsuario] = useState('edgar');
-      const [password, setPassword] = useState('Usaer2E!Dir#2026');
+      const [usuario, setUsuario] = useState('');
+      const [password, setPassword] = useState('');
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
 
@@ -126,11 +125,6 @@
         }
       };
 
-      const selectDemoAccount = (u, p) => {
-        setUsuario(u);
-        setPassword(p);
-      };
-
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12">
           <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 space-y-6">
@@ -139,7 +133,7 @@
                 ◈
               </div>
               <h1 className="text-2xl font-black tracking-tight text-slate-900">USAER 02-E · 2.0</h1>
-              <p className="text-xs text-slate-500 font-medium">Plataforma Pedagógica y Administrativa Desacoplada</p>
+              <p className="text-xs text-slate-500 font-medium">Plataforma Pedagógica y Administrativa Integral</p>
             </div>
 
             {error && (
@@ -157,7 +151,7 @@
                   value={usuario}
                   onChange={(e) => setUsuario(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
-                  placeholder="ej. edgar o cindy.burgos"
+                  placeholder="ej. edgar, marycruz, ceci, zuemmy"
                 />
               </div>
 
@@ -169,7 +163,7 @@
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
-                  placeholder="••••••••"
+                  placeholder="Tu contraseña institucional"
                 />
               </div>
 
@@ -182,42 +176,10 @@
               </button>
             </form>
 
-            <div className="border-t border-slate-100 pt-4 space-y-2">
-              <div className="text-[11px] font-bold uppercase text-slate-400 tracking-wider text-center">Cuentas Institucionales con PBKDF2</div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => selectDemoAccount('edgar', 'Usaer2E!Dir#2026')}
-                  className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
-                >
-                  <div className="font-bold text-slate-800">Dirección</div>
-                  <div className="text-[10px] text-slate-500">Edgar Adrián Yam</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectDemoAccount('cindy.burgos', 'Usaer2E!Cindy#2026')}
-                  className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
-                >
-                  <div className="font-bold text-slate-800">Maestra de Apoyo</div>
-                  <div className="text-[10px] text-slate-500">Cindy Burgos (Damián C.)</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectDemoAccount('laura.pech', 'Usaer2E!Laura#2026')}
-                  className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
-                >
-                  <div className="font-bold text-slate-800">Psicología</div>
-                  <div className="text-[10px] text-slate-500">Laura Pech</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectDemoAccount('mariana.solis', 'Usaer2E!Mariana#2026')}
-                  className="p-2 border border-slate-200 hover:border-amber-500 rounded-lg text-left transition"
-                >
-                  <div className="font-bold text-slate-800">Comunicación</div>
-                  <div className="text-[10px] text-slate-500">Mariana Solís</div>
-                </button>
-              </div>
+            <div className="border-t border-slate-100 pt-4 text-center">
+              <span className="text-[11px] text-slate-400">
+                Acceso exclusivo para personal de USAER 02-E · Zona 001 Primarias
+              </span>
             </div>
           </div>
         </div>
@@ -225,7 +187,7 @@
     }
 
     // =============================================================
-    // COMPONENTE PRINCIPAL (APP CON NAVEGACIÓN SPA)
+    // COMPONENTE PRINCIPAL (APP CON NAVEGACIÓN COMPLETA DE MÓDULOS)
     // =============================================================
     function App() {
       const [user, setUser] = useState(() => {
@@ -238,10 +200,11 @@
         }
       });
 
-      const [currentView, setCurrentView] = useState('mis_documentos'); // 'mis_documentos' | 'editor' | 'expedientes' | 'visitas' | 'estadisticas'
+      const [currentView, setCurrentView] = useState('mis_documentos');
       const [activeDocId, setActiveDocId] = useState(null);
       const [activeAlumnoId, setActiveAlumnoId] = useState(null);
       const [metrics, setMetrics] = useState({ latency: 12, requests: 1 });
+      const [dropdownOpen, setDropdownOpen] = useState(false);
 
       useEffect(() => {
         const handleAuthExpired = () => {
@@ -250,14 +213,13 @@
         };
         window.addEventListener('auth_expired', handleAuthExpired);
 
-        // Temporizador de inactividad de 30 minutos para aulas compartidas
         let idleTimer;
         const resetIdle = () => {
           clearTimeout(idleTimer);
           idleTimer = setTimeout(() => {
             sessionStorage.clear();
             setUser(null);
-          }, 30 * 60 * 1000);
+          }, 45 * 60 * 1000);
         };
         window.addEventListener('mousemove', resetIdle);
         window.addEventListener('keydown', resetIdle);
@@ -287,6 +249,11 @@
         setUser(null);
       };
 
+      const navigateTo = (view) => {
+        setCurrentView(view);
+        setDropdownOpen(false);
+      };
+
       if (!user) {
         return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
       }
@@ -298,7 +265,7 @@
             <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
               <div
                 className="flex items-center space-x-3 cursor-pointer"
-                onClick={() => setCurrentView('mis_documentos')}
+                onClick={() => navigateTo('mis_documentos')}
               >
                 <span className="text-amber-500 font-black text-xl">◈</span>
                 <span className="font-bold tracking-tight text-slate-100 text-lg">USAER 02-E</span>
@@ -307,10 +274,10 @@
                 </span>
               </div>
 
-              {/* Pestañas de Acceso Rápido (1 Clic) */}
+              {/* Menú de Navegación Rápido + Menú Desplegable con Todos los Módulos */}
               <nav className="hidden md:flex items-center space-x-1 text-sm font-medium">
                 <button
-                  onClick={() => setCurrentView('mis_documentos')}
+                  onClick={() => navigateTo('mis_documentos')}
                   className={`px-3 py-1.5 rounded-lg transition ${
                     currentView === 'mis_documentos' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
@@ -318,7 +285,7 @@
                   📁 Mis Documentos
                 </button>
                 <button
-                  onClick={() => setCurrentView('expedientes')}
+                  onClick={() => navigateTo('expedientes')}
                   className={`px-3 py-1.5 rounded-lg transition ${
                     currentView === 'expedientes' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
@@ -326,21 +293,85 @@
                   👤 Alumnos y Expedientes
                 </button>
                 <button
-                  onClick={() => setCurrentView('visitas')}
+                  onClick={() => navigateTo('epp')}
                   className={`px-3 py-1.5 rounded-lg transition ${
-                    currentView === 'visitas' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                    currentView === 'epp' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  📋 Actas y Oficios
+                  📋 EPP
                 </button>
-                <button
-                  onClick={() => setCurrentView('estadisticas')}
-                  className={`px-3 py-1.5 rounded-lg transition ${
-                    currentView === 'estadisticas' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  📊 Estadísticas Zona
-                </button>
+
+                {/* Dropdown de Todos los Módulos */}
+                <div className="relative">
+                  <button
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="px-3 py-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition flex items-center space-x-1"
+                  >
+                    <span>Todos los Módulos</span>
+                    <span className="text-xs">▾</span>
+                  </button>
+
+                  {dropdownOpen && (
+                    <div className="absolute left-0 mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 text-xs grid grid-cols-2 gap-1 p-2">
+                      <div className="col-span-2 px-2 py-1 text-[10px] uppercase font-bold text-amber-400 tracking-wider border-b border-slate-800 mb-1">
+                        Área Pedagógica y Anexos
+                      </div>
+                      <button onClick={() => navigateTo('anexo3')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        🚧 Anexo III BAP
+                      </button>
+                      <button onClick={() => navigateTo('anexo4')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        💡 Anexo IV Sugerencias
+                      </button>
+                      <button onClick={() => navigateTo('anexo5')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        📌 Anexo V Eventos
+                      </button>
+                      <button onClick={() => navigateTo('anexo7')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        📑 Anexo VII Derivación
+                      </button>
+                      <button onClick={() => navigateTo('informes')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        📄 Informes
+                      </button>
+
+                      <div className="col-span-2 px-2 py-1 text-[10px] uppercase font-bold text-amber-400 tracking-wider border-b border-slate-800 my-1">
+                        Organización y Gestión
+                      </div>
+                      <button onClick={() => navigateTo('horarios')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        ⏰ Horarios de Apoyo
+                      </button>
+                      <button onClick={() => navigateTo('cronogramas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        📅 Cronograma Mensual
+                      </button>
+                      <button onClick={() => navigateTo('calendario')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        🗓️ Calendario SEGEY
+                      </button>
+                      <button onClick={() => navigateTo('docentes_regulares')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        👥 Maestros Primaria
+                      </button>
+                      <button onClick={() => navigateTo('novedades')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        📢 Supervisión Zona 001
+                      </button>
+                      <button onClick={() => navigateTo('juntas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        🤝 Juntas y Relatorías
+                      </button>
+                      <button onClick={() => navigateTo('metas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        🎯 Metas Personales
+                      </button>
+                      <button onClick={() => navigateTo('tramites')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        📨 Trámites
+                      </button>
+
+                      <div className="col-span-2 px-2 py-1 text-[10px] uppercase font-bold text-amber-400 tracking-wider border-b border-slate-800 my-1">
+                        Institucional y Dirección
+                      </div>
+                      <button onClick={() => navigateTo('visitas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        📋 Actas y Oficios
+                      </button>
+                      <button onClick={() => navigateTo('estadisticas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
+                        📊 Estadísticas Zona
+                      </button>
+                    </div>
+                  )}
+                </div>
               </nav>
 
               <div className="flex items-center space-x-3">
@@ -367,8 +398,8 @@
             </div>
           </header>
 
-          {/* Área de Contenido SPA */}
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+          {/* Área Principal de Contenido SPA */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6" onClick={() => dropdownOpen && setDropdownOpen(false)}>
             {currentView === 'mis_documentos' && (
               <MisDocumentosView
                 onOpenDoc={(id) => {
@@ -399,18 +430,75 @@
               />
             )}
 
-            {currentView === 'visitas' && (
-              <ActasYOficiosView
+            {currentView === 'epp' && (
+              <EPPView
                 onBack={() => setCurrentView('mis_documentos')}
+                onOpenAlumno={(id) => {
+                  setActiveAlumnoId(id);
+                  setCurrentView('expedientes');
+                }}
                 setMetrics={setMetrics}
               />
             )}
 
+            {currentView === 'anexo3' && (
+              <Anexo3View onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'anexo4' && (
+              <Anexo4View onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'anexo5' && (
+              <Anexo5View onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'anexo7' && (
+              <Anexo7View onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'horarios' && (
+              <HorariosView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'cronogramas' && (
+              <CronogramasView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'calendario' && (
+              <CalendarioView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'docentes_regulares' && (
+              <DocentesRegularesView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'novedades' && (
+              <NovedadesView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'juntas' && (
+              <JuntasView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'metas' && (
+              <MetasView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'tramites' && (
+              <TramitesView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'informes' && (
+              <InformesView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
+            {currentView === 'visitas' && (
+              <ActasYOficiosView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
+            )}
+
             {currentView === 'estadisticas' && (
-              <EstadisticasView
-                onBack={() => setCurrentView('mis_documentos')}
-                setMetrics={setMetrics}
-              />
+              <EstadisticasView onBack={() => setCurrentView('mis_documentos')} setMetrics={setMetrics} />
             )}
           </main>
 
@@ -500,16 +588,16 @@
         const q = busqueda.toLowerCase();
         return (p.metadatos?.titulo || '').toLowerCase().includes(q) ||
                (p.datos?.Escuela || '').toLowerCase().includes(q) ||
+               (p.datos?.Docente_Especialista || '').toLowerCase().includes(q) ||
                (p.id || '').toLowerCase().includes(q);
       });
 
       return (
         <div className="space-y-6">
-          {/* Encabezado y Acciones Rápidas */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Mis Documentos de Trabajo</h1>
-              <p className="text-sm text-slate-500">Acceso directo a tus planeaciones activas y expedientes de alumnos</p>
+              <p className="text-sm text-slate-500">Historial completo de planeaciones y expedientes autorizados</p>
             </div>
             <div className="flex items-center space-x-3">
               <button
@@ -528,18 +616,16 @@
             </div>
           </div>
 
-          {/* Barra de Búsqueda Instantánea en Memoria */}
           <div className="relative">
             <input
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar documento por alumno, escuela, grado o aprendizaje esperado..."
+              placeholder="Buscar por alumno, escuela, grado o aprendizaje esperado..."
               className="w-full pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-sm"
             />
           </div>
 
-          {/* Sección de Planeaciones Recientes */}
           <div className="space-y-3">
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
               <span>📝 Planeaciones y Planes de Intervención</span>
@@ -580,7 +666,9 @@
                       <div className="text-xs text-slate-500 flex items-center space-x-3">
                         <span>🏫 {plan.datos?.Escuela || 'Primaria Oficial'}</span>
                         <span>•</span>
-                        <span>Grado: {plan.datos?.Grado_Grupo || '2° A'}</span>
+                        <span>Grado: {plan.datos?.Grado_Grupo || 'Atención USAER'}</span>
+                        <span>•</span>
+                        <span>{plan.datos?.Docente_Especialista || 'Docente USAER'}</span>
                         <span>•</span>
                         <span>Guardado: {plan.guardado_en || 'Reciente'}</span>
                       </div>
@@ -612,7 +700,6 @@
             )}
           </div>
 
-          {/* Sección de Alumnos Frecuentes / Expedientes */}
           <div className="space-y-3 pt-4">
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
               <span>👥 Expedientes de Alumnos Asignados</span>
@@ -620,7 +707,7 @@
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {alumnos.map((al) => (
+              {alumnos.slice(0, 15).map((al) => (
                 <div
                   key={al.id}
                   onClick={() => onOpenExpediente(al.id)}
@@ -641,6 +728,16 @@
                 </div>
               ))}
             </div>
+            {alumnos.length > 15 && (
+              <div className="text-center pt-2">
+                <button
+                  onClick={() => onOpenExpediente(alumnos[0].id)}
+                  className="text-xs text-amber-700 font-bold hover:underline"
+                >
+                  Ver todos los {alumnos.length} alumnos en el módulo de Expedientes →
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Modal de Confirmación para Eliminar */}
@@ -758,32 +855,16 @@
     }
 
     // =============================================================
-    // VISTA 2: EDITOR DE PLANEACIÓN INDIVIDUAL (ANEXO XXIII)
+    // VISTA 2: EDITOR DE PLANEACIÓN COMPATIBLE CON STREAMLIT + SPA
     // =============================================================
     function PlaneacionEditorView({ docId, onBack, setMetrics }) {
       const [doc, setDoc] = useState(null);
       const [loading, setLoading] = useState(true);
-      const [activeTab, setActiveTab] = useState('aprendizajes'); // 'aprendizajes' | 'dosificacion' | 'evaluacion' | 'firmas'
-      const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'dirty' | 'offline' | 'error'
+      const [activeTab, setActiveTab] = useState('aprendizajes');
+      const [saveStatus, setSaveStatus] = useState('saved');
       const [assistantOpen, setAssistantOpen] = useState(false);
-      const [isOnline, setIsOnline] = useState(navigator.onLine);
       const debounceTimer = useRef(null);
 
-      useEffect(() => {
-        const handleOnline = () => setIsOnline(true);
-        const handleOffline = () => {
-          setIsOnline(false);
-          setSaveStatus('offline');
-        };
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-        return () => {
-          window.removeEventListener('online', handleOnline);
-          window.removeEventListener('offline', handleOffline);
-        };
-      }, []);
-
-      // Cargar documento completo
       useEffect(() => {
         let mounted = true;
         const fetchDoc = async () => {
@@ -805,7 +886,6 @@
         return () => { mounted = false; };
       }, [docId, setMetrics]);
 
-      // Guardar con debounce
       const persistir = useCallback(async (docActual) => {
         if (!navigator.onLine) {
           setSaveStatus('offline');
@@ -828,7 +908,6 @@
         }
       }, [setMetrics]);
 
-      // Detectar cambios y programar autoguardado a 1.5s
       const mutarDoc = (updater) => {
         setDoc(prev => {
           const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
@@ -858,9 +937,11 @@
         );
       }
 
+      // Compatibilidad con tablas históricas de Streamlit (ej. "Tabla principal")
+      const tablaNEE = doc.tablas?.nee || doc.tablas?.["Tabla principal"] || [];
+
       return (
         <div className="space-y-4">
-          {/* Cabecera del Editor */}
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               <button
@@ -878,9 +959,9 @@
                   placeholder="Título del Plan de Intervención"
                 />
                 <div className="text-xs text-slate-500 px-1 flex items-center space-x-2">
-                  <span>Escuela: {doc.datos?.Escuela || 'Primaria Oficial'}</span>
+                  <span>Escuela: {doc.datos?.Escuela || doc.datos?.["Escuela regular"] || 'Primaria Oficial'}</span>
                   <span>•</span>
-                  <span>Anexo {doc.formato}</span>
+                  <span>Docente: {doc.datos?.Docente_Especialista || doc.datos?.["Nombre del docente especialista"] || 'USAER 2E'}</span>
                   <span>•</span>
                   <span>Revisión: {doc.revision}</span>
                 </div>
@@ -888,7 +969,6 @@
             </div>
 
             <div className="flex items-center space-x-2.5">
-              {/* Indicador de Guardado */}
               <div className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-slate-50 border-slate-200 flex items-center space-x-2">
                 {saveStatus === 'saved' && (
                   <>
@@ -908,18 +988,6 @@
                     <span className="text-slate-500">Cambios pendientes</span>
                   </>
                 )}
-                {saveStatus === 'offline' && (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                    <span className="text-slate-600">Sin conexión (esperando red)</span>
-                  </>
-                )}
-                {saveStatus === 'error' && (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                    <span className="text-red-600 font-bold">Error de guardado</span>
-                  </>
-                )}
               </div>
 
               <a
@@ -928,7 +996,7 @@
                 rel="noreferrer"
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5"
               >
-                <span>Descargar PDF Oficial</span>
+                <span>Descargar PDF</span>
                 <span>📄</span>
               </a>
 
@@ -938,12 +1006,27 @@
                   assistantOpen ? 'bg-amber-600 text-white ring-2 ring-amber-400' : 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100'
                 }`}
               >
-                <span>🤖 Asistente Pedagógico IA</span>
+                <span>🤖 Asistente IA</span>
               </button>
             </div>
           </div>
 
-          {/* Navegación por Pestañas del Formato Oficial */}
+          {/* Tarjeta de Aportaciones Multidisciplinarias si vienen de Streamlit */}
+          {doc.metadatos?.aportaciones_equipo && (
+            <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 text-xs space-y-1">
+              <div className="font-bold text-amber-900">🤝 Aportaciones del Equipo Multidisciplinario (Streamlit Histórico)</div>
+              <div className="text-slate-700 whitespace-pre-wrap">{doc.metadatos.aportaciones_equipo}</div>
+            </div>
+          )}
+
+          {/* Tarjeta de Guía Grupal Manual si viene de Streamlit */}
+          {doc.metadatos?.guia_grupal_manual && (
+            <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 text-xs space-y-1">
+              <div className="font-bold text-blue-900">📘 Guía Grupal de Intervención (Streamlit Histórico)</div>
+              <div className="text-slate-700 whitespace-pre-wrap">{doc.metadatos.guia_grupal_manual}</div>
+            </div>
+          )}
+
           <div className="flex border-b border-slate-200 space-x-1 text-sm font-semibold">
             {[
               { id: 'aprendizajes', label: '1. NEE y Descriptores Observables' },
@@ -965,10 +1048,8 @@
             ))}
           </div>
 
-          {/* Contenedor Principal: Editor + Drawer IA */}
           <div className="flex gap-4 items-start">
             <div className="flex-1 bg-white p-5 rounded-xl border border-slate-200 shadow-sm min-h-[420px]">
-              {/* TAB 1: NEE, BAP y Descriptores Observables */}
               {activeTab === 'aprendizajes' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -983,16 +1064,14 @@
                     <button
                       onClick={() => {
                         const nuevaFila = {
-                          alumno: 'Jesús Emmanuel Chan Burgos',
-                          curp: 'CABJ160512MYNRRN01',
+                          alumno: 'Nuevo Alumno',
                           barreras_o_necesidades: 'Atención sostenida en lectura guiada.',
-                          pda: 'Identifica y reflexiona sobre textos narrativos.',
-                          descriptor: 'Jesús Emmanuel identifica elementos clave y formula preguntas breves con apoyo visual.',
+                          descriptor: 'El alumno identifica elementos clave con apoyo visual.',
                           apoyos: 'Cronómetro visual y tarjetas léxicas.'
                         };
                         mutarDoc(d => ({
                           ...d,
-                          tablas: { ...d.tablas, nee: [...(d.tablas?.nee || []), nuevaFila] }
+                          tablas: { ...d.tablas, nee: [...tablaNEE, nuevaFila] }
                         }));
                       }}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold"
@@ -1013,16 +1092,16 @@
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {(doc.tablas?.nee || []).map((row, idx) => (
+                        {tablaNEE.map((row, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/70 transition">
                             <td className="p-2">
                               <input
                                 type="text"
-                                value={row.alumno || ''}
+                                value={row.alumno || row.Alumno || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   mutarDoc(d => {
-                                    const copy = [...d.tablas.nee];
+                                    const copy = [...tablaNEE];
                                     copy[idx] = { ...copy[idx], alumno: val };
                                     return { ...d, tablas: { ...d.tablas, nee: copy } };
                                   });
@@ -1033,11 +1112,11 @@
                             <td className="p-2">
                               <textarea
                                 rows="2"
-                                value={row.barreras_o_necesidades || ''}
+                                value={row.barreras_o_necesidades || row["Barrera o Necesidad"] || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   mutarDoc(d => {
-                                    const copy = [...d.tablas.nee];
+                                    const copy = [...tablaNEE];
                                     copy[idx] = { ...copy[idx], barreras_o_necesidades: val };
                                     return { ...d, tablas: { ...d.tablas, nee: copy } };
                                   });
@@ -1048,11 +1127,11 @@
                             <td className="p-2">
                               <textarea
                                 rows="2"
-                                value={row.descriptor || ''}
+                                value={row.descriptor || row["Descriptor Observable"] || row.descriptor_observable || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   mutarDoc(d => {
-                                    const copy = [...d.tablas.nee];
+                                    const copy = [...tablaNEE];
                                     copy[idx] = { ...copy[idx], descriptor: val };
                                     return { ...d, tablas: { ...d.tablas, nee: copy } };
                                   });
@@ -1063,11 +1142,11 @@
                             <td className="p-2">
                               <textarea
                                 rows="2"
-                                value={row.apoyos || ''}
+                                value={row.apoyos || row["Apoyos y Ajustes"] || row.ajustes_razonables || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   mutarDoc(d => {
-                                    const copy = [...d.tablas.nee];
+                                    const copy = [...tablaNEE];
                                     copy[idx] = { ...copy[idx], apoyos: val };
                                     return { ...d, tablas: { ...d.tablas, nee: copy } };
                                   });
@@ -1080,7 +1159,7 @@
                                 onClick={() => {
                                   mutarDoc(d => ({
                                     ...d,
-                                    tablas: { ...d.tablas, nee: d.tablas.nee.filter((_, i) => i !== idx) }
+                                    tablas: { ...d.tablas, nee: tablaNEE.filter((_, i) => i !== idx) }
                                   }));
                                 }}
                                 className="text-slate-400 hover:text-red-600 font-bold p-1"
@@ -1096,7 +1175,6 @@
                 </div>
               )}
 
-              {/* TAB 2: Dosificación de Actividades */}
               {activeTab === 'dosificacion' && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
@@ -1169,7 +1247,6 @@
                 </div>
               )}
 
-              {/* TAB 3: Evaluación Formativa */}
               {activeTab === 'evaluacion' && (
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Criterios e Instrumentos de Evaluación</h3>
@@ -1183,7 +1260,6 @@
                 </div>
               )}
 
-              {/* TAB 4: Firmas y Vo. Bo. Oficial */}
               {activeTab === 'firmas' && (
                 <div className="space-y-6 max-w-2xl mx-auto py-6">
                   <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-xl text-xs text-slate-700 space-y-1">
@@ -1219,17 +1295,16 @@
               )}
             </div>
 
-            {/* DRAWER LATERAL: ASISTENTE PEDAGÓGICO CONVERSACIONAL */}
             {assistantOpen && (
               <div className="w-80 md:w-96 bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex flex-col h-[520px]">
                 <PedagogicalChatComponent
-                  alumnoId="ALU-001"
+                  alumnoId="ALU-035"
                   onInsertProposal={(propuesta) => {
                     mutarDoc(d => ({
                       ...d,
                       tablas: {
                         ...d.tablas,
-                        nee: [...(d.tablas?.nee || []), propuesta]
+                        nee: [...tablaNEE, propuesta]
                       }
                     }));
                   }}
@@ -1242,7 +1317,7 @@
     }
 
     // =============================================================
-    // COMPONENTE: ASISTENTE PEDAGÓGICO IA CONVERSACIONAL
+    // COMPONENTE: ASISTENTE PEDAGÓGICO IA
     // =============================================================
     function PedagogicalChatComponent({ alumnoId, onInsertProposal }) {
       const [messages, setMessages] = useState([
@@ -1267,18 +1342,14 @@
         try {
           const res = await apiRequest('/api/ai/chat', {
             method: 'POST',
-            body: JSON.stringify({
-              mensaje: userMsg,
-              alumno_id: alumnoId
-            })
+            body: JSON.stringify({ mensaje: userMsg, alumno_id: alumnoId })
           });
-
           setMessages(prev => [...prev, { sender: 'ai', text: res.respuesta }]);
           if (res.propuesta_tabla) {
             setLastProposal(res.propuesta_tabla);
           }
         } catch (err) {
-          setMessages(prev => [...prev, { sender: 'ai', text: 'Lo siento, ocurrió un error consultando el motor pedagógico.' }]);
+          setMessages(prev => [...prev, { sender: 'ai', text: 'Error consultando el motor pedagógico.' }]);
         } finally {
           setLoading(false);
         }
@@ -1333,7 +1404,7 @@
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Escribe tu instrucción pedagógica..."
+              placeholder="Instrucción pedagógica..."
               className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-amber-500"
             />
             <button
@@ -1349,7 +1420,7 @@
     }
 
     // =============================================================
-    // VISTA 3: EXPEDIENTES INTEGRALES DE ALUMNOS (CON HISTORIA Y EPP)
+    // VISTA 3: EXPEDIENTES INTEGRALES (307 ALUMNOS, LÍNEA DE TIEMPO)
     // =============================================================
     function ExpedientesView({ initialAlumnoId, onBack, setMetrics }) {
       const [alumnos, setAlumnos] = useState([]);
@@ -1358,7 +1429,7 @@
       const [selectedId, setSelectedId] = useState(initialAlumnoId || null);
       const [expediente, setExpediente] = useState(null);
       const [loadingExp, setLoadingExp] = useState(false);
-      const [activeExpTab, setActiveExpTab] = useState('resumen'); // 'resumen' | 'epp' | 'bap' | 'sugerencias' | 'eventos' | 'derivacion'
+      const [activeExpTab, setActiveExpTab] = useState('resumen');
 
       useEffect(() => {
         apiRequest('/api/alumnos').then(data => {
@@ -1381,7 +1452,6 @@
         });
       }, [selectedId, setMetrics]);
 
-      // Extraer maestras disponibles en la lista de alumnos
       const maestrasDisponibles = Array.from(new Set(
         alumnos.map(a => a.maestra_apoyo).filter(Boolean)
       )).sort();
@@ -1422,16 +1492,14 @@
                 </span>
               </div>
 
-              {/* Buscador de alumnos */}
               <input
                 type="text"
-                placeholder="Buscar por nombre, CURP..."
+                placeholder="Buscar por nombre, CURP, escuela..."
                 value={busqueda}
                 onChange={e => setBusqueda(e.target.value)}
                 className="w-full text-xs p-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
               />
 
-              {/* Filtro por Maestra si hay más de una (ej. Ichcaanziho: Ceci y Marycruz) */}
               {maestrasDisponibles.length > 1 && (
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-slate-400">Filtrar por Maestra:</label>
@@ -1462,9 +1530,6 @@
                     <div className="text-[10px] text-amber-700 font-semibold mt-0.5">👤 {al.maestra_apoyo}</div>
                   </div>
                 ))}
-                {alumnosFiltrados.length === 0 && (
-                  <div className="text-center py-6 text-slate-400 text-xs">No se encontraron alumnos con los filtros seleccionados.</div>
-                )}
               </div>
             </div>
 
@@ -1478,6 +1543,8 @@
                     <div>
                       <h2 className="text-xl font-bold text-slate-900">{expediente.alumno?.nombre_completo}</h2>
                       <div className="text-xs text-slate-500 mt-1">
+                        <span>ID: {expediente.alumno?.id}</span>
+                        <span className="mx-2">•</span>
                         <span>CURP: {expediente.alumno?.curp || 'No registrada'}</span>
                         <span className="mx-2">•</span>
                         <span>{expediente.alumno?.escuela}</span>
@@ -1490,10 +1557,9 @@
                     </span>
                   </div>
 
-                  {/* Sub-pestañas de Expediente */}
-                  <div className="flex border-b border-slate-200 space-x-1 text-xs font-bold">
+                  <div className="flex border-b border-slate-200 space-x-1 text-xs font-bold overflow-x-auto pb-1">
                     {[
-                      { id: 'resumen', label: 'Resumen' },
+                      { id: 'resumen', label: 'Resumen e Historia' },
                       { id: 'epp', label: 'Evaluación Psicopedagógica (EPP)' },
                       { id: 'bap', label: `BAP (${expediente.anexo3_bap?.length || 0})` },
                       { id: 'sugerencias', label: `Sugerencias (${expediente.anexo4_sugerencias?.length || 0})` },
@@ -1503,7 +1569,7 @@
                       <button
                         key={t.id}
                         onClick={() => setActiveExpTab(t.id)}
-                        className={`px-3 py-2 border-b-2 transition ${
+                        className={`px-3 py-2 border-b-2 whitespace-nowrap transition ${
                           activeExpTab === t.id ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-400 hover:text-slate-700'
                         }`}
                       >
@@ -1512,29 +1578,47 @@
                     ))}
                   </div>
 
-                  {/* SUB-TAB: RESUMEN */}
                   {activeExpTab === 'resumen' && (
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                        <div className="font-bold text-slate-700">Maestra de Apoyo Asignada</div>
-                        <div className="text-slate-900">{expediente.alumno?.maestra_apoyo || 'Por asignar'}</div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                          <div className="font-bold text-slate-700">Maestra de Apoyo Asignada</div>
+                          <div className="text-slate-900">{expediente.alumno?.maestra_apoyo || 'Por asignar'}</div>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                          <div className="font-bold text-slate-700">Tipo de Atención</div>
+                          <div className="text-slate-900">{expediente.alumno?.tipo_atencion || 'Atención Focalizada'}</div>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                          <div className="font-bold text-slate-700">Turno y CCT</div>
+                          <div className="text-slate-900">{expediente.alumno?.turno} • {expediente.alumno?.cct}</div>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                          <div className="font-bold text-slate-700">Documentos Vinculados</div>
+                          <div className="text-amber-700 font-bold">{expediente.total_documentos} registros en expediente</div>
+                        </div>
                       </div>
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                        <div className="font-bold text-slate-700">Tipo de Atención</div>
-                        <div className="text-slate-900">{expediente.alumno?.tipo_atencion || 'Atención Focalizada'}</div>
-                      </div>
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                        <div className="font-bold text-slate-700">Turno y CCT</div>
-                        <div className="text-slate-900">{expediente.alumno?.turno} • {expediente.alumno?.cct}</div>
-                      </div>
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                        <div className="font-bold text-slate-700">Documentos Vinculados</div>
-                        <div className="text-amber-700 font-bold">{expediente.total_documentos} registros en expediente</div>
-                      </div>
+
+                      {/* Línea de Tiempo del Alumno */}
+                      {expediente.linea_tiempo && expediente.linea_tiempo.length > 0 && (
+                        <div className="pt-2 space-y-2">
+                          <h4 className="text-xs font-bold uppercase text-slate-600">📜 Línea de Tiempo del Expediente ({expediente.linea_tiempo.length})</h4>
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                            {expediente.linea_tiempo.map((lt, idx) => (
+                              <div key={idx} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs flex justify-between items-start">
+                                <div>
+                                  <div className="font-semibold text-slate-800">{lt.tipo || lt.evento || 'Evento de Expediente'}</div>
+                                  <div className="text-slate-600 text-[11px] mt-0.5">{lt.descripcion || lt.detalle || ''}</div>
+                                </div>
+                                <span className="text-[10px] text-slate-400 font-mono ml-3">{lt.fecha || '2026-2027'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* SUB-TAB: EPP MULTI-ÁREA */}
                   {activeExpTab === 'epp' && (
                     <div className="space-y-3 text-xs">
                       {expediente.epp ? (
@@ -1546,7 +1630,7 @@
                           {Object.entries(expediente.epp.partes || {}).map(([area, datos]) => {
                             if (area === 'META') return null;
                             return (
-                              <div key={area} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                              <div key={area} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                                 <div className="font-bold text-slate-900 uppercase tracking-wider text-[11px] text-amber-700">
                                   Área: {area}
                                 </div>
@@ -1569,13 +1653,12 @@
                     </div>
                   )}
 
-                  {/* SUB-TAB: BAP */}
                   {activeExpTab === 'bap' && (
                     <div className="space-y-2 text-xs">
                       {expediente.anexo3_bap?.map((b) => (
                         <div key={b.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                           <div className="flex justify-between items-center font-bold text-slate-800">
-                            <span>Detección BAP</span>
+                            <span>Detección BAP {b.tipo_deteccion === 'GRUPAL' ? '· GRUPAL DE AULA' : ''}</span>
                             <span className="text-slate-400 font-normal">{b.fecha}</span>
                           </div>
                           {b.fisicas && <div><strong>Físicas:</strong> {b.fisicas}</div>}
@@ -1587,7 +1670,6 @@
                     </div>
                   )}
 
-                  {/* SUB-TAB: SUGERENCIAS */}
                   {activeExpTab === 'sugerencias' && (
                     <div className="space-y-2 text-xs">
                       {expediente.anexo4_sugerencias?.map((sug) => (
@@ -1604,7 +1686,6 @@
                     </div>
                   )}
 
-                  {/* SUB-TAB: EVENTOS */}
                   {activeExpTab === 'eventos' && (
                     <div className="space-y-2 text-xs">
                       {expediente.anexo5_eventos?.map((ev) => (
@@ -1619,7 +1700,6 @@
                     </div>
                   )}
 
-                  {/* SUB-TAB: DERIVACIÓN */}
                   {activeExpTab === 'derivacion' && (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
                       <div className="font-bold text-slate-900">Anexo VII — Formato de Derivación</div>
@@ -1638,12 +1718,679 @@
     }
 
     // =============================================================
-    // VISTA 4: ACTAS DE VISITA Y OFICIOS DE COMISIÓN
+    // VISTA 4: EVALUACIÓN PSICOPEDAGÓGICA (EPP MULTI-ÁREA)
+    // =============================================================
+    function EPPView({ onBack, onOpenAlumno, setMetrics }) {
+      const [listaEPP, setListaEPP] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        const t0 = performance.now();
+        apiRequest('/api/epp').then(data => {
+          setListaEPP(data);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+          setLoading(false);
+        });
+      }, [setMetrics]);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Evaluación Psicopedagógica (EPP)</h1>
+          </div>
+
+          <div className="grid gap-4">
+            {listaEPP.map((epp) => (
+              <div key={epp.id} className="p-4 bg-white rounded-xl border border-slate-200 space-y-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base">{epp.alumno_nombre}</h3>
+                    <div className="text-xs text-slate-500">ID: {epp.alumno_id} • Ciclo: {epp.ciclo} • Revisión: {epp.revision}</div>
+                  </div>
+                  <button
+                    onClick={() => onOpenAlumno(epp.alumno_id)}
+                    className="text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 transition"
+                  >
+                    Ver Expediente Completo →
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 pt-2 text-xs">
+                  {['Aprendizaje', 'Psicología', 'Comunicación', 'Trabajo Social'].map(area => (
+                    <div key={area} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="font-bold text-slate-700">{area}</div>
+                      <div className="text-[11px] text-emerald-700 mt-1">✓ Registro completado</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 5: ANEXO III - DETECCIÓN DE BAP (INDIVIDUAL Y GRUPAL)
+    // =============================================================
+    function Anexo3View({ onBack, setMetrics }) {
+      const [baps, setBaps] = useState([]);
+      const [busqueda, setBusqueda] = useState('');
+
+      useEffect(() => {
+        apiRequest('/api/anexo3').then(setBaps);
+      }, []);
+
+      const filtrados = baps.filter(b => 
+        (b.Nombre_Alumno || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (b.Escuela || '').toLowerCase().includes(busqueda.toLowerCase())
+      );
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+                ← Volver
+              </button>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo III — Detección de BAP</h1>
+            </div>
+            <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
+              {filtrados.length} registros
+            </span>
+          </div>
+
+          <input
+            type="text"
+            placeholder="Buscar por alumno, escuela o barrera..."
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
+          />
+
+          <div className="grid gap-3">
+            {filtrados.map((b, i) => (
+              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span className="text-sm">{b.Nombre_Alumno || 'Detección Grupal'}</span>
+                  <span className="text-slate-400 font-normal">{b.Fecha}</span>
+                </div>
+                <div className="text-slate-500">Escuela: {b.Escuela} • Grado y Grupo: {b.Grado_Grupo}</div>
+                {b.Fisicas && <div><strong>Físicas/Arquitectónicas:</strong> {b.Fisicas}</div>}
+                {b.Actitudinales && <div><strong>Actitudinales:</strong> {b.Actitudinales}</div>}
+                {b.Curriculares && <div><strong>Curriculares/Pedagógicas:</strong> {b.Curriculares}</div>}
+                {b.Organizativas && <div><strong>Organizativas:</strong> {b.Organizativas}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 6: ANEXO IV - HOJA DE SUGERENCIAS
+    // =============================================================
+    function Anexo4View({ onBack, setMetrics }) {
+      const [sugerencias, setSugerencias] = useState([]);
+      const [busqueda, setBusqueda] = useState('');
+
+      useEffect(() => {
+        apiRequest('/api/anexo4').then(setSugerencias);
+      }, []);
+
+      const filtradas = sugerencias.filter(s => 
+        (s.Alumno || s.Nombre_Alumno || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (s.Sugerencias || '').toLowerCase().includes(busqueda.toLowerCase())
+      );
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+                ← Volver
+              </button>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo IV — Hojas de Sugerencias</h1>
+            </div>
+            <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
+              {filtradas.length} hojas
+            </span>
+          </div>
+
+          <input
+            type="text"
+            placeholder="Buscar por alumno, área o contenido..."
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
+          />
+
+          <div className="grid gap-3">
+            {filtradas.map((s, i) => (
+              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span className="text-sm">{s.Alumno || s.Nombre_Alumno || 'Sugerencias de Grupo'}</span>
+                  <span className="text-slate-400 font-normal">{s.Fecha}</span>
+                </div>
+                <div className="text-slate-500">Área: <strong className="text-amber-800">{s.Area || 'Pedagógica'}</strong> • Especialista: {s.Especialista || 'USAER'}</div>
+                {s.Motivo && <div><strong>Motivo:</strong> {s.Motivo}</div>}
+                <div><strong>Sugerencias para el Docente Regular:</strong> {s.Sugerencias}</div>
+                {s.Cumplimiento && <div className="text-emerald-700"><strong>Resultado / Seguimiento:</strong> {s.Cumplimiento}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 7: ANEXO V - EVENTOS SIGNIFICATIVOS (408 REGISTROS)
+    // =============================================================
+    function Anexo5View({ onBack, setMetrics }) {
+      const [eventos, setEventos] = useState([]);
+      const [busqueda, setBusqueda] = useState('');
+
+      useEffect(() => {
+        apiRequest('/api/anexo5').then(setEventos);
+      }, []);
+
+      const filtrados = eventos.filter(ev => 
+        (ev.Nombre_Alumno || ev.alumno_nombre || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (ev.Evento || ev.evento || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (ev.Especialista || ev.especialista || '').toLowerCase().includes(busqueda.toLowerCase())
+      );
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+                ← Volver
+              </button>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo V — Eventos Significativos</h1>
+            </div>
+            <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
+              {filtrados.length} eventos históricos
+            </span>
+          </div>
+
+          <input
+            type="text"
+            placeholder="Buscar por alumno, especialista o descripción del evento..."
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
+          />
+
+          <div className="space-y-2">
+            {filtrados.map((ev, i) => (
+              <div key={i} className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-start hover:border-amber-400 transition">
+                <div className="space-y-1">
+                  <div className="font-bold text-slate-900 text-sm">{ev.Nombre_Alumno || ev.alumno_nombre || 'Alumno USAER'}</div>
+                  <div className="text-slate-700">{ev.Evento || ev.evento}</div>
+                  <div className="text-[11px] text-slate-500">Registrado por: <strong>{ev.Especialista || ev.especialista}</strong></div>
+                </div>
+                <span className="text-slate-400 font-mono text-xs whitespace-nowrap ml-4">{ev.Fecha || ev.fecha}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 8: ANEXO VII - DERIVACIÓN Y SEGUIMIENTO MÉDICO
+    // =============================================================
+    function Anexo7View({ onBack, setMetrics }) {
+      const [derivaciones, setDerivaciones] = useState([]);
+
+      useEffect(() => {
+        apiRequest('/api/anexo7').then(setDerivaciones);
+      }, []);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo VII — Derivación y Salud</h1>
+          </div>
+
+          <div className="grid gap-3">
+            {derivaciones.map((d, i) => (
+              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span className="text-sm">{d.Alumno || d.Nombre_Alumno}</span>
+                  <span className="text-slate-400 font-normal">{d.Fecha}</span>
+                </div>
+                <div><strong>Docente Regular:</strong> {d.Docente_Regular || 'No registrado'}</div>
+                <div><strong>Salud:</strong> {d.Salud || 'Buena salud'}</div>
+                <div><strong>Seguimiento Médico:</strong> {d.Seguimiento_Medico || 'En observación'}</div>
+                {d.Aspecto_Relevante && <div><strong>Aspecto Relevante:</strong> {d.Aspecto_Relevante}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 9: HORARIOS DE APOYO
+    // =============================================================
+    function HorariosView({ onBack, setMetrics }) {
+      const [horarios, setHorarios] = useState(null);
+
+      useEffect(() => {
+        apiRequest('/api/horarios').then(setHorarios);
+      }, []);
+
+      if (!horarios) return <div className="text-center py-16 text-slate-500 text-sm">Cargando horarios de apoyo...</div>;
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Horarios de Apoyo Semanal</h1>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Sesiones de Apoyo Registradas</div>
+              <div className="text-2xl font-black text-amber-600 mt-1">{horarios.horarios_apoyo?.length || 0}</div>
+            </div>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Restricciones de Aula</div>
+              <div className="text-2xl font-black text-slate-900 mt-1">{horarios.restricciones?.length || 0}</div>
+            </div>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-semibold">Borradores de Horarios</div>
+              <div className="text-2xl font-black text-emerald-600 mt-1">{horarios.borradores?.length || 0}</div>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-3">
+            <h3 className="font-bold text-slate-800 text-sm">Distribución de Apoyo en Escuelas</h3>
+            <div className="grid gap-2 max-h-96 overflow-y-auto">
+              {(horarios.horarios_apoyo || []).slice(0, 30).map((h, i) => (
+                <div key={i} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs flex justify-between items-center">
+                  <div>
+                    <span className="font-bold text-slate-900">{h.Dia || 'Lunes'} • {h.Hora || '08:00'}</span>
+                    <span className="mx-2">•</span>
+                    <span className="text-slate-600">{h.Escuela} ({h.Grado_Grupo})</span>
+                  </div>
+                  <span className="text-amber-800 font-semibold">{h.Maestra_Apoyo || h.Especialista}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 10: CRONOGRAMA MENSUAL
+    // =============================================================
+    function CronogramasView({ onBack, setMetrics }) {
+      const [cronogramas, setCronogramas] = useState(null);
+
+      useEffect(() => {
+        apiRequest('/api/cronogramas').then(setCronogramas);
+      }, []);
+
+      if (!cronogramas) return <div className="text-center py-16 text-slate-500 text-sm">Cargando cronogramas mensuales...</div>;
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Cronogramas Mensuales del Equipo</h1>
+          </div>
+
+          <div className="grid gap-3">
+            {(cronogramas.cronogramas || []).map((c, i) => (
+              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span className="text-sm">{c.Personal || c.Especialista} — {c.Mes || 'Mensual'}</span>
+                  <span className="text-slate-400 font-normal">{c.Ciclo || '2026-2027'}</span>
+                </div>
+                <div>{c.Actividad || c.Detalle || 'Actividades de acompañamiento técnico en escuelas asignadas.'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 11: CALENDARIO DE ACTIVIDADES SEGEY / USAER (130 EVENTOS)
+    // =============================================================
+    function CalendarioView({ onBack, setMetrics }) {
+      const [eventos, setEventos] = useState([]);
+      const [filtroMes, setFiltroMes] = useState('TODOS');
+
+      useEffect(() => {
+        apiRequest('/api/calendario').then(setEventos);
+      }, []);
+
+      const meses = ['TODOS', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio'];
+
+      const filtrados = eventos.filter(ev => {
+        if (filtroMes === 'TODOS') return true;
+        return (ev.mes || ev.Mes || '').toLowerCase().includes(filtroMes.toLowerCase());
+      });
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+                ← Volver
+              </button>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Calendario Oficial de Actividades SEGEY / USAER</h1>
+            </div>
+            <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
+              {filtrados.length} actividades
+            </span>
+          </div>
+
+          <div className="flex space-x-2 overflow-x-auto pb-2 text-xs">
+            {meses.map(m => (
+              <button
+                key={m}
+                onClick={() => setFiltroMes(m)}
+                className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${
+                  filtroMes === m ? 'bg-amber-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-2.5">
+            {filtrados.map((ev, i) => (
+              <div key={i} className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-center shadow-sm">
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">{ev.actividad || ev.Actividad || ev.nombre}</div>
+                  <div className="text-slate-500 mt-0.5">{ev.tipo || 'Actividad Institucional'} • {ev.responsable || 'Dirección / Zona'}</div>
+                </div>
+                <span className="text-amber-800 font-bold bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 whitespace-nowrap ml-4">
+                  {ev.fecha || ev.Fecha}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 12: DOCENTES REGULARES (71 MAESTROS DE PRIMARIA)
+    // =============================================================
+    function DocentesRegularesView({ onBack, setMetrics }) {
+      const [docentes, setDocentes] = useState([]);
+      const [busqueda, setBusqueda] = useState('');
+
+      useEffect(() => {
+        apiRequest('/api/docentes-regulares').then(setDocentes);
+      }, []);
+
+      const filtrados = docentes.filter(d => 
+        (d.Nombre || d.Docente || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (d.Escuela || '').toLowerCase().includes(busqueda.toLowerCase())
+      );
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+                ← Volver
+              </button>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Directorio de Maestros de Primaria (7 Escuelas)</h1>
+            </div>
+            <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
+              {filtrados.length} maestros
+            </span>
+          </div>
+
+          <input
+            type="text"
+            placeholder="Buscar por nombre de maestro o escuela primaria..."
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filtrados.map((d, i) => (
+              <div key={i} className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs space-y-1 shadow-sm">
+                <div className="font-bold text-slate-900 text-sm">{d.Nombre || d.Docente}</div>
+                <div className="text-slate-600">Escuela: {d.Escuela}</div>
+                <div className="text-slate-500">Grado y Grupo: <strong>{d.Grado_Grupo || d.Grado}</strong></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 13: NOVEDADES DE SUPERVISIÓN (111 DOCUMENTOS ZONA 001)
+    // =============================================================
+    function NovedadesView({ onBack, setMetrics }) {
+      const [novedades, setNovedades] = useState([]);
+      const [busqueda, setBusqueda] = useState('');
+
+      useEffect(() => {
+        apiRequest('/api/novedades').then(setNovedades);
+      }, []);
+
+      const filtradas = novedades.filter(n => 
+        (n.Titulo || n.Asunto || '').toLowerCase().includes(busqueda.toLowerCase())
+      );
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+                ← Volver
+              </button>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Novedades de Supervisión · ATP Zona 001</h1>
+            </div>
+            <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
+              {filtradas.length} documentos oficiales
+            </span>
+          </div>
+
+          <input
+            type="text"
+            placeholder="Buscar en circulares y documentos oficiales..."
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
+          />
+
+          <div className="grid gap-2.5">
+            {filtradas.map((n, i) => (
+              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-center shadow-sm">
+                <div className="space-y-1">
+                  <div className="font-bold text-slate-900 text-sm">{n.Titulo || n.Asunto}</div>
+                  <div className="text-slate-500">{n.Descripcion || 'Circular oficial emitida por la Supervisión Escolar Zona 001.'}</div>
+                </div>
+                {n.Enlace && (
+                  <a
+                    href={n.Enlace}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 whitespace-nowrap ml-4 transition"
+                  >
+                    Ver Documento ↗
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 14: JUNTAS ACADÉMICAS Y RELATORÍAS
+    // =============================================================
+    function JuntasView({ onBack, setMetrics }) {
+      const [juntas, setJuntas] = useState(null);
+
+      useEffect(() => {
+        apiRequest('/api/juntas').then(setJuntas);
+      }, []);
+
+      if (!juntas) return <div className="text-center py-16 text-slate-500 text-sm">Cargando catálogo metodológico...</div>;
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Juntas Académicas y Catálogo de Metodologías</h1>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
+            <h3 className="font-bold text-slate-800 text-sm">Catálogo Oficial de Metodologías Pedagógicas</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              {Object.entries(juntas.catalogo_metodologias || {}).map(([clave, desc]) => (
+                <div key={clave} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                  <div className="font-bold text-amber-800">{clave}</div>
+                  <div className="text-slate-600">{desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 15: METAS PERSONALES
+    // =============================================================
+    function MetasView({ onBack, setMetrics }) {
+      const [metas, setMetas] = useState([]);
+
+      useEffect(() => {
+        apiRequest('/api/metas').then(setMetas);
+      }, []);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Metas Personales Trimestrales</h1>
+          </div>
+
+          <div className="grid gap-3">
+            {metas.map((m, i) => (
+              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span className="text-sm">{m.Docente || m.Especialista}</span>
+                  <span className="text-slate-400 font-normal">{m.Ciclo || '2026-2027'}</span>
+                </div>
+                <div><strong>Meta:</strong> {m.Meta || m.Descripcion}</div>
+                {m.Avance && <div className="text-emerald-700"><strong>Avance Reportado:</strong> {m.Avance}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 16: TRÁMITES
+    // =============================================================
+    function TramitesView({ onBack, setMetrics }) {
+      const [tramites, setTramites] = useState([]);
+
+      useEffect(() => {
+        apiRequest('/api/tramites').then(setTramites);
+      }, []);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Trámites y Solicitudes Administrativas</h1>
+          </div>
+
+          <div className="grid gap-3">
+            {tramites.map((t, i) => (
+              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span className="text-sm">{t.Tipo || t.Asunto}</span>
+                  <span className="text-slate-400 font-normal">{t.Fecha}</span>
+                </div>
+                <div>Solicitante: {t.Solicitante} • Estatus: <strong className="text-amber-800">{t.Estatus || 'En Proceso'}</strong></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 17: INFORMES
+    // =============================================================
+    function InformesView({ onBack, setMetrics }) {
+      const [informes, setInformes] = useState([]);
+
+      useEffect(() => {
+        apiRequest('/api/informes').then(setInformes);
+      }, []);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
+              ← Volver
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Informes y Documentos Pedagógicos</h1>
+          </div>
+
+          <div className="grid gap-3">
+            {informes.map((inf, i) => (
+              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span className="text-sm">{inf.Titulo || inf.Asunto}</span>
+                  <span className="text-slate-400 font-normal">{inf.Fecha}</span>
+                </div>
+                <div>Alumno / Grupo: {inf.Alumno || inf.Escuela}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // =============================================================
+    // VISTA 18: ACTAS DE VISITA Y OFICIOS DE COMISIÓN
     // =============================================================
     function ActasYOficiosView({ onBack, setMetrics }) {
       const [visitas, setVisitas] = useState([]);
       const [oficios, setOficios] = useState([]);
-      const [subTab, setSubTab] = useState('visitas'); // 'visitas' | 'oficios'
+      const [subTab, setSubTab] = useState('visitas');
 
       useEffect(() => {
         const t0 = performance.now();
@@ -1723,7 +2470,7 @@
     }
 
     // =============================================================
-    // VISTA 5: ESTADÍSTICAS INSTITUCIONALES DE ZONA
+    // VISTA 19: ESTADÍSTICAS INSTITUCIONALES DE ZONA
     // =============================================================
     function EstadisticasView({ onBack, setMetrics }) {
       const [stats, setStats] = useState(null);

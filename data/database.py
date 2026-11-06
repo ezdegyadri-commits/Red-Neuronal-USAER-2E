@@ -273,6 +273,21 @@ class BloqueoConcurrencia(Base):
     namespace = Column(String(64), default="usaer2e")
 
 
+class ColeccionInstitucional(Base):
+    __tablename__ = "colecciones_institucionales"
+
+    id = Column(String(128), primary_key=True)
+    modulo = Column(String(64), index=True, nullable=False)
+    registro_id = Column(String(128), index=True, default="")
+    cuenta = Column(String(128), index=True, default="")
+    id_escuela = Column(String(64), index=True, default="")
+    id_alumno = Column(String(64), index=True, default="")
+    fecha = Column(String(64), index=True, default="")
+    estado = Column(String(64), default="ACTIVO")
+    payload_json = Column(Text, default="{}")
+    actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
+
+
 _ENGINE = None
 _SESSION_FACTORY = None
 _LOCK_DB = threading.Lock()

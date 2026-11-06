@@ -54,3 +54,4 @@ Se ejecutó el script de migración sobre un lote sintético de prueba con regis
 - Actualización in situ de campos modificados sin pérdida de historial.
 - Detección precisa de CURP duplicada.
 - Compatible con modo `--dry-run` para pre-visualizar migraciones sin persistir en disco.
+

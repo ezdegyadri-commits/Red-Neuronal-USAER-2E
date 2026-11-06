@@ -30,3 +30,4 @@
    Se erradicó el volcado masivo de expedientes en texto plano dentro de `localStorage`. Los datos sensibles de diagnóstico residen únicamente en la memoria reactiva del componente activo y se descargan bajo demanda restringida.
 5. **Aislamiento Multi-Escuela:**  
    Se probó en [`tests/test_end_to_end_spa.py`](file:///c:/Users/edgar/OneDrive/Escritorio/USAER-2E-Rediseño/tests/test_end_to_end_spa.py) que una maestra de una escuela no puede solicitar ni recibir expedientes pertenecientes a otra primaria.
+

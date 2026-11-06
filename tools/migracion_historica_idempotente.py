@@ -173,3 +173,4 @@ if __name__ == "__main__":
     ]
     rep = ejecutar_migracion_idempotente(muestra, dry_run=False)
     print("Resultado:", json.dumps(rep, indent=2))
+

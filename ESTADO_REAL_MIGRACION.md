@@ -58,3 +58,4 @@ En cumplimiento con la directriz de auditoría estricta de no declarar completa 
 6. [`tools/migracion_historica_idempotente.py`](file:///c:/Users/edgar/OneDrive/Escritorio/USAER-2E-Rediseño/tools/migracion_historica_idempotente.py): Herramienta de sincronización y normalización canónica.
 7. [`tests/test_end_to_end_spa.py`](file:///c:/Users/edgar/OneDrive/Escritorio/USAER-2E-Rediseño/tests/test_end_to_end_spa.py): Suite de 10 pruebas E2E automatizadas.
 8. [`tests/test_concurrencia_25_usuarios.py`](file:///c:/Users/edgar/OneDrive/Escritorio/USAER-2E-Rediseño/tests/test_concurrencia_25_usuarios.py): Prueba de estrés concurrente con 25 hilos simultáneos.
+

@@ -35,3 +35,4 @@ OK
 ```
 
 Todos los contratos de entrada y salida cumplen con los esquemas Pydantic v2 y no se registraron fugas de memoria ni conexiones huérfanas en el motor SQLAlchemy.
+

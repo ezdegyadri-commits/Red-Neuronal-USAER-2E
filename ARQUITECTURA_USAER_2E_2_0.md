@@ -89,3 +89,4 @@ sequenceDiagram
     API-->>SPA: HTTP 200 OK (firmas y nueva revisión)
     Note over SPA: Estado: 'Guardado confirmado'<br/>Latencia: 84 ms
 ```
+

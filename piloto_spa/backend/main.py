@@ -2,19 +2,36 @@
 
 Capa de servicios RESTful de alta velocidad para la versión SPA desacoplada de Streamlit.
 Implementa autenticación con tokens seguros, control de acceso basado en roles (RBAC),
-persistencia relacional, EPP, expedientes, planeaciones (Formatos XXIII, XXV, XIX, XX),
-asistente pedagógico conversacional, anexos oficiales, visitas, oficios e indicadores de la Zona 001.
+persistencia relacional completa (PostgreSQL 17), y todos los módulos institucionales:
+- Mis Documentos y Planeación e Intervención (Formatos XXI, XXIII, XXV, XIX, XX)
+- Alumnos y Expedientes Integrales (con Línea de Tiempo, Adjuntos y Movimientos)
+- Evaluación Psicopedagógica (EPP) Multi-Área
+- Anexo III (BAP), Anexo IV (Hoja de Sugerencias), Anexo V (Eventos Significativos) y Anexo VII (Derivación)
+- Informes Educativos de Seguimiento
+- Cronograma Mensual y Avisos
+- Horarios de Apoyo y Restricciones por Escuela
+- Calendario Institucional de Actividades SEGEY / USAER
+- Juntas Académicas (Cuadro de Metodologías) y Relatorías CTE
+- Metas Personales
+- Trámites de Expedientes
+- Directorio de Maestros de Primaria (Docentes Regulares)
+- Novedades de Supervisión Zona 001
+- Constancias / Actas de Visita y Oficios de Comisión
+- Estadísticas e Indicadores de Zona 001 y Panel de Dirección
 """
 from __future__ import annotations
 
+import gzip
 import io
+import json
+import logging
 import os
 import sys
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import time
 
-# Configurar path raíz para módulos canónicos
 ROOT_DIR = str(Path(__file__).resolve().parents[2])
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
@@ -38,9 +55,9 @@ except ImportError:
     _st.session_state = {}
     sys.modules["streamlit"] = _st
 
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, status, Response, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, status, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 import pandas as pd
 
@@ -57,8 +74,14 @@ from piloto_spa.backend.domain_services import (
     guardar_alumno_nuevo,
     actualizar_alumno_existente,
     obtener_expediente_completo,
+    obtener_anexo3_autorizados,
+    obtener_anexo4_autorizados,
+    obtener_anexo5_autorizados,
+    obtener_anexo7_autorizados,
+    listar_epp_autorizados,
     obtener_epp_documento,
     guardar_epp_documento,
+    listar_planeaciones_autorizadas,
     obtener_planeacion_con_firmas,
     guardar_planeacion_transaccional,
     eliminar_planeacion_documento,
@@ -70,8 +93,23 @@ from piloto_spa.backend.domain_services import (
     guardar_visita_documento,
     obtener_oficios_documentos,
     guardar_oficio_documento,
+    obtener_horarios_modulo,
+    guardar_horario_modulo,
+    obtener_cronogramas_modulo,
+    guardar_cronograma_modulo,
+    obtener_docentes_regulares_autorizados,
+    guardar_docente_regular_modulo,
+    obtener_calendario_modulo,
+    guardar_evento_calendario_modulo,
+    obtener_juntas_y_catalogo,
     chat_asistente_pedagogico,
     obtener_estadisticas_zona,
+)
+from data.sql_repository import (
+    coleccion_listar_sql,
+    coleccion_guardar_sql,
+    configuracion_oficios_sql,
+    guardar_configuracion_oficios_sql,
 )
 from documents.planeacion import generar_pdf as generar_pdf_planeacion
 
@@ -90,52 +128,199 @@ app.add_middleware(
 )
 
 
+def reconciliar_base_datos() -> Dict[str, Any]:
+    """Sincroniza e hidrata el 100% de la información histórica desde semilla_historica_completa.json.gz."""
+    from data.database import (
+        Base,
+        get_engine,
+        get_session,
+        Alumno,
+        Escuela,
+        Personal,
+        Usuario,
+        PlaneacionDoc,
+        EPPDoc,
+        Anexo3Deteccion,
+        Anexo4Sugerencia,
+        Anexo5Evento,
+        Anexo7Derivacion,
+        RegistroVisita,
+        OficioComision,
+        ConfiguracionOficio,
+        DocenteRegular,
+        ColeccionInstitucional,
+    )
+
+    engine = get_engine(initialize_schema=True)
+    Base.metadata.create_all(engine)
+
+    data_dir = Path(__file__).resolve().parents[2] / "data"
+    gz_path = data_dir / "semilla_historica_completa.json.gz"
+    json_path = data_dir / "semilla_datos_reales.json"
+
+    if gz_path.exists():
+        with gzip.open(gz_path, "rt", encoding="utf-8") as f:
+            data = json.load(f)
+    elif json_path.exists():
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        return {"status": "sin_semilla"}
+
+    resumen = {}
+    with get_session() as session:
+        # 1. Escuelas
+        for item in data.get("escuelas", []):
+            obj = session.query(Escuela).filter_by(id=item["id"]).first()
+            if not obj:
+                session.add(Escuela(**item))
+            else:
+                for k, v in item.items():
+                    setattr(obj, k, v)
+        session.commit()
+
+        # 2. Personal
+        for item in data.get("personal", []):
+            obj = session.query(Personal).filter_by(id=item["id"]).first()
+            if not obj:
+                session.add(Personal(**item))
+            else:
+                for k, v in item.items():
+                    setattr(obj, k, v)
+        session.commit()
+
+        # 3. Usuarios
+        for item in data.get("usuarios", []):
+            obj = session.query(Usuario).filter_by(usuario=item["usuario"]).first() or session.query(Usuario).filter_by(id=item["id"]).first()
+            if not obj:
+                session.add(Usuario(**item))
+            else:
+                obj.nombre = item.get("nombre", obj.nombre)
+                obj.usuario = item.get("usuario", obj.usuario)
+                obj.password = item.get("password", obj.password)
+                obj.rol = item.get("rol", obj.rol)
+                obj.escuelas_permitidas = item.get("escuelas_permitidas", obj.escuelas_permitidas)
+        session.commit()
+
+        # 4. Alumnos canónicos (sin romper llaves foráneas previas)
+        ids_canonicos = set()
+        for item in data.get("alumnos", []):
+            aid = item["id"]
+            ids_canonicos.add(aid)
+            obj = session.query(Alumno).filter_by(id=aid).first()
+            if not obj:
+                session.add(Alumno(**item))
+            else:
+                for k, v in item.items():
+                    if hasattr(obj, k):
+                        setattr(obj, k, v)
+        # Cualquier ID antiguo (ALU-001..ALU-034 de carga previa secuencial) que no esté en el padrón canónico se marca como ANULADO_MIGRACION
+        for row_old in session.query(Alumno).all():
+            if row_old.id not in ids_canonicos and not str(row_old.id).startswith("ALU-3"):
+                row_old.estatus = "ANULADO_MIGRACION"
+        session.commit()
+        resumen["alumnos"] = len(ids_canonicos)
+
+        # 5. Planeaciones (167 documentos con JSON reconstruido e íntegro)
+        for item in data.get("planeaciones", []):
+            pid = item["id"]
+            payload_str = item.get("payload_json", "{}")
+            datos_str = item.get("datos_json", "{}")
+            metadatos_str = item.get("metadatos_json", "{}")
+            tablas_str = item.get("tablas_json", "{}")
+            textos_str = item.get("textos_json", "{}")
+            obs_dir = item.get("observaciones_director", "")
+            if payload_str and payload_str != "{}" and datos_str == "{}":
+                try:
+                    parsed = json.loads(payload_str)
+                    if isinstance(parsed, dict):
+                        datos_str = json.dumps(parsed.get("datos", {}), ensure_ascii=False)
+                        metadatos_str = json.dumps(parsed.get("metadatos", {}), ensure_ascii=False)
+                        tablas_str = json.dumps(parsed.get("tablas", {}), ensure_ascii=False)
+                        textos_str = json.dumps(parsed.get("textos", {}), ensure_ascii=False)
+                        obs_dir = str(parsed.get("observaciones_director", obs_dir) or "")
+                except Exception:
+                    pass
+            obj = session.query(PlaneacionDoc).filter_by(id=pid).first()
+            if not obj:
+                session.add(PlaneacionDoc(
+                    id=pid,
+                    cuenta=item.get("cuenta", ""),
+                    formato=item.get("formato", "XXIII"),
+                    estado=item.get("estado", "BORRADOR"),
+                    revision=item.get("revision", ""),
+                    guardado_en=item.get("guardado_en", ""),
+                    datos_json=datos_str,
+                    metadatos_json=metadatos_str,
+                    tablas_json=tablas_str,
+                    textos_json=textos_str,
+                    payload_json=payload_str,
+                    observaciones_director=obs_dir,
+                ))
+            else:
+                # Actualizar si estaba truncado o sin datos_json
+                if not obj.datos_json or obj.datos_json == "{}" or len(payload_str) > len(obj.payload_json or ""):
+                    obj.cuenta = item.get("cuenta", obj.cuenta)
+                    obj.formato = item.get("formato", obj.formato)
+                    obj.estado = item.get("estado", obj.estado)
+                    obj.revision = item.get("revision", obj.revision)
+                    obj.guardado_en = item.get("guardado_en", obj.guardado_en)
+                    obj.datos_json = datos_str
+                    obj.metadatos_json = metadatos_str
+                    obj.tablas_json = tablas_str
+                    obj.textos_json = textos_str
+                    obj.payload_json = payload_str
+                    obj.observaciones_director = obs_dir
+        session.commit()
+        resumen["planeaciones"] = session.query(PlaneacionDoc).count()
+
+        # 6. EPP (9 expedientes multi-área reconstruidos de 249 versiones)
+        for item in data.get("epp", []):
+            eid = item["id"]
+            obj = session.query(EPPDoc).filter_by(id=eid).first()
+            if not obj:
+                session.add(EPPDoc(**item))
+            else:
+                obj.alumno = item.get("alumno", obj.alumno)
+                obj.ciclo = item.get("ciclo", obj.ciclo)
+                obj.estado = item.get("estado", obj.estado)
+                obj.revision = item.get("revision", obj.revision)
+                obj.fecha = item.get("fecha", obj.fecha)
+                obj.partes_json = item.get("partes_json", obj.partes_json)
+        session.commit()
+        resumen["epp"] = session.query(EPPDoc).count()
+
+        # 7. Anexo 3, Anexo 4, Anexo 5, Anexo 7
+        for ModelCls, key_name in [
+            (Anexo3Deteccion, "anexo3"),
+            (Anexo4Sugerencia, "anexo4"),
+            (Anexo5Evento, "anexo5"),
+            (Anexo7Derivacion, "anexo7"),
+            (RegistroVisita, "visitas"),
+            (OficioComision, "oficios"),
+            (ConfiguracionOficio, "configuracion_oficios"),
+            (DocenteRegular, "docentes_regulares"),
+            (ColeccionInstitucional, "colecciones"),
+        ]:
+            items = data.get(key_name, [])
+            if not items:
+                continue
+            existing_ids = {r[0] for r in session.query(ModelCls.id).all()}
+            nuevos = [ModelCls(**it) for it in items if it.get("id") and it["id"] not in existing_ids]
+            if nuevos:
+                session.bulk_save_objects(nuevos)
+                session.commit()
+            resumen[key_name] = session.query(ModelCls).count()
+
+    return resumen
+
+
 @app.on_event("startup")
 def inicializar_base_datos():
-    """Inicializa el esquema relacional y asegura la presencia de los datos reales desde la semilla."""
+    """Inicializa el esquema relacional y asegura la presencia del 100% de los datos históricos."""
     try:
-        from data.database import (
-            get_session,
-            Alumno,
-            Escuela,
-            Personal,
-            Usuario,
-            PlaneacionDoc,
-            EPPDoc,
-            Anexo3Deteccion,
-        )
-        with get_session() as session:
-            num_alumnos = session.query(Alumno).count()
-            if num_alumnos == 0:
-                seed_path = Path(__file__).resolve().parents[2] / "data" / "semilla_datos_reales.json"
-                if seed_path.exists():
-                    import json
-                    with open(seed_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    for item in data.get("escuelas", []):
-                        if not session.query(Escuela).filter_by(id=item["id"]).first():
-                            session.add(Escuela(**item))
-                    for item in data.get("personal", []):
-                        if not session.query(Personal).filter_by(id=item["id"]).first():
-                            session.add(Personal(**item))
-                    for item in data.get("usuarios", []):
-                        if not session.query(Usuario).filter_by(id=item["id"]).first():
-                            session.add(Usuario(**item))
-                    for item in data.get("alumnos", []):
-                        if not session.query(Alumno).filter_by(id=item["id"]).first():
-                            session.add(Alumno(**item))
-                    for item in data.get("planeaciones", []):
-                        if not session.query(PlaneacionDoc).filter_by(id=item["id"]).first():
-                            session.add(PlaneacionDoc(**item))
-                    for item in data.get("epp", []):
-                        if not session.query(EPPDoc).filter_by(id=item["id"]).first():
-                            session.add(EPPDoc(**item))
-                    for item in data.get("anexo3", []):
-                        if not session.query(Anexo3Deteccion).filter_by(id=item["id"]).first():
-                            session.add(Anexo3Deteccion(**item))
-                    session.commit()
+        reconciliar_base_datos()
     except Exception as exc:
-        import logging
         logging.getLogger("uvicorn").error("Error inicializando semilla relacional: %s", exc)
 
 
@@ -151,6 +336,13 @@ def estado_base_datos():
         PlaneacionDoc,
         EPPDoc,
         Anexo3Deteccion,
+        Anexo4Sugerencia,
+        Anexo5Evento,
+        Anexo7Derivacion,
+        RegistroVisita,
+        OficioComision,
+        DocenteRegular,
+        ColeccionInstitucional,
         is_postgres,
         get_database_url,
     )
@@ -173,24 +365,29 @@ def estado_base_datos():
             "escuelas": session.query(Escuela).count(),
             "personal": session.query(Personal).count(),
             "usuarios": session.query(Usuario).count(),
-            "alumnos": session.query(Alumno).count(),
+            "alumnos_activos": session.query(Alumno).filter(Alumno.estatus == "ACTIVO").count(),
+            "alumnos_total": session.query(Alumno).filter(Alumno.estatus != "ANULADO_MIGRACION").count(),
             "planeaciones": session.query(PlaneacionDoc).count(),
             "epp": session.query(EPPDoc).count(),
             "anexo3_bap": session.query(Anexo3Deteccion).count(),
-            "estado": "OK - Base de datos operativa y sincronizada",
+            "anexo4_sugerencias": session.query(Anexo4Sugerencia).count(),
+            "anexo5_eventos": session.query(Anexo5Evento).count(),
+            "anexo7_derivaciones": session.query(Anexo7Derivacion).count(),
+            "visitas": session.query(RegistroVisita).count(),
+            "oficios": session.query(OficioComision).count(),
+            "docentes_regulares": session.query(DocenteRegular).count(),
+            "colecciones_institucionales": session.query(ColeccionInstitucional).count(),
+            "estado": "OK - Base de datos histórica completa y sincronizada",
         }
+
 
 # -------------------------------------------------------------
 # MODELOS PYDANTIC PARA CONTRATOS DE ENTRADA Y SALIDA
 # -------------------------------------------------------------
-
 class LoginPayload(BaseModel):
     usuario: str
     password: str
 
-class LoginResponse(BaseModel):
-    token: str
-    user: SessionUser
 
 class AlumnoPayload(BaseModel):
     id: Optional[str] = None
@@ -198,7 +395,7 @@ class AlumnoPayload(BaseModel):
     curp: str = ""
     edad_1_septiembre: str = ""
     sexo: str = "Hombre"
-    situacion_alumno: str = "INSCRITO"
+    situacion_alumno: str = "CON"
     nivel_educativo: str = "Primaria"
     grado: str = "1"
     grupo: str = "A"
@@ -207,7 +404,8 @@ class AlumnoPayload(BaseModel):
     maestra_apoyo: str = ""
     condicion_discapacidad: str = "TDAH"
     estatus: str = "ACTIVO"
-    tipo_atencion: str = "Atención Focalizada"
+    tipo_atencion: str = "Grupal"
+
 
 class PlaneacionPayload(BaseModel):
     id: Optional[str] = None
@@ -220,22 +418,26 @@ class PlaneacionPayload(BaseModel):
     textos: Dict[str, str] = Field(default_factory=dict)
     observaciones_director: str = ""
 
+
 class EPPPayload(BaseModel):
     id: str
     alumno: str
     ciclo: str = "2026-2027"
     partes: Dict[str, Any] = Field(default_factory=dict)
 
+
 class AIChatPayload(BaseModel):
     mensaje: str
     alumno_id: Optional[str] = None
     planeacion_id: Optional[str] = None
+
 
 class AISugerenciaPayload(BaseModel):
     area: str = "Aprendizaje"
     necesidad_o_barrera: str
     grado: str = "2"
     condicion: str = "General"
+
 
 class Anexo3Payload(BaseModel):
     id: Optional[str] = None
@@ -246,9 +448,13 @@ class Anexo3Payload(BaseModel):
     bap_pedagogicas: str = ""
     bap_organizativas: str = ""
 
+
 class Anexo4Payload(BaseModel):
     id: Optional[str] = None
     id_alumno: str
+    nombre_alumno: str = ""
+    grado_grupo: str = ""
+    escuela: str = ""
     fecha_elaboracion: str = ""
     ciclo_escolar: str = "2026-2027"
     trimestre: str = "1"
@@ -259,9 +465,10 @@ class Anexo4Payload(BaseModel):
     fecha_seguimiento: str = ""
     nivel_cumplimiento_resultados: str = ""
 
+
 class Anexo5Payload(BaseModel):
     id: Optional[str] = None
-    id_alumno: str
+    id_alumno: str = ""
     fecha: str = ""
     nombre_alumno: str = ""
     grado_grupo: str = ""
@@ -269,6 +476,21 @@ class Anexo5Payload(BaseModel):
     evento: str = ""
     id_escuela: str = ""
     escuela: str = ""
+
+
+class Anexo7Payload(BaseModel):
+    id: Optional[str] = None
+    id_alumno: str = ""
+    fecha: str = ""
+    escuela: str = ""
+    docente_regular: str = ""
+    fecha_nacimiento: str = ""
+    salud: str = ""
+    seguimiento_medico: str = ""
+    aspecto_relevante: str = ""
+    elaborado_por: str = ""
+    respuestas: Any = Field(default_factory=list)
+
 
 class VisitaPayload(BaseModel):
     id: Optional[str] = None
@@ -279,6 +501,7 @@ class VisitaPayload(BaseModel):
     observaciones: str = ""
     tipo_acta: str = "Acompañamiento"
     lugar: str = "Mérida, Yucatán"
+
 
 class OficioPayload(BaseModel):
     id: Optional[str] = None
@@ -294,25 +517,20 @@ class OficioPayload(BaseModel):
     destino: str = ""
     horario: str = ""
 
-# -------------------------------------------------------------
-# 1. AUTENTICACIÓN Y SESIÓN (SEGURA Y CON TOKENS)
-# -------------------------------------------------------------
 
+# -------------------------------------------------------------
+# 1. AUTENTICACIÓN Y SESIÓN
+# -------------------------------------------------------------
 @app.get("/api/health")
 def healthcheck():
-    """Monitoreo de estado y keep-alive de disponibilidad."""
     return {"status": "ok", "version": "2.0.0", "timestamp": time.time()}
 
 
 @app.post("/api/auth/login")
 def login_endpoint(payload: LoginPayload):
-    """Autentica credenciales y emite un token de sesión criptográfico."""
     user = autenticar_usuario(payload.usuario, payload.password)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario o contraseña incorrectos."
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario o contraseña incorrectos.")
     token = emitir_token_sesion(user)
     return {
         "token": token,
@@ -323,54 +541,59 @@ def login_endpoint(payload: LoginPayload):
             "rol": getattr(user, "rol", "DIRECTOR"),
             "escuelas_permitidas": getattr(user, "escuelas_permitidas", ["TODAS"]),
             "director": getattr(user, "director", True),
-            "area": getattr(user, "area", "Dirección")
-        }
+            "area": getattr(user, "area", "Dirección"),
+        },
     }
 
 
 @app.get("/api/me", response_model=SessionUser)
 def obtener_perfil_actual(user: SessionUser = Depends(validar_token_sesion)):
-    """Retorna los datos y alcance de autorización del usuario autenticado."""
     return user
 
 
 @app.post("/api/auth/logout")
 def logout_endpoint(authorization: Optional[str] = Header(None)):
-    """Invalida la sesión actual de forma inmediata en el servidor."""
     cerrar_sesion(authorization)
     return {"status": "success", "mensaje": "Sesión cerrada correctamente."}
+
 
 # -------------------------------------------------------------
 # 2. ESCUELAS Y PADRÓN DE ALUMNOS (RBAC)
 # -------------------------------------------------------------
-
 @app.get("/api/escuelas")
 def listar_escuelas(user: SessionUser = Depends(validar_token_sesion)):
-    """Retorna las 8 primarias oficiales de la Zona 001."""
-    return obtener_catalogo_escuelas()
+    todas = obtener_catalogo_escuelas()
+    if user.director or "TRABAJO" in user.rol.upper() or "TODAS" in user.escuelas_permitidas:
+        return todas
+    permitidas = {str(e).strip() for e in user.escuelas_permitidas}
+    filtradas = [e for e in todas if e["id"] in permitidas]
+    return filtradas or todas
 
 
 @app.get("/api/alumnos")
 def listar_alumnos(
     escuela: Optional[str] = None,
-    user: SessionUser = Depends(validar_token_sesion)
+    incluir_inactivos: bool = False,
+    user: SessionUser = Depends(validar_token_sesion),
 ):
-    """Padrón de alumnos autorizado según el rol del usuario."""
     alumnos = obtener_alumnos_autorizados(
         usuario_rol=user.rol,
         escuelas_permitidas=user.escuelas_permitidas,
-        nombre_docente=user.nombre
+        nombre_docente=user.nombre,
+        incluir_inactivos=incluir_inactivos,
     )
     if escuela:
         escuela_norm = escuela.strip().lower()
-        alumnos = [a for a in alumnos if escuela_norm in str(a.get("escuela", "")).lower() or escuela_norm in str(a.get("id_escuela", "")).lower()]
+        alumnos = [
+            a for a in alumnos
+            if escuela_norm in str(a.get("escuela", "")).lower() or escuela_norm in str(a.get("id_escuela", "")).lower()
+        ]
     return alumnos
 
 
 @app.post("/api/alumnos")
 def crear_alumno(payload: AlumnoPayload, user: SessionUser = Depends(validar_token_sesion)):
-    """Registra un nuevo alumno en la base de datos."""
-    if not user.director and payload.id_escuela not in user.escuelas_permitidas:
+    if not user.director and "TODAS" not in user.escuelas_permitidas and payload.id_escuela not in user.escuelas_permitidas:
         raise HTTPException(status_code=403, detail="No tiene permisos para agregar alumnos en esta escuela.")
     doc_dict = {
         "Nombre_Completo": payload.nombre_completo,
@@ -397,8 +620,7 @@ def crear_alumno(payload: AlumnoPayload, user: SessionUser = Depends(validar_tok
 
 @app.put("/api/alumnos/{alumno_id}")
 def editar_alumno(alumno_id: str, payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
-    """Edita un alumno existente validando permisos de escuela."""
-    alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas)
+    alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas, user.nombre, incluir_inactivos=True)
     allowed_ids = [a["id"] for a in alumnos]
     if alumno_id not in allowed_ids and not user.director:
         raise HTTPException(status_code=403, detail="No tiene permisos para modificar este alumno.")
@@ -411,100 +633,204 @@ def editar_alumno(alumno_id: str, payload: Dict[str, Any], user: SessionUser = D
 
 @app.get("/api/alumnos/exportar")
 def exportar_alumnos_csv(user: SessionUser = Depends(validar_token_sesion)):
-    """Exporta el padrón autorizado en formato CSV para respaldos."""
-    alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas)
+    alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
     df = pd.DataFrame(alumnos)
     csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
     return Response(
         content=csv_bytes,
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="Padron_Alumnos_USAER_2E.csv"'}
+        headers={"Content-Disposition": 'attachment; filename="Padron_Alumnos_USAER_2E.csv"'},
     )
 
+
 def _verificar_acceso_alumno(alumno_id: str, user: SessionUser) -> Dict[str, Any]:
-    """Valida autorización en backend según rol y escuelas permitidas."""
-    alumnos = obtener_alumnos_autorizados("DIRECTOR", ["TODAS"])
+    if str(alumno_id).startswith("GRUPO-") or str(alumno_id) == "GRUPAL":
+        return {"id": alumno_id, "nombre_completo": alumno_id}
+    alumnos = obtener_alumnos_autorizados("DIRECTOR", ["TODAS"], incluir_inactivos=True)
     alumno = next((a for a in alumnos if str(a.get("id")) == str(alumno_id)), None)
     if not alumno:
         raise HTTPException(status_code=404, detail=f"Alumno {alumno_id} no encontrado en el padrón central.")
-
-    if user.director:
+    if user.director or "TRABAJO" in user.rol.upper() or "TODAS" in user.escuelas_permitidas:
         return alumno
-
     escuela_alumno = str(alumno.get("id_escuela", "")).strip()
     permitidas = {str(e).strip() for e in user.escuelas_permitidas}
-    if "TODAS" not in permitidas and escuela_alumno not in permitidas:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Acceso denegado: el alumno {alumno_id} pertenece a un centro de trabajo no asignado a su cuenta ({escuela_alumno})."
-        )
+    if escuela_alumno not in permitidas:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado a este centro de trabajo.")
     return alumno
 
-# -------------------------------------------------------------
-# 3. EXPEDIENTES Y SEGUIMIENTO EDUCATIVO
-# -------------------------------------------------------------
 
+# -------------------------------------------------------------
+# 3. EXPEDIENTES Y MÓDULOS DEDICADOS DE ANEXOS III, IV, V Y VII
+# -------------------------------------------------------------
 @app.get("/api/expedientes/{alumno_id}")
 def ver_expediente(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    """Expediente integral con verificación estricta de autorización por escuela."""
     _verificar_acceso_alumno(alumno_id, user)
     return obtener_expediente_completo(alumno_id)
+
+
+@app.get("/api/anexo3")
+def listar_anexo3_endpoint(user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_anexo3_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
+
+
+@app.post("/api/anexo3")
+def crear_anexo3(payload: Anexo3Payload, user: SessionUser = Depends(validar_token_sesion)):
+    _verificar_acceso_alumno(payload.id_alumno, user)
+    doc = {
+        "ID_Anexo3": payload.id or f"AN3-{uuid.uuid4().hex[:6].upper()}",
+        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
+        "ID_Alumno": payload.id_alumno,
+        "ID_Personal": user.nombre,
+        "BAP_Fisicas": payload.bap_fisicas,
+        "BAP_Actitudinales": payload.bap_actitudinales,
+        "BAP_Pedagogicas": payload.bap_pedagogicas,
+        "BAP_Organizativas": payload.bap_organizativas,
+        "Estatus_IA": "VALIDADO",
+        "Estado": "ACTIVO",
+    }
+    aid = guardar_anexo3_documento(doc)
+    return {"status": "success", "id": aid, "mensaje": "Detección de BAP (Anexo III) registrada correctamente."}
+
+
+@app.get("/api/anexo4")
+def listar_anexo4_endpoint(user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_anexo4_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
+
+
+@app.post("/api/anexo4")
+def crear_anexo4(payload: Anexo4Payload, user: SessionUser = Depends(validar_token_sesion)):
+    if payload.id_alumno and payload.id_alumno.startswith("ALU-"):
+        _verificar_acceso_alumno(payload.id_alumno, user)
+    obs_meta = json.dumps({
+        "nombre_alumno": payload.nombre_alumno or payload.id_alumno,
+        "grado_grupo": payload.grado_grupo,
+        "escuela": payload.escuela,
+        "servicio_ee": "USAER 2E",
+    }, ensure_ascii=False)
+    doc = {
+        "ID_Anexo4": payload.id or f"AN4-{uuid.uuid4().hex[:6].upper()}",
+        "ID_Alumno": payload.id_alumno or payload.nombre_alumno or "GRUPAL",
+        "Fecha_Elaboracion": payload.fecha_elaboracion or time.strftime("%Y-%m-%d"),
+        "Ciclo_Escolar": payload.ciclo_escolar,
+        "Trimestre": payload.trimestre,
+        "Docente_Especialista": payload.docente_especialista or user.nombre,
+        "Area": payload.area,
+        "Sugerencias_Area": payload.area,
+        "Sugerencias": payload.sugerencias,
+        "Motivo": payload.motivo,
+        "Fecha_Seguimiento": payload.fecha_seguimiento,
+        "Nivel_Cumplimiento_Resultados": payload.nivel_cumplimiento_resultados or "En seguimiento",
+        "Observaciones": obs_meta,
+        "Estado": "ACTIVA",
+    }
+    aid = guardar_anexo4_documento(doc)
+    return {"status": "success", "id": aid, "mensaje": "Hoja de sugerencias (Anexo IV) guardada correctamente."}
+
+
+@app.get("/api/anexo5")
+def listar_anexo5_endpoint(user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_anexo5_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
+
+
+@app.post("/api/anexo5")
+def crear_anexo5(payload: Anexo5Payload, user: SessionUser = Depends(validar_token_sesion)):
+    if payload.id_alumno and payload.id_alumno.startswith("ALU-"):
+        alu = _verificar_acceso_alumno(payload.id_alumno, user)
+        if not payload.nombre_alumno:
+            payload.nombre_alumno = alu.get("nombre_completo", "")
+        if not payload.escuela:
+            payload.escuela = alu.get("escuela", "")
+        if not payload.id_escuela:
+            payload.id_escuela = alu.get("id_escuela", "")
+        if not payload.grado_grupo:
+            payload.grado_grupo = f"{alu.get('grado', '')}° {alu.get('grupo', '')}"
+    doc = {
+        "ID_Evento": payload.id or f"AN5-{uuid.uuid4().hex[:6].upper()}",
+        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
+        "Nombre_Alumno": payload.nombre_alumno,
+        "Grado_Grupo": payload.grado_grupo,
+        "Especialista": payload.especialista or user.nombre,
+        "Evento": payload.evento,
+        "Estado": "ACTIVO",
+        "ID_Alumno": payload.id_alumno,
+        "ID_Escuela": payload.id_escuela,
+        "Escuela": payload.escuela,
+    }
+    aid = guardar_anexo5_documento(doc)
+    return {"status": "success", "id": aid, "mensaje": "Evento significativo (Anexo V) registrado correctamente."}
+
+
+@app.get("/api/anexo7")
+def listar_anexo7_endpoint(user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_anexo7_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
+
+
+@app.post("/api/anexo7")
+def crear_anexo7(payload: Anexo7Payload, user: SessionUser = Depends(validar_token_sesion)):
+    doc = {
+        "ID_Anexo7": payload.id or f"AN7-{uuid.uuid4().hex[:6].upper()}",
+        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
+        "ID_Alumno": payload.id_alumno,
+        "Escuela": payload.escuela,
+        "Docente_Regular": payload.docente_regular,
+        "Fecha_Nacimiento": payload.fecha_nacimiento,
+        "Respuestas_JSON": json.dumps(payload.respuestas, ensure_ascii=False) if not isinstance(payload.respuestas, str) else payload.respuestas,
+        "Salud": payload.salud,
+        "Seguimiento_Medico": payload.seguimiento_medico,
+        "Aspecto_Relevante": payload.aspecto_relevante,
+        "Elaborado_Por": payload.elaborado_por or user.nombre,
+    }
+    aid = guardar_anexo7_documento(doc)
+    return {"status": "success", "id": aid, "mensaje": "Ficha de derivación (Anexo VII) guardada correctamente."}
+
 
 # -------------------------------------------------------------
 # 4. EVALUACIÓN PSICOPEDAGÓGICA (EPP) MULTI-ÁREA
 # -------------------------------------------------------------
+@app.get("/api/epp")
+def listar_epps_endpoint(user: SessionUser = Depends(validar_token_sesion)):
+    return listar_epp_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
+
 
 @app.get("/api/epp/{alumno_id}")
 def consultar_epp(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    """Recupera el informe EPP verificando pertenencia del alumno a la escuela del usuario."""
     _verificar_acceso_alumno(alumno_id, user)
     return obtener_epp_documento(alumno_id)
 
 
 @app.post("/api/epp")
 def guardar_epp(payload: EPPPayload, user: SessionUser = Depends(validar_token_sesion)):
-    """Guarda o actualiza el informe EPP verificando permisos sobre el alumno."""
     _verificar_acceso_alumno(payload.alumno, user)
     return guardar_epp_documento(payload.model_dump(), autor_cuenta=user.usuario)
 
-# -------------------------------------------------------------
-# 5. PLANEACIÓN PEDAGÓGICA (FORMATOS XXIII, XXV, XIX, XX)
-# -------------------------------------------------------------
 
+# -------------------------------------------------------------
+# 5. PLANEACIÓN PEDAGÓGICA (FORMATOS XXI, XXIII, XXV, XIX, XX)
+# -------------------------------------------------------------
 @app.get("/api/planeaciones")
 def listar_planeaciones(user: SessionUser = Depends(validar_token_sesion)):
-    """Lista resumida de planeaciones con límite duro para el usuario activo."""
-    from data.sql_repository import planeaciones_resumen_sql
-    return planeaciones_resumen_sql(cuenta=user.usuario, es_director=user.director)
+    return listar_planeaciones_autorizadas(
+        cuenta=user.usuario,
+        usuario_rol=user.rol,
+        escuelas_permitidas=user.escuelas_permitidas,
+        nombre_docente=user.nombre,
+        es_director=user.director,
+    )
 
 
 @app.get("/api/planeaciones/{doc_id}")
 def obtener_planeacion(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    """Documento de planeación completo con cálculo oficial de firmas y verificación de permisos."""
-    doc = obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
-    if not user.director:
-        doc_cuenta = str(doc.get("cuenta", "")).strip()
-        doc_escuela = str(doc.get("datos", {}).get("Escuela", "")).strip()
-        alumnos_user = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas)
-        escuelas_nombres = {str(a.get("escuela", "")).strip() for a in alumnos_user}
-        if doc_cuenta != user.usuario and doc_escuela not in escuelas_nombres and "TODAS" not in user.escuelas_permitidas:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado: esta planeación pertenece a otro docente o centro de trabajo no autorizado."
-            )
-    return doc
+    return obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
 
 
 @app.post("/api/planeaciones")
 def guardar_planeacion(payload: PlaneacionPayload, user: SessionUser = Depends(validar_token_sesion)):
-    """Guarda planeación con control de versiones y verificación de concurrencia."""
     doc_dict = payload.model_dump()
     return guardar_planeacion_transaccional(doc_dict, autor_cuenta=user.usuario)
 
 
 @app.delete("/api/planeaciones/{doc_id}")
 def eliminar_planeacion_endpoint(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    """Elimina una planeación tras confirmación explícita del docente."""
     ok = eliminar_planeacion_documento(doc_id, usuario_cuenta=user.usuario, es_director=user.director)
     if not ok:
         raise HTTPException(status_code=404, detail="No se encontró la planeación o no tiene permisos para eliminarla.")
@@ -513,111 +839,28 @@ def eliminar_planeacion_endpoint(doc_id: str, user: SessionUser = Depends(valida
 
 @app.get("/api/planeaciones/{doc_id}/pdf")
 def descargar_planeacion_pdf(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    """Genera la exportación oficial en PDF con los sellos y firmas de la Zona 001."""
     doc = obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
     try:
         pdf_bytes = generar_pdf_planeacion(doc)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generando PDF de planeación: {exc}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error generando PDF de planeación: {exc}")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="Planeacion_{doc_id}.pdf"'}
+        headers={"Content-Disposition": f'attachment; filename="Planeacion_{doc_id}.pdf"'},
     )
 
-# -------------------------------------------------------------
-# 6. ANEXOS III, IV, V Y VII (BAP, SUGERENCIAS, EVENTOS, DERIVACIÓN)
-# -------------------------------------------------------------
-
-@app.post("/api/anexo3")
-def crear_anexo3(payload: Anexo3Payload, user: SessionUser = Depends(validar_token_sesion)):
-    """Guarda registro de detección de BAP (Anexo III)."""
-    _verificar_acceso_alumno(payload.id_alumno, user)
-    doc = {
-        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
-        "ID_Alumno": payload.id_alumno,
-        "ID_Personal": user.id_usuario,
-        "BAP_Fisicas": payload.bap_fisicas,
-        "BAP_Actitudinales": payload.bap_actitudinales,
-        "BAP_Pedagogicas": payload.bap_pedagogicas,
-        "BAP_Organizativas": payload.bap_organizativas,
-        "Estatus_IA": "VALIDADO",
-        "Estado": "ACTIVO"
-    }
-    aid = guardar_anexo3_documento(doc)
-    return {"status": "success", "id": aid, "mensaje": "BAP registrada correctamente."}
-
-
-@app.post("/api/anexo4")
-def crear_anexo4(payload: Anexo4Payload, user: SessionUser = Depends(validar_token_sesion)):
-    """Guarda sugerencias técnico pedagógicas a docente regular (Anexo IV)."""
-    _verificar_acceso_alumno(payload.id_alumno, user)
-    doc = {
-        "ID_Alumno": payload.id_alumno,
-        "Fecha_Elaboracion": payload.fecha_elaboracion or time.strftime("%Y-%m-%d"),
-        "Ciclo_Escolar": payload.ciclo_escolar,
-        "Trimestre": payload.trimestre,
-        "Docente_Especialista": payload.docente_especialista or user.nombre,
-        "Area": payload.area,
-        "Sugerencias": payload.sugerencias,
-        "Motivo": payload.motivo,
-        "Fecha_Seguimiento": payload.fecha_seguimiento,
-        "Nivel_Cumplimiento_Resultados": payload.nivel_cumplimiento_resultados,
-        "Estado": "ACTIVA"
-    }
-    aid = guardar_anexo4_documento(doc)
-    return {"status": "success", "id": aid, "mensaje": "Sugerencias guardadas correctamente."}
-
-
-@app.post("/api/anexo5")
-def crear_anexo5(payload: Anexo5Payload, user: SessionUser = Depends(validar_token_sesion)):
-    """Guarda hoja de evento significativo (Anexo V)."""
-    _verificar_acceso_alumno(payload.id_alumno, user)
-    doc = {
-        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
-        "Nombre_Alumno": payload.nombre_alumno,
-        "Grado_Grupo": payload.grado_grupo,
-        "Especialista": payload.especialista or user.nombre,
-        "Evento": payload.evento,
-        "Estado": "ACTIVO",
-        "ID_Alumno": payload.id_alumno,
-        "ID_Escuela": payload.id_escuela,
-        "Escuela": payload.escuela,
-    }
-    aid = guardar_anexo5_documento(doc)
-    return {"status": "success", "id": aid, "mensaje": "Evento significativo registrado correctamente."}
-
-    """Guarda hoja de evento significativo (Anexo V)."""
-    doc = {
-        "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
-        "Nombre_Alumno": payload.nombre_alumno,
-        "Grado_Grupo": payload.grado_grupo,
-        "Especialista": payload.especialista or user.nombre,
-        "Evento": payload.evento,
-        "Estado": "ACTIVO",
-        "ID_Alumno": payload.id_alumno,
-        "ID_Escuela": payload.id_escuela,
-        "Escuela": payload.escuela,
-    }
-    aid = guardar_anexo5_documento(doc)
-    return {"status": "success", "id": aid, "mensaje": "Evento significativo registrado correctamente."}
 
 # -------------------------------------------------------------
-# 7. ACTAS DE VISITA Y OFICIOS DE COMISIÓN
+# 6. ACTAS DE VISITA Y OFICIOS DE COMISIÓN
 # -------------------------------------------------------------
-
 @app.get("/api/visitas")
 def listar_visitas(escuela: Optional[str] = None, user: SessionUser = Depends(validar_token_sesion)):
-    """Consulta actas de visitas de acompañamiento técnico."""
-    return obtener_visitas_documentos(escuela)
+    return obtener_visitas_documentos(escuela, user.rol, user.escuelas_permitidas, user.nombre)
 
 
 @app.post("/api/visitas")
 def crear_visita(payload: VisitaPayload, user: SessionUser = Depends(validar_token_sesion)):
-    """Registra acta de visita técnica."""
     doc = {
         "Fecha": payload.fecha or time.strftime("%Y-%m-%d"),
         "Escuela": payload.escuela,
@@ -626,62 +869,283 @@ def crear_visita(payload: VisitaPayload, user: SessionUser = Depends(validar_tok
         "Observaciones": payload.observaciones,
         "Tipo_Acta": payload.tipo_acta,
         "Lugar": payload.lugar,
-        "Estatus": "GUARDADA"
+        "Estatus": "GENERADA",
     }
     vid = guardar_visita_documento(doc)
-    return {"status": "success", "id": vid, "mensaje": "Acta de visita guardada correctamente."}
+    return {"status": "success", "id": vid, "mensaje": "Constancia / Acta de visita guardada correctamente."}
 
 
 @app.get("/api/oficios")
 def listar_oficios(escuela: Optional[str] = None, user: SessionUser = Depends(validar_token_sesion)):
-    """Consulta oficios de comisión oficiales de la zona."""
-    return obtener_oficios_documentos(escuela)
+    return obtener_oficios_documentos(escuela, user.rol, user.escuelas_permitidas, user.nombre)
 
 
 @app.post("/api/oficios")
 def crear_oficio(payload: OficioPayload, user: SessionUser = Depends(validar_token_sesion)):
-    """Emite un oficio de comisión oficial."""
     doc = {
-        "Folio": payload.folio or f"OF-2026-{int(time.time())%1000:03d}",
-        "Clave_Operacion": payload.clave_operacion,
+        "Folio": payload.folio,
+        "Clave_Operacion": payload.clave_operacion or f"{payload.maestra_apoyo}|{payload.escuela}|{payload.fecha_comision}|{payload.asunto}",
         "Fecha_Emision": payload.fecha_emision or time.strftime("%Y-%m-%d"),
-        "Fecha_Comision": payload.fecha_comision,
+        "Fecha_Comision": payload.fecha_comision or time.strftime("%Y-%m-%d"),
         "Escuela": payload.escuela,
         "ID_Escuela": payload.id_escuela,
-        "Maestra_Apoyo": payload.maestra_apoyo,
+        "Maestra_Apoyo": payload.maestra_apoyo or user.nombre,
         "Director_Escuela": payload.director_escuela,
         "Asunto": payload.asunto,
         "Destino": payload.destino,
-        "Horario": payload.horario,
-        "Estado": "ACTIVO"
+        "Horario": payload.horario or "en su horario laboral",
+        "Estado": "GENERADO",
     }
-    oid = guardar_oficio_documento(doc)
-    return {"status": "success", "id": oid, "mensaje": "Oficio de comisión emitido correctamente."}
+    res = guardar_oficio_documento(doc)
+    return {"status": "success", "oficio": res, "mensaje": "Oficio de comisión emitido correctamente."}
+
+
+@app.get("/api/oficios/configuracion")
+def obtener_config_oficios(user: SessionUser = Depends(validar_token_sesion)):
+    df = configuracion_oficios_sql()
+    return df.to_dict(orient="records") if not df.empty else []
+
+
+@app.post("/api/oficios/configuracion")
+def guardar_config_oficios(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    payload["Actualizado_Por"] = user.nombre
+    payload["Actualizado_En"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    return guardar_configuracion_oficios_sql(payload)
+
+
+# -------------------------------------------------------------
+# 7. HORARIOS, CRONOGRAMAS, CALENDARIO, MAESTROS PRIMARIA, NOVEDADES, JUNTAS, METAS, TRÁMITES E INFORMES
+# -------------------------------------------------------------
+@app.get("/api/horarios")
+def listar_horarios(user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_horarios_modulo(user.rol, user.escuelas_permitidas, user.nombre)
+
+
+@app.post("/api/horarios")
+def guardar_horario(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    return guardar_horario_modulo(payload, user.nombre)
+
+
+@app.get("/api/cronogramas")
+def listar_cronogramas(user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_cronogramas_modulo(user.rol, user.escuelas_permitidas, user.nombre)
+
+
+@app.post("/api/cronogramas")
+def guardar_cronograma(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    return guardar_cronograma_modulo(payload, user.nombre)
+
+
+@app.get("/api/calendario")
+def listar_calendario(mes: Optional[str] = None, user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_calendario_modulo(mes)
+
+
+@app.post("/api/calendario")
+def crear_evento_calendario(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    return guardar_evento_calendario_modulo(payload, user.nombre)
+
+
+@app.get("/api/docentes-regulares")
+def listar_docentes_primaria(user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_docentes_regulares_autorizados(user.rol, user.escuelas_permitidas)
+
+
+@app.post("/api/docentes-regulares")
+def crear_docente_primaria(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    did = guardar_docente_regular_modulo(payload)
+    return {"status": "success", "id": did, "mensaje": "Docente de primaria registrado correctamente."}
+
+
+@app.get("/api/novedades")
+def listar_novedades(user: SessionUser = Depends(validar_token_sesion)):
+    return coleccion_listar_sql("novedades_supervision")
+
+
+@app.post("/api/novedades")
+def crear_novedad(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    did = str(payload.get("id") or f"nov-{uuid.uuid4().hex[:8]}")
+    doc = {
+        "ID_Documento": did,
+        "Nombre": str(payload.get("nombre") or "").strip(),
+        "Seccion": str(payload.get("seccion") or "General").strip(),
+        "Tipo": str(payload.get("tipo") or "documento").strip(),
+        "Enlace": str(payload.get("enlace") or "").strip(),
+        "Extracto": str(payload.get("extracto") or "").strip(),
+        "Modificado_En": time.strftime("%Y-%m-%d"),
+        "Estado_Lectura": "Disponible",
+        "Estado": "VIGENTE",
+    }
+    coleccion_guardar_sql("novedades_supervision", did, doc, cuenta=user.usuario, fecha=doc["Modificado_En"])
+    return {"status": "success", "id": did, "documento": doc}
+
+
+@app.get("/api/juntas")
+def listar_juntas(user: SessionUser = Depends(validar_token_sesion)):
+    return obtener_juntas_y_catalogo(user.usuario, es_director=user.director)
+
+
+@app.post("/api/juntas")
+def guardar_junta(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    reg_id = str(payload.get("id") or f"junta-{user.usuario}-{payload.get('fecha_sesion', time.strftime('%Y-%m-%d'))}")
+    doc = {
+        "id": reg_id,
+        "cuenta": user.usuario,
+        "docente": user.nombre,
+        "area": user.area,
+        "fecha_sesion": str(payload.get("fecha_sesion") or time.strftime("%Y-%m-%d")),
+        "codigo": str(payload.get("codigo") or ""),
+        "necesidad": str(payload.get("necesidad") or ""),
+        "A": bool(payload.get("A", False)),
+        "C": bool(payload.get("C", False)),
+        "P": bool(payload.get("P", False)),
+        "aplicacion_prevista": str(payload.get("aplicacion_prevista") or ""),
+        "evidencia_seguimiento": str(payload.get("evidencia_seguimiento") or ""),
+        "guardado_en": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    coleccion_guardar_sql("juntas_academicas", reg_id, doc, cuenta=user.usuario, fecha=doc["fecha_sesion"])
+    return {"status": "success", "id": reg_id, "documento": doc}
+
+
+@app.get("/api/relatorias")
+def listar_relatorias(user: SessionUser = Depends(validar_token_sesion)):
+    return coleccion_listar_sql("relatorias")
+
+
+@app.post("/api/relatorias")
+def guardar_relatoria(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    reg_id = str(payload.get("id") or f"rel-{uuid.uuid4().hex[:8]}")
+    doc = {
+        "id": reg_id,
+        "fecha": str(payload.get("fecha") or time.strftime("%Y-%m-%d")),
+        "sesion": str(payload.get("sesion") or "Consejo Técnico Escolar"),
+        "tipo_junta": str(payload.get("tipo_junta") or "CTE"),
+        "modalidad": str(payload.get("modalidad") or "Presencial"),
+        "tema": str(payload.get("tema") or ""),
+        "cuerpo": str(payload.get("cuerpo") or ""),
+        "acuerdos": str(payload.get("acuerdos") or ""),
+        "autor": user.nombre,
+        "guardado_en": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    coleccion_guardar_sql("relatorias", reg_id, doc, cuenta=user.usuario, fecha=doc["fecha"])
+    return {"status": "success", "id": reg_id, "relatoria": doc}
+
+
+@app.get("/api/metas")
+def listar_metas(user: SessionUser = Depends(validar_token_sesion)):
+    return coleccion_listar_sql("metas_personales", cuenta=None if user.director else user.usuario)
+
+
+@app.post("/api/metas")
+def guardar_meta(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    reg_id = str(payload.get("id") or f"meta-{user.usuario}-{uuid.uuid4().hex[:6]}")
+    doc = {
+        "id": reg_id,
+        "cuenta": user.usuario,
+        "docente": user.nombre,
+        "area": user.area,
+        "escuela": str(payload.get("escuela") or ""),
+        "id_escuela": str(payload.get("id_escuela") or ""),
+        "fecha_sesion": str(payload.get("fecha_sesion") or time.strftime("%Y-%m-%d")),
+        "id_alumno": str(payload.get("id_alumno") or ""),
+        "nombre_alumno": str(payload.get("nombre_alumno") or ""),
+        "meta": str(payload.get("meta") or ""),
+        "recursos": str(payload.get("recursos") or ""),
+        "periodo": str(payload.get("periodo") or "2026-2027"),
+        "guardado_en": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    coleccion_guardar_sql(
+        "metas_personales",
+        reg_id,
+        doc,
+        cuenta=user.usuario,
+        id_escuela=doc["id_escuela"],
+        id_alumno=doc["id_alumno"],
+        fecha=doc["fecha_sesion"],
+    )
+    return {"status": "success", "id": reg_id, "meta": doc}
+
+
+@app.get("/api/tramites")
+def listar_tramites(user: SessionUser = Depends(validar_token_sesion)):
+    es_gestor = user.director or "TRABAJO" in user.rol.upper()
+    return coleccion_listar_sql("tramites", cuenta=None if es_gestor else user.usuario)
+
+
+@app.post("/api/tramites")
+def guardar_tramite(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    reg_id = str(payload.get("id") or f"TRM-{uuid.uuid4().hex[:6].upper()}")
+    doc = {
+        "id": reg_id,
+        "fecha": str(payload.get("fecha") or time.strftime("%Y-%m-%d")),
+        "solicitante": str(payload.get("solicitante") or user.nombre),
+        "cuenta": str(payload.get("cuenta") or user.usuario),
+        "tipo": str(payload.get("tipo") or ("Externa" if user.director or "TRABAJO" in user.rol.upper() else "Interna")),
+        "origen": str(payload.get("origen") or ""),
+        "escuela": str(payload.get("escuela") or ""),
+        "alumnos": str(payload.get("alumnos") or ""),
+        "solicitud": str(payload.get("solicitud") or ""),
+        "seguimiento": str(payload.get("seguimiento") or ""),
+        "estado": str(payload.get("estado") or "Solicitado"),
+        "folio": str(payload.get("folio") or ""),
+    }
+    coleccion_guardar_sql("tramites", reg_id, doc, cuenta=doc["cuenta"], fecha=doc["fecha"], estado=doc["estado"])
+    return {"status": "success", "id": reg_id, "tramite": doc}
+
+
+@app.get("/api/informes")
+def listar_informes(alumno_id: Optional[str] = None, user: SessionUser = Depends(validar_token_sesion)):
+    alumnos = obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas, user.nombre, incluir_inactivos=True)
+    ids_set = {a["id"] for a in alumnos}
+    guardados = coleccion_listar_sql("informes", id_alumno=alumno_id)
+    if not user.director and "TODAS" not in user.escuelas_permitidas:
+        guardados = [g for g in guardados if g.get("id_alumno") in ids_set or g.get("_cuenta") == user.usuario]
+    return guardados
+
+
+@app.post("/api/informes")
+def guardar_informe(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    reg_id = str(payload.get("id") or f"INF-{uuid.uuid4().hex[:6].upper()}")
+    doc = {
+        "id": reg_id,
+        "id_alumno": str(payload.get("id_alumno") or ""),
+        "nombre_alumno": str(payload.get("nombre_alumno") or ""),
+        "escuela": str(payload.get("escuela") or ""),
+        "grado_grupo": str(payload.get("grado_grupo") or ""),
+        "periodo": str(payload.get("periodo") or "1er Trimestre 2026-2027"),
+        "tipo_informe": str(payload.get("tipo_informe") or "Informe de Seguimiento Pedagógico"),
+        "avances": str(payload.get("avances") or ""),
+        "barreras_atendidas": str(payload.get("barreras_atendidas") or ""),
+        "acuerdos_familia": str(payload.get("acuerdos_familia") or ""),
+        "recomendaciones_aula": str(payload.get("recomendaciones_aula") or ""),
+        "elaborado_por": user.nombre,
+        "fecha": str(payload.get("fecha") or time.strftime("%Y-%m-%d")),
+    }
+    coleccion_guardar_sql("informes", reg_id, doc, cuenta=user.usuario, id_alumno=doc["id_alumno"], fecha=doc["fecha"])
+    return {"status": "success", "id": reg_id, "informe": doc}
+
 
 # -------------------------------------------------------------
 # 8. ASISTENTE PEDAGÓGICO CONVERSACIONAL E IA
 # -------------------------------------------------------------
-
 @app.post("/api/ai/chat")
 def chat_asistente(payload: AIChatPayload, user: SessionUser = Depends(validar_token_sesion)):
-    """Asistente conversacional con recuperación contextual del alumno y reglas Zona 001."""
     if payload.alumno_id:
         _verificar_acceso_alumno(payload.alumno_id, user)
     return chat_asistente_pedagogico(
         mensaje_docente=payload.mensaje,
         alumno_id=payload.alumno_id,
-        planeacion_id=payload.planeacion_id
+        planeacion_id=payload.planeacion_id,
     )
 
 
 @app.post("/api/ai/sugerencias")
 def sugerencias_asistente(payload: AISugerenciaPayload, user: SessionUser = Depends(validar_token_sesion)):
-    """Generación directa de ajustes razonables y descriptores observables."""
     contexto = {
         "area": payload.area,
         "barreras_o_necesidades": payload.necesidad_o_barrera,
         "grado": payload.grado,
-        "condicion": payload.condicion
+        "condicion": payload.condicion,
     }
     from ai.engine import generar_sugerencias, fallback as ai_fallback
     try:
@@ -689,23 +1153,21 @@ def sugerencias_asistente(payload: AISugerenciaPayload, user: SessionUser = Depe
     except Exception:
         return ai_fallback()
 
+
 # -------------------------------------------------------------
 # 9. ESTADÍSTICAS INSTITUCIONALES ZONA 001
 # -------------------------------------------------------------
-
 @app.get("/api/estadisticas/zona")
 def estadisticas_zona(user: SessionUser = Depends(validar_token_sesion)):
-    """Métricas globales de la zona escolar para el panel directivo."""
-    return obtener_estadisticas_zona()
+    return obtener_estadisticas_zona(user.rol, user.escuelas_permitidas, user.nombre)
+
 
 # -------------------------------------------------------------
 # 10. DESCARGA OFICIAL DE CONCENTRADO EN EXCEL
 # -------------------------------------------------------------
-
 @app.get("/descargar-concentrado")
 @app.get("/api/descargar-concentrado")
 def descargar_concentrado():
-    """Descarga directa del Concentrado de Revisión de Planificaciones en Excel."""
     excel_path = Path(ROOT_DIR) / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx"
     if not excel_path.exists():
         from tools.generar_concentrado_excel import crear_libro_concentrado
@@ -713,30 +1175,26 @@ def descargar_concentrado():
     return FileResponse(
         path=str(excel_path),
         filename="Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
 
 # -------------------------------------------------------------
 # 11. SERVIR FRONTEND SPA ESTÁTICO DIRECTO
 # -------------------------------------------------------------
-
 SPA_STATIC_DIR = Path(__file__).resolve().parent / "static"
-INDEX_HTML = SPA_STATIC_DIR / "index.html"
+
 
 @app.get("/", response_class=HTMLResponse)
 def index_spa():
-    """Punto de entrada de la SPA React 18 con resolución robusta de rutas."""
     posibles_rutas = [
         SPA_STATIC_DIR / "index.html",
-        Path(__file__).resolve().parent / "static" / "index.html",
         Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static/index.html"),
-        Path("/home/uppcoder/app/piloto_spa/backend/static/index.html"),
-        Path("/home/uppcoder/app/static/index.html")
     ]
     for p in posibles_rutas:
         if p.exists():
             return HTMLResponse(
                 content=p.read_text(encoding="utf-8"),
-                headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
             )
     return HTMLResponse("<h1>USAER 2E 2.0</h1><p>Compilando frontend...</p>")

@@ -36,6 +36,7 @@ from data.database import (
     PlaneacionDoc,
     EPPDoc,
 )
+from piloto_spa.backend.auth_service import hash_password
 
 def sembrar_datos_sinteticos():
     engine = get_engine(initialize_schema=True)
@@ -57,19 +58,25 @@ def sembrar_datos_sinteticos():
             if not session.query(Escuela).filter_by(id=eid).first():
                 session.add(Escuela(id=eid, cct=cct, nombre_escuela=nom, nivel=niv, turno=tur))
 
-        # 2. USUARIOS Y PERSONAL (RBAC Real)
+        # 2. USUARIOS Y PERSONAL (RBAC Real con contraseñas seguras y hash PBKDF2)
         usuarios_datos = [
-            ("usr-dir-001", "Psic. Edgar Adrián Yam Briceño MD", "edgar", "123", "DIRECTOR", "TODAS"),
-            ("usr-doc-001", "Mtra. Cindy Mayanín Burgos González", "cindy.burgos", "123", "MAESTRA DE APOYO", "ESC-001,ESC-003"),
-            ("usr-doc-002", "Mtra. Andrea Gómez Tun", "andrea.gomez", "123", "MAESTRA DE APOYO", "ESC-002,ESC-004"),
-            ("usr-psi-001", "Mtra. Laura Elena Pech Cauich", "laura.pech", "123", "PSICOLOGÍA", "TODAS"),
-            ("usr-com-001", "Mtra. Mariana Solís Ceballos", "mariana.solis", "123", "COMUNICACIÓN", "TODAS"),
-            ("usr-ts-001", "Lic. Roberto Méndez Canché", "roberto.mendez", "123", "TRABAJO SOCIAL", "TODAS"),
+            ("usr-dir-001", "Psic. Edgar Adrián Yam Briceño MD", "edgar", "Usaer2E!Dir#2026", "DIRECTOR", "TODAS"),
+            ("usr-doc-001", "Mtra. Cindy Mayanín Burgos González", "cindy.burgos", "Usaer2E!Cindy#2026", "MAESTRA DE APOYO", "ESC-001,ESC-003"),
+            ("usr-doc-002", "Mtra. Andrea Gómez Tun", "andrea.gomez", "Usaer2E!Andrea#2026", "MAESTRA DE APOYO", "ESC-002,ESC-004"),
+            ("usr-psi-001", "Mtra. Laura Elena Pech Cauich", "laura.pech", "Usaer2E!Laura#2026", "PSICOLOGÍA", "TODAS"),
+            ("usr-com-001", "Mtra. Mariana Solís Ceballos", "mariana.solis", "Usaer2E!Mariana#2026", "COMUNICACIÓN", "TODAS"),
+            ("usr-ts-001", "Lic. Roberto Méndez Canché", "roberto.mendez", "Usaer2E!Roberto#2026", "TRABAJO SOCIAL", "TODAS"),
         ]
         for uid, nom, usu, pwd, rol, esc in usuarios_datos:
+            pwd_hash = hash_password(pwd)
             u = session.query(Usuario).filter_by(usuario=usu).first()
             if not u:
-                session.add(Usuario(id=uid, nombre=nom, usuario=usu, password=pwd, rol=rol, escuelas_permitidas=esc))
+                session.add(Usuario(id=uid, nombre=nom, usuario=usu, password=pwd_hash, rol=rol, escuelas_permitidas=esc))
+            else:
+                u.password = pwd_hash
+                u.rol = rol
+                u.escuelas_permitidas = esc
+
             p = session.query(Personal).filter_by(id=uid).first()
             if not p:
                 session.add(Personal(id=uid, nombre_completo=nom, rol=rol, email=f"{usu}@usaer2e.edu.mx", telefono="9991234567"))
