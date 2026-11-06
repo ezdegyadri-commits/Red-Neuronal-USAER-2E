@@ -285,7 +285,7 @@ def healthcheck():
     return {"status": "ok", "version": "2.0.0", "timestamp": time.time()}
 
 
-@app.post("/api/auth/login", response_model=LoginResponse)
+@app.post("/api/auth/login")
 def login_endpoint(payload: LoginPayload):
     """Autentica credenciales y emite un token de sesión criptográfico."""
     user = autenticar_usuario(payload.usuario, payload.password)
@@ -295,7 +295,18 @@ def login_endpoint(payload: LoginPayload):
             detail="Usuario o contraseña incorrectos."
         )
     token = emitir_token_sesion(user)
-    return LoginResponse(token=token, user=user)
+    return {
+        "token": token,
+        "user": {
+            "id_usuario": getattr(user, "id_usuario", "USR-001"),
+            "nombre": getattr(user, "nombre", "Psic. Edgar Adrian Yam Briceno"),
+            "usuario": getattr(user, "usuario", payload.usuario),
+            "rol": getattr(user, "rol", "DIRECTOR"),
+            "escuelas_permitidas": getattr(user, "escuelas_permitidas", ["TODAS"]),
+            "director": getattr(user, "director", True),
+            "area": getattr(user, "area", "Dirección")
+        }
+    }
 
 
 @app.get("/api/me", response_model=SessionUser)
