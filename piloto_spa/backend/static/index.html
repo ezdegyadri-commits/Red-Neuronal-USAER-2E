@@ -56,13 +56,18 @@
 
   <script>
     window.onerror = function(message, source, lineno, colno, error) {
-      console.error("Error global frontend:", message, source, lineno);
+      console.error("Error global frontend:", message, source, lineno, colno, error);
       const root = document.getElementById('root');
       if (root && root.innerHTML.includes('Cargando plataforma')) {
+        const detalle = (error && error.message) || message || 'Hubo un retraso conectando con los módulos interactivos.';
+        const ubicacion = lineno ? ` (Línea: ${lineno}${colno ? `:${colno}` : ''})` : '';
         root.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;background:#0F172A;color:#F87171;min-height:100vh;">' +
           '<h2 style="font-size:24px;font-weight:bold;margin-bottom:12px;">⚠️ Aviso de Carga de Plataforma</h2>' +
-          '<p style="color:#CBD5E1;max-width:500px;margin:0 auto 20px;">' + (message || 'Hubo un retraso conectando con los módulos interactivos.') + '</p>' +
+          '<p style="color:#CBD5E1;max-width:550px;margin:0 auto 20px;font-size:14px;word-break:break-word;">' + detalle + ubicacion + '</p>' +
+          '<div style="display:flex;gap:12px;justify-content:center;">' +
           '<button onclick="location.reload()" style="background:#D97706;color:#FFF;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;">Reintentar Carga</button>' +
+          '<button onclick="sessionStorage.clear(); localStorage.clear(); location.reload(true);" style="background:#334155;color:#E2E8F0;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;">Limpiar Sesión y Recargar</button>' +
+          '</div>' +
           '</div>';
       }
     };
@@ -1864,8 +1869,9 @@
         const nom = (s.nombre_alumno || s.Nombre_Alumno || s.Alumno || '').toLowerCase();
         const sug = (s.sugerencias || s.Sugerencias || '').toLowerCase();
         const area = (s.area || s.Area || '').toLowerCase();
+        const esc = (s.escuela || s.Escuela || '').toLowerCase();
         const q = busqueda.toLowerCase();
-        return nom.includes(q) || sug.includes(q) || area.includes(q);
+        return nom.includes(q) || sug.includes(q) || area.includes(q) || esc.includes(q);
       });
 
       return (
@@ -1939,8 +1945,9 @@
         const nom = (ev.nombre_alumno || ev.Nombre_Alumno || ev.alumno_nombre || '').toLowerCase();
         const txt = (ev.evento || ev.Evento || '').toLowerCase();
         const esp = (ev.especialista || ev.Especialista || '').toLowerCase();
+        const esc = (ev.escuela || ev.Escuela || '').toLowerCase();
         const q = busqueda.toLowerCase();
-        return nom.includes(q) || txt.includes(q) || esp.includes(q);
+        return nom.includes(q) || txt.includes(q) || esp.includes(q) || esc.includes(q);
       });
 
       return (
@@ -1978,7 +1985,10 @@
                   <div className="space-y-1">
                     <div className="font-bold text-slate-900 text-sm">{ev.nombre_alumno || ev.Nombre_Alumno || ev.alumno_nombre || 'Alumno USAER'}</div>
                     <div className="text-slate-700">{ev.evento || ev.Evento}</div>
-                    <div className="text-[11px] text-slate-500">Registrado por: <strong>{ev.especialista || ev.Especialista}</strong></div>
+                    <div className="text-[11px] text-slate-500">
+                      <span>Registrado por: <strong>{ev.especialista || ev.Especialista}</strong></span>
+                      {(ev.escuela || ev.Escuela) && <span className="ml-2">• Escuela: {ev.escuela || ev.Escuela}</span>}
+                    </div>
                   </div>
                   <span className="text-slate-400 font-mono text-xs whitespace-nowrap ml-4">{ev.fecha || ev.Fecha}</span>
                 </div>
@@ -2025,6 +2035,7 @@
                     <span className="text-sm">{d.nombre_alumno || d.Nombre_Alumno || d.Alumno}</span>
                     <span className="text-slate-400 font-normal">{d.fecha || d.Fecha}</span>
                   </div>
+                  {(d.escuela || d.Escuela) && <div className="text-slate-500 font-semibold">Escuela: {d.escuela || d.Escuela}</div>}
                   <div><strong>Docente Regular:</strong> {d.docente_regular || d.Docente_Regular || 'No registrado'}</div>
                   <div><strong>Salud:</strong> {d.salud || d.Salud || 'Buena salud'}</div>
                   <div><strong>Seguimiento Médico:</strong> {d.seguimiento_medico || d.Seguimiento_Medico || 'En observación'}</div>
@@ -2333,7 +2344,6 @@
           )}
         </div>
       );
-    }
     }
 
     // =============================================================

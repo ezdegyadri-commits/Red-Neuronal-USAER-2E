@@ -69,9 +69,9 @@ print("STDOUT:", res.stdout.strip())
 if res.stderr:
     print("STDERR:", res.stderr.strip())
 
-# 4. Reiniciar servicio FastAPI
+# 4. Reiniciar servicio FastAPI limpiamente con supervisorctl
 print("Reiniciando servicio FastAPI...")
 subprocess.run(["bash", "-ic", "supervisorctl restart framework"], check=False)
-subprocess.run(["pkill", "-f", "uvicorn"], check=False)
 time.sleep(2)
+subprocess.run(["bash", "-ic", "supervisorctl status framework"], check=False)
 print(">>> DESPLIEGUE OFICIAL, FILTRADO Y BASE DE DATOS RESTABLECIDOS AL 100% <<<")
