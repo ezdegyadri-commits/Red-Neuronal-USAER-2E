@@ -49,8 +49,10 @@ for b_dir in backend_dirs:
     descargar("piloto_spa/backend/domain_services.py", b_dir / "domain_services.py")
     descargar("piloto_spa/backend/main.py", b_dir / "main.py")
     descargar("piloto_spa/backend/static/index.html", b_dir / "static" / "index.html")
-    # Asegurar copia de semilla histórica en el release activo
+    # Asegurar copia de base de datos, repositorios y semilla histórica en el release activo
     rel_data_dir = b_dir.parent.parent / "data"
+    descargar("data/database.py", rel_data_dir / "database.py")
+    descargar("data/sql_repository.py", rel_data_dir / "sql_repository.py")
     descargar("data/semilla_historica_completa.json.gz", rel_data_dir / "semilla_historica_completa.json.gz")
 
 # 2. Actualizar root main.py

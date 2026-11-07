@@ -336,12 +336,25 @@ def get_engine(*, initialize_schema=True):
         if _ENGINE is None:
             db_url = get_database_url()
             if is_postgres():
-                db_url=make_url(db_url).set(drivername="postgresql+psycopg2").render_as_string(hide_password=False)
+                driver = None
+                try:
+                    import psycopg  # noqa: F401
+                    driver = "postgresql+psycopg"
+                except ImportError:
+                    try:
+                        import psycopg2  # noqa: F401
+                        driver = "postgresql+psycopg2"
+                    except ImportError:
+                        driver = "postgresql+psycopg"
+                db_url = make_url(db_url).set(drivername=driver).render_as_string(hide_password=False)
             from sqlalchemy.pool import NullPool
             if db_url.startswith("sqlite"):
                 _ENGINE = create_engine(db_url, connect_args={"check_same_thread": False}, echo=False, hide_parameters=True)
             else:
-                _ENGINE = create_engine(db_url, connect_args={"connect_timeout": 5}, poolclass=NullPool, pool_pre_ping=True, echo=False, hide_parameters=True)
+                try:
+                    _ENGINE = create_engine(db_url, connect_args={"connect_timeout": 5}, poolclass=NullPool, pool_pre_ping=True, echo=False, hide_parameters=True)
+                except Exception:
+                    _ENGINE = create_engine(db_url, poolclass=NullPool, pool_pre_ping=True, echo=False, hide_parameters=True)
             _SESSION_FACTORY = sessionmaker(bind=_ENGINE, class_=SafeSession, autoflush=False, expire_on_commit=False)
         if initialize_schema and not _SCHEMA_READY:
             Base.metadata.create_all(_ENGINE)
