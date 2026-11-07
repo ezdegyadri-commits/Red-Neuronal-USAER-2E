@@ -49,6 +49,9 @@ for b_dir in backend_dirs:
     descargar("piloto_spa/backend/domain_services.py", b_dir / "domain_services.py")
     descargar("piloto_spa/backend/main.py", b_dir / "main.py")
     descargar("piloto_spa/backend/static/index.html", b_dir / "static" / "index.html")
+    # Asegurar copia de semilla histórica en el release activo
+    rel_data_dir = b_dir.parent.parent / "data"
+    descargar("data/semilla_historica_completa.json.gz", rel_data_dir / "semilla_historica_completa.json.gz")
 
 # 2. Actualizar root main.py
 descargar("main.py", Path("/home/uppcoder/app/main.py"))
@@ -61,7 +64,7 @@ res = subprocess.run(
     [
         py_exe,
         "-c",
-        "import main; main.reconciliar_base_datos(); print('MAIN APP CARGADA OK:', main.app.title, 'ERROR:', main.STARTUP_ERROR)"
+        "import main; res = main.reconciliar_base_datos(); print('RECONCILIACION DB:', res); print('MAIN APP CARGADA OK:', main.app.title, 'ERROR:', main.STARTUP_ERROR)"
     ],
     capture_output=True, text=True, cwd="/home/uppcoder/app"
 )

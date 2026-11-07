@@ -154,18 +154,47 @@ def reconciliar_base_datos() -> Dict[str, Any]:
     engine = get_engine(initialize_schema=True)
     Base.metadata.create_all(engine)
 
-    data_dir = Path(__file__).resolve().parents[2] / "data"
-    gz_path = data_dir / "semilla_historica_completa.json.gz"
-    json_path = data_dir / "semilla_datos_reales.json"
+    candidatos_semilla = [
+        Path(__file__).resolve().parents[2] / "data" / "semilla_historica_completa.json.gz",
+        Path(__file__).resolve().parents[1] / "data" / "semilla_historica_completa.json.gz",
+        Path(__file__).resolve().parent / "data" / "semilla_historica_completa.json.gz",
+        Path("/home/uppcoder/app/usaer2e/data/semilla_historica_completa.json.gz"),
+        Path("/home/uppcoder/app/data/semilla_historica_completa.json.gz"),
+        Path(__file__).resolve().parents[2] / "data" / "semilla_datos_reales.json",
+        Path("/home/uppcoder/app/usaer2e/data/semilla_datos_reales.json"),
+        Path("/home/uppcoder/app/data/semilla_datos_reales.json"),
+    ]
 
-    if gz_path.exists():
-        with gzip.open(gz_path, "rt", encoding="utf-8") as f:
-            data = json.load(f)
-    elif json_path.exists():
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    else:
-        return {"status": "sin_semilla"}
+    data = None
+    for cand in candidatos_semilla:
+        if cand.exists():
+            try:
+                if str(cand).endswith(".gz"):
+                    with gzip.open(cand, "rt", encoding="utf-8") as f:
+                        data = json.load(f)
+                else:
+                    with open(cand, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                if data and "alumnos" in data and len(data["alumnos"]) > 0:
+                    logging.getLogger("uvicorn").info("Semilla cargada con éxito desde %s (%d alumnos)", cand, len(data["alumnos"]))
+                    break
+            except Exception as e:
+                logging.getLogger("uvicorn").warning("Error leyendo semilla %s: %s", cand, e)
+
+    # Fallback seguro: Descarga directa desde GitHub de la semilla histórica oficial si no está en disco
+    if not data or "alumnos" not in data or len(data["alumnos"]) == 0:
+        try:
+            import urllib.request
+            url = "https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USAER-2E/piloto-spa/data/semilla_historica_completa.json.gz"
+            logging.getLogger("uvicorn").info("Descargando semilla histórica de emergencia desde GitHub: %s", url)
+            tmp_gz = Path("/tmp/semilla_historica_completa.json.gz")
+            tmp_gz.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(url, str(tmp_gz))
+            with gzip.open(tmp_gz, "rt", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:
+            logging.getLogger("uvicorn").error("Error descargando semilla histórica remota: %s", exc)
+            return {"status": "sin_semilla", "error": str(exc)}
 
     resumen = {}
     with get_session() as session:
@@ -207,6 +236,12 @@ def reconciliar_base_datos() -> Dict[str, Any]:
         for item in data.get("alumnos", []):
             aid = item["id"]
             ids_canonicos.add(aid)
+            # Asegurar estatus activo para alumnos del padrón
+            item_status = str(item.get("estatus") or "ACTIVO").strip().upper()
+            if item_status not in ("BAJA", "INACTIVO"):
+                item_status = "ACTIVO"
+            item["estatus"] = item_status
+
             obj = session.query(Alumno).filter_by(id=aid).first()
             if not obj:
                 session.add(Alumno(**item))
@@ -214,12 +249,18 @@ def reconciliar_base_datos() -> Dict[str, Any]:
                 for k, v in item.items():
                     if hasattr(obj, k):
                         setattr(obj, k, v)
-        # Cualquier ID antiguo (ALU-001..ALU-034 de carga previa secuencial) que no esté en el padrón canónico se marca como ANULADO_MIGRACION
-        for row_old in session.query(Alumno).all():
-            if row_old.id not in ids_canonicos and not str(row_old.id).startswith("ALU-3"):
-                row_old.estatus = "ANULADO_MIGRACION"
+                obj.estatus = item_status
+
+        # Restaurar estatus ACTIVO para cualquier alumno real con formato ALU- que haya sido marcado erróneamente como anulado
+        for alu_existente in session.query(Alumno).all():
+            aid_str = str(alu_existente.id or "")
+            if aid_str.startswith("alu-uppcoder"):
+                continue
+            if alu_existente.estatus == "ANULADO_MIGRACION" and (aid_str in ids_canonicos or aid_str.upper().startswith("ALU-")):
+                alu_existente.estatus = "ACTIVO"
+
         session.commit()
-        resumen["alumnos"] = len(ids_canonicos)
+        resumen["alumnos"] = session.query(Alumno).filter(Alumno.estatus == "ACTIVO").count()
 
         # 5. Planeaciones (167 documentos con JSON reconstruido e íntegro)
         for item in data.get("planeaciones", []):

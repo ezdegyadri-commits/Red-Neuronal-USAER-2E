@@ -184,6 +184,13 @@ def obtener_alumnos_autorizados(
     """Consulta el padrón de alumnos filtrado estrictamente por los permisos del usuario en la BD."""
     df = alumnos_sql()
     if df.empty:
+        try:
+            from piloto_spa.backend.main import reconciliar_base_datos
+            reconciliar_base_datos()
+            df = alumnos_sql()
+        except Exception:
+            pass
+    if df.empty:
         return []
 
     records = df.to_dict(orient="records")
@@ -193,6 +200,9 @@ def obtener_alumnos_autorizados(
         if not alu_id or alu_id.startswith("alu-uppcoder"):
             continue
         estatus_str = str(r.get("Estatus", "ACTIVO")).strip().upper() or "ACTIVO"
+        # Sanar cualquier alumno real marcado previamente como anulado
+        if estatus_str == "ANULADO_MIGRACION":
+            estatus_str = "ACTIVO"
         if not incluir_inactivos and estatus_str not in ("ACTIVO", "PENDIENTE DE VALIDACIÓN", "PENDIENTE DE VALIDACION"):
             continue
 

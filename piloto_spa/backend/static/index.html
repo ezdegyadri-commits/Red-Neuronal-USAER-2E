@@ -1429,6 +1429,8 @@
     // =============================================================
     function ExpedientesView({ initialAlumnoId, onBack, setMetrics }) {
       const [alumnos, setAlumnos] = useState([]);
+      const [loadingAlumnos, setLoadingAlumnos] = useState(true);
+      const [errorAlumnos, setErrorAlumnos] = useState(null);
       const [busqueda, setBusqueda] = useState('');
       const [filtroMaestra, setFiltroMaestra] = useState('TODAS');
       const [selectedId, setSelectedId] = useState(initialAlumnoId || null);
@@ -1437,36 +1439,50 @@
       const [activeExpTab, setActiveExpTab] = useState('resumen');
 
       useEffect(() => {
-        apiRequest('/api/alumnos').then(data => {
-          setAlumnos(data);
-          if (!selectedId && data.length > 0) {
-            setSelectedId(data[0].id);
-          }
-        });
+        setLoadingAlumnos(true);
+        setErrorAlumnos(null);
+        apiRequest('/api/alumnos')
+          .then(data => {
+            const list = Array.isArray(data) ? data : [];
+            setAlumnos(list);
+            setLoadingAlumnos(false);
+            if (!selectedId && list.length > 0) {
+              setSelectedId(list[0].id);
+            }
+          })
+          .catch(err => {
+            console.error("Error al cargar padrón de alumnos:", err);
+            setErrorAlumnos(err.message || 'Error cargando padrón');
+            setLoadingAlumnos(false);
+          });
       }, []);
 
       useEffect(() => {
         if (!selectedId) return;
         setLoadingExp(true);
         const t0 = performance.now();
-        apiRequest(`/api/expedientes/${selectedId}`).then(exp => {
-          setExpediente(exp);
-          const t1 = performance.now();
-          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
-          setLoadingExp(false);
-        });
+        apiRequest(`/api/expedientes/${selectedId}`)
+          .then(exp => {
+            setExpediente(exp);
+            const t1 = performance.now();
+            setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+            setLoadingExp(false);
+          })
+          .catch(() => setLoadingExp(false));
       }, [selectedId, setMetrics]);
 
       const maestrasDisponibles = Array.from(new Set(
-        alumnos.map(a => a.maestra_apoyo).filter(Boolean)
+        alumnos.map(a => a.maestra_apoyo || a['Maestra de Apoyo']).filter(Boolean)
       )).sort();
 
       const alumnosFiltrados = alumnos.filter(al => {
-        const matchesBusqueda = !busqueda || 
-          al.nombre_completo.toLowerCase().includes(busqueda.toLowerCase()) ||
-          (al.curp && al.curp.toLowerCase().includes(busqueda.toLowerCase())) ||
-          al.escuela.toLowerCase().includes(busqueda.toLowerCase());
-        const matchesMaestra = filtroMaestra === 'TODAS' || al.maestra_apoyo === filtroMaestra;
+        const nom = (al.nombre_completo || al.Nombre_Completo || al.nombre || '').toLowerCase();
+        const curp = (al.curp || al.CURP || '').toLowerCase();
+        const esc = (al.escuela || al.Nombre_Escuela || al.Escuela || '').toLowerCase();
+        const q = (busqueda || '').toLowerCase();
+        const matchesBusqueda = !q || nom.includes(q) || curp.includes(q) || esc.includes(q);
+        const m = al.maestra_apoyo || al['Maestra de Apoyo'] || '';
+        const matchesMaestra = filtroMaestra === 'TODAS' || m === filtroMaestra;
         return matchesBusqueda && matchesMaestra;
       });
 
@@ -1521,26 +1537,47 @@
                 </div>
               )}
 
-              <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
-                {alumnosFiltrados.map(al => (
-                  <div
-                    key={al.id}
-                    onClick={() => setSelectedId(al.id)}
-                    className={`p-2.5 rounded-lg text-xs cursor-pointer transition ${
-                      selectedId === al.id ? 'bg-amber-100/70 border border-amber-300 font-bold text-slate-900' : 'hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <div>{al.nombre_completo}</div>
-                    <div className="text-[11px] text-slate-500">{al.grado}° {al.grupo} • {al.escuela}</div>
-                    <div className="text-[10px] text-amber-700 font-semibold mt-0.5">👤 {al.maestra_apoyo}</div>
-                  </div>
-                ))}
-              </div>
+              {loadingAlumnos ? (
+                <div className="text-center py-8 text-xs text-slate-400">Cargando matrícula de atención...</div>
+              ) : errorAlumnos ? (
+                <div className="text-center py-6 text-xs text-red-500 bg-red-50 rounded-lg p-3">
+                  <div>⚠️ {errorAlumnos}</div>
+                  <button onClick={() => location.reload()} className="mt-2 text-[11px] underline font-bold text-amber-700">Reintentar</button>
+                </div>
+              ) : alumnosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-xs text-slate-400">
+                  No se encontraron alumnos para tu escuela o criterio de búsqueda.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                  {alumnosFiltrados.map(al => (
+                    <div
+                      key={al.id}
+                      onClick={() => setSelectedId(al.id)}
+                      className={`p-2.5 rounded-lg text-xs cursor-pointer transition ${
+                        selectedId === al.id ? 'bg-amber-100/70 border border-amber-300 font-bold text-slate-900' : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div>{al.nombre_completo || al.Nombre_Completo}</div>
+                      <div className="text-[11px] text-slate-500">{al.grado}° {al.grupo} • {al.escuela}</div>
+                      <div className="text-[10px] text-amber-700 font-semibold mt-0.5">👤 {al.maestra_apoyo}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Vista Derecha del Expediente Integral */}
             <div className="lg:col-span-8 bg-white p-6 rounded-xl border border-slate-200 space-y-5">
-              {loadingExp || !expediente ? (
+              {loadingAlumnos ? (
+                <div className="text-center py-16 text-slate-500 text-sm">Cargando padrón escolar...</div>
+              ) : alumnos.length === 0 ? (
+                <div className="text-center py-16 text-slate-500 text-sm">
+                  <div className="text-2xl mb-2">📋</div>
+                  <div className="font-bold text-slate-700">No hay alumnos asignados a este perfil o escuela.</div>
+                  <div className="text-xs text-slate-400 mt-1">Si perteneces a una escuela específica, verifica haber iniciado sesión con tu cuenta correspondiente.</div>
+                </div>
+              ) : loadingExp || !expediente ? (
                 <div className="text-center py-16 text-slate-500 text-sm">Cargando expediente integral desde base relacional...</div>
               ) : (
                 <>
