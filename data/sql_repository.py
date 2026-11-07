@@ -905,37 +905,41 @@ def coleccion_listar_sql(
     id_alumno: Optional[str] = None,
     cuenta: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Lista registros de una colección institucional con filtrado indexado."""
-    with get_session() as session:
-        query = session.query(ColeccionInstitucional).filter(ColeccionInstitucional.modulo == str(modulo).strip())
-        if id_escuela:
-            query = query.filter(ColeccionInstitucional.id_escuela == str(id_escuela).strip())
-        if id_alumno:
-            query = query.filter(ColeccionInstitucional.id_alumno == str(id_alumno).strip())
-        if cuenta:
-            query = query.filter(ColeccionInstitucional.cuenta == str(cuenta).strip())
-        rows = query.order_by(ColeccionInstitucional.fecha.desc(), ColeccionInstitucional.actualizado_en.desc()).all()
-        out = []
-        for r in rows:
-            if r.estado == "ANULADO":
-                continue
-            try:
-                payload = json.loads(r.payload_json) if r.payload_json else {}
-            except Exception:
-                payload = {}
-            if isinstance(payload, dict):
-                item = dict(payload)
-            else:
-                item = {"valor": payload}
-            item.setdefault("id", str(r.registro_id or r.id))
-            item.setdefault("_modulo", str(r.modulo))
-            item.setdefault("_cuenta", str(r.cuenta or ""))
-            item.setdefault("_id_escuela", str(r.id_escuela or ""))
-            item.setdefault("_id_alumno", str(r.id_alumno or ""))
-            item.setdefault("_fecha", str(r.fecha or ""))
-            item.setdefault("_estado", str(r.estado or "ACTIVO"))
-            out.append(item)
-        return out
+    """Lista registros de una colección institucional con filtrado indexado y tolerancia a fallos."""
+    try:
+        with get_session() as session:
+            query = session.query(ColeccionInstitucional).filter(ColeccionInstitucional.modulo == str(modulo).strip())
+            if id_escuela:
+                query = query.filter(ColeccionInstitucional.id_escuela == str(id_escuela).strip())
+            if id_alumno:
+                query = query.filter(ColeccionInstitucional.id_alumno == str(id_alumno).strip())
+            if cuenta:
+                query = query.filter(ColeccionInstitucional.cuenta == str(cuenta).strip())
+            rows = query.order_by(ColeccionInstitucional.fecha.desc(), ColeccionInstitucional.actualizado_en.desc()).all()
+            out = []
+            for r in rows:
+                if r.estado == "ANULADO":
+                    continue
+                try:
+                    payload = json.loads(r.payload_json) if r.payload_json else {}
+                except Exception:
+                    payload = {}
+                if isinstance(payload, dict):
+                    item = dict(payload)
+                else:
+                    item = {"valor": payload}
+                item.setdefault("id", str(r.registro_id or r.id))
+                item.setdefault("_modulo", str(r.modulo))
+                item.setdefault("_cuenta", str(r.cuenta or ""))
+                item.setdefault("_id_escuela", str(r.id_escuela or ""))
+                item.setdefault("_id_alumno", str(r.id_alumno or ""))
+                item.setdefault("_fecha", str(r.fecha or ""))
+                item.setdefault("_estado", str(r.estado or "ACTIVO"))
+                out.append(item)
+            return out
+    except Exception as exc:
+        logger.warning("Aviso en coleccion_listar_sql (%s): %s", modulo, exc)
+        return []
 
 
 def coleccion_guardar_sql(
@@ -953,28 +957,31 @@ def coleccion_guardar_sql(
     reg_clean = str(registro_id or uuid.uuid4().hex[:12]).strip()
     pk = f"{mod_clean}:{reg_clean}"
     payload_str = json.dumps(payload, ensure_ascii=False)
-    with get_session() as session:
-        existente = session.query(ColeccionInstitucional).filter_by(id=pk).first()
-        if existente:
-            existente.registro_id = reg_clean
-            existente.cuenta = str(cuenta or existente.cuenta or "")
-            existente.id_escuela = str(id_escuela or existente.id_escuela or "")
-            existente.id_alumno = str(id_alumno or existente.id_alumno or "")
-            existente.fecha = str(fecha or existente.fecha or "")
-            existente.estado = str(estado or "ACTIVO")
-            existente.payload_json = payload_str
-        else:
-            session.add(ColeccionInstitucional(
-                id=pk,
-                modulo=mod_clean,
-                registro_id=reg_clean,
-                cuenta=str(cuenta or ""),
-                id_escuela=str(id_escuela or ""),
-                id_alumno=str(id_alumno or ""),
-                fecha=str(fecha or ""),
-                estado=str(estado or "ACTIVO"),
-                payload_json=payload_str,
-            ))
-        session.commit()
+    try:
+        with get_session() as session:
+            existente = session.query(ColeccionInstitucional).filter_by(id=pk).first()
+            if existente:
+                existente.registro_id = reg_clean
+                existente.cuenta = str(cuenta or existente.cuenta or "")
+                existente.id_escuela = str(id_escuela or existente.id_escuela or "")
+                existente.id_alumno = str(id_alumno or existente.id_alumno or "")
+                existente.fecha = str(fecha or existente.fecha or "")
+                existente.estado = str(estado or "ACTIVO")
+                existente.payload_json = payload_str
+            else:
+                session.add(ColeccionInstitucional(
+                    id=pk,
+                    modulo=mod_clean,
+                    registro_id=reg_clean,
+                    cuenta=str(cuenta or ""),
+                    id_escuela=str(id_escuela or ""),
+                    id_alumno=str(id_alumno or ""),
+                    fecha=str(fecha or ""),
+                    estado=str(estado or "ACTIVO"),
+                    payload_json=payload_str,
+                ))
+            session.commit()
+    except Exception as exc:
+        logger.warning("Aviso en coleccion_guardar_sql (%s): %s", pk, exc)
     return reg_clean
 

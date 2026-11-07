@@ -441,25 +441,31 @@ def estado_base_datos():
         db_repr = "desconocido"
 
     with get_session() as session:
+        def _cnt(q_func):
+            try:
+                return q_func()
+            except Exception:
+                return 0
+
         return {
             "motor": "PostgreSQL 17" if is_postgres() else "SQLite Local",
             "host": host_repr,
             "database": db_repr,
-            "escuelas": session.query(Escuela).count(),
-            "personal": session.query(Personal).count(),
-            "usuarios": session.query(Usuario).count(),
-            "alumnos_activos": session.query(Alumno).filter(Alumno.estatus == "ACTIVO").count(),
-            "alumnos_total": session.query(Alumno).filter(Alumno.estatus != "ANULADO_MIGRACION").count(),
-            "planeaciones": session.query(PlaneacionDoc).count(),
-            "epp": session.query(EPPDoc).count(),
-            "anexo3_bap": session.query(Anexo3Deteccion).count(),
-            "anexo4_sugerencias": session.query(Anexo4Sugerencia).count(),
-            "anexo5_eventos": session.query(Anexo5Evento).count(),
-            "anexo7_derivaciones": session.query(Anexo7Derivacion).count(),
-            "visitas": session.query(RegistroVisita).count(),
-            "oficios": session.query(OficioComision).count(),
-            "docentes_regulares": session.query(DocenteRegular).count(),
-            "colecciones_institucionales": session.query(ColeccionInstitucional).count(),
+            "escuelas": _cnt(lambda: session.query(Escuela).count()),
+            "personal": _cnt(lambda: session.query(Personal).count()),
+            "usuarios": _cnt(lambda: session.query(Usuario).count()),
+            "alumnos_activos": _cnt(lambda: session.query(Alumno).filter(Alumno.estatus == "ACTIVO").count()),
+            "alumnos_total": _cnt(lambda: session.query(Alumno).filter(Alumno.estatus != "ANULADO_MIGRACION").count()),
+            "planeaciones": _cnt(lambda: session.query(PlaneacionDoc).count()),
+            "epp": _cnt(lambda: session.query(EPPDoc).count()),
+            "anexo3_bap": _cnt(lambda: session.query(Anexo3Deteccion).count()),
+            "anexo4_sugerencias": _cnt(lambda: session.query(Anexo4Sugerencia).count()),
+            "anexo5_eventos": _cnt(lambda: session.query(Anexo5Evento).count()),
+            "anexo7_derivaciones": _cnt(lambda: session.query(Anexo7Derivacion).count()),
+            "visitas": _cnt(lambda: session.query(RegistroVisita).count()),
+            "oficios": _cnt(lambda: session.query(OficioComision).count()),
+            "docentes_regulares": _cnt(lambda: session.query(DocenteRegular).count()),
+            "colecciones_institucionales": _cnt(lambda: session.query(ColeccionInstitucional).count()),
             "estado": "OK - Base de datos histórica completa y sincronizada",
         }
 
