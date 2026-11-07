@@ -1780,15 +1780,22 @@
     function Anexo3View({ onBack, setMetrics }) {
       const [baps, setBaps] = useState([]);
       const [busqueda, setBusqueda] = useState('');
+      const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        apiRequest('/api/anexo3').then(setBaps);
+        apiRequest('/api/anexo3')
+          .then(data => { setBaps(data); setLoading(false); })
+          .catch(() => setLoading(false));
       }, []);
 
-      const filtrados = baps.filter(b => 
-        (b.Nombre_Alumno || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (b.Escuela || '').toLowerCase().includes(busqueda.toLowerCase())
-      );
+      const filtrados = baps.filter(b => {
+        const nom = (b.nombre_alumno || b.Nombre_Alumno || '').toLowerCase();
+        const esc = (b.escuela || b.Escuela || '').toLowerCase();
+        const fis = (b.fisicas || b.Fisicas || '').toLowerCase();
+        const ped = (b.pedagogicas || b.Pedagogicas || b.Curriculares || '').toLowerCase();
+        const q = busqueda.toLowerCase();
+        return nom.includes(q) || esc.includes(q) || fis.includes(q) || ped.includes(q);
+      });
 
       return (
         <div className="space-y-6">
@@ -1812,21 +1819,29 @@
             className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
           />
 
-          <div className="grid gap-3">
-            {filtrados.map((b, i) => (
-              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
-                <div className="flex justify-between items-center font-bold text-slate-900">
-                  <span className="text-sm">{b.Nombre_Alumno || 'Detección Grupal'}</span>
-                  <span className="text-slate-400 font-normal">{b.Fecha}</span>
+          {loading ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando detecciones de BAP...</div>
+          ) : filtrados.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
+              No hay registros de BAP para este criterio de búsqueda o escuela asignada.
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {filtrados.map((b, i) => (
+                <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2 hover:border-amber-400 transition">
+                  <div className="flex justify-between items-center font-bold text-slate-900">
+                    <span className="text-sm">{b.nombre_alumno || b.Nombre_Alumno || 'Detección Grupal'}</span>
+                    <span className="text-slate-400 font-normal">{b.fecha || b.Fecha}</span>
+                  </div>
+                  <div className="text-slate-500">Escuela: {b.escuela || b.Escuela} • Alumno/Grupo: {b.id_alumno || b.ID_Alumno}</div>
+                  {(b.fisicas || b.Fisicas) && <div><strong>Físicas/Arquitectónicas:</strong> {b.fisicas || b.Fisicas}</div>}
+                  {(b.actitudinales || b.Actitudinales) && <div><strong>Actitudinales:</strong> {b.actitudinales || b.Actitudinales}</div>}
+                  {(b.pedagogicas || b.Pedagogicas || b.Curriculares) && <div><strong>Curriculares/Pedagógicas:</strong> {b.pedagogicas || b.Pedagogicas || b.Curriculares}</div>}
+                  {(b.organizativas || b.Organizativas) && <div><strong>Organizativas:</strong> {b.organizativas || b.Organizativas}</div>}
                 </div>
-                <div className="text-slate-500">Escuela: {b.Escuela} • Grado y Grupo: {b.Grado_Grupo}</div>
-                {b.Fisicas && <div><strong>Físicas/Arquitectónicas:</strong> {b.Fisicas}</div>}
-                {b.Actitudinales && <div><strong>Actitudinales:</strong> {b.Actitudinales}</div>}
-                {b.Curriculares && <div><strong>Curriculares/Pedagógicas:</strong> {b.Curriculares}</div>}
-                {b.Organizativas && <div><strong>Organizativas:</strong> {b.Organizativas}</div>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -1837,15 +1852,21 @@
     function Anexo4View({ onBack, setMetrics }) {
       const [sugerencias, setSugerencias] = useState([]);
       const [busqueda, setBusqueda] = useState('');
+      const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        apiRequest('/api/anexo4').then(setSugerencias);
+        apiRequest('/api/anexo4')
+          .then(data => { setSugerencias(data); setLoading(false); })
+          .catch(() => setLoading(false));
       }, []);
 
-      const filtradas = sugerencias.filter(s => 
-        (s.Alumno || s.Nombre_Alumno || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (s.Sugerencias || '').toLowerCase().includes(busqueda.toLowerCase())
-      );
+      const filtradas = sugerencias.filter(s => {
+        const nom = (s.nombre_alumno || s.Nombre_Alumno || s.Alumno || '').toLowerCase();
+        const sug = (s.sugerencias || s.Sugerencias || '').toLowerCase();
+        const area = (s.area || s.Area || '').toLowerCase();
+        const q = busqueda.toLowerCase();
+        return nom.includes(q) || sug.includes(q) || area.includes(q);
+      });
 
       return (
         <div className="space-y-6">
@@ -1869,20 +1890,33 @@
             className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
           />
 
-          <div className="grid gap-3">
-            {filtradas.map((s, i) => (
-              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
-                <div className="flex justify-between items-center font-bold text-slate-900">
-                  <span className="text-sm">{s.Alumno || s.Nombre_Alumno || 'Sugerencias de Grupo'}</span>
-                  <span className="text-slate-400 font-normal">{s.Fecha}</span>
+          {loading ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando hojas de sugerencias...</div>
+          ) : filtradas.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
+              No hay hojas de sugerencias registradas para este criterio o escuela asignada.
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {filtradas.map((s, i) => (
+                <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2 hover:border-amber-400 transition">
+                  <div className="flex justify-between items-center font-bold text-slate-900">
+                    <span className="text-sm">{s.nombre_alumno || s.Nombre_Alumno || s.Alumno || 'Sugerencias de Grupo'}</span>
+                    <span className="text-slate-400 font-normal">{s.fecha || s.Fecha}</span>
+                  </div>
+                  <div className="text-slate-500">
+                    <span>Área: <strong className="text-amber-800">{s.area || s.Area || 'Pedagógica'}</strong></span>
+                    <span className="mx-2">•</span>
+                    <span>Especialista: {s.docente_especialista || s.Docente_Especialista || s.Especialista || 'USAER'}</span>
+                    {(s.escuela || s.Escuela) && <span> • Escuela: {s.escuela || s.Escuela}</span>}
+                  </div>
+                  {(s.motivo || s.Motivo) && <div><strong>Motivo:</strong> {s.motivo || s.Motivo}</div>}
+                  <div><strong>Sugerencias para el Docente Regular:</strong> {s.sugerencias || s.Sugerencias}</div>
+                  {(s.cumplimiento || s.Cumplimiento) && <div className="text-emerald-700"><strong>Resultado / Seguimiento:</strong> {s.cumplimiento || s.Cumplimiento}</div>}
                 </div>
-                <div className="text-slate-500">Área: <strong className="text-amber-800">{s.Area || 'Pedagógica'}</strong> • Especialista: {s.Especialista || 'USAER'}</div>
-                {s.Motivo && <div><strong>Motivo:</strong> {s.Motivo}</div>}
-                <div><strong>Sugerencias para el Docente Regular:</strong> {s.Sugerencias}</div>
-                {s.Cumplimiento && <div className="text-emerald-700"><strong>Resultado / Seguimiento:</strong> {s.Cumplimiento}</div>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -1893,16 +1927,21 @@
     function Anexo5View({ onBack, setMetrics }) {
       const [eventos, setEventos] = useState([]);
       const [busqueda, setBusqueda] = useState('');
+      const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        apiRequest('/api/anexo5').then(setEventos);
+        apiRequest('/api/anexo5')
+          .then(data => { setEventos(data); setLoading(false); })
+          .catch(() => setLoading(false));
       }, []);
 
-      const filtrados = eventos.filter(ev => 
-        (ev.Nombre_Alumno || ev.alumno_nombre || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (ev.Evento || ev.evento || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (ev.Especialista || ev.especialista || '').toLowerCase().includes(busqueda.toLowerCase())
-      );
+      const filtrados = eventos.filter(ev => {
+        const nom = (ev.nombre_alumno || ev.Nombre_Alumno || ev.alumno_nombre || '').toLowerCase();
+        const txt = (ev.evento || ev.Evento || '').toLowerCase();
+        const esp = (ev.especialista || ev.Especialista || '').toLowerCase();
+        const q = busqueda.toLowerCase();
+        return nom.includes(q) || txt.includes(q) || esp.includes(q);
+      });
 
       return (
         <div className="space-y-6">
@@ -1926,18 +1965,26 @@
             className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
           />
 
-          <div className="space-y-2">
-            {filtrados.map((ev, i) => (
-              <div key={i} className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-start hover:border-amber-400 transition">
-                <div className="space-y-1">
-                  <div className="font-bold text-slate-900 text-sm">{ev.Nombre_Alumno || ev.alumno_nombre || 'Alumno USAER'}</div>
-                  <div className="text-slate-700">{ev.Evento || ev.evento}</div>
-                  <div className="text-[11px] text-slate-500">Registrado por: <strong>{ev.Especialista || ev.especialista}</strong></div>
+          {loading ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando eventos significativos...</div>
+          ) : filtrados.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
+              No hay eventos significativos registrados en tu búsqueda.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filtrados.map((ev, i) => (
+                <div key={i} className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-start hover:border-amber-400 transition">
+                  <div className="space-y-1">
+                    <div className="font-bold text-slate-900 text-sm">{ev.nombre_alumno || ev.Nombre_Alumno || ev.alumno_nombre || 'Alumno USAER'}</div>
+                    <div className="text-slate-700">{ev.evento || ev.Evento}</div>
+                    <div className="text-[11px] text-slate-500">Registrado por: <strong>{ev.especialista || ev.Especialista}</strong></div>
+                  </div>
+                  <span className="text-slate-400 font-mono text-xs whitespace-nowrap ml-4">{ev.fecha || ev.Fecha}</span>
                 </div>
-                <span className="text-slate-400 font-mono text-xs whitespace-nowrap ml-4">{ev.Fecha || ev.fecha}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -1947,9 +1994,12 @@
     // =============================================================
     function Anexo7View({ onBack, setMetrics }) {
       const [derivaciones, setDerivaciones] = useState([]);
+      const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        apiRequest('/api/anexo7').then(setDerivaciones);
+        apiRequest('/api/anexo7')
+          .then(data => { setDerivaciones(data); setLoading(false); })
+          .catch(() => setLoading(false));
       }, []);
 
       return (
@@ -1961,20 +2011,28 @@
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo VII — Derivación y Salud</h1>
           </div>
 
-          <div className="grid gap-3">
-            {derivaciones.map((d, i) => (
-              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
-                <div className="flex justify-between items-center font-bold text-slate-900">
-                  <span className="text-sm">{d.Alumno || d.Nombre_Alumno}</span>
-                  <span className="text-slate-400 font-normal">{d.Fecha}</span>
+          {loading ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando derivaciones...</div>
+          ) : derivaciones.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
+              No hay derivaciones médicas ni de salud registradas para tus alumnos.
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {derivaciones.map((d, i) => (
+                <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2 hover:border-amber-400 transition">
+                  <div className="flex justify-between items-center font-bold text-slate-900">
+                    <span className="text-sm">{d.nombre_alumno || d.Nombre_Alumno || d.Alumno}</span>
+                    <span className="text-slate-400 font-normal">{d.fecha || d.Fecha}</span>
+                  </div>
+                  <div><strong>Docente Regular:</strong> {d.docente_regular || d.Docente_Regular || 'No registrado'}</div>
+                  <div><strong>Salud:</strong> {d.salud || d.Salud || 'Buena salud'}</div>
+                  <div><strong>Seguimiento Médico:</strong> {d.seguimiento_medico || d.Seguimiento_Medico || 'En observación'}</div>
+                  {(d.aspecto_relevante || d.Aspecto_Relevante) && <div><strong>Aspecto Relevante:</strong> {d.aspecto_relevante || d.Aspecto_Relevante}</div>}
                 </div>
-                <div><strong>Docente Regular:</strong> {d.Docente_Regular || 'No registrado'}</div>
-                <div><strong>Salud:</strong> {d.Salud || 'Buena salud'}</div>
-                <div><strong>Seguimiento Médico:</strong> {d.Seguimiento_Medico || 'En observación'}</div>
-                {d.Aspecto_Relevante && <div><strong>Aspecto Relevante:</strong> {d.Aspecto_Relevante}</div>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -2139,15 +2197,20 @@
     function DocentesRegularesView({ onBack, setMetrics }) {
       const [docentes, setDocentes] = useState([]);
       const [busqueda, setBusqueda] = useState('');
+      const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        apiRequest('/api/docentes-regulares').then(setDocentes);
+        apiRequest('/api/docentes-regulares')
+          .then(data => { setDocentes(data); setLoading(false); })
+          .catch(() => setLoading(false));
       }, []);
 
-      const filtrados = docentes.filter(d => 
-        (d.Nombre || d.Docente || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (d.Escuela || '').toLowerCase().includes(busqueda.toLowerCase())
-      );
+      const filtrados = docentes.filter(d => {
+        const nom = (d.nombre_docente || d.Nombre_Docente || d.Nombre || d.Docente || '').toLowerCase();
+        const esc = (d.nombre_escuela || d.Nombre_Escuela || d.Escuela || '').toLowerCase();
+        const q = busqueda.toLowerCase();
+        return nom.includes(q) || esc.includes(q);
+      });
 
       return (
         <div className="space-y-6">
@@ -2171,15 +2234,28 @@
             className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtrados.map((d, i) => (
-              <div key={i} className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs space-y-1 shadow-sm">
-                <div className="font-bold text-slate-900 text-sm">{d.Nombre || d.Docente}</div>
-                <div className="text-slate-600">Escuela: {d.Escuela}</div>
-                <div className="text-slate-500">Grado y Grupo: <strong>{d.Grado_Grupo || d.Grado}</strong></div>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando directorio docente...</div>
+          ) : filtrados.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
+              No se encontraron docentes regulares con ese criterio.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filtrados.map((d, i) => (
+                <div key={i} className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs space-y-1 shadow-sm hover:border-amber-400 transition">
+                  <div className="font-bold text-slate-900 text-sm">{d.nombre_docente || d.Nombre_Docente || d.Nombre || d.Docente}</div>
+                  <div className="text-slate-600">Escuela: {d.nombre_escuela || d.Nombre_Escuela || d.Escuela}</div>
+                  <div className="text-slate-500">
+                    <span>Grado y Grupo: <strong>{d.grado || d.Grado} {d.grupo || d.Grupo}</strong></span>
+                    {(d.turno || d.Turno) && <span className="ml-2">• {d.turno || d.Turno}</span>}
+                  </div>
+                  {(d.telefono || d.Telefono) && <div className="text-slate-400 text-[11px]">📞 {d.telefono || d.Telefono}</div>}
+                  {(d.email || d.Email) && <div className="text-slate-400 text-[11px]">✉️ {d.email || d.Email}</div>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -2190,14 +2266,20 @@
     function NovedadesView({ onBack, setMetrics }) {
       const [novedades, setNovedades] = useState([]);
       const [busqueda, setBusqueda] = useState('');
+      const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        apiRequest('/api/novedades').then(setNovedades);
+        apiRequest('/api/novedades')
+          .then(data => { setNovedades(data); setLoading(false); })
+          .catch(() => setLoading(false));
       }, []);
 
-      const filtradas = novedades.filter(n => 
-        (n.Titulo || n.Asunto || '').toLowerCase().includes(busqueda.toLowerCase())
-      );
+      const filtradas = novedades.filter(n => {
+        const tit = (n.Nombre || n.nombre || n.Titulo || n.asunto || n.Asunto || '').toLowerCase();
+        const ext = (n.Extracto || n.extracto || n.Descripcion || '').toLowerCase();
+        const q = busqueda.toLowerCase();
+        return tit.includes(q) || ext.includes(q);
+      });
 
       return (
         <div className="space-y-6">
@@ -2221,28 +2303,37 @@
             className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
           />
 
-          <div className="grid gap-2.5">
-            {filtradas.map((n, i) => (
-              <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-center shadow-sm">
-                <div className="space-y-1">
-                  <div className="font-bold text-slate-900 text-sm">{n.Titulo || n.Asunto}</div>
-                  <div className="text-slate-500">{n.Descripcion || 'Circular oficial emitida por la Supervisión Escolar Zona 001.'}</div>
+          {loading ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando circulares oficiales...</div>
+          ) : filtradas.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
+              No se encontraron novedades o circulares con ese criterio.
+            </div>
+          ) : (
+            <div className="grid gap-2.5">
+              {filtradas.map((n, i) => (
+                <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-center shadow-sm hover:border-amber-400 transition">
+                  <div className="space-y-1">
+                    <div className="font-bold text-slate-900 text-sm">{n.Nombre || n.nombre || n.Titulo || n.asunto || n.Asunto}</div>
+                    <div className="text-slate-500">{n.Extracto || n.extracto || n.Descripcion || 'Circular oficial emitida por la Supervisión Escolar Zona 001.'}</div>
+                  </div>
+                  {(n.Enlace || n.enlace) && (
+                    <a
+                      href={n.Enlace || n.enlace}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 whitespace-nowrap ml-4 transition"
+                    >
+                      Ver Documento ↗
+                    </a>
+                  )}
                 </div>
-                {n.Enlace && (
-                  <a
-                    href={n.Enlace}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 whitespace-nowrap ml-4 transition"
-                  >
-                    Ver Documento ↗
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       );
+    }
     }
 
     // =============================================================

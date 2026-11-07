@@ -290,7 +290,7 @@ def reconciliar_base_datos() -> Dict[str, Any]:
         session.commit()
         resumen["epp"] = session.query(EPPDoc).count()
 
-        # 7. Anexo 3, Anexo 4, Anexo 5, Anexo 7
+        # 7. Anexo 3, Anexo 4, Anexo 5, Anexo 7, Visitas, Oficios, Docentes y Colecciones
         for ModelCls, key_name in [
             (Anexo3Deteccion, "anexo3"),
             (Anexo4Sugerencia, "anexo4"),
@@ -302,15 +302,43 @@ def reconciliar_base_datos() -> Dict[str, Any]:
             (DocenteRegular, "docentes_regulares"),
             (ColeccionInstitucional, "colecciones"),
         ]:
-            items = data.get(key_name, [])
-            if not items:
-                continue
-            existing_ids = {r[0] for r in session.query(ModelCls.id).all()}
-            nuevos = [ModelCls(**it) for it in items if it.get("id") and it["id"] not in existing_ids]
-            if nuevos:
-                session.bulk_save_objects(nuevos)
-                session.commit()
-            resumen[key_name] = session.query(ModelCls).count()
+            try:
+                items = data.get(key_name, [])
+                if not items:
+                    continue
+                existing_ids = {r[0] for r in session.query(ModelCls.id).all()}
+                seen_in_batch = set(existing_ids)
+                valid_columns = {c.name for c in ModelCls.__table__.columns}
+                nuevos = []
+                for it in items:
+                    iid = str(it.get("id") or "").strip()
+                    if not iid or iid in seen_in_batch:
+                        continue
+                    seen_in_batch.add(iid)
+                    filt_item = {k: v for k, v in it.items() if k in valid_columns}
+                    nuevos.append(ModelCls(**filt_item))
+                if nuevos:
+                    session.bulk_save_objects(nuevos)
+                    session.commit()
+                resumen[key_name] = session.query(ModelCls).count()
+            except Exception as exc:
+                session.rollback()
+                logging.getLogger("uvicorn").warning("Aviso reconciliando %s: %s", key_name, exc)
+                # Inserción registro a registro como fallback seguro
+                try:
+                    for it in data.get(key_name, []):
+                        iid = str(it.get("id") or "").strip()
+                        if not iid:
+                            continue
+                        exists = session.query(ModelCls).filter_by(id=iid).first()
+                        if not exists:
+                            filt_it = {k: v for k, v in it.items() if k in valid_columns}
+                            session.add(ModelCls(**filt_it))
+                    session.commit()
+                    resumen[key_name] = session.query(ModelCls).count()
+                except Exception as exc2:
+                    session.rollback()
+                    logging.getLogger("uvicorn").error("Error persistiendo %s: %s", key_name, exc2)
 
     return resumen
 

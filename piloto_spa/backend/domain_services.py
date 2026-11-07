@@ -128,22 +128,25 @@ def resolver_escuela_canonica(nom_esc: Any, eid_raw: Any = "") -> tuple[str, str
     return (e or "ESC-001"), (str(nom_esc or "").strip() or "Damián Carmona")
 
 
+ESCUELAS_CANONICAS: Dict[str, Tuple[str, str]] = {
+    "ESC-001": ("Damián Carmona", "31DPR0414P"),
+    "ESC-002": ("Ichcaanziho", "31DPR0002Z"),
+    "ESC-003": ("Gregorio Torres Quintero", "31DPR0003Y"),
+    "ESC-004": ("Remigio Aguilar Sosa", "31DPR0004X"),
+    "ESC-005": ("Elvira Parra Ávila", "31DPR0005W"),
+    "ESC-006": ("Manuel Sarrado", "31DPR0006V"),
+    "ESC-007": ("Domingo Solís Rodríguez", "31EPR0075F"),
+    "ESC-008": ("Quintana Roo", "31DPR0008T"),
+}
+
+
 # -------------------------------------------------------------
 # 1. SERVICIO DE ESCUELAS
 # -------------------------------------------------------------
 def obtener_catalogo_escuelas() -> List[Dict[str, Any]]:
     """Retorna las 8 primarias oficiales de la Zona 001 consultando la base relacional."""
     df = escuelas_sql()
-    ccts = {
-        "ESC-001": ("Damián Carmona", "31DPR0414P"),
-        "ESC-002": ("Ichcaanziho", "31DPR0002Z"),
-        "ESC-003": ("Gregorio Torres Quintero", "31DPR0003Y"),
-        "ESC-004": ("Remigio Aguilar Sosa", "31DPR0004X"),
-        "ESC-005": ("Elvira Parra Ávila", "31DPR0005W"),
-        "ESC-006": ("Manuel Sarrado", "31DPR0006V"),
-        "ESC-007": ("Domingo Solís Rodríguez", "31EPR0075F"),
-        "ESC-008": ("Quintana Roo", "31DPR0008T"),
-    }
+    ccts = ESCUELAS_CANONICAS
     if df.empty:
         return [
             {"id": eid, "nombre": nom, "cct": cct, "turno": "Matutino", "nivel": "Primaria"}
@@ -247,9 +250,24 @@ def obtener_alumnos_autorizados(
     if "DIRECTOR" in rol_clean or "TRABAJO" in rol_clean or "TODAS" in escuelas_permitidas:
         return alumnos
 
-    # 2. Filtrado por escuelas asignadas
-    permitidas_set = {str(e).strip() for e in escuelas_permitidas}
-    alumnos_escuela = [a for a in alumnos if a.get("id_escuela") in permitidas_set]
+    # 2. Filtrado por escuelas asignadas (tolerante a clave ESC-00X y nombre oficial)
+    permitidas_set = set()
+    for e in escuelas_permitidas or []:
+        e_str = str(e).strip()
+        permitidas_set.add(e_str)
+        e_norm = _norm(e_str)
+        if e_norm:
+            permitidas_set.add(e_norm)
+        for code, (nom, _) in ESCUELAS_CANONICAS.items():
+            if e_str == code or e_norm == _norm(nom) or e_norm in _norm(nom) or _norm(nom) in e_norm:
+                permitidas_set.add(code)
+                permitidas_set.add(nom)
+                permitidas_set.add(_norm(nom))
+
+    alumnos_escuela = [
+        a for a in alumnos
+        if a.get("id_escuela") in permitidas_set or _norm(a.get("escuela", "")) in permitidas_set
+    ]
 
     # 3. Especialistas clínicos (Psicología y Comunicación): ven todos los alumnos de su cluster asignado
     if "PSIC" in rol_clean or "COM" in rol_clean:
@@ -885,17 +903,22 @@ def listar_planeaciones_autorizadas(
     es_especialista = "PSIC" in _norm(usuario_rol) or "COM" in _norm(usuario_rol)
 
     filtradas = []
+    nom_doc_clean = _norm(nombre_docente)
     for p in todas:
         p_cuenta = str(p.get("cuenta") or "").strip()
-        if p_cuenta == cuenta:
-            filtradas.append(p)
-            continue
         datos = p.get("datos") or {}
+        doc_esp = str(datos.get("Docente_Especialista") or datos.get("Nombre del docente especialista") or "")
         esc_plan = str(datos.get("Escuela") or datos.get("Escuela regular") or "").strip()
         id_esc_plan = str(datos.get("ID_Escuela") or "").strip()
-        if es_especialista:
-            if (id_esc_plan and id_esc_plan in esc_id_set) or (esc_plan and _norm(esc_plan) in esc_norm_set):
-                filtradas.append(p)
+
+        # 1. Es autor directo por cuenta de usuario o por nombre en el documento
+        if p_cuenta == cuenta or (nom_doc_clean and (nom_doc_clean in _norm(doc_esp) or _norm(doc_esp) in nom_doc_clean)):
+            filtradas.append(p)
+            continue
+
+        # 2. Corresponde a la escuela o cluster asignado
+        if (id_esc_plan and id_esc_plan in esc_id_set) or (esc_plan and _norm(esc_plan) in esc_norm_set):
+            filtradas.append(p)
     return filtradas
 
 
