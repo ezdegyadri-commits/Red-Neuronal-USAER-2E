@@ -200,9 +200,9 @@ def obtener_alumnos_autorizados(
         if not alu_id or alu_id.startswith("alu-uppcoder"):
             continue
         estatus_str = str(r.get("Estatus", "ACTIVO")).strip().upper() or "ACTIVO"
-        # Sanar cualquier alumno real marcado previamente como anulado
+        # Omitir registros anulados
         if estatus_str == "ANULADO_MIGRACION":
-            estatus_str = "ACTIVO"
+            continue
         if not incluir_inactivos and estatus_str not in ("ACTIVO", "PENDIENTE DE VALIDACIÓN", "PENDIENTE DE VALIDACION"):
             continue
 

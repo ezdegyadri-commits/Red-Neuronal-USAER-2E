@@ -1,0 +1,122 @@
+[
+  {
+    "ID_Usuario": "USR-001",
+    "Nombre": "Psic. Edgar Adrian Yam Briceño",
+    "Usuario": "edgar.director",
+    "Password": "DirUsaer2E*2026",
+    "Rol": "Director",
+    "Escuelas_Permitidas": "TODAS"
+  },
+  {
+    "ID_Usuario": "USR-002",
+    "Nombre": "Mtra. Cindy Mayanín Burgos González",
+    "Usuario": "cindy.burgos",
+    "Password": "Usaer2E*Carmona",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-001"
+  },
+  {
+    "ID_Usuario": "USR-003",
+    "Nombre": "Mtra. Marycruz Caamal Coral",
+    "Usuario": "marycruz.caamal",
+    "Password": "Usaer2E*Ichcaan",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-002"
+  },
+  {
+    "ID_Usuario": "USR-004",
+    "Nombre": "Mtra. Dolores Eugenia Cortázar Navarrete",
+    "Usuario": "dolores.cortazar",
+    "Password": "Usaer2E*Torres",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-003"
+  },
+  {
+    "ID_Usuario": "USR-005",
+    "Nombre": "Mtra. Dianely de Sugeidy Caamal Tamay",
+    "Usuario": "dianely.caamal",
+    "Password": "Usaer2E*Remigio",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-004"
+  },
+  {
+    "ID_Usuario": "USR-006",
+    "Nombre": "Mtro. Luis Jorge García Herrera",
+    "Usuario": "luis.garcia",
+    "Password": "Usaer2E*Elvira",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-005"
+  },
+  {
+    "ID_Usuario": "USR-007",
+    "Nombre": "Mtra. María del Rosario Pérez Vitorin",
+    "Usuario": "rosario.perez",
+    "Password": "Usaer2E*Sarrado",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-006"
+  },
+  {
+    "ID_Usuario": "USR-008",
+    "Nombre": "Mtra. Zuemmy del Carmen Pérez Basto",
+    "Usuario": "zuemmy.perez",
+    "Password": "Usaer2E*Domingo",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-007"
+  },
+  {
+    "ID_Usuario": "USR-009",
+    "Nombre": "Mtro. Pedro Manuel Torres May",
+    "Usuario": "pedro.torres",
+    "Password": "Usaer2E*QRoo",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-008"
+  },
+  {
+    "ID_Usuario": "USR-010",
+    "Nombre": "Psic. María José Cupul Realpozo",
+    "Usuario": "mariajose.cupul",
+    "Password": "PsiUsaer2E*26",
+    "Rol": "Psicologia",
+    "Escuelas_Permitidas": "ESC-001,ESC-002,ESC-005,ESC-008"
+  },
+  {
+    "ID_Usuario": "USR-011",
+    "Nombre": "Com. Elmy Lucelly Puerto Gone",
+    "Usuario": "elmy.puerto",
+    "Password": "ComUsaer2E*26",
+    "Rol": "Comunicacion",
+    "Escuelas_Permitidas": "ESC-001,ESC-002,ESC-005,ESC-008"
+  },
+  {
+    "ID_Usuario": "USR-012",
+    "Nombre": "Psic. Abril de María Chable Ríos",
+    "Usuario": "abril.chable",
+    "Password": "PsiUsaer2E*26B",
+    "Rol": "Psicologia",
+    "Escuelas_Permitidas": "ESC-003,ESC-004,ESC-006,ESC-007"
+  },
+  {
+    "ID_Usuario": "USR-013",
+    "Nombre": "Com. Marilyn Pérez Lizama",
+    "Usuario": "marilyn.perez",
+    "Password": "ComUsaer2E*26B",
+    "Rol": "Comunicacion",
+    "Escuelas_Permitidas": "ESC-003,ESC-004,ESC-006,ESC-007"
+  },
+  {
+    "ID_Usuario": "USR-014",
+    "Nombre": "Mtro. Diego Peralta Torres",
+    "Usuario": "diego.peralta",
+    "Password": "TSUsaer2E*2026",
+    "Rol": "Trabajo_Social",
+    "Escuelas_Permitidas": "TODAS"
+  },
+  {
+    "ID_Usuario": "USR-015",
+    "Nombre": "Mtra. María Cecilia Solís Vázquez",
+    "Usuario": "cecilia.solis",
+    "Password": "Usaer2E*Ichcaan2",
+    "Rol": "Apoyo",
+    "Escuelas_Permitidas": "ESC-002"
+  }
+]
