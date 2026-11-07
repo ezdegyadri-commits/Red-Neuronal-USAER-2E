@@ -151,8 +151,15 @@ def reconciliar_base_datos() -> Dict[str, Any]:
         ColeccionInstitucional,
     )
 
-    engine = get_engine(initialize_schema=True)
-    Base.metadata.create_all(engine)
+    engine = get_engine(initialize_schema=False)
+    try:
+        for table in Base.metadata.sorted_tables:
+            try:
+                table.create(engine, checkfirst=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     candidatos_semilla = [
         Path(__file__).resolve().parents[2] / "data" / "semilla_historica_completa.json.gz",
@@ -346,6 +353,12 @@ def reconciliar_base_datos() -> Dict[str, Any]:
             try:
                 items = data.get(key_name, [])
                 if not items:
+                    continue
+                # Verificar primero si la tabla existe en la BD
+                try:
+                    session.query(ModelCls).first()
+                except Exception:
+                    session.rollback()
                     continue
                 existing_ids = {r[0] for r in session.query(ModelCls.id).all()}
                 seen_in_batch = set(existing_ids)

@@ -357,8 +357,15 @@ def get_engine(*, initialize_schema=True):
                     _ENGINE = create_engine(db_url, poolclass=NullPool, pool_pre_ping=True, echo=False, hide_parameters=True)
             _SESSION_FACTORY = sessionmaker(bind=_ENGINE, class_=SafeSession, autoflush=False, expire_on_commit=False)
         if initialize_schema and not _SCHEMA_READY:
-            Base.metadata.create_all(_ENGINE)
-            _SCHEMA_READY=True
+            try:
+                for table in Base.metadata.sorted_tables:
+                    try:
+                        table.create(_ENGINE, checkfirst=True)
+                    except Exception as tab_err:
+                        logger.warning("Aviso auto-creando tabla %s (ignorado): %s", table.name, tab_err)
+            except Exception as e:
+                logger.warning("Aviso schema init: %s", e)
+            _SCHEMA_READY = True
         return _ENGINE
 
 
