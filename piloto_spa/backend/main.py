@@ -83,6 +83,7 @@ from piloto_spa.backend.domain_services import (
     guardar_epp_documento,
     listar_planeaciones_autorizadas,
     obtener_planeacion_con_firmas,
+    verificar_acceso_planeacion,
     guardar_planeacion_transaccional,
     eliminar_planeacion_documento,
     guardar_anexo3_documento,
@@ -499,6 +500,8 @@ class PlaneacionPayload(BaseModel):
     tablas: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
     textos: Dict[str, str] = Field(default_factory=dict)
     observaciones_director: str = ""
+    aporte_area: Optional[Dict[str, Any]] = None
+    forzar: bool = False
 
 
 class EPPPayload(BaseModel):
@@ -902,13 +905,32 @@ def listar_planeaciones(user: SessionUser = Depends(validar_token_sesion)):
 
 @app.get("/api/planeaciones/{doc_id}")
 def obtener_planeacion(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    return obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
+    doc = obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
+    if not verificar_acceso_planeacion(
+        doc=doc,
+        usuario_cuenta=user.usuario,
+        usuario_rol=user.rol,
+        escuelas_permitidas=user.escuelas_permitidas,
+        nombre_docente=user.nombre,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permisos para acceder a esta planeación."
+        )
+    return doc
 
 
 @app.post("/api/planeaciones")
 def guardar_planeacion(payload: PlaneacionPayload, user: SessionUser = Depends(validar_token_sesion)):
     doc_dict = payload.model_dump()
-    return guardar_planeacion_transaccional(doc_dict, autor_cuenta=user.usuario)
+    return guardar_planeacion_transaccional(
+        payload=doc_dict,
+        autor_cuenta=user.usuario,
+        usuario_rol=user.rol,
+        escuelas_permitidas=user.escuelas_permitidas,
+        nombre_docente=user.nombre,
+        area_docente=user.area,
+    )
 
 
 @app.delete("/api/planeaciones/{doc_id}")
@@ -922,6 +944,17 @@ def eliminar_planeacion_endpoint(doc_id: str, user: SessionUser = Depends(valida
 @app.get("/api/planeaciones/{doc_id}/pdf")
 def descargar_planeacion_pdf(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
     doc = obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
+    if not verificar_acceso_planeacion(
+        doc=doc,
+        usuario_cuenta=user.usuario,
+        usuario_rol=user.rol,
+        escuelas_permitidas=user.escuelas_permitidas,
+        nombre_docente=user.nombre,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permisos para descargar el PDF de esta planeación."
+        )
     try:
         pdf_bytes = generar_pdf_planeacion(doc)
     except Exception as exc:

@@ -422,6 +422,7 @@
             {currentView === 'editor' && (
               <PlaneacionEditorView
                 docId={activeDocId}
+                user={user}
                 onBack={() => setCurrentView('mis_documentos')}
                 setMetrics={setMetrics}
               />
@@ -862,34 +863,65 @@
     // =============================================================
     // VISTA 2: EDITOR DE PLANEACIÓN COMPATIBLE CON STREAMLIT + SPA
     // =============================================================
-    function PlaneacionEditorView({ docId, onBack, setMetrics }) {
+    function PlaneacionEditorView({ docId, user, onBack, setMetrics }) {
       const [doc, setDoc] = useState(null);
       const [loading, setLoading] = useState(true);
       const [activeTab, setActiveTab] = useState('aprendizajes');
       const [saveStatus, setSaveStatus] = useState('saved');
+      const [conflictError, setConflictError] = useState(null);
       const [assistantOpen, setAssistantOpen] = useState(false);
+      const [activeAlumnoId, setActiveAlumnoId] = useState('');
       const debounceTimer = useRef(null);
 
-      useEffect(() => {
-        let mounted = true;
-        const fetchDoc = async () => {
-          const t0 = performance.now();
-          try {
-            const data = await apiRequest(`/api/planeaciones/${docId}`);
-            if (mounted) {
-              setDoc(data);
-              const t1 = performance.now();
-              setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
-            }
-          } catch (e) {
-            console.error("Error abriendo planeación:", e);
-          } finally {
-            if (mounted) setLoading(false);
-          }
-        };
-        fetchDoc();
-        return () => { mounted = false; };
+      const fetchDoc = useCallback(async () => {
+        setLoading(true);
+        setConflictError(null);
+        const t0 = performance.now();
+        try {
+          const data = await apiRequest(`/api/planeaciones/${docId}`);
+          setDoc(data);
+          const t1 = performance.now();
+          setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
+        } catch (e) {
+          console.error("Error abriendo planeación:", e);
+        } finally {
+          setLoading(false);
+        }
       }, [docId, setMetrics]);
+
+      useEffect(() => {
+        fetchDoc();
+      }, [fetchDoc]);
+
+      // Alumnos vinculados en la planeación
+      const alumnosEnPlaneacion = useMemo(() => {
+        if (!doc) return [];
+        const map = new Map();
+        if (Array.isArray(doc.datos?.Alumnos)) {
+          doc.datos.Alumnos.forEach(a => {
+            const id = a.ID_Alumno || a.id || a.id_alumno || '';
+            const nom = a.Nombre_Completo || a.nombre || a.alumno || id;
+            if (id) map.set(id, { id, nombre: nom });
+          });
+        }
+        const tNee = doc.tablas?.nee || doc.tablas?.aprendizajes || doc.tablas?.["Tabla principal"] || [];
+        tNee.forEach(row => {
+          const id = row.id_alumno || row.ID_Alumno || '';
+          const nom = row.alumno || row.Alumno || row.nombre_completo || '';
+          if (id && !map.has(id)) {
+            map.set(id, { id, nombre: nom || id });
+          } else if (nom && !map.has(nom)) {
+            map.set(nom, { id: id || nom, nombre: nom });
+          }
+        });
+        return Array.from(map.values());
+      }, [doc]);
+
+      useEffect(() => {
+        if (alumnosEnPlaneacion.length > 0 && !activeAlumnoId) {
+          setActiveAlumnoId(alumnosEnPlaneacion[0].id);
+        }
+      }, [alumnosEnPlaneacion, activeAlumnoId]);
 
       const persistir = useCallback(async (docActual) => {
         if (!navigator.onLine) {
@@ -897,6 +929,7 @@
           return;
         }
         setSaveStatus('saving');
+        setConflictError(null);
         const t0 = performance.now();
         try {
           const res = await apiRequest('/api/planeaciones', {
@@ -906,10 +939,21 @@
           setSaveStatus('saved');
           const t1 = performance.now();
           setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
-          setDoc(d => ({ ...d, revision: res.revision, guardado_en: res.guardado_en, firmas_resueltas: res.firmas }));
+          setDoc(d => ({
+            ...d,
+            revision: res.revision,
+            guardado_en: res.guardado_en,
+            firmas_resueltas: res.firmas,
+            metadatos: res.metadatos || d.metadatos
+          }));
         } catch (e) {
           console.error("Error al persistir:", e);
-          setSaveStatus('error');
+          if (e.message && e.message.includes('Conflicto de concurrencia')) {
+            setSaveStatus('conflict');
+            setConflictError(e.message);
+          } else {
+            setSaveStatus('error');
+          }
         }
       }, [setMetrics]);
 
@@ -942,8 +986,9 @@
         );
       }
 
-      // Compatibilidad con tablas históricas de Streamlit (ej. "Tabla principal")
-      const tablaNEE = doc.tablas?.nee || doc.tablas?.["Tabla principal"] || [];
+      // Compatibilidad canónica con todas las variantes de Streamlit
+      const tablaNEE = doc.tablas?.nee || doc.tablas?.aprendizajes || doc.tablas?.["Tabla principal"] || [];
+      const tablaDosificacion = doc.tablas?.dosificacion || [];
 
       return (
         <div className="space-y-4">
@@ -993,6 +1038,18 @@
                     <span className="text-slate-500">Cambios pendientes</span>
                   </>
                 )}
+                {saveStatus === 'conflict' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                    <span className="text-red-700 font-semibold">Conflicto de edición</span>
+                  </>
+                )}
+                {saveStatus === 'error' && (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                    <span className="text-red-600">Error al guardar</span>
+                  </>
+                )}
               </div>
 
               <a
@@ -1016,33 +1073,41 @@
             </div>
           </div>
 
-          {/* Tarjeta de Aportaciones Multidisciplinarias si vienen de Streamlit */}
-          {doc.metadatos?.aportaciones_equipo && (
-            <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 text-xs space-y-1">
-              <div className="font-bold text-amber-900">🤝 Aportaciones del Equipo Multidisciplinario (Streamlit Histórico)</div>
-              <div className="text-slate-700 whitespace-pre-wrap">{doc.metadatos.aportaciones_equipo}</div>
+          {/* Aviso de Conflicto si aplica */}
+          {conflictError && (
+            <div className="p-4 bg-red-50 border border-red-300 rounded-xl text-xs text-red-800 flex items-center justify-between shadow-sm">
+              <div>
+                <strong>Aviso de Concurrencia:</strong> {conflictError}
+              </div>
+              <button
+                onClick={fetchDoc}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition ml-3 shadow"
+              >
+                Sincronizar y Recargar
+              </button>
             </div>
           )}
 
           {/* Tarjeta de Guía Grupal Manual si viene de Streamlit */}
-          {doc.metadatos?.guia_grupal_manual && (
+          {typeof doc.metadatos?.guia_grupal_manual === 'string' && doc.metadatos.guia_grupal_manual && (
             <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 text-xs space-y-1">
               <div className="font-bold text-blue-900">📘 Guía Grupal de Intervención (Streamlit Histórico)</div>
               <div className="text-slate-700 whitespace-pre-wrap">{doc.metadatos.guia_grupal_manual}</div>
             </div>
           )}
 
-          <div className="flex border-b border-slate-200 space-x-1 text-sm font-semibold">
+          <div className="flex border-b border-slate-200 space-x-1 text-sm font-semibold overflow-x-auto">
             {[
               { id: 'aprendizajes', label: '1. NEE y Descriptores Observables' },
               { id: 'dosificacion', label: '2. Dosificación y Actividades' },
               { id: 'evaluacion', label: '3. Evaluación Formativa' },
-              { id: 'firmas', label: '4. Firmas y Vo. Bo. Oficial' },
+              { id: 'aportaciones', label: '4. Aportaciones Interdisciplinarias' },
+              { id: 'firmas', label: '5. Firmas y Vo. Bo. Oficial' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 border-b-2 font-bold transition text-xs sm:text-sm ${
+                className={`px-4 py-2.5 border-b-2 font-bold transition text-xs sm:text-sm whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'border-amber-600 text-amber-700 bg-amber-50/50'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -1070,13 +1135,24 @@
                       onClick={() => {
                         const nuevaFila = {
                           alumno: 'Nuevo Alumno',
+                          Alumno: 'Nuevo Alumno',
                           barreras_o_necesidades: 'Atención sostenida en lectura guiada.',
+                          'Necesidades educativas específicas': 'Atención sostenida en lectura guiada.',
+                          pda: 'Identifica ideas clave con apoyo visual.',
+                          'Aprendizaje y/u objetivo': 'Identifica ideas clave con apoyo visual.',
                           descriptor: 'El alumno identifica elementos clave con apoyo visual.',
-                          apoyos: 'Cronómetro visual y tarjetas léxicas.'
+                          'Descriptor de logro': 'El alumno identifica elementos clave con apoyo visual.',
+                          'Descriptor Observable': 'El alumno identifica elementos clave con apoyo visual.',
+                          apoyos: 'Cronómetro visual y tarjetas léxicas.',
+                          'Apoyos y Ajustes': 'Cronómetro visual y tarjetas léxicas.',
                         };
                         mutarDoc(d => ({
                           ...d,
-                          tablas: { ...d.tablas, nee: [...tablaNEE, nuevaFila] }
+                          tablas: {
+                            ...d.tablas,
+                            nee: [...tablaNEE, nuevaFila],
+                            aprendizajes: [...tablaNEE, nuevaFila]
+                          }
                         }));
                       }}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold"
@@ -1107,8 +1183,8 @@
                                   const val = e.target.value;
                                   mutarDoc(d => {
                                     const copy = [...tablaNEE];
-                                    copy[idx] = { ...copy[idx], alumno: val };
-                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                    copy[idx] = { ...copy[idx], alumno: val, Alumno: val };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy, aprendizajes: copy } };
                                   });
                                 }}
                                 className="w-full p-1.5 border border-slate-200 rounded font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
@@ -1117,13 +1193,18 @@
                             <td className="p-2">
                               <textarea
                                 rows="2"
-                                value={row.barreras_o_necesidades || row["Barrera o Necesidad"] || ''}
+                                value={row.barreras_o_necesidades || row["Necesidades educativas específicas"] || row["Barrera o Necesidad"] || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   mutarDoc(d => {
                                     const copy = [...tablaNEE];
-                                    copy[idx] = { ...copy[idx], barreras_o_necesidades: val };
-                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                    copy[idx] = {
+                                      ...copy[idx],
+                                      barreras_o_necesidades: val,
+                                      "Necesidades educativas específicas": val,
+                                      "Barrera o Necesidad": val
+                                    };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy, aprendizajes: copy } };
                                   });
                                 }}
                                 className="w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
@@ -1132,13 +1213,18 @@
                             <td className="p-2">
                               <textarea
                                 rows="2"
-                                value={row.descriptor || row["Descriptor Observable"] || row.descriptor_observable || ''}
+                                value={row.descriptor || row["Descriptor de logro"] || row["Descriptor Observable"] || row.descriptor_observable || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   mutarDoc(d => {
                                     const copy = [...tablaNEE];
-                                    copy[idx] = { ...copy[idx], descriptor: val };
-                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                    copy[idx] = {
+                                      ...copy[idx],
+                                      descriptor: val,
+                                      "Descriptor de logro": val,
+                                      "Descriptor Observable": val
+                                    };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy, aprendizajes: copy } };
                                   });
                                 }}
                                 className="w-full p-1.5 border border-amber-300 bg-amber-50/30 rounded text-slate-900 font-medium focus:outline-none focus:border-amber-500"
@@ -1147,13 +1233,19 @@
                             <td className="p-2">
                               <textarea
                                 rows="2"
-                                value={row.apoyos || row["Apoyos y Ajustes"] || row.ajustes_razonables || ''}
+                                value={row.apoyos || row["Apoyos y Ajustes"] || row["Apoyos o ajustes"] || row.ajustes_razonables || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   mutarDoc(d => {
                                     const copy = [...tablaNEE];
-                                    copy[idx] = { ...copy[idx], apoyos: val };
-                                    return { ...d, tablas: { ...d.tablas, nee: copy } };
+                                    copy[idx] = {
+                                      ...copy[idx],
+                                      apoyos: val,
+                                      "Apoyos y Ajustes": val,
+                                      "Apoyos o ajustes": val,
+                                      ajustes_razonables: val
+                                    };
+                                    return { ...d, tablas: { ...d.tablas, nee: copy, aprendizajes: copy } };
                                   });
                                 }}
                                 className="w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
@@ -1164,7 +1256,11 @@
                                 onClick={() => {
                                   mutarDoc(d => ({
                                     ...d,
-                                    tablas: { ...d.tablas, nee: tablaNEE.filter((_, i) => i !== idx) }
+                                    tablas: {
+                                      ...d.tablas,
+                                      nee: tablaNEE.filter((_, i) => i !== idx),
+                                      aprendizajes: tablaNEE.filter((_, i) => i !== idx)
+                                    }
                                   }));
                                 }}
                                 className="text-slate-400 hover:text-red-600 font-bold p-1"
@@ -1186,14 +1282,24 @@
                     <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Secuencia Didáctica y Modalidad</h3>
                     <button
                       onClick={() => {
+                        const nuevaSesion = {
+                          Contextos: 'Aula de apoyo',
+                          contextos: 'Aula de apoyo',
+                          semana: 'Semana ' + (tablaDosificacion.length + 1),
+                          Actividades: 'Actividad de intervención pedagógica individual / grupal.',
+                          actividad: 'Actividad de intervención pedagógica individual / grupal.',
+                          Recursos: 'Material didáctico y apoyos visuales.',
+                          recursos: 'Material didáctico y apoyos visuales.',
+                          Temporalidad: '45 minutos',
+                          temporalidad: '45 minutos',
+                          "Ajustes Razonables": 'Pausas activas y estructuración secuencial.',
+                          ajustes_razonables: 'Pausas activas y estructuración secuencial.',
+                        };
                         mutarDoc(d => ({
                           ...d,
                           tablas: {
                             ...d.tablas,
-                            dosificacion: [
-                              ...(d.tablas?.dosificacion || []),
-                              { semana: 'Semana 1', actividad: 'Lectura interactiva', recursos: 'Láminas', modalidad: 'Aula de Apoyo' }
-                            ]
+                            dosificacion: [...tablaDosificacion, nuevaSesion]
                           }
                         }));
                       }}
@@ -1204,48 +1310,93 @@
                   </div>
 
                   <div className="space-y-3">
-                    {(doc.tablas?.dosificacion || []).map((dos, i) => (
+                    {tablaDosificacion.map((dos, i) => (
                       <div key={i} className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 space-y-2 text-xs">
                         <div className="flex justify-between items-center">
                           <input
                             type="text"
-                            value={dos.semana || ''}
+                            value={dos.Contextos || dos.contextos || dos.semana || dos.modalidad || ''}
                             onChange={(e) => {
                               const val = e.target.value;
                               mutarDoc(d => {
-                                const copy = [...d.tablas.dosificacion];
-                                copy[i] = { ...copy[i], semana: val };
+                                const copy = [...tablaDosificacion];
+                                copy[i] = { ...copy[i], Contextos: val, semana: val, contextos: val };
                                 return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
                               });
                             }}
-                            className="font-bold text-slate-800 bg-white px-2 py-1 border border-slate-200 rounded"
+                            className="font-bold text-slate-800 bg-white px-2 py-1 border border-slate-200 rounded text-xs"
+                            placeholder="Contexto / Modalidad (ej. Aula de apoyo)"
                           />
                           <button
                             onClick={() => {
                               mutarDoc(d => ({
                                 ...d,
-                                tablas: { ...d.tablas, dosificacion: d.tablas.dosificacion.filter((_, idx) => idx !== i) }
+                                tablas: {
+                                  ...d.tablas,
+                                  dosificacion: tablaDosificacion.filter((_, idx) => idx !== i)
+                                }
                               }));
                             }}
-                            className="text-red-500 hover:text-red-700"
+                            className="text-red-500 hover:text-red-700 text-xs font-semibold"
                           >
                             Eliminar
                           </button>
                         </div>
-                        <textarea
-                          rows="2"
-                          value={dos.actividad || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            mutarDoc(d => {
-                              const copy = [...d.tablas.dosificacion];
-                              copy[i] = { ...copy[i], actividad: val };
-                              return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
-                            });
-                          }}
-                          className="w-full p-2 border border-slate-200 rounded bg-white"
-                          placeholder="Descripción de la actividad pedagógica..."
-                        />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <div className="md:col-span-2 space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-slate-400">Actividades:</label>
+                            <textarea
+                              rows="3"
+                              value={dos.Actividades || dos.actividades || dos.actividad || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                mutarDoc(d => {
+                                  const copy = [...tablaDosificacion];
+                                  copy[i] = { ...copy[i], Actividades: val, actividades: val, actividad: val };
+                                  return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
+                                });
+                              }}
+                              className="w-full p-2 border border-slate-200 rounded bg-white text-slate-800"
+                              placeholder="Descripción de la actividad pedagógica..."
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[10px] uppercase font-bold text-slate-400">Recursos:</label>
+                              <input
+                                type="text"
+                                value={dos.Recursos || dos.recursos || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...tablaDosificacion];
+                                    copy[i] = { ...copy[i], Recursos: val, recursos: val };
+                                    return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-slate-200 rounded bg-white text-xs"
+                                placeholder="Materiales y recursos..."
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] uppercase font-bold text-slate-400">Ajustes Razonables:</label>
+                              <input
+                                type="text"
+                                value={dos["Ajustes Razonables"] || dos.ajustes_razonables || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  mutarDoc(d => {
+                                    const copy = [...tablaDosificacion];
+                                    copy[i] = { ...copy[i], "Ajustes Razonables": val, ajustes_razonables: val };
+                                    return { ...d, tablas: { ...d.tablas, dosificacion: copy } };
+                                  });
+                                }}
+                                className="w-full p-1.5 border border-slate-200 rounded bg-white text-xs"
+                                placeholder="Ajustes específicos..."
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1253,15 +1404,133 @@
               )}
 
               {activeTab === 'evaluacion' && (
-                <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Criterios e Instrumentos de Evaluación</h3>
-                  <textarea
-                    rows="6"
-                    value={doc.textos?.evaluacion || ''}
-                    onChange={(e) => mutarDoc(d => ({ ...d, textos: { ...d.textos, evaluacion: e.target.value } }))}
-                    className="w-full p-3 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-amber-500"
-                    placeholder="Registra los indicadores de logro formativo y rúbricas de la Zona 001..."
-                  />
+                <div className="space-y-5">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Criterios e Instrumentos de Evaluación Formativa</h3>
+                    <p className="text-xs text-slate-500 mb-2">Registra los indicadores de logro formativo y rúbricas de la Zona 001.</p>
+                    <textarea
+                      rows="5"
+                      value={doc.textos?.['Evaluación'] || doc.textos?.evaluacion || doc.textos?.criterios_evaluacion || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        mutarDoc(d => ({
+                          ...d,
+                          textos: {
+                            ...d.textos,
+                            'Evaluación': val,
+                            evaluacion: val,
+                            criterios_evaluacion: val
+                          }
+                        }));
+                      }}
+                      className="w-full p-3 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                      placeholder="Registra los indicadores de logro formativo y rúbricas de la Zona 001..."
+                    />
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Observaciones Generales de la Intervención</h3>
+                    <textarea
+                      rows="4"
+                      value={doc.textos?.['Observaciones'] || doc.textos?.observaciones || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        mutarDoc(d => ({
+                          ...d,
+                          textos: {
+                            ...d.textos,
+                            'Observaciones': val,
+                            observaciones: val
+                          }
+                        }));
+                      }}
+                      className="w-full p-3 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                      placeholder="Notas pedagógicas u observaciones de seguimiento..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'aportaciones' && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                        Aportaciones del Equipo Multidisciplinario
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Espacio de colaboración técnica para Aprendizaje, Psicología, Comunicación y Trabajo Social.
+                      </p>
+                    </div>
+                  </div>
+
+                  {['Aprendizaje', 'Psicología', 'Comunicación', 'Trabajo Social'].map((areaName) => {
+                    const aportes = doc.metadatos?.aportaciones_equipo;
+                    const aporteInfo = (typeof aportes === 'object' && aportes !== null) ? aportes[areaName] : null;
+                    const puedeEditar = Boolean(user?.director || user?.area === areaName || (!user?.area && user?.rol === areaName.toUpperCase()));
+
+                    return (
+                      <div key={areaName} className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-base">
+                              {areaName === 'Aprendizaje' ? '📖' : areaName === 'Psicología' ? '🧠' : areaName === 'Comunicación' ? '🗣️' : '👥'}
+                            </span>
+                            <span className="font-bold text-slate-900 text-sm">{areaName}</span>
+                            {puedeEditar && (
+                              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded border border-emerald-200">
+                                Tu Área / Autorizado para Editar
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-slate-500">
+                            {aporteInfo?.autor ? `${aporteInfo.autor} (${aporteInfo.fecha ? aporteInfo.fecha.slice(0, 10) : 'Registrado'})` : 'Sin aportación registrada aún'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 uppercase">Observaciones y Estrategias Técnicas:</label>
+                          {puedeEditar ? (
+                            <textarea
+                              rows="3"
+                              value={aporteInfo?.observaciones || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                mutarDoc(d => {
+                                  const meta = { ...(d.metadatos || {}) };
+                                  const ae = typeof meta.aportaciones_equipo === 'object' && meta.aportaciones_equipo !== null
+                                    ? { ...meta.aportaciones_equipo }
+                                    : {};
+                                  const currentAporte = ae[areaName] || {};
+                                  ae[areaName] = {
+                                    ...currentAporte,
+                                    observaciones: val,
+                                    autor: user?.nombre || currentAporte.autor || 'Especialista',
+                                    cuenta: user?.usuario || currentAporte.cuenta || '',
+                                    fecha: new Date().toISOString(),
+                                  };
+                                  return { ...d, metadatos: { ...meta, aportaciones_equipo: ae } };
+                                });
+                              }}
+                              className="w-full p-2 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-amber-500"
+                              placeholder={`Registra las observaciones y sugerencias de ${areaName}...`}
+                            />
+                          ) : (
+                            <div className="p-2.5 bg-slate-50 rounded text-xs text-slate-700 whitespace-pre-wrap">
+                              {aporteInfo?.observaciones || 'No hay observaciones específicas registradas para esta área.'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {typeof doc.metadatos?.aportaciones_equipo === 'string' && doc.metadatos.aportaciones_equipo && (
+                    <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1">
+                      <div className="font-bold text-amber-900">Nota Histórica Migrada de Streamlit:</div>
+                      <div className="text-slate-700 whitespace-pre-wrap">{doc.metadatos.aportaciones_equipo}</div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1302,16 +1571,50 @@
 
             {assistantOpen && (
               <div className="w-80 md:w-96 bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex flex-col h-[520px]">
+                <div className="mb-2 pb-2 border-b border-slate-100 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">Enfoque de Alumno:</span>
+                  <select
+                    value={activeAlumnoId}
+                    onChange={(e) => setActiveAlumnoId(e.target.value)}
+                    className="text-xs font-semibold bg-amber-50 border border-amber-300 rounded px-2 py-1 max-w-[200px] truncate"
+                  >
+                    {alumnosEnPlaneacion.length > 0 ? (
+                      alumnosEnPlaneacion.map(a => (
+                        <option key={a.id} value={a.id}>{a.nombre}</option>
+                      ))
+                    ) : (
+                      <option value="">(Sin alumno asignado)</option>
+                    )}
+                  </select>
+                </div>
                 <PedagogicalChatComponent
-                  alumnoId="ALU-035"
+                  alumnoId={activeAlumnoId}
                   onInsertProposal={(propuesta) => {
-                    mutarDoc(d => ({
-                      ...d,
-                      tablas: {
-                        ...d.tablas,
-                        nee: [...tablaNEE, propuesta]
-                      }
-                    }));
+                    mutarDoc(d => {
+                      const aluNom = propuesta.alumno || alumnosEnPlaneacion.find(a => a.id === activeAlumnoId)?.nombre || 'Alumno';
+                      const nuevaFila = {
+                        alumno: aluNom,
+                        Alumno: aluNom,
+                        id_alumno: activeAlumnoId,
+                        barreras_o_necesidades: propuesta.barrera || propuesta.barreras_o_necesidades || 'Barrera identificada',
+                        'Necesidades educativas específicas': propuesta.barrera || propuesta.barreras_o_necesidades || 'Barrera identificada',
+                        pda: propuesta.pda || propuesta.aprendizaje || '',
+                        'Aprendizaje y/u objetivo': propuesta.pda || propuesta.aprendizaje || '',
+                        descriptor: propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeño observable.',
+                        'Descriptor de logro': propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeño observable.',
+                        'Descriptor Observable': propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeño observable.',
+                        apoyos: propuesta.apoyos || propuesta.ajustes_razonables || 'Apoyos visuales y estructurados.',
+                        'Apoyos y Ajustes': propuesta.apoyos || propuesta.ajustes_razonables || 'Apoyos visuales y estructurados.',
+                      };
+                      return {
+                        ...d,
+                        tablas: {
+                          ...d.tablas,
+                          nee: [...tablaNEE, nuevaFila],
+                          aprendizajes: [...tablaNEE, nuevaFila]
+                        }
+                      };
+                    });
                   }}
                 />
               </div>

@@ -2,7 +2,14 @@
 
 Valida tiempos de respuesta, serialización JSON, resolución de firmas canónicas y control de errores.
 """
+import sys
 import unittest
+from pathlib import Path
+
+ROOT_DIR = str(Path(__file__).resolve().parents[1])
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 from fastapi.testclient import TestClient
 from piloto_spa.backend.main import app
 
@@ -21,15 +28,19 @@ class TestPilotoSPAAPI(unittest.TestCase):
 
     def test_02_login_endpoint(self):
         """Verifica el inicio de sesión y la asignación del rol."""
-        res = self.client.post("/api/auth/login", json={"usuario": "cindy.burgos", "password": "123"})
+        res = self.client.post("/api/auth/login", json={"usuario": "cindy.burgos", "password": "Usaer2E*Carmona"})
         self.assertEqual(res.status_code, 200)
         data = res.json()
-        self.assertIn("Mtra. Cindy", data["nombre"])
-        self.assertEqual(data["rol"], "MAESTRA DE APOYO")
+        self.assertIn("user", data)
+        self.assertIn("Cindy", data["user"]["nombre"])
+        self.assertIn("token", data)
+        TestPilotoSPAAPI.cindy_token = data["token"]
 
     def test_03_listar_planeaciones_limite_y_rendimiento(self):
         """Verifica que la lista de planeaciones retorne rápidamente."""
-        res = self.client.get("/api/planeaciones", headers={"X-User-Account": "cindy.burgos"})
+        token = getattr(self.__class__, "cindy_token", None)
+        headers = {"Authorization": f"Bearer {token}"} if token else {"Authorization": "Bearer token_oficial_edgar_director_2026"}
+        res = self.client.get("/api/planeaciones", headers=headers)
         self.assertEqual(res.status_code, 200)
         planeaciones = res.json()
         self.assertIsInstance(planeaciones, list)
@@ -39,7 +50,9 @@ class TestPilotoSPAAPI(unittest.TestCase):
 
     def test_04_obtener_planeacion_con_firmas_oficiales(self):
         """Verifica que la planeación completa resuelva automáticamente las firmas de Edgar y del docente."""
-        res = self.client.get("/api/planeaciones/plan-demo-001", headers={"X-User-Account": "cindy.burgos"})
+        token = getattr(self.__class__, "cindy_token", None)
+        headers = {"Authorization": f"Bearer {token}"} if token else {"Authorization": "Bearer token_oficial_edgar_director_2026"}
+        res = self.client.get("/api/planeaciones/plan-demo-001", headers=headers)
         self.assertEqual(res.status_code, 200)
         doc = res.json()
         self.assertIn("firmas_resueltas", doc)
@@ -49,6 +62,8 @@ class TestPilotoSPAAPI(unittest.TestCase):
 
     def test_05_guardar_planeacion_con_revision(self):
         """Verifica el guardado y confirmación atómica con nuevo hash de revisión."""
+        token = getattr(self.__class__, "cindy_token", None)
+        headers = {"Authorization": f"Bearer {token}"} if token else {"Authorization": "Bearer token_oficial_edgar_director_2026"}
         payload = {
             "id": "plan-test-save-999",
             "cuenta": "cindy.burgos",
@@ -61,7 +76,7 @@ class TestPilotoSPAAPI(unittest.TestCase):
             },
             "textos": {"Observaciones": "Sin incidencias"}
         }
-        res = self.client.post("/api/planeaciones", json=payload, headers={"X-User-Account": "cindy.burgos"})
+        res = self.client.post("/api/planeaciones", json=payload, headers=headers)
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(data["status"], "success")
@@ -69,8 +84,10 @@ class TestPilotoSPAAPI(unittest.TestCase):
 
     def test_06_asistente_ia_sugerencias(self):
         """Verifica que el asistente pedagógico devuelva sugerencias limpias con fallback."""
+        token = getattr(self.__class__, "cindy_token", None)
+        headers = {"Authorization": f"Bearer {token}"} if token else {"Authorization": "Bearer token_oficial_edgar_director_2026"}
         payload = {"necesidad_o_barrera": "Dificultad de autorregulación"}
-        res = self.client.post("/api/ai/sugerencias", json=payload)
+        res = self.client.post("/api/ai/sugerencias", json=payload, headers=headers)
         self.assertEqual(res.status_code, 200)
         sug = res.json()
         self.assertIn("sugerencias", sug)
@@ -81,7 +98,7 @@ class TestPilotoSPAAPI(unittest.TestCase):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)
         self.assertIn("text/html", res.headers.get("content-type", ""))
-        self.assertIn("Piloto SPA", res.text)
+        self.assertIn("USAER 02-E", res.text)
         self.assertIn("React 18", res.text)
 
 if __name__ == "__main__":

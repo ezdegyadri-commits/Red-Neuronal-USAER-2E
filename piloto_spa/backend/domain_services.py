@@ -932,6 +932,65 @@ def listar_planeaciones_autorizadas(
     return filtradas
 
 
+def verificar_acceso_planeacion(
+    doc: Dict[str, Any],
+    usuario_cuenta: str,
+    usuario_rol: str,
+    escuelas_permitidas: List[str],
+    nombre_docente: str = "",
+) -> bool:
+    """Verifica si el usuario tiene alcance para consultar o modificar esta planeación."""
+    rol_clean = _norm(usuario_rol)
+    # 1. Dirección y Trabajo Social tienen acceso institucional global
+    if "DIRECTOR" in rol_clean or "TRABAJO" in rol_clean or "TODAS" in escuelas_permitidas:
+        return True
+
+    # 2. El propio autor siempre tiene acceso a su planeación
+    doc_cuenta = str(doc.get("cuenta") or "").strip().lower()
+    if usuario_cuenta and doc_cuenta and usuario_cuenta.strip().lower() == doc_cuenta:
+        return True
+
+    # 3. El docente nombrado explícitamente en los datos de la planeación
+    doc_nombre = _norm(
+        doc.get("datos", {}).get("Docente_Especialista", "")
+        or doc.get("datos", {}).get("Nombre del docente especialista", "")
+    )
+    usr_nombre = _norm(nombre_docente)
+    if usr_nombre and doc_nombre and (usr_nombre in doc_nombre or doc_nombre in usr_nombre):
+        return True
+
+    # 4. Docentes y especialistas con la escuela asignada en su alcance
+    doc_esc = str(doc.get("datos", {}).get("Escuela") or doc.get("datos", {}).get("Escuela regular") or "").strip()
+    doc_eid = str(doc.get("datos", {}).get("ID_Escuela") or "").strip()
+    eid_canon, esc_canon = resolver_escuela_canonica(doc_esc, doc_eid)
+
+    permitidas_set = set()
+    for e in escuelas_permitidas or []:
+        e_str = str(e).strip()
+        permitidas_set.add(e_str)
+        e_norm = _norm(e_str)
+        if e_norm:
+            permitidas_set.add(e_norm)
+        for code, (nom, _) in ESCUELAS_CANONICAS.items():
+            if e_str == code or e_norm == _norm(nom) or e_norm in _norm(nom) or _norm(nom) in e_norm:
+                permitidas_set.add(code)
+                permitidas_set.add(nom)
+                permitidas_set.add(_norm(nom))
+
+    if eid_canon in permitidas_set or _norm(esc_canon) in permitidas_set or (doc_esc and _norm(doc_esc) in permitidas_set):
+        return True
+
+    # 5. Especialistas clínicos que hayan registrado aportaciones en aportaciones_equipo
+    metadatos = doc.get("metadatos") or {}
+    aportes = metadatos.get("aportaciones_equipo") or {}
+    if isinstance(aportes, dict):
+        for area, ap in aportes.items():
+            if isinstance(ap, dict) and str(ap.get("cuenta", "")).strip().lower() == usuario_cuenta.strip().lower():
+                return True
+
+    return False
+
+
 def obtener_planeacion_con_firmas(doc_id: str, usuario_cuenta: str) -> Dict[str, Any]:
     """Carga la planeación de la BD y computa automáticamente las firmas canónicas oficiales."""
     doc = planeacion_por_id_sql(doc_id)
@@ -968,15 +1027,56 @@ def obtener_planeacion_con_firmas(doc_id: str, usuario_cuenta: str) -> Dict[str,
     if not datos.get("Grado_Grupo") and datos.get("Grado y grupo"):
         datos["Grado_Grupo"] = datos["Grado y grupo"]
 
+    # Sincronizar tabla de aprendizajes con tabla de nee si sólo una está presente
+    tablas = doc.setdefault("tablas", {})
+    if not tablas.get("nee") and tablas.get("aprendizajes"):
+        tablas["nee"] = tablas["aprendizajes"]
+    elif not tablas.get("aprendizajes") and tablas.get("nee"):
+        tablas["aprendizajes"] = tablas["nee"]
+    elif not tablas.get("nee") and tablas.get("Tabla principal"):
+        tablas["nee"] = tablas["Tabla principal"]
+
     firmas = resolver_firmas_planeacion(doc)
     doc["firmas_resueltas"] = firmas
     return doc
 
 
-def guardar_planeacion_transaccional(payload: Dict[str, Any], autor_cuenta: str) -> Dict[str, Any]:
-    """Guarda planeación con control de versiones preservando metadatos e historial previos."""
+def guardar_planeacion_transaccional(
+    payload: Dict[str, Any],
+    autor_cuenta: str,
+    usuario_rol: str = "",
+    escuelas_permitidas: Optional[List[str]] = None,
+    nombre_docente: str = "",
+    area_docente: str = "",
+) -> Dict[str, Any]:
+    """Guarda planeación con control de versiones y concurrencia optimista preservando historial previo."""
     pid = payload.get("id") or f"plan-{uuid.uuid4().hex[:8]}"
     prev = planeacion_por_id_sql(pid) or {}
+
+    # Validar permisos si el documento ya existía previamente
+    if prev and usuario_rol:
+        if not verificar_acceso_planeacion(
+            doc=prev,
+            usuario_cuenta=autor_cuenta,
+            usuario_rol=usuario_rol,
+            escuelas_permitidas=escuelas_permitidas or [],
+            nombre_docente=nombre_docente,
+        ):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="No tiene permisos para modificar esta planeación.")
+
+    # Control de concurrencia optimista con revisiones
+    client_rev = str(payload.get("revision") or "").strip()
+    prev_rev = str(prev.get("revision") or "").strip()
+    es_aporte_area = bool(payload.get("aporte_area"))
+
+    if prev and client_rev and prev_rev and client_rev != prev_rev and not es_aporte_area and not payload.get("forzar"):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=409,
+            detail="Conflicto de concurrencia: El documento fue modificado en otra sesión o pestaña. Actualice antes de guardar."
+        )
+
     nueva_rev = f"rev-{uuid.uuid4().hex[:6]}"
 
     merged = dict(prev)
@@ -986,11 +1086,53 @@ def guardar_planeacion_transaccional(payload: Dict[str, Any], autor_cuenta: str)
     merged["revision"] = nueva_rev
     merged["guardado_en"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # Conservar campos de metadatos como aportaciones_equipo o guia_grupal_manual si no vinieron en el payload parcial
-    if isinstance(prev.get("metadatos"), dict) and isinstance(payload.get("metadatos"), dict):
-        meta_merged = dict(prev["metadatos"])
+    # Conservar y combinar metadatos (como aportaciones_equipo de otras áreas)
+    meta_merged = dict(prev.get("metadatos") or {}) if isinstance(prev.get("metadatos"), dict) else {}
+    if isinstance(payload.get("metadatos"), dict):
         meta_merged.update(payload["metadatos"])
-        merged["metadatos"] = meta_merged
+
+    # Manejar aportaciones por área de forma colaborativa
+    if es_aporte_area:
+        info_aporte = payload["aporte_area"]
+        area_nombre = str(info_aporte.get("area") or area_docente or "Especialista").strip()
+        aportes_existentes = meta_merged.setdefault("aportaciones_equipo", {})
+        if not isinstance(aportes_existentes, dict):
+            aportes_existentes = {}
+            meta_merged["aportaciones_equipo"] = aportes_existentes
+
+        aportes_existentes[area_nombre] = {
+            "cuenta": autor_cuenta,
+            "autor": nombre_docente or autor_cuenta,
+            "revision": uuid.uuid4().hex[:8],
+            "fecha": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "filas": info_aporte.get("filas", []),
+            "observaciones": str(info_aporte.get("observaciones", "")).strip(),
+        }
+    elif isinstance(prev.get("metadatos", {}).get("aportaciones_equipo"), dict) and isinstance(meta_merged.get("aportaciones_equipo"), dict):
+        # Asegurar que un guardado general no elimine aportaciones existentes de otros especialistas
+        combo = dict(prev["metadatos"]["aportaciones_equipo"])
+        combo.update(meta_merged["aportaciones_equipo"])
+        meta_merged["aportaciones_equipo"] = combo
+
+    merged["metadatos"] = meta_merged
+
+    # Sincronizar tablas para compatibilidad total con Streamlit
+    tablas = merged.setdefault("tablas", {})
+    if "nee" in tablas and "aprendizajes" not in tablas:
+        tablas["aprendizajes"] = tablas["nee"]
+    elif "aprendizajes" in tablas and "nee" not in tablas:
+        tablas["nee"] = tablas["aprendizajes"]
+
+    # Sincronizar textos para compatibilidad con el reporte PDF y Streamlit
+    textos = merged.setdefault("textos", {})
+    if "evaluacion" in textos and "Evaluación" not in textos:
+        textos["Evaluación"] = textos["evaluacion"]
+    elif "Evaluación" in textos and "evaluacion" not in textos:
+        textos["evaluacion"] = textos["Evaluación"]
+    if "observaciones" in textos and "Observaciones" not in textos:
+        textos["Observaciones"] = textos["observaciones"]
+    elif "Observaciones" in textos and "observaciones" not in textos:
+        textos["observaciones"] = textos["Observaciones"]
 
     guardar_planeacion_sql(merged)
     firmas = resolver_firmas_planeacion(merged)
@@ -1001,6 +1143,7 @@ def guardar_planeacion_transaccional(payload: Dict[str, Any], autor_cuenta: str)
         "revision": nueva_rev,
         "guardado_en": merged["guardado_en"],
         "firmas": firmas,
+        "metadatos": merged["metadatos"],
     }
 
 

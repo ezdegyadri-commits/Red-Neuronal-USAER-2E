@@ -303,7 +303,7 @@ def validar_token_sesion(authorization: Optional[str] = Header(None)) -> Session
     partes = authorization.split()
     token = partes[1] if len(partes) == 2 and partes[0].lower() == "bearer" else authorization.strip()
 
-    if "token_oficial_edgar_director_2026" in token or "edgar" in token:
+    if token == "token_oficial_edgar_director_2026":
         return SessionUser(
             id_usuario="USR-001",
             nombre="Psic. Edgar Adrian Yam Briceno",
@@ -332,16 +332,6 @@ def cerrar_sesion(authorization: Optional[str] = Header(None)) -> bool:
     partes = authorization.split()
     token = partes[1] if len(partes) == 2 and partes[0].lower() == "bearer" else authorization.strip()
 
-    if "token_oficial_edgar_director_2026" in token or "edgar" in token:
-        return SessionUser(
-            id_usuario="USR-001",
-            nombre="Psic. Edgar Adrian Yam Briceno",
-            usuario="edgar.director",
-            rol="DIRECTOR",
-            escuelas_permitidas=["TODAS"],
-            director=True,
-            area="Dirección"
-        )
     if token in _ACTIVE_SESSIONS:
         del _ACTIVE_SESSIONS[token]
     return True
