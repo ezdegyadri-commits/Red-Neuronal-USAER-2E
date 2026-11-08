@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>USAER 02-E · Sistema Integral SPA 2.0</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◈</text></svg>">
   <!-- Tailwind CSS CDN -->
   <script crossorigin="anonymous" src="https://cdn.tailwindcss.com"></script>
   <!-- React 18 & ReactDOM CDN -->
@@ -80,7 +81,22 @@
   </script>
 
   <script type="text/babel" data-presets="react">
-    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+    const {
+      useState,
+      useEffect,
+      useMemo,
+      useRef,
+      useCallback,
+      useContext,
+      createContext,
+      useReducer,
+      useLayoutEffect,
+      useId,
+      Fragment,
+      Suspense,
+      lazy,
+      memo
+    } = React;
     const API_BASE = window.location.origin;
 
     // =============================================================
@@ -122,6 +138,15 @@
                 <p className="text-xs text-slate-300 leading-relaxed">
                   {this.state.error?.message || 'Ocurrió una excepción al procesar la vista interactiva.'}
                 </p>
+                {this.state.error && (
+                  <details className="text-left bg-slate-900/80 p-3 rounded-lg border border-slate-700 text-[11px] text-red-300 font-mono overflow-x-auto max-h-40">
+                    <summary className="cursor-pointer text-slate-400 hover:text-slate-200 font-bold mb-1">Ver Detalle Técnico</summary>
+                    <div>{String(this.state.error?.stack || this.state.error)}</div>
+                    {this.state.errorInfo?.componentStack && (
+                      <div className="mt-2 text-slate-400">{this.state.errorInfo.componentStack}</div>
+                    )}
+                  </details>
+                )}
                 <div className="flex justify-center gap-3 pt-2">
                   <button
                     onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}

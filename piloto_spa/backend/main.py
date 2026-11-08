@@ -637,6 +637,12 @@ class OficioPayload(BaseModel):
 # -------------------------------------------------------------
 # 1. AUTENTICACIÓN Y SESIÓN
 # -------------------------------------------------------------
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Responde 204 No Content para evitar errores 404 en la consola del navegador."""
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 @app.get("/api/health")
 def healthcheck():
     return {"status": "ok", "version": "2.0.0", "timestamp": time.time()}

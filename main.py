@@ -88,6 +88,12 @@ def startup_reconciliacion():
         print(f"Aviso startup DB: {e}")
 
 
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon_root():
+    from fastapi import Response, status
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 @app.get("/api/diag")
 def diag():
     try:
