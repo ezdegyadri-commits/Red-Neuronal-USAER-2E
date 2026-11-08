@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>USAER 02-E · Sistema Integral SPA 2.0</title>
   <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin="anonymous" src="https://cdn.tailwindcss.com"></script>
   <!-- React 18 & ReactDOM CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <!-- Babel Standalone para JSX -->
-  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
   <style>
     :root {
       --primary: #0F172A;
@@ -59,23 +59,90 @@
       console.error("Error global frontend:", message, source, lineno, colno, error);
       const root = document.getElementById('root');
       if (root && root.innerHTML.includes('Cargando plataforma')) {
-        const detalle = (error && error.message) || message || 'Hubo un retraso conectando con los módulos interactivos.';
+        let detalle = (error && error.message) || message || 'Hubo un retraso cargando los recursos interactivos.';
+        if (detalle === 'Script error.' || !lineno) {
+          detalle = 'El navegador detectó una intermitencia de red descargando librerías interactivas (React/Tailwind). Presiona Reintentar.';
+        }
         const ubicacion = lineno ? ` (Línea: ${lineno}${colno ? `:${colno}` : ''})` : '';
-        root.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;background:#0F172A;color:#F87171;min-height:100vh;">' +
-          '<h2 style="font-size:24px;font-weight:bold;margin-bottom:12px;">⚠️ Aviso de Carga de Plataforma</h2>' +
-          '<p style="color:#CBD5E1;max-width:550px;margin:0 auto 20px;font-size:14px;word-break:break-word;">' + detalle + ubicacion + '</p>' +
-          '<div style="display:flex;gap:12px;justify-content:center;">' +
-          '<button onclick="location.reload()" style="background:#D97706;color:#FFF;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;">Reintentar Carga</button>' +
-          '<button onclick="sessionStorage.clear(); localStorage.clear(); location.reload(true);" style="background:#334155;color:#E2E8F0;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;">Limpiar Sesión y Recargar</button>' +
+        root.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;background:#0F172A;color:#F87171;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
+          '<div style="background:#1E293B;padding:32px;border-radius:16px;border:1px solid #334155;max-width:540px;width:100%;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">' +
+          '<h2 style="font-size:22px;font-weight:bold;margin-bottom:12px;color:#FBBF24;">USAER 02-E · Sistema 2.0</h2>' +
+          '<p style="font-size:14px;font-weight:bold;color:#F87171;margin-bottom:8px;">⚠️ Aviso de Conexión de Plataforma</p>' +
+          '<p style="color:#CBD5E1;font-size:13px;line-height:1.5;margin-bottom:20px;word-break:break-word;">' + detalle + ubicacion + '</p>' +
+          '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">' +
+          '<button onclick="location.reload()" style="background:#D97706;color:#FFF;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;font-size:13px;">Reintentar Carga Inmediata</button>' +
+          '<button onclick="sessionStorage.clear(); localStorage.clear(); location.reload(true);" style="background:#334155;color:#E2E8F0;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;font-size:13px;">Limpiar Caché y Recargar</button>' +
+          '</div>' +
           '</div>' +
           '</div>';
       }
     };
   </script>
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef, useCallback } = React;
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
     const API_BASE = window.location.origin;
+
+    // =============================================================
+    // COMPONENTE: LIMITADOR DE ERRORES (ERROR BOUNDARY) ANTI-PANTALLA BLANCA
+    // =============================================================
+    class ErrorBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null, errorInfo: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      componentDidCatch(error, errorInfo) {
+        console.error("ErrorBoundary atrapó un error en tiempo de render:", error, errorInfo);
+        this.setState({ errorInfo });
+        try {
+          fetch(`${API_BASE}/api/logs/frontend`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              error: String(error),
+              message: error?.message,
+              stack: error?.stack,
+              componentStack: errorInfo?.componentStack,
+              url: window.location.href,
+              fecha: new Date().toISOString()
+            })
+          }).catch(() => {});
+        } catch (_) {}
+      }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="p-8 bg-slate-900 min-h-screen text-slate-100 flex items-center justify-center">
+              <div className="bg-slate-800 border border-slate-700 max-w-lg w-full p-6 rounded-2xl shadow-2xl text-center space-y-4">
+                <div className="text-3xl text-amber-400">⚠️</div>
+                <h2 className="text-lg font-bold text-amber-300">Aviso de Renderizado en Módulo</h2>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {this.state.error?.message || 'Ocurrió una excepción al procesar la vista interactiva.'}
+                </p>
+                <div className="flex justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition"
+                  >
+                    Reintentar y Recargar
+                  </button>
+                  <button
+                    onClick={() => { sessionStorage.clear(); localStorage.clear(); window.location.href = '/'; }}
+                    className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold px-4 py-2 rounded-lg transition"
+                  >
+                    Limpiar Sesión
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
 
     // Cliente API con Bearer Token y manejo de sesión
     async function apiRequest(endpoint, options = {}) {
@@ -210,6 +277,27 @@
       const [activeAlumnoId, setActiveAlumnoId] = useState(null);
       const [metrics, setMetrics] = useState({ latency: 12, requests: 1 });
       const [dropdownOpen, setDropdownOpen] = useState(false);
+      const [notificacionEnVivo, setNotificacionEnVivo] = useState(null);
+
+      // Sincronización en vivo entre sesiones concurrentes (Cero Recargas)
+      useEffect(() => {
+        if (!user) return;
+        let lastTs = Date.now() / 1000;
+        const poller = setInterval(async () => {
+          try {
+            const data = await apiRequest(`/api/novedades-en-vivo?desde=${lastTs}`);
+            if (data && Array.isArray(data.novedades) && data.novedades.length > 0) {
+              lastTs = data.servidor_tiempo || (Date.now() / 1000);
+              const ult = data.novedades[data.novedades.length - 1];
+              if (ult && ult.usuario !== user.usuario) {
+                setNotificacionEnVivo(`🔄 ${ult.resumen || 'Cambio registrado en plataforma'}`);
+                setTimeout(() => setNotificacionEnVivo(null), 6000);
+              }
+            }
+          } catch (_) {}
+        }, 6000);
+        return () => clearInterval(poller);
+      }, [user]);
 
       useEffect(() => {
         const handleAuthExpired = () => {
@@ -402,6 +490,13 @@
               </div>
             </div>
           </header>
+
+          {notificacionEnVivo && (
+            <div className="bg-amber-500 text-slate-950 font-bold text-xs py-2 px-4 text-center sticky top-14 z-50 shadow-md flex items-center justify-center space-x-2">
+              <span>{notificacionEnVivo}</span>
+              <button onClick={() => setNotificacionEnVivo(null)} className="ml-2 underline text-[11px] font-normal hover:text-white">Cerrar</button>
+            </div>
+          )}
 
           {/* Área Principal de Contenido SPA */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6" onClick={() => dropdownOpen && setDropdownOpen(false)}>
@@ -871,6 +966,7 @@
       const [conflictError, setConflictError] = useState(null);
       const [assistantOpen, setAssistantOpen] = useState(false);
       const [activeAlumnoId, setActiveAlumnoId] = useState('');
+      const [borradorDisponible, setBorradorDisponible] = useState(null);
       const debounceTimer = useRef(null);
 
       const fetchDoc = useCallback(async () => {
@@ -880,6 +976,15 @@
         try {
           const data = await apiRequest(`/api/planeaciones/${docId}`);
           setDoc(data);
+          try {
+            const draftRaw = localStorage.getItem(`usaer_borrador_plan_${docId}`);
+            if (draftRaw) {
+              const draft = JSON.parse(draftRaw);
+              if (draft && draft.id === docId && draft.metadatos?.titulo) {
+                setBorradorDisponible(draft);
+              }
+            }
+          } catch (_) {}
           const t1 = performance.now();
           setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
         } catch (e) {
@@ -893,27 +998,35 @@
         fetchDoc();
       }, [fetchDoc]);
 
-      // Alumnos vinculados en la planeación
+      // Alumnos vinculados en la planeación (tolerante a estructuras nulas)
       const alumnosEnPlaneacion = useMemo(() => {
         if (!doc) return [];
         const map = new Map();
-        if (Array.isArray(doc.datos?.Alumnos)) {
-          doc.datos.Alumnos.forEach(a => {
-            const id = a.ID_Alumno || a.id || a.id_alumno || '';
-            const nom = a.Nombre_Completo || a.nombre || a.alumno || id;
-            if (id) map.set(id, { id, nombre: nom });
-          });
-        }
-        const tNee = doc.tablas?.nee || doc.tablas?.aprendizajes || doc.tablas?.["Tabla principal"] || [];
-        tNee.forEach(row => {
-          const id = row.id_alumno || row.ID_Alumno || '';
-          const nom = row.alumno || row.Alumno || row.nombre_completo || '';
-          if (id && !map.has(id)) {
-            map.set(id, { id, nombre: nom || id });
-          } else if (nom && !map.has(nom)) {
-            map.set(nom, { id: id || nom, nombre: nom });
+        try {
+          if (Array.isArray(doc.datos?.Alumnos)) {
+            doc.datos.Alumnos.forEach(a => {
+              if (!a) return;
+              const id = a.ID_Alumno || a.id || a.id_alumno || '';
+              const nom = a.Nombre_Completo || a.nombre || a.alumno || id;
+              if (id) map.set(id, { id, nombre: nom });
+            });
           }
-        });
+          const tNee = doc.tablas?.nee || doc.tablas?.aprendizajes || doc.tablas?.["Tabla principal"] || [];
+          if (Array.isArray(tNee)) {
+            tNee.forEach(row => {
+              if (!row) return;
+              const id = row.id_alumno || row.ID_Alumno || '';
+              const nom = row.alumno || row.Alumno || row.nombre_completo || '';
+              if (id && !map.has(id)) {
+                map.set(id, { id, nombre: nom || id });
+              } else if (nom && !map.has(nom)) {
+                map.set(nom, { id: id || nom, nombre: nom });
+              }
+            });
+          }
+        } catch (err) {
+          console.warn("Aviso computando alumnos en planeación:", err);
+        }
         return Array.from(map.values());
       }, [doc]);
 
@@ -937,6 +1050,8 @@
             body: JSON.stringify(docActual)
           });
           setSaveStatus('saved');
+          try { localStorage.removeItem(`usaer_borrador_plan_${docId}`); } catch (_) {}
+          setBorradorDisponible(null);
           const t1 = performance.now();
           setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
           setDoc(d => ({
@@ -961,6 +1076,9 @@
         setDoc(prev => {
           const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
           setSaveStatus('dirty');
+          try {
+            localStorage.setItem(`usaer_borrador_plan_${docId}`, JSON.stringify(next));
+          } catch (_) {}
           return next;
         });
       };
@@ -992,6 +1110,27 @@
 
       return (
         <div className="space-y-4">
+          {borradorDisponible && (
+            <div className="bg-amber-50 border border-amber-300 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-xs text-amber-900 gap-2">
+              <div>
+                <span className="font-bold">⚠️ Borrador local detectado:</span> Tienes una versión previa no sincronizada en este dispositivo.
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => { setDoc(borradorDisponible); setBorradorDisponible(null); setSaveStatus('dirty'); }}
+                  className="bg-amber-600 text-white px-3 py-1 rounded-lg font-bold hover:bg-amber-700 transition"
+                >
+                  Restaurar Borrador
+                </button>
+                <button
+                  onClick={() => { try { localStorage.removeItem(`usaer_borrador_plan_${docId}`); } catch(_) {} setBorradorDisponible(null); }}
+                  className="bg-slate-200 text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-300 transition"
+                >
+                  Descartar
+                </button>
+              </div>
+            </div>
+          )}
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               <button
@@ -2990,7 +3129,11 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    );
   </script>
 </body>
 </html>

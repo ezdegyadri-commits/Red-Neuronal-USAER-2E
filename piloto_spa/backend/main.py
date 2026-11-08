@@ -28,6 +28,7 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime, timezone
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -57,6 +58,7 @@ except ImportError:
 
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 import pandas as pd
@@ -127,6 +129,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 def reconciliar_base_datos() -> Dict[str, Any]:
@@ -620,6 +623,15 @@ class OficioPayload(BaseModel):
 def healthcheck():
     return {"status": "ok", "version": "2.0.0", "timestamp": time.time()}
 
+@app.post("/api/logs/frontend")
+def registrar_error_frontend(payload: Dict[str, Any]):
+    """Registra errores de JavaScript capturados por ErrorBoundary para diagnóstico remoto."""
+    err_msg = str(payload.get("message") or payload.get("error") or "Error no especificado")
+    err_stack = str(payload.get("stack") or "")
+    logger.error(f"[FRONTEND ERROR] {err_msg} | URL: {payload.get('url')} | Stack: {err_stack[:200]}")
+    return {"status": "ok", "registrado": True}
+
+
 
 @app.post("/api/auth/login")
 def login_endpoint(payload: LoginPayload):
@@ -653,6 +665,60 @@ def logout_endpoint(authorization: Optional[str] = Header(None)):
 
 
 # -------------------------------------------------------------
+
+# -------------------------------------------------------------
+# REGISTRO GLOBAL DE NOVEDADES EN VIVO (CERO RECARGAS)
+# -------------------------------------------------------------
+NOVEDADES_EN_VIVO: List[Dict[str, Any]] = []
+
+def registrar_novedad(
+    modulo: str,
+    id_registro: str,
+    accion: str,
+    usuario: str,
+    id_escuela: str = "",
+    resumen: str = ""
+):
+    """Registra eventos en memoria para notificación reactiva entre pestañas y navegadores concurrentes."""
+    global NOVEDADES_EN_VIVO
+    evento = {
+        "id_evento": uuid.uuid4().hex[:8],
+        "timestamp": time.time(),
+        "fecha_hora": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "modulo": modulo,
+        "id_registro": str(id_registro),
+        "accion": accion,
+        "usuario": usuario,
+        "id_escuela": str(id_escuela or ""),
+        "resumen": str(resumen or "")[:180]
+    }
+    NOVEDADES_EN_VIVO.append(evento)
+    if len(NOVEDADES_EN_VIVO) > 500:
+        NOVEDADES_EN_VIVO = NOVEDADES_EN_VIVO[-500:]
+
+@app.get("/api/novedades-en-vivo")
+def obtener_novedades_en_vivo(
+    desde: float = 0.0,
+    user: SessionUser = Depends(validar_token_sesion)
+):
+    """Retorna las novedades registradas después del timestamp 'desde' filtradas por alcance institucional."""
+    ahora = time.time()
+    es_director = user.director or "TRABAJO" in user.rol.upper() or "TODAS" in user.escuelas_permitidas
+    permitidas = set(user.escuelas_permitidas or [])
+
+    filtradas = []
+    for ev in reversed(NOVEDADES_EN_VIVO):
+        if ev["timestamp"] <= desde:
+            break
+        if es_director or not ev["id_escuela"] or ev["id_escuela"] in permitidas or ev["usuario"] == user.usuario:
+            filtradas.append(ev)
+
+    return {
+        "novedades": list(reversed(filtradas)),
+        "servidor_tiempo": ahora,
+        "total_eventos": len(NOVEDADES_EN_VIVO)
+    }
+
 # 2. ESCUELAS Y PADRÓN DE ALUMNOS (RBAC)
 # -------------------------------------------------------------
 @app.get("/api/escuelas")
@@ -710,6 +776,7 @@ def crear_alumno(payload: AlumnoPayload, user: SessionUser = Depends(validar_tok
         nuevo_id = guardar_alumno_nuevo(doc_dict)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    registrar_novedad("alumnos", nuevo_id, "CREADO", user.usuario, payload.id_escuela, f"Alta de alumno {payload.nombre_completo}")
     return {"status": "success", "id": nuevo_id, "mensaje": "Alumno registrado exitosamente."}
 
 
@@ -723,6 +790,7 @@ def editar_alumno(alumno_id: str, payload: Dict[str, Any], user: SessionUser = D
         actualizar_alumno_existente(alumno_id, payload, allowed_ids)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    registrar_novedad("alumnos", alumno_id, "ACTUALIZADO", user.usuario, payload.get("id_escuela", ""), f"Actualización de alumno {alumno_id}")
     return {"status": "success", "id": alumno_id, "mensaje": "Alumno actualizado correctamente."}
 
 
@@ -784,6 +852,7 @@ def crear_anexo3(payload: Anexo3Payload, user: SessionUser = Depends(validar_tok
         "Estado": "ACTIVO",
     }
     aid = guardar_anexo3_documento(doc)
+    registrar_novedad("anexo3", aid, "CREADO", user.usuario, "", f"Detección BAP para {payload.id_alumno}")
     return {"status": "success", "id": aid, "mensaje": "Detección de BAP (Anexo III) registrada correctamente."}
 
 
@@ -819,6 +888,7 @@ def crear_anexo4(payload: Anexo4Payload, user: SessionUser = Depends(validar_tok
         "Estado": "ACTIVA",
     }
     aid = guardar_anexo4_documento(doc)
+    registrar_novedad("anexo4", aid, "CREADO", user.usuario, payload.escuela, f"Hoja de sugerencias para {payload.id_alumno}")
     return {"status": "success", "id": aid, "mensaje": "Hoja de sugerencias (Anexo IV) guardada correctamente."}
 
 
@@ -933,7 +1003,7 @@ def obtener_planeacion(doc_id: str, user: SessionUser = Depends(validar_token_se
 @app.post("/api/planeaciones")
 def guardar_planeacion(payload: PlaneacionPayload, user: SessionUser = Depends(validar_token_sesion)):
     doc_dict = payload.model_dump()
-    return guardar_planeacion_transaccional(
+    res = guardar_planeacion_transaccional(
         payload=doc_dict,
         autor_cuenta=user.usuario,
         usuario_rol=user.rol,
@@ -941,6 +1011,10 @@ def guardar_planeacion(payload: PlaneacionPayload, user: SessionUser = Depends(v
         nombre_docente=user.nombre,
         area_docente=user.area,
     )
+    plan_id = res.get("id") or doc_dict.get("id") or "plan"
+    esc_id = doc_dict.get("datos", {}).get("Escuela_ID") or doc_dict.get("metadatos", {}).get("id_escuela") or ""
+    registrar_novedad("planeaciones", plan_id, "ACTUALIZADO" if doc_dict.get("revision") else "CREADO", user.usuario, str(esc_id), f"Planeación {plan_id} guardada por {user.nombre}")
+    return res
 
 
 @app.delete("/api/planeaciones/{doc_id}")

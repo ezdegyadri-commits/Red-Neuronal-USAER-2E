@@ -50,3 +50,4 @@ for e in errors[:10]:
 print(f"Remaining unclosed: {len(stack)}")
 for s in stack[:10]:
     print(s)
+

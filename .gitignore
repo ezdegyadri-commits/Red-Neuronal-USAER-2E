@@ -12,3 +12,5 @@ venv/
 *.log
 *.db
 
+scratch/
+backups/

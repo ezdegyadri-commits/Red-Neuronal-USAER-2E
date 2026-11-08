@@ -9,6 +9,8 @@ Implementa:
 """
 from __future__ import annotations
 
+import base64
+import json
 import hashlib
 import hmac
 import os
@@ -284,11 +286,26 @@ def autenticar_usuario(usuario: str, password_plana: str) -> Optional[SessionUse
     )
 
 def emitir_token_sesion(user: SessionUser) -> str:
-    """Genera un token firmado con expiración."""
-    token = secrets.token_urlsafe(32)
+    """Genera un token firmado con HMAC-SHA256 y expiración para compatibilidad multi-worker y cero 401."""
+    expira = int(time.time() + TOKEN_TTL_SECONDS)
+    payload_data = {
+        "id_usuario": user.id_usuario,
+        "nombre": user.nombre,
+        "usuario": user.usuario,
+        "rol": user.rol,
+        "escuelas_permitidas": user.escuelas_permitidas,
+        "director": user.director,
+        "area": user.area,
+        "expira": expira,
+        "nonce": secrets.token_hex(8)
+    }
+    payload_json = json.dumps(payload_data, separators=(',', ':'), ensure_ascii=False)
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode('utf-8')).decode('ascii').rstrip('=')
+    sig = hmac.new(SECRET_KEY.encode('utf-8'), payload_b64.encode('ascii'), hashlib.sha256).hexdigest()
+    token = f"{payload_b64}.{sig}"
     _ACTIVE_SESSIONS[token] = {
         "user": user,
-        "expira": time.time() + TOKEN_TTL_SECONDS
+        "expira": expira
     }
     return token
 
@@ -314,16 +331,43 @@ def validar_token_sesion(authorization: Optional[str] = Header(None)) -> Session
             area="Dirección"
         )
 
+    # 1. Chequeo rápido en memoria
     sesion = _ACTIVE_SESSIONS.get(token)
-    if not sesion or sesion["expira"] < time.time():
-        if token in _ACTIVE_SESSIONS:
-            del _ACTIVE_SESSIONS[token]
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sesión expirada o token inválido. Inicie sesión nuevamente."
-        )
+    if sesion and sesion["expira"] >= time.time():
+        return sesion["user"]
 
-    return sesion["user"]
+    # 2. Validación de firma criptográfica multi-worker (Stateless fallback)
+    if "." in token:
+        try:
+            payload_b64, sig = token.split(".", 1)
+            expected_sig = hmac.new(SECRET_KEY.encode('utf-8'), payload_b64.encode('ascii'), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(sig, expected_sig):
+                pad = len(payload_b64) % 4
+                if pad:
+                    payload_b64 += "=" * (4 - pad)
+                payload_json = base64.urlsafe_b64decode(payload_b64).decode('utf-8')
+                data = json.loads(payload_json)
+                if data.get("expira", 0) >= time.time():
+                    user = SessionUser(
+                        id_usuario=data["id_usuario"],
+                        nombre=data["nombre"],
+                        usuario=data["usuario"],
+                        rol=data["rol"],
+                        escuelas_permitidas=data.get("escuelas_permitidas", []),
+                        director=data.get("director", False),
+                        area=data.get("area", "")
+                    )
+                    _ACTIVE_SESSIONS[token] = {"user": user, "expira": data["expira"]}
+                    return user
+        except Exception:
+            pass
+
+    if token in _ACTIVE_SESSIONS:
+        del _ACTIVE_SESSIONS[token]
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Sesión expirada o token inválido. Inicie sesión nuevamente."
+    )
 
 def cerrar_sesion(authorization: Optional[str] = Header(None)) -> bool:
     """Invalida inmediatamente el token en memoria."""

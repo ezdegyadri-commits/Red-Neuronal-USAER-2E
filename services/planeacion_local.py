@@ -1,6 +1,7 @@
 """Propuestas educativas locales y transparentes; no usa motores ni inventa NEE."""
 from copy import deepcopy
-from services import planeacion as s,planeacion_edicion as ed
+import re
+from services.planeacion_edicion import huella
 from services.planeacion_generacion import fuentes_pertinentes
 from services.curriculo import contexto_ia
 from services.planeacion_modelo import FORMATOS
@@ -17,8 +18,75 @@ SECUENCIAS={
  'Trabajo Social':('Retomar una barrera del entorno documentada o una rutina escolar que el equipo necesite revisar.','Proponer con las personas implicadas una alternativa viable de participación o acceso; preguntar por recursos reales sin suponer carencias ni culpar a la familia.','Registrar únicamente acuerdos que efectivamente se alcancen después de la actividad y definir su seguimiento.','Hoja de registro y recursos accesibles por confirmar; no supone una visita o acuerdo realizado.')}
 
 
+# Actividades de acceso inicial: ninguna exige leer un texto o redactar sin apoyo.
+INICIAL = (
+    ("Presentar dos objetos familiares y modelar el sonido inicial de sus nombres.",
+     "Escuchar un nombre, señalar su objeto y elegir entre dos letras móviles con apoyo visual. No se requiere leer palabras.",
+     "Registrar si identifica el sonido inicial mediante señalamiento, con y sin modelado.",
+     "Objetos familiares, imágenes y letras móviles.", "identifica el sonido inicial de un nombre con apoyo visual"),
+    ("Mostrar una imagen conocida y nombrarla oralmente junto con el alumno.",
+     "Separar oralmente el nombre en sílabas con palmadas o fichas. Permitir señalar o mover una ficha por sílaba; el docente lee cualquier etiqueta.",
+     "Registrar si segmenta el nombre oralmente o con fichas y qué apoyo requirió.",
+     "Imágenes y fichas de conteo.", "segmenta oralmente un nombre conocido mediante fichas o palmadas"),
+    ("Modelar una elección funcional usando dos imágenes y sus etiquetas.",
+     "Emparejar la imagen elegida con su etiqueta como modelo visual. Comunicar la elección señalando, dibujando o dictando al docente; no exigir redacción.",
+     "Registrar si comunica su elección y empareja la imagen con el modelo con apoyo graduado.",
+     "Imágenes, etiquetas de referencia y hojas.", "comunica una elección con imágenes y la empareja con un modelo visual"),
+)
+
+
+def acceso_inicial(fuentes):
+    """Una restricción de acceso documentada no se convierte en diagnóstico."""
+    patrones = r"NO (?:HA |HABIA )?(?:ADQUIRID[OA]|ADQUIERE|CONSOLIDAD[OA]|DOMINA) (?:LA )?LECTOESCRITURA|SIN (?:ADQUISICION DE )?LECTOESCRITURA|(?:NIVEL |ETAPA )?(?:PRESILABIC[OA]|PRE SILABIC[OA])|(?:AUN |TODAVIA )?NO (?:LOGRA |PUEDE |SABE )?(?:LEER|LEE|DECODIFICAR|DECODIFICA) (?:PALABRAS|TEXTOS|SILABAS|DE FORMA AUTONOMA)|(?:AUN |TODAVIA )?NO (?:RECONOCE|IDENTIFICA) (?:LAS )?(?:LETRAS|VOCALES)"
+    validos = {"EPP", "EPP Anexo XVII", "NEE", "Informe educativo", "Plan de intervención", "Planeación previa", "Evento", "Contexto escolar"}
+    for f in fuentes:
+        if f.get('tipo') in validos and re.search(patrones, normalizar_texto(f['texto'])):
+            return f['referencia']
+    return ''
+
+
+def apoyos_de_bap(fuentes):
+    texto=normalizar_texto(' '.join(f['texto'] for f in fuentes if f.get('tipo')=='BAP'))
+    ajustes=[]
+    if re.search(r'RUIDO|DISTRACTORES',texto):ajustes.append('Reducir distractores del entorno durante el modelado.')
+    if re.search(r'CONSIGNAS|INSTRUCCIONES|LENGUAJE ORAL',texto):ajustes.append('Presentar una consigna por vez con demostración o apoyo visual.')
+    if re.search(r'MOVILIDAD|ACCESO FISICO',texto):ajustes.append('Colocar materiales al alcance y permitir un canal de respuesta accesible.')
+    return ' '.join(ajustes)
+
+
+def vincular_cadena_nee(actividad, necesidad, pda, conclusion):
+    """Reutiliza solo los apoyos del renglón de la NEE elegida."""
+    from services.planeacion_calidad import descriptor
+
+    texto = necesidad["texto"].strip()
+    fila = next((r for r in conclusion.get("nee", []) if str(r.get("NEE", "")).strip() == texto), {})
+    apoyos = " · ".join(str(fila[k]).strip() for k in ("Apoyos", "Ajustes razonables") if str(fila.get(k) or "").strip())
+    pda_oficial = " ".join(pda.split())
+    verbo = re.match(r"^(identifica|reconoce|clasifica|forma|expresa|ordena|mantiene|sigue|compara|resuelve|solicita)\b",
+                     pda_oficial, flags=re.I)
+    if verbo and 8 <= len(pda_oficial[verbo.end():].strip().rstrip(".")) <= 500:
+        observable = descriptor(actividad["nombre"], verbo[0], pda_oficial[verbo.end():])
+    else:
+        observable = descriptor(actividad["nombre"], "participa",
+                                 "y demuestra el desempeño del PDA mediante una respuesta observable con los apoyos acordados")
+    if actividad.get("acceso_inicial"):
+        observable = actividad["descriptor"]
+    return {
+        "nee": texto, "pda": pda, "descriptor": observable,
+        "apoyos": " · ".join(x for x in (apoyos, actividad.get("apoyos_acceso", "")) if x) or "Propuesta: usar modelado y opciones de respuesta accesibles. Ajustar con observación docente.",
+        "temporalidad": str(fila.get("Fecha o período") or "").strip() or "Primera sesión. Ajustar tras observar el desempeño.",
+        "evaluacion": actividad.get("evaluacion") or "Registrar el desempeño descrito, el apoyo efectivamente utilizado y el siguiente ajuste docente.",
+    }
+
+
 def preparar(doc,enfoque='',contexto_actividad=None):
+    from services import planeacion as s
     s.autorizar(doc,True)
+    return preparar_documento_autorizado(doc, enfoque, contexto_actividad)
+
+
+def preparar_documento_autorizado(doc, enfoque='', contexto_actividad=None, *, alumno_id='', variante=0, metodo='', materiales_docentes=''):
+    """Prepara propuestas; el adaptador debe validar previamente todos los alumnos."""
     contexto_actividad=contexto_actividad or ('Escuela' if doc['formato']=='XXV' else 'Aula regular')
     if doc['formato']!='XXI' and contexto_actividad not in FORMATOS[doc['formato']]['contextos']:raise ValueError('Elige un contexto de este formato.')
     fuentes=fuentes_pertinentes(doc)
@@ -36,7 +104,10 @@ def preparar(doc,enfoque='',contexto_actividad=None):
         raise ValueError('Añade un antecedente, un contenido/PDA o una orientación docente para preparar propuestas locales. No necesitas IA.')
     propuestas=[]
     for a in doc['datos']['Alumnos']:
+        if alumno_id and a['ID_Alumno']!=alumno_id:continue
         individuales=propios[a['ID_Alumno']]
+        evidencia_inicial=acceso_inicial(individuales)
+        apoyos_bap=apoyos_de_bap(individuales)
         for campo in campos:
             seleccionados=[r for r in refs if r['campo']==campo]
             datos=' '.join(f['texto'][:1500] for f in individuales+materiales)+' '+str(enfoque)+' '+' '.join(r['contenido'] for r in seleccionados)
@@ -49,24 +120,40 @@ def preparar(doc,enfoque='',contexto_actividad=None):
                 normal=normalizar_texto(datos)
                 clave='lectura' if any(t in normal for t in ('LECTURA','LEER','LECTO')) else 'escritura' if 'ESCRIT' in normal else 'numeros' if any(t in normal for t in ('NUMER','CONTEO','CANTIDAD','MATEMAT')) else 'general'
             inicio,desarrollo,cierre,recursos=SECUENCIAS[clave]
+            descriptor_inicial=''
+            # La evidencia individual manda sobre una palabra suelta en el PDA o en el enfoque.
+            if evidencia_inicial and area not in ('Trabajo Social','Psicología','Comunicación') and (campo=='Lenguajes' or clave in ('lectura','escritura','general')):
+                enfoque_metodo=normalizar_texto(metodo)
+                base=2 if 'TRONCOSO' in enfoque_metodo or 'GLOBAL' in enfoque_metodo else 1 if 'SILAB' in enfoque_metodo else 0
+                inicio,desarrollo,cierre,recursos,descriptor_inicial=INICIAL[(base+variante)%len(INICIAL)]
+            elif variante:
+                inicio += (' Usar un ejemplo distinto tomado de una rutina escolar.' if variante==1 else ' Comparar dos ejemplos concretos antes de elegir una respuesta.')
+                cierre += (' Repetir con un objeto nuevo para comprobar transferencia.' if variante==1 else ' Ofrecer una segunda oportunidad con un apoyo menor, si resulta viable.')
+            if metodo:desarrollo += ' Método indicado por el docente: '+metodo+'. Ajustar el modelado y los apoyos sin exigir un desempeño no documentado.'
+            if materiales_docentes:recursos += ' Material seleccionado por el docente: '+materiales_docentes+'.'
             antecedentes=[f['referencia'] for f in individuales]
             alcance='Antecedentes propios: '+', '.join(antecedentes) if antecedentes else 'Propuesta curricular general: sin antecedente individual disponible; no atribuye necesidades al alumno.'
             if materiales:alcance+=' Materiales generales de apoyo: '+', '.join(f['referencia'] for f in materiales)+'. No equivalen a una evaluación individual.'
             referentes=[r['id'] for r in seleccionados]
             sustento='Referentes seleccionados: '+', '.join(referentes) if referentes else 'Sin PDA específico seleccionado. Revisar su vinculación antes de enviar.'
             if area=='Trabajo Social' and not referentes:sustento='Revisar la barrera documentada, los apoyos y el contexto elegido en el Anexo XXV.'
+            if descriptor_inicial:alcance+=' Acceso inicial documentado en '+evidencia_inicial+'; el PDA se conserva como referente y se adapta la tarea, no se presume lectoescritura adquirida.'
             if base_formato:alcance+=' Se reutiliza la orientación escrita en el formato como propuesta de trabajo; no confirma una evaluación ni un resultado.'
-            firma=ed.huella({'doc':doc['id'],'alumno':a['ID_Alumno'],'campo':campo,'enfoque':enfoque,'fuentes':individuales+materiales,'referentes':seleccionados,'base_formato':bases,'contexto':contexto_actividad,'version':2})
+            firma=huella({'doc':doc['id'],'alumno':a['ID_Alumno'],'campo':campo,'enfoque':enfoque,'fuentes':individuales+materiales,'referentes':seleccionados,'base_formato':bases,'contexto':contexto_actividad,'variante':variante,'metodo':metodo,'materiales':materiales_docentes,'version':3})
             propuestas.append({'id':firma,'alumno':a['ID_Alumno'],'nombre':a['Nombre del alumno'],'campo':campo,
                 'actividad':(a['Nombre del alumno']+'\n' if len(doc['datos']['Alumnos'])>1 else '')+'Inicio: '+inicio+'\nDesarrollo: '+desarrollo+'\nCierre: '+cierre,
                 'orientacion':alcance+'\n'+sustento,
-                'recursos':recursos,'evidencias':antecedentes,'referentes':referentes,'contexto':contexto_actividad})
-    return {'huella':ed.huella(doc),'propuestas':propuestas,'enfoque':str(enfoque)}
+                'recursos':recursos,'evidencias':antecedentes,'referentes':referentes,'contexto':contexto_actividad,
+                'variante':variante,'acceso_inicial':bool(descriptor_inicial),'descriptor':a['Nombre del alumno']+' '+descriptor_inicial if descriptor_inicial else '',
+                'apoyos_acceso':' '.join(x for x in ('Modelado oral, elección con imágenes y respuesta accesible; sin exigir lectura autónoma ni redacción.' if descriptor_inicial else '',apoyos_bap) if x),
+                'evaluacion':cierre if descriptor_inicial else ''})
+    return {'huella':huella(doc),'propuestas':propuestas,'enfoque':str(enfoque)}
 
 
 def aplicar(doc,propuesta,ids):
+    from services import planeacion as s, planeacion_edicion as ed
     s.autorizar(doc,True)
-    if propuesta['huella']!=ed.huella(doc):raise ValueError('La planeación cambió. Prepara otra vez la propuesta local antes de incorporarla.')
+    if propuesta['huella']!=huella(doc):raise ValueError('La planeación cambió. Prepara otra vez la propuesta local antes de incorporarla.')
     disponibles={r['id']:r for r in propuesta['propuestas']}
     if not ids or not set(ids)<=set(disponibles):raise ValueError('Elige propuestas de esta preparación.')
     alumnos={a['ID_Alumno'] for a in doc['datos']['Alumnos']}

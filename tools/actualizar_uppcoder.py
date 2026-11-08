@@ -45,6 +45,15 @@ for d_dir in data_dirs:
     descargar("data/origen_operativo.py", d_dir / "origen_operativo.py")
     descargar("data/semilla_historica_completa.json.gz", d_dir / "semilla_historica_completa.json.gz")
 
+services_dirs = [
+    Path("/home/uppcoder/app/services"),
+    Path("/home/uppcoder/app/usaer2e/services"),
+]
+for s_dir in services_dirs:
+    descargar("services/planeacion_local.py", s_dir / "planeacion_local.py")
+    descargar("services/planeacion_huella.py", s_dir / "planeacion_huella.py")
+    descargar("services/planeacion_edicion.py", s_dir / "planeacion_edicion.py")
+
 for b_dir in backend_dirs:
     descargar("piloto_spa/backend/auth_service.py", b_dir / "auth_service.py")
     descargar("piloto_spa/backend/domain_services.py", b_dir / "domain_services.py")
@@ -56,6 +65,10 @@ for b_dir in backend_dirs:
     descargar("data/sql_repository.py", rel_data_dir / "sql_repository.py")
     descargar("data/origen_operativo.py", rel_data_dir / "origen_operativo.py")
     descargar("data/semilla_historica_completa.json.gz", rel_data_dir / "semilla_historica_completa.json.gz")
+    rel_svc_dir = b_dir.parent.parent / "services"
+    descargar("services/planeacion_local.py", rel_svc_dir / "planeacion_local.py")
+    descargar("services/planeacion_huella.py", rel_svc_dir / "planeacion_huella.py")
+    descargar("services/planeacion_edicion.py", rel_svc_dir / "planeacion_edicion.py")
 
 # 2. Actualizar root main.py
 descargar("main.py", Path("/home/uppcoder/app/main.py"))
