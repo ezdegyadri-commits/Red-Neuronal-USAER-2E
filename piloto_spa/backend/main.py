@@ -264,7 +264,11 @@ def reconciliar_base_datos() -> Dict[str, Any]:
             aid_str = str(alu_existente.id or "")
             if aid_str.startswith("alu-uppcoder"):
                 continue
-            if alu_existente.estatus == "ANULADO_MIGRACION" and (aid_str in ids_canonicos or aid_str.upper().startswith("ALU-")):
+            if aid_str not in ids_canonicos:
+                alu_existente.estatus = "ANULADO_MIGRACION"
+                alu_existente.id_escuela = ""
+                alu_existente.maestra_apoyo = ""
+            elif alu_existente.estatus == "ANULADO_MIGRACION":
                 alu_existente.estatus = "ACTIVO"
 
         session.commit()
