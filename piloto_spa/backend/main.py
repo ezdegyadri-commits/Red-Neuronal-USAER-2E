@@ -414,6 +414,24 @@ def inicializar_base_datos():
         logging.getLogger("uvicorn").error("Error inicializando semilla relacional: %s", exc)
 
 
+
+@app.post("/api/admin/auto-actualizar")
+def auto_actualizar_servidor(user: SessionUser = Depends(validar_token_sesion)):
+    """Ejecuta la actualización y sincronización de código y base de datos de forma autónoma."""
+    if not user.director:
+        raise HTTPException(status_code=403, detail="Acceso reservado exclusivamente a Dirección.")
+    
+    script_path = Path(__file__).resolve().parents[2] / "tools" / "actualizar_uppcoder.py"
+    if not script_path.exists():
+        script_path = Path("/home/uppcoder/app/tools/actualizar_uppcoder.py")
+    
+    import subprocess
+    try:
+        res = subprocess.run([sys.executable, str(script_path)], capture_output=True, text=True, timeout=60)
+        return {"status": "ok", "stdout": res.stdout[-400:], "stderr": res.stderr[-400:]}
+    except Exception as exc:
+        return {"status": "error", "detalle": str(exc)}
+
 @app.get("/api/admin/status-bd")
 def estado_base_datos():
     """Diagnóstico en vivo del motor de base de datos relacional y conteo de registros."""
