@@ -42,6 +42,7 @@ data_dirs = [
 for d_dir in data_dirs:
     descargar("data/database.py", d_dir / "database.py")
     descargar("data/sql_repository.py", d_dir / "sql_repository.py")
+    descargar("data/origen_operativo.py", d_dir / "origen_operativo.py")
     descargar("data/semilla_historica_completa.json.gz", d_dir / "semilla_historica_completa.json.gz")
 
 for b_dir in backend_dirs:
@@ -53,6 +54,7 @@ for b_dir in backend_dirs:
     rel_data_dir = b_dir.parent.parent / "data"
     descargar("data/database.py", rel_data_dir / "database.py")
     descargar("data/sql_repository.py", rel_data_dir / "sql_repository.py")
+    descargar("data/origen_operativo.py", rel_data_dir / "origen_operativo.py")
     descargar("data/semilla_historica_completa.json.gz", rel_data_dir / "semilla_historica_completa.json.gz")
 
 # 2. Actualizar root main.py
