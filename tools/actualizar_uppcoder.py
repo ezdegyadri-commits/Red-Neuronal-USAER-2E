@@ -27,6 +27,10 @@ usaer_backend = Path("/home/uppcoder/app/usaer2e/piloto_spa/backend")
 if usaer_backend.exists():
     backend_dirs.append(usaer_backend)
 
+app_backend = Path("/home/uppcoder/app/piloto_spa/backend")
+if app_backend.exists() and app_backend not in backend_dirs:
+    backend_dirs.append(app_backend)
+
 releases_root = Path("/home/uppcoder/.config/usaer-spark/releases")
 if releases_root.exists():
     for rel_dir in releases_root.iterdir():
@@ -70,8 +74,10 @@ for b_dir in backend_dirs:
     descargar("services/planeacion_huella.py", rel_svc_dir / "planeacion_huella.py")
     descargar("services/planeacion_edicion.py", rel_svc_dir / "planeacion_edicion.py")
 
-# 2. Actualizar root main.py
+# 2. Actualizar root main.py e index.html estático de reserva
 descargar("main.py", Path("/home/uppcoder/app/main.py"))
+descargar("piloto_spa/backend/static/index.html", Path("/home/uppcoder/app/static/index.html"))
+descargar("piloto_spa/backend/static/index.html", Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static/index.html"))
 
 # 3. Verificar importación y ejecutar reconciliación de PostgreSQL 17 con el Python del entorno FastAPI
 print("Verificando importación y reconciliando PostgreSQL 17...")

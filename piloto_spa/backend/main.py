@@ -1412,6 +1412,7 @@ SPA_STATIC_DIR = Path(__file__).resolve().parent / "static"
 def index_spa():
     posibles_rutas = [
         SPA_STATIC_DIR / "index.html",
+        Path("/home/uppcoder/app/static/index.html"),
         Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static/index.html"),
     ]
     for p in posibles_rutas:

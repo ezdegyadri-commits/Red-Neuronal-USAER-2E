@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>USAER 02-E · Sistema Integral SPA 2.0</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◈</text></svg>">
+  <title>USAER 02-E Â· Sistema Integral SPA 2.0</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>â—ˆ</text></svg>">
   <!-- Tailwind CSS CDN -->
   <script crossorigin="anonymous" src="https://cdn.tailwindcss.com"></script>
   <!-- React 18 & ReactDOM CDN -->
@@ -47,7 +47,7 @@
     <div class="flex items-center justify-center min-h-screen bg-slate-900 text-amber-400 font-sans">
       <div class="text-center p-8 bg-slate-800/80 rounded-2xl border border-slate-700 shadow-2xl max-w-sm w-full mx-4">
         <div class="text-4xl font-black mb-3 text-amber-400 tracking-wider">USAER 02-E</div>
-        <p class="text-slate-300 text-sm animate-pulse mb-4">Cargando plataforma pedagógica 2.0...</p>
+        <p class="text-slate-300 text-sm animate-pulse mb-4">Cargando plataforma pedagÃ³gica 2.0...</p>
         <div class="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
           <div class="bg-amber-400 h-full w-2/3 animate-pulse"></div>
         </div>
@@ -62,17 +62,17 @@
       if (root && root.innerHTML.includes('Cargando plataforma')) {
         let detalle = (error && error.message) || message || 'Hubo un retraso cargando los recursos interactivos.';
         if (detalle === 'Script error.' || !lineno) {
-          detalle = 'El navegador detectó una intermitencia de red descargando librerías interactivas (React/Tailwind). Presiona Reintentar.';
+          detalle = 'El navegador detectÃ³ una intermitencia de red descargando librerÃ­as interactivas (React/Tailwind). Presiona Reintentar.';
         }
-        const ubicacion = lineno ? ` (Línea: ${lineno}${colno ? `:${colno}` : ''})` : '';
+        const ubicacion = lineno ? ` (LÃ­nea: ${lineno}${colno ? `:${colno}` : ''})` : '';
         root.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;background:#0F172A;color:#F87171;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
           '<div style="background:#1E293B;padding:32px;border-radius:16px;border:1px solid #334155;max-width:540px;width:100%;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">' +
-          '<h2 style="font-size:22px;font-weight:bold;margin-bottom:12px;color:#FBBF24;">USAER 02-E · Sistema 2.0</h2>' +
-          '<p style="font-size:14px;font-weight:bold;color:#F87171;margin-bottom:8px;">⚠️ Aviso de Conexión de Plataforma</p>' +
+          '<h2 style="font-size:22px;font-weight:bold;margin-bottom:12px;color:#FBBF24;">USAER 02-E Â· Sistema 2.0</h2>' +
+          '<p style="font-size:14px;font-weight:bold;color:#F87171;margin-bottom:8px;">âš ï¸ Aviso de ConexiÃ³n de Plataforma</p>' +
           '<p style="color:#CBD5E1;font-size:13px;line-height:1.5;margin-bottom:20px;word-break:break-word;">' + detalle + ubicacion + '</p>' +
           '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">' +
           '<button onclick="location.reload()" style="background:#D97706;color:#FFF;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;font-size:13px;">Reintentar Carga Inmediata</button>' +
-          '<button onclick="sessionStorage.clear(); localStorage.clear(); location.reload(true);" style="background:#334155;color:#E2E8F0;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;font-size:13px;">Limpiar Caché y Recargar</button>' +
+          '<button onclick="sessionStorage.clear(); localStorage.clear(); location.reload(true);" style="background:#334155;color:#E2E8F0;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;font-size:13px;">Limpiar CachÃ© y Recargar</button>' +
           '</div>' +
           '</div>' +
           '</div>';
@@ -111,7 +111,7 @@
         return { hasError: true, error };
       }
       componentDidCatch(error, errorInfo) {
-        console.error("ErrorBoundary atrapó un error en tiempo de render:", error, errorInfo);
+        console.error("ErrorBoundary atrapÃ³ un error en tiempo de render:", error, errorInfo);
         this.setState({ errorInfo });
         try {
           fetch(`${API_BASE}/api/logs/frontend`, {
@@ -133,14 +133,14 @@
           return (
             <div className="p-8 bg-slate-900 min-h-screen text-slate-100 flex items-center justify-center">
               <div className="bg-slate-800 border border-slate-700 max-w-lg w-full p-6 rounded-2xl shadow-2xl text-center space-y-4">
-                <div className="text-3xl text-amber-400">⚠️</div>
-                <h2 className="text-lg font-bold text-amber-300">Aviso de Renderizado en Módulo</h2>
+                <div className="text-3xl text-amber-400">âš ï¸</div>
+                <h2 className="text-lg font-bold text-amber-300">Aviso de Renderizado en MÃ³dulo</h2>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  {this.state.error?.message || 'Ocurrió una excepción al procesar la vista interactiva.'}
+                  {this.state.error?.message || 'OcurriÃ³ una excepciÃ³n al procesar la vista interactiva.'}
                 </p>
                 {this.state.error && (
                   <details className="text-left bg-slate-900/80 p-3 rounded-lg border border-slate-700 text-[11px] text-red-300 font-mono overflow-x-auto max-h-40">
-                    <summary className="cursor-pointer text-slate-400 hover:text-slate-200 font-bold mb-1">Ver Detalle Técnico</summary>
+                    <summary className="cursor-pointer text-slate-400 hover:text-slate-200 font-bold mb-1">Ver Detalle TÃ©cnico</summary>
                     <div>{String(this.state.error?.stack || this.state.error)}</div>
                     {this.state.errorInfo?.componentStack && (
                       <div className="mt-2 text-slate-400">{this.state.errorInfo.componentStack}</div>
@@ -158,7 +158,7 @@
                     onClick={() => { sessionStorage.clear(); localStorage.clear(); window.location.href = '/'; }}
                     className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold px-4 py-2 rounded-lg transition"
                   >
-                    Limpiar Sesión
+                    Limpiar SesiÃ³n
                   </button>
                 </div>
               </div>
@@ -169,7 +169,7 @@
       }
     }
 
-    // Cliente API con Bearer Token y manejo de sesión
+    // Cliente API con Bearer Token y manejo de sesiÃ³n
     async function apiRequest(endpoint, options = {}) {
       const token = sessionStorage.getItem('usaer_token');
       const headers = {
@@ -182,7 +182,7 @@
         sessionStorage.removeItem('usaer_token');
         sessionStorage.removeItem('usaer_user');
         window.dispatchEvent(new Event('auth_expired'));
-        throw new Error('Sesión expirada o credenciales inválidas');
+        throw new Error('SesiÃ³n expirada o credenciales invÃ¡lidas');
       }
       if (!res.ok) {
         const errorText = await res.text();
@@ -192,13 +192,13 @@
     }
 
     // =============================================================
-    // COMPONENTE: PANTALLA DE INICIO DE SESIÓN
+    // COMPONENTE: PANTALLA DE INICIO DE SESIÃ“N
     // =============================================================
     function LoginScreen({ onLoginSuccess }) {
-      const [usuario, setUsuario] = useState('');
-      const [password, setPassword] = useState('');
-      const [error, setError] = useState('');
-      const [loading, setLoading] = useState(false);
+      const [usuario, setUsuario] = React.useState('');
+      const [password, setPassword] = React.useState('');
+      const [error, setError] = React.useState('');
+      const [loading, setLoading] = React.useState(false);
 
       const handleSubmit = async (e) => {
         if (e) e.preventDefault();
@@ -211,12 +211,12 @@
             body: JSON.stringify({ usuario, password })
           });
           if (!res.ok) {
-            throw new Error('Usuario o contraseña incorrectos.');
+            throw new Error('Usuario o contraseÃ±a incorrectos.');
           }
           const data = await res.json();
           onLoginSuccess(data.user, data.token);
         } catch (err) {
-          setError(err.message || 'Error de conexión');
+          setError(err.message || 'Error de conexiÃ³n');
         } finally {
           setLoading(false);
         }
@@ -227,15 +227,15 @@
           <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 space-y-6">
             <div className="text-center space-y-2">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 font-black text-3xl mb-2">
-                ◈
+                â—ˆ
               </div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">USAER 02-E · 2.0</h1>
-              <p className="text-xs text-slate-500 font-medium">Plataforma Pedagógica y Administrativa Integral</p>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">USAER 02-E Â· 2.0</h1>
+              <p className="text-xs text-slate-500 font-medium">Plataforma PedagÃ³gica y Administrativa Integral</p>
             </div>
 
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold">
-                ⚠️ {error}
+                âš ï¸ {error}
               </div>
             )}
 
@@ -253,14 +253,14 @@
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Contraseña</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">ContraseÃ±a</label>
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
-                  placeholder="Tu contraseña institucional"
+                  placeholder="Tu contraseÃ±a institucional"
                 />
               </div>
 
@@ -269,13 +269,13 @@
                 disabled={loading}
                 className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 disabled:opacity-50"
               >
-                {loading ? <span>Iniciando sesión...</span> : <span>Entrar al Sistema →</span>}
+                {loading ? <span>Iniciando sesiÃ³n...</span> : <span>Entrar al Sistema â†’</span>}
               </button>
             </form>
 
             <div className="border-t border-slate-100 pt-4 text-center">
               <span className="text-[11px] text-slate-400">
-                Acceso exclusivo para personal de USAER 02-E · Zona 001 Primarias
+                Acceso exclusivo para personal de USAER 02-E Â· Zona 001 Primarias
               </span>
             </div>
           </div>
@@ -284,10 +284,10 @@
     }
 
     // =============================================================
-    // COMPONENTE PRINCIPAL (APP CON NAVEGACIÓN COMPLETA DE MÓDULOS)
+    // COMPONENTE PRINCIPAL (APP CON NAVEGACIÃ“N COMPLETA DE MÃ“DULOS)
     // =============================================================
     function App() {
-      const [user, setUser] = useState(() => {
+      const [user, setUser] = React.useState(() => {
         try {
           const u = sessionStorage.getItem('usaer_user');
           const t = sessionStorage.getItem('usaer_token');
@@ -297,15 +297,15 @@
         }
       });
 
-      const [currentView, setCurrentView] = useState('mis_documentos');
-      const [activeDocId, setActiveDocId] = useState(null);
-      const [activeAlumnoId, setActiveAlumnoId] = useState(null);
-      const [metrics, setMetrics] = useState({ latency: 12, requests: 1 });
-      const [dropdownOpen, setDropdownOpen] = useState(false);
-      const [notificacionEnVivo, setNotificacionEnVivo] = useState(null);
+      const [currentView, setCurrentView] = React.useState('mis_documentos');
+      const [activeDocId, setActiveDocId] = React.useState(null);
+      const [activeAlumnoId, setActiveAlumnoId] = React.useState(null);
+      const [metrics, setMetrics] = React.useState({ latency: 12, requests: 1 });
+      const [dropdownOpen, setDropdownOpen] = React.useState(false);
+      const [notificacionEnVivo, setNotificacionEnVivo] = React.useState(null);
 
-      // Sincronización en vivo entre sesiones concurrentes (Cero Recargas)
-      useEffect(() => {
+      // SincronizaciÃ³n en vivo entre sesiones concurrentes (Cero Recargas)
+      React.useEffect(() => {
         if (!user) return;
         let lastTs = Date.now() / 1000;
         const poller = setInterval(async () => {
@@ -315,7 +315,7 @@
               lastTs = data.servidor_tiempo || (Date.now() / 1000);
               const ult = data.novedades[data.novedades.length - 1];
               if (ult && ult.usuario !== user.usuario) {
-                setNotificacionEnVivo(`🔄 ${ult.resumen || 'Cambio registrado en plataforma'}`);
+                setNotificacionEnVivo(`ðŸ”„ ${ult.resumen || 'Cambio registrado en plataforma'}`);
                 setTimeout(() => setNotificacionEnVivo(null), 6000);
               }
             }
@@ -324,7 +324,7 @@
         return () => clearInterval(poller);
       }, [user]);
 
-      useEffect(() => {
+      React.useEffect(() => {
         const handleAuthExpired = () => {
           sessionStorage.clear();
           setUser(null);
@@ -378,21 +378,21 @@
 
       return (
         <div className="flex flex-col min-h-screen">
-          {/* Barra de Navegación Superior Inmediata */}
+          {/* Barra de NavegaciÃ³n Superior Inmediata */}
           <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
             <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
               <div
                 className="flex items-center space-x-3 cursor-pointer"
                 onClick={() => navigateTo('mis_documentos')}
               >
-                <span className="text-amber-500 font-black text-xl">◈</span>
+                <span className="text-amber-500 font-black text-xl">â—ˆ</span>
                 <span className="font-bold tracking-tight text-slate-100 text-lg">USAER 02-E</span>
                 <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded font-semibold hidden sm:inline">
-                  Zona 001 · SPA 2.0
+                  Zona 001 Â· SPA 2.0
                 </span>
               </div>
 
-              {/* Menú de Navegación Rápido + Menú Desplegable con Todos los Módulos */}
+              {/* MenÃº de NavegaciÃ³n RÃ¡pido + MenÃº Desplegable con Todos los MÃ³dulos */}
               <nav className="hidden md:flex items-center space-x-1 text-sm font-medium">
                 <button
                   onClick={() => navigateTo('mis_documentos')}
@@ -400,7 +400,7 @@
                     currentView === 'mis_documentos' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  📁 Mis Documentos
+                  ðŸ“ Mis Documentos
                 </button>
                 <button
                   onClick={() => navigateTo('expedientes')}
@@ -408,7 +408,7 @@
                     currentView === 'expedientes' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  👤 Alumnos y Expedientes
+                  ðŸ‘¤ Alumnos y Expedientes
                 </button>
                 <button
                   onClick={() => navigateTo('epp')}
@@ -416,76 +416,76 @@
                     currentView === 'epp' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  📋 EPP
+                  ðŸ“‹ EPP
                 </button>
 
-                {/* Dropdown de Todos los Módulos */}
+                {/* Dropdown de Todos los MÃ³dulos */}
                 <div className="relative">
                   <button
                     onClick={() => setDropdownOpen(!dropdownOpen)}
                     className="px-3 py-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition flex items-center space-x-1"
                   >
-                    <span>Todos los Módulos</span>
-                    <span className="text-xs">▾</span>
+                    <span>Todos los MÃ³dulos</span>
+                    <span className="text-xs">â–¾</span>
                   </button>
 
                   {dropdownOpen && (
                     <div className="absolute left-0 mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 text-xs grid grid-cols-2 gap-1 p-2">
                       <div className="col-span-2 px-2 py-1 text-[10px] uppercase font-bold text-amber-400 tracking-wider border-b border-slate-800 mb-1">
-                        Área Pedagógica y Anexos
+                        Ãrea PedagÃ³gica y Anexos
                       </div>
                       <button onClick={() => navigateTo('anexo3')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        🚧 Anexo III BAP
+                        ðŸš§ Anexo III BAP
                       </button>
                       <button onClick={() => navigateTo('anexo4')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        💡 Anexo IV Sugerencias
+                        ðŸ’¡ Anexo IV Sugerencias
                       </button>
                       <button onClick={() => navigateTo('anexo5')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        📌 Anexo V Eventos
+                        ðŸ“Œ Anexo V Eventos
                       </button>
                       <button onClick={() => navigateTo('anexo7')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        📑 Anexo VII Derivación
+                        ðŸ“‘ Anexo VII DerivaciÃ³n
                       </button>
                       <button onClick={() => navigateTo('informes')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        📄 Informes
+                        ðŸ“„ Informes
                       </button>
 
                       <div className="col-span-2 px-2 py-1 text-[10px] uppercase font-bold text-amber-400 tracking-wider border-b border-slate-800 my-1">
-                        Organización y Gestión
+                        OrganizaciÃ³n y GestiÃ³n
                       </div>
                       <button onClick={() => navigateTo('horarios')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        ⏰ Horarios de Apoyo
+                        â° Horarios de Apoyo
                       </button>
                       <button onClick={() => navigateTo('cronogramas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        📅 Cronograma Mensual
+                        ðŸ“… Cronograma Mensual
                       </button>
                       <button onClick={() => navigateTo('calendario')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        🗓️ Calendario SEGEY
+                        ðŸ—“ï¸ Calendario SEGEY
                       </button>
                       <button onClick={() => navigateTo('docentes_regulares')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        👥 Maestros Primaria
+                        ðŸ‘¥ Maestros Primaria
                       </button>
                       <button onClick={() => navigateTo('novedades')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        📢 Supervisión Zona 001
+                        ðŸ“¢ SupervisiÃ³n Zona 001
                       </button>
                       <button onClick={() => navigateTo('juntas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        🤝 Juntas y Relatorías
+                        ðŸ¤ Juntas y RelatorÃ­as
                       </button>
                       <button onClick={() => navigateTo('metas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        🎯 Metas Personales
+                        ðŸŽ¯ Metas Personales
                       </button>
                       <button onClick={() => navigateTo('tramites')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        📨 Trámites
+                        ðŸ“¨ TrÃ¡mites
                       </button>
 
                       <div className="col-span-2 px-2 py-1 text-[10px] uppercase font-bold text-amber-400 tracking-wider border-b border-slate-800 my-1">
-                        Institucional y Dirección
+                        Institucional y DirecciÃ³n
                       </div>
                       <button onClick={() => navigateTo('visitas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        📋 Actas y Oficios
+                        ðŸ“‹ Actas y Oficios
                       </button>
                       <button onClick={() => navigateTo('estadisticas')} className="p-2 text-left hover:bg-slate-800 rounded-lg text-slate-300 hover:text-amber-300 transition">
-                        📊 Estadísticas Zona
+                        ðŸ“Š EstadÃ­sticas Zona
                       </button>
                     </div>
                   )}
@@ -507,7 +507,7 @@
                   <button
                     onClick={handleLogout}
                     className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded border border-slate-700 transition"
-                    title="Cerrar sesión"
+                    title="Cerrar sesiÃ³n"
                   >
                     Salir
                   </button>
@@ -523,7 +523,7 @@
             </div>
           )}
 
-          {/* Área Principal de Contenido SPA */}
+          {/* Ãrea Principal de Contenido SPA */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6" onClick={() => dropdownOpen && setDropdownOpen(false)}>
             {currentView === 'mis_documentos' && (
               <MisDocumentosView
@@ -629,7 +629,7 @@
           </main>
 
           <footer className="border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-400">
-            USAER 02-E · Sistema Pedagógico Integrado 2.0 · React SPA + FastAPI + PostgreSQL (Cero Recargas)
+            USAER 02-E Â· Sistema PedagÃ³gico Integrado 2.0 Â· React SPA + FastAPI + PostgreSQL (Cero Recargas)
           </footer>
         </div>
       );
@@ -639,22 +639,22 @@
     // VISTA 1: MIS DOCUMENTOS (HUB CENTRAL EN 1 CLIC)
     // =============================================================
     function MisDocumentosView({ onOpenDoc, onOpenExpediente, setMetrics }) {
-      const [planeaciones, setPlaneaciones] = useState([]);
-      const [alumnos, setAlumnos] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [busqueda, setBusqueda] = useState('');
-      const [modalAlumno, setModalAlumno] = useState(false);
-      const [deleteTargetId, setDeleteTargetId] = useState(null);
+      const [planeaciones, setPlaneaciones] = React.useState([]);
+      const [alumnos, setAlumnos] = React.useState([]);
+      const [loading, setLoading] = React.useState(true);
+      const [busqueda, setBusqueda] = React.useState('');
+      const [modalAlumno, setModalAlumno] = React.useState(false);
+      const [deleteTargetId, setDeleteTargetId] = React.useState(null);
 
       // Estado para nuevo alumno
-      const [nuevoNombre, setNuevoNombre] = useState('');
-      const [nuevoCURP, setNuevoCURP] = useState('');
-      const [nuevoGrado, setNuevoGrado] = useState('2');
-      const [nuevoGrupo, setNuevoGrupo] = useState('A');
-      const [nuevaEscuela, setNuevaEscuela] = useState('ESC-001');
-      const [nuevaCondicion, setNuevaCondicion] = useState('TDAH');
+      const [nuevoNombre, setNuevoNombre] = React.useState('');
+      const [nuevoCURP, setNuevoCURP] = React.useState('');
+      const [nuevoGrado, setNuevoGrado] = React.useState('2');
+      const [nuevoGrupo, setNuevoGrupo] = React.useState('A');
+      const [nuevaEscuela, setNuevaEscuela] = React.useState('ESC-001');
+      const [nuevaCondicion, setNuevaCondicion] = React.useState('TDAH');
 
-      const loadHub = useCallback(async () => {
+      const loadHub = React.useCallback(async () => {
         const t0 = performance.now();
         try {
           const [planesData, alumnosData] = await Promise.all([
@@ -672,7 +672,7 @@
         }
       }, [setMetrics]);
 
-      useEffect(() => {
+      React.useEffect(() => {
         loadHub();
       }, [loadHub]);
 
@@ -730,14 +730,14 @@
                 onClick={() => setModalAlumno(true)}
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold text-sm transition"
               >
-                + Alta Rápida de Alumno
+                + Alta RÃ¡pida de Alumno
               </button>
               <button
                 onClick={() => onOpenDoc(`plan-nuevo-${Date.now().toString(36)}`)}
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-semibold shadow-sm text-sm transition flex items-center space-x-2"
               >
                 <span>+</span>
-                <span>Nueva Planeación (Anexo XXIII)</span>
+                <span>Nueva PlaneaciÃ³n (Anexo XXIII)</span>
               </button>
             </div>
           </div>
@@ -754,18 +754,18 @@
 
           <div className="space-y-3">
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
-              <span>📝 Planeaciones y Planes de Intervención</span>
+              <span>ðŸ“ Planeaciones y Planes de IntervenciÃ³n</span>
               <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">{planesFiltrados.length}</span>
             </h2>
 
             {loading ? (
               <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-                <div className="inline-block animate-spin text-amber-600 text-2xl mb-2">◈</div>
+                <div className="inline-block animate-spin text-amber-600 text-2xl mb-2">â—ˆ</div>
                 <p className="text-sm text-slate-500">Cargando documentos desde PostgreSQL...</p>
               </div>
             ) : planesFiltrados.length === 0 ? (
               <div className="text-center py-8 bg-white rounded-xl border border-slate-200 text-slate-500 text-sm">
-                No hay planeaciones que coincidan con la búsqueda.
+                No hay planeaciones que coincidan con la bÃºsqueda.
               </div>
             ) : (
               <div className="grid gap-3">
@@ -780,22 +780,22 @@
                     >
                       <div className="flex items-center space-x-2">
                         <span className="font-bold text-slate-900 group-hover:text-amber-700 transition">
-                          {plan.metadatos?.titulo || `Planeación Anexo ${plan.formato}`}
+                          {plan.metadatos?.titulo || `PlaneaciÃ³n Anexo ${plan.formato}`}
                         </span>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                           plan.estado === 'APROBADO' || plan.estado === 'AUTORIZADA' ? 'bg-emerald-100 text-emerald-800' :
-                          plan.estado === 'REVISIÓN' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                          plan.estado === 'REVISIÃ“N' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
                         }`}>
                           {plan.estado}
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 flex items-center space-x-3">
-                        <span>🏫 {plan.datos?.Escuela || 'Primaria Oficial'}</span>
-                        <span>•</span>
-                        <span>Grado: {plan.datos?.Grado_Grupo || 'Atención USAER'}</span>
-                        <span>•</span>
+                        <span>ðŸ« {plan.datos?.Escuela || 'Primaria Oficial'}</span>
+                        <span>â€¢</span>
+                        <span>Grado: {plan.datos?.Grado_Grupo || 'AtenciÃ³n USAER'}</span>
+                        <span>â€¢</span>
                         <span>{plan.datos?.Docente_Especialista || 'Docente USAER'}</span>
-                        <span>•</span>
+                        <span>â€¢</span>
                         <span>Guardado: {plan.guardado_en || 'Reciente'}</span>
                       </div>
                     </div>
@@ -803,21 +803,21 @@
                     <div className="flex items-center space-x-3">
                       {plan.observaciones_director && (
                         <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 font-medium hidden sm:inline">
-                          💬 Con Vo. Bo.
+                          ðŸ’¬ Con Vo. Bo.
                         </span>
                       )}
                       <button
                         onClick={() => onOpenDoc(plan.id)}
                         className="text-xs font-semibold text-amber-600 hover:text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 hover:bg-amber-50 transition"
                       >
-                        Abrir →
+                        Abrir â†’
                       </button>
                       <button
                         onClick={() => setDeleteTargetId(plan.id)}
                         className="text-xs text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
-                        title="Eliminar planeación"
+                        title="Eliminar planeaciÃ³n"
                       >
-                        🗑️
+                        ðŸ—‘ï¸
                       </button>
                     </div>
                   </div>
@@ -828,7 +828,7 @@
 
           <div className="space-y-3 pt-4">
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
-              <span>👥 Expedientes de Alumnos Asignados</span>
+              <span>ðŸ‘¥ Expedientes de Alumnos Asignados</span>
               <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">{alumnos.length}</span>
             </h2>
 
@@ -841,15 +841,15 @@
                 >
                   <div className="font-bold text-slate-800 text-sm">{al.nombre_completo}</div>
                   <div className="text-xs text-slate-500">
-                    <span>{al.grado}° {al.grupo}</span>
-                    <span className="mx-1.5">•</span>
+                    <span>{al.grado}Â° {al.grupo}</span>
+                    <span className="mx-1.5">â€¢</span>
                     <span>{al.escuela}</span>
                   </div>
                   <div className="pt-1 flex items-center justify-between">
                     <span className="text-[11px] bg-amber-50 text-amber-800 font-semibold px-2 py-0.5 rounded border border-amber-200">
-                      {al.condicion || 'Atención USAER'}
+                      {al.condicion || 'AtenciÃ³n USAER'}
                     </span>
-                    <span className="text-xs text-slate-400 hover:text-slate-700 font-medium">Ver expediente →</span>
+                    <span className="text-xs text-slate-400 hover:text-slate-700 font-medium">Ver expediente â†’</span>
                   </div>
                 </div>
               ))}
@@ -860,18 +860,18 @@
                   onClick={() => onOpenExpediente(alumnos[0].id)}
                   className="text-xs text-amber-700 font-bold hover:underline"
                 >
-                  Ver todos los {alumnos.length} alumnos en el módulo de Expedientes →
+                  Ver todos los {alumnos.length} alumnos en el mÃ³dulo de Expedientes â†’
                 </button>
               </div>
             )}
           </div>
 
-          {/* Modal de Confirmación para Eliminar */}
+          {/* Modal de ConfirmaciÃ³n para Eliminar */}
           {deleteTargetId && (
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4">
-                <h3 className="font-bold text-slate-900 text-lg">¿Eliminar planeación?</h3>
-                <p className="text-xs text-slate-600">Esta acción removerá el borrador seleccionado de la base de datos de forma permanente.</p>
+                <h3 className="font-bold text-slate-900 text-lg">Â¿Eliminar planeaciÃ³n?</h3>
+                <p className="text-xs text-slate-600">Esta acciÃ³n removerÃ¡ el borrador seleccionado de la base de datos de forma permanente.</p>
                 <div className="flex justify-end space-x-2 pt-2">
                   <button
                     onClick={() => setDeleteTargetId(null)}
@@ -890,13 +890,13 @@
             </div>
           )}
 
-          {/* Modal de Alta Rápida de Alumno */}
+          {/* Modal de Alta RÃ¡pida de Alumno */}
           {modalAlumno && (
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
                 <div className="flex justify-between items-center">
                   <h3 className="font-bold text-slate-900 text-base">Registrar Nuevo Alumno</h3>
-                  <button onClick={() => setModalAlumno(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                  <button onClick={() => setModalAlumno(false)} className="text-slate-400 hover:text-slate-600">âœ•</button>
                 </div>
                 <form onSubmit={handleCrearAlumno} className="space-y-3 text-xs">
                   <div>
@@ -928,12 +928,12 @@
                         onChange={(e) => setNuevoGrado(e.target.value)}
                         className="w-full px-3 py-2 border rounded-lg"
                       >
-                        <option value="1">1° Primaria</option>
-                        <option value="2">2° Primaria</option>
-                        <option value="3">3° Primaria</option>
-                        <option value="4">4° Primaria</option>
-                        <option value="5">5° Primaria</option>
-                        <option value="6">6° Primaria</option>
+                        <option value="1">1Â° Primaria</option>
+                        <option value="2">2Â° Primaria</option>
+                        <option value="3">3Â° Primaria</option>
+                        <option value="4">4Â° Primaria</option>
+                        <option value="5">5Â° Primaria</option>
+                        <option value="6">6Â° Primaria</option>
                       </select>
                     </div>
                     <div>
@@ -948,7 +948,7 @@
                     </div>
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Condición / BAP:</label>
+                    <label className="font-bold text-slate-700 block mb-1">CondiciÃ³n / BAP:</label>
                     <input
                       type="text"
                       value={nuevaCondicion}
@@ -981,20 +981,20 @@
     }
 
     // =============================================================
-    // VISTA 2: EDITOR DE PLANEACIÓN COMPATIBLE CON STREAMLIT + SPA
+    // VISTA 2: EDITOR DE PLANEACIÃ“N COMPATIBLE CON STREAMLIT + SPA
     // =============================================================
     function PlaneacionEditorView({ docId, user, onBack, setMetrics }) {
-      const [doc, setDoc] = useState(null);
-      const [loading, setLoading] = useState(true);
-      const [activeTab, setActiveTab] = useState('aprendizajes');
-      const [saveStatus, setSaveStatus] = useState('saved');
-      const [conflictError, setConflictError] = useState(null);
-      const [assistantOpen, setAssistantOpen] = useState(false);
-      const [activeAlumnoId, setActiveAlumnoId] = useState('');
-      const [borradorDisponible, setBorradorDisponible] = useState(null);
-      const debounceTimer = useRef(null);
+      const [doc, setDoc] = React.useState(null);
+      const [loading, setLoading] = React.useState(true);
+      const [activeTab, setActiveTab] = React.useState('aprendizajes');
+      const [saveStatus, setSaveStatus] = React.useState('saved');
+      const [conflictError, setConflictError] = React.useState(null);
+      const [assistantOpen, setAssistantOpen] = React.useState(false);
+      const [activeAlumnoId, setActiveAlumnoId] = React.useState('');
+      const [borradorDisponible, setBorradorDisponible] = React.useState(null);
+      const debounceTimer = React.useRef(null);
 
-      const fetchDoc = useCallback(async () => {
+      const fetchDoc = React.useCallback(async () => {
         setLoading(true);
         setConflictError(null);
         const t0 = performance.now();
@@ -1013,18 +1013,18 @@
           const t1 = performance.now();
           setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 1 }));
         } catch (e) {
-          console.error("Error abriendo planeación:", e);
+          console.error("Error abriendo planeaciÃ³n:", e);
         } finally {
           setLoading(false);
         }
       }, [docId, setMetrics]);
 
-      useEffect(() => {
+      React.useEffect(() => {
         fetchDoc();
       }, [fetchDoc]);
 
-      // Alumnos vinculados en la planeación (tolerante a estructuras nulas)
-      const alumnosEnPlaneacion = useMemo(() => {
+      // Alumnos vinculados en la planeaciÃ³n (tolerante a estructuras nulas)
+      const alumnosEnPlaneacion = React.useMemo(() => {
         if (!doc) return [];
         const map = new Map();
         try {
@@ -1050,18 +1050,18 @@
             });
           }
         } catch (err) {
-          console.warn("Aviso computando alumnos en planeación:", err);
+          console.warn("Aviso computando alumnos en planeaciÃ³n:", err);
         }
         return Array.from(map.values());
       }, [doc]);
 
-      useEffect(() => {
+      React.useEffect(() => {
         if (alumnosEnPlaneacion.length > 0 && !activeAlumnoId) {
           setActiveAlumnoId(alumnosEnPlaneacion[0].id);
         }
       }, [alumnosEnPlaneacion, activeAlumnoId]);
 
-      const persistir = useCallback(async (docActual) => {
+      const persistir = React.useCallback(async (docActual) => {
         if (!navigator.onLine) {
           setSaveStatus('offline');
           return;
@@ -1108,7 +1108,7 @@
         });
       };
 
-      useEffect(() => {
+      React.useEffect(() => {
         if (saveStatus === 'dirty') {
           if (debounceTimer.current) clearTimeout(debounceTimer.current);
           debounceTimer.current = setTimeout(() => {
@@ -1123,13 +1123,13 @@
       if (loading || !doc) {
         return (
           <div className="text-center py-24 bg-white rounded-xl border border-slate-200">
-            <div className="inline-block animate-spin text-amber-600 text-3xl mb-3">◈</div>
-            <p className="text-slate-600 text-sm font-medium">Abriendo planeación oficial...</p>
+            <div className="inline-block animate-spin text-amber-600 text-3xl mb-3">â—ˆ</div>
+            <p className="text-slate-600 text-sm font-medium">Abriendo planeaciÃ³n oficial...</p>
           </div>
         );
       }
 
-      // Compatibilidad canónica con todas las variantes de Streamlit
+      // Compatibilidad canÃ³nica con todas las variantes de Streamlit
       const tablaNEE = doc.tablas?.nee || doc.tablas?.aprendizajes || doc.tablas?.["Tabla principal"] || [];
       const tablaDosificacion = doc.tablas?.dosificacion || [];
 
@@ -1138,7 +1138,7 @@
           {borradorDisponible && (
             <div className="bg-amber-50 border border-amber-300 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-xs text-amber-900 gap-2">
               <div>
-                <span className="font-bold">⚠️ Borrador local detectado:</span> Tienes una versión previa no sincronizada en este dispositivo.
+                <span className="font-bold">âš ï¸ Borrador local detectado:</span> Tienes una versiÃ³n previa no sincronizada en este dispositivo.
               </div>
               <div className="flex space-x-2">
                 <button
@@ -1162,7 +1162,7 @@
                 onClick={onBack}
                 className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 text-xs font-semibold transition"
               >
-                ← Volver a Mis Documentos
+                â† Volver a Mis Documentos
               </button>
               <div>
                 <input
@@ -1170,14 +1170,14 @@
                   value={doc.metadatos?.titulo || ''}
                   onChange={(e) => mutarDoc(d => ({ ...d, metadatos: { ...d.metadatos, titulo: e.target.value } }))}
                   className="font-bold text-slate-900 text-base md:text-lg border-b border-transparent hover:border-slate-300 focus:border-amber-500 focus:outline-none px-1 w-full max-w-lg"
-                  placeholder="Título del Plan de Intervención"
+                  placeholder="TÃ­tulo del Plan de IntervenciÃ³n"
                 />
                 <div className="text-xs text-slate-500 px-1 flex items-center space-x-2">
                   <span>Escuela: {doc.datos?.Escuela || doc.datos?.["Escuela regular"] || 'Primaria Oficial'}</span>
-                  <span>•</span>
+                  <span>â€¢</span>
                   <span>Docente: {doc.datos?.Docente_Especialista || doc.datos?.["Nombre del docente especialista"] || 'USAER 2E'}</span>
-                  <span>•</span>
-                  <span>Revisión: {doc.revision}</span>
+                  <span>â€¢</span>
+                  <span>RevisiÃ³n: {doc.revision}</span>
                 </div>
               </div>
             </div>
@@ -1205,7 +1205,7 @@
                 {saveStatus === 'conflict' && (
                   <>
                     <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                    <span className="text-red-700 font-semibold">Conflicto de edición</span>
+                    <span className="text-red-700 font-semibold">Conflicto de ediciÃ³n</span>
                   </>
                 )}
                 {saveStatus === 'error' && (
@@ -1223,7 +1223,7 @@
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5"
               >
                 <span>Descargar PDF</span>
-                <span>📄</span>
+                <span>ðŸ“„</span>
               </a>
 
               <button
@@ -1232,7 +1232,7 @@
                   assistantOpen ? 'bg-amber-600 text-white ring-2 ring-amber-400' : 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100'
                 }`}
               >
-                <span>🤖 Asistente IA</span>
+                <span>ðŸ¤– Asistente IA</span>
               </button>
             </div>
           </div>
@@ -1252,10 +1252,10 @@
             </div>
           )}
 
-          {/* Tarjeta de Guía Grupal Manual si viene de Streamlit */}
+          {/* Tarjeta de GuÃ­a Grupal Manual si viene de Streamlit */}
           {typeof doc.metadatos?.guia_grupal_manual === 'string' && doc.metadatos.guia_grupal_manual && (
             <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 text-xs space-y-1">
-              <div className="font-bold text-blue-900">📘 Guía Grupal de Intervención (Streamlit Histórico)</div>
+              <div className="font-bold text-blue-900">ðŸ“˜ GuÃ­a Grupal de IntervenciÃ³n (Streamlit HistÃ³rico)</div>
               <div className="text-slate-700 whitespace-pre-wrap">{doc.metadatos.guia_grupal_manual}</div>
             </div>
           )}
@@ -1263,8 +1263,8 @@
           <div className="flex border-b border-slate-200 space-x-1 text-sm font-semibold overflow-x-auto">
             {[
               { id: 'aprendizajes', label: '1. NEE y Descriptores Observables' },
-              { id: 'dosificacion', label: '2. Dosificación y Actividades' },
-              { id: 'evaluacion', label: '3. Evaluación Formativa' },
+              { id: 'dosificacion', label: '2. DosificaciÃ³n y Actividades' },
+              { id: 'evaluacion', label: '3. EvaluaciÃ³n Formativa' },
               { id: 'aportaciones', label: '4. Aportaciones Interdisciplinarias' },
               { id: 'firmas', label: '5. Firmas y Vo. Bo. Oficial' },
             ].map((tab) => (
@@ -1300,15 +1300,15 @@
                         const nuevaFila = {
                           alumno: 'Nuevo Alumno',
                           Alumno: 'Nuevo Alumno',
-                          barreras_o_necesidades: 'Atención sostenida en lectura guiada.',
-                          'Necesidades educativas específicas': 'Atención sostenida en lectura guiada.',
+                          barreras_o_necesidades: 'AtenciÃ³n sostenida en lectura guiada.',
+                          'Necesidades educativas especÃ­ficas': 'AtenciÃ³n sostenida en lectura guiada.',
                           pda: 'Identifica ideas clave con apoyo visual.',
                           'Aprendizaje y/u objetivo': 'Identifica ideas clave con apoyo visual.',
                           descriptor: 'El alumno identifica elementos clave con apoyo visual.',
                           'Descriptor de logro': 'El alumno identifica elementos clave con apoyo visual.',
                           'Descriptor Observable': 'El alumno identifica elementos clave con apoyo visual.',
-                          apoyos: 'Cronómetro visual y tarjetas léxicas.',
-                          'Apoyos y Ajustes': 'Cronómetro visual y tarjetas léxicas.',
+                          apoyos: 'CronÃ³metro visual y tarjetas lÃ©xicas.',
+                          'Apoyos y Ajustes': 'CronÃ³metro visual y tarjetas lÃ©xicas.',
                         };
                         mutarDoc(d => ({
                           ...d,
@@ -1321,7 +1321,7 @@
                       }}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold"
                     >
-                      + Agregar Alumno a Planeación
+                      + Agregar Alumno a PlaneaciÃ³n
                     </button>
                   </div>
 
@@ -1357,7 +1357,7 @@
                             <td className="p-2">
                               <textarea
                                 rows="2"
-                                value={row.barreras_o_necesidades || row["Necesidades educativas específicas"] || row["Barrera o Necesidad"] || ''}
+                                value={row.barreras_o_necesidades || row["Necesidades educativas especÃ­ficas"] || row["Barrera o Necesidad"] || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   mutarDoc(d => {
@@ -1365,7 +1365,7 @@
                                     copy[idx] = {
                                       ...copy[idx],
                                       barreras_o_necesidades: val,
-                                      "Necesidades educativas específicas": val,
+                                      "Necesidades educativas especÃ­ficas": val,
                                       "Barrera o Necesidad": val
                                     };
                                     return { ...d, tablas: { ...d.tablas, nee: copy, aprendizajes: copy } };
@@ -1429,7 +1429,7 @@
                                 }}
                                 className="text-slate-400 hover:text-red-600 font-bold p-1"
                               >
-                                ✕
+                                âœ•
                               </button>
                             </td>
                           </tr>
@@ -1443,21 +1443,21 @@
               {activeTab === 'dosificacion' && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Secuencia Didáctica y Modalidad</h3>
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Secuencia DidÃ¡ctica y Modalidad</h3>
                     <button
                       onClick={() => {
                         const nuevaSesion = {
                           Contextos: 'Aula de apoyo',
                           contextos: 'Aula de apoyo',
                           semana: 'Semana ' + (tablaDosificacion.length + 1),
-                          Actividades: 'Actividad de intervención pedagógica individual / grupal.',
-                          actividad: 'Actividad de intervención pedagógica individual / grupal.',
-                          Recursos: 'Material didáctico y apoyos visuales.',
-                          recursos: 'Material didáctico y apoyos visuales.',
+                          Actividades: 'Actividad de intervenciÃ³n pedagÃ³gica individual / grupal.',
+                          actividad: 'Actividad de intervenciÃ³n pedagÃ³gica individual / grupal.',
+                          Recursos: 'Material didÃ¡ctico y apoyos visuales.',
+                          recursos: 'Material didÃ¡ctico y apoyos visuales.',
                           Temporalidad: '45 minutos',
                           temporalidad: '45 minutos',
-                          "Ajustes Razonables": 'Pausas activas y estructuración secuencial.',
-                          ajustes_razonables: 'Pausas activas y estructuración secuencial.',
+                          "Ajustes Razonables": 'Pausas activas y estructuraciÃ³n secuencial.',
+                          ajustes_razonables: 'Pausas activas y estructuraciÃ³n secuencial.',
                         };
                         mutarDoc(d => ({
                           ...d,
@@ -1469,7 +1469,7 @@
                       }}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold"
                     >
-                      + Agregar Sesión
+                      + Agregar SesiÃ³n
                     </button>
                   </div>
 
@@ -1521,7 +1521,7 @@
                                 });
                               }}
                               className="w-full p-2 border border-slate-200 rounded bg-white text-slate-800"
-                              placeholder="Descripción de la actividad pedagógica..."
+                              placeholder="DescripciÃ³n de la actividad pedagÃ³gica..."
                             />
                           </div>
                           <div className="space-y-2">
@@ -1556,7 +1556,7 @@
                                   });
                                 }}
                                 className="w-full p-1.5 border border-slate-200 rounded bg-white text-xs"
-                                placeholder="Ajustes específicos..."
+                                placeholder="Ajustes especÃ­ficos..."
                               />
                             </div>
                           </div>
@@ -1570,30 +1570,30 @@
               {activeTab === 'evaluacion' && (
                 <div className="space-y-5">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Criterios e Instrumentos de Evaluación Formativa</h3>
-                    <p className="text-xs text-slate-500 mb-2">Registra los indicadores de logro formativo y rúbricas de la Zona 001.</p>
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Criterios e Instrumentos de EvaluaciÃ³n Formativa</h3>
+                    <p className="text-xs text-slate-500 mb-2">Registra los indicadores de logro formativo y rÃºbricas de la Zona 001.</p>
                     <textarea
                       rows="5"
-                      value={doc.textos?.['Evaluación'] || doc.textos?.evaluacion || doc.textos?.criterios_evaluacion || ''}
+                      value={doc.textos?.['EvaluaciÃ³n'] || doc.textos?.evaluacion || doc.textos?.criterios_evaluacion || ''}
                       onChange={(e) => {
                         const val = e.target.value;
                         mutarDoc(d => ({
                           ...d,
                           textos: {
                             ...d.textos,
-                            'Evaluación': val,
+                            'EvaluaciÃ³n': val,
                             evaluacion: val,
                             criterios_evaluacion: val
                           }
                         }));
                       }}
                       className="w-full p-3 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-amber-500"
-                      placeholder="Registra los indicadores de logro formativo y rúbricas de la Zona 001..."
+                      placeholder="Registra los indicadores de logro formativo y rÃºbricas de la Zona 001..."
                     />
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Observaciones Generales de la Intervención</h3>
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Observaciones Generales de la IntervenciÃ³n</h3>
                     <textarea
                       rows="4"
                       value={doc.textos?.['Observaciones'] || doc.textos?.observaciones || ''}
@@ -1609,7 +1609,7 @@
                         }));
                       }}
                       className="w-full p-3 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-amber-500"
-                      placeholder="Notas pedagógicas u observaciones de seguimiento..."
+                      placeholder="Notas pedagÃ³gicas u observaciones de seguimiento..."
                     />
                   </div>
                 </div>
@@ -1623,12 +1623,12 @@
                         Aportaciones del Equipo Multidisciplinario
                       </h3>
                       <p className="text-xs text-slate-500">
-                        Espacio de colaboración técnica para Aprendizaje, Psicología, Comunicación y Trabajo Social.
+                        Espacio de colaboraciÃ³n tÃ©cnica para Aprendizaje, PsicologÃ­a, ComunicaciÃ³n y Trabajo Social.
                       </p>
                     </div>
                   </div>
 
-                  {['Aprendizaje', 'Psicología', 'Comunicación', 'Trabajo Social'].map((areaName) => {
+                  {['Aprendizaje', 'PsicologÃ­a', 'ComunicaciÃ³n', 'Trabajo Social'].map((areaName) => {
                     const aportes = doc.metadatos?.aportaciones_equipo;
                     const aporteInfo = (typeof aportes === 'object' && aportes !== null) ? aportes[areaName] : null;
                     const puedeEditar = Boolean(user?.director || user?.area === areaName || (!user?.area && user?.rol === areaName.toUpperCase()));
@@ -1638,22 +1638,22 @@
                         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                           <div className="flex items-center space-x-2">
                             <span className="text-base">
-                              {areaName === 'Aprendizaje' ? '📖' : areaName === 'Psicología' ? '🧠' : areaName === 'Comunicación' ? '🗣️' : '👥'}
+                              {areaName === 'Aprendizaje' ? 'ðŸ“–' : areaName === 'PsicologÃ­a' ? 'ðŸ§ ' : areaName === 'ComunicaciÃ³n' ? 'ðŸ—£ï¸' : 'ðŸ‘¥'}
                             </span>
                             <span className="font-bold text-slate-900 text-sm">{areaName}</span>
                             {puedeEditar && (
                               <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded border border-emerald-200">
-                                Tu Área / Autorizado para Editar
+                                Tu Ãrea / Autorizado para Editar
                               </span>
                             )}
                           </div>
                           <span className="text-xs text-slate-500">
-                            {aporteInfo?.autor ? `${aporteInfo.autor} (${aporteInfo.fecha ? aporteInfo.fecha.slice(0, 10) : 'Registrado'})` : 'Sin aportación registrada aún'}
+                            {aporteInfo?.autor ? `${aporteInfo.autor} (${aporteInfo.fecha ? aporteInfo.fecha.slice(0, 10) : 'Registrado'})` : 'Sin aportaciÃ³n registrada aÃºn'}
                           </span>
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[11px] font-bold text-slate-600 uppercase">Observaciones y Estrategias Técnicas:</label>
+                          <label className="text-[11px] font-bold text-slate-600 uppercase">Observaciones y Estrategias TÃ©cnicas:</label>
                           {puedeEditar ? (
                             <textarea
                               rows="3"
@@ -1681,7 +1681,7 @@
                             />
                           ) : (
                             <div className="p-2.5 bg-slate-50 rounded text-xs text-slate-700 whitespace-pre-wrap">
-                              {aporteInfo?.observaciones || 'No hay observaciones específicas registradas para esta área.'}
+                              {aporteInfo?.observaciones || 'No hay observaciones especÃ­ficas registradas para esta Ã¡rea.'}
                             </div>
                           )}
                         </div>
@@ -1691,7 +1691,7 @@
 
                   {typeof doc.metadatos?.aportaciones_equipo === 'string' && doc.metadatos.aportaciones_equipo && (
                     <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1">
-                      <div className="font-bold text-amber-900">Nota Histórica Migrada de Streamlit:</div>
+                      <div className="font-bold text-amber-900">Nota HistÃ³rica Migrada de Streamlit:</div>
                       <div className="text-slate-700 whitespace-pre-wrap">{doc.metadatos.aportaciones_equipo}</div>
                     </div>
                   )}
@@ -1701,23 +1701,23 @@
               {activeTab === 'firmas' && (
                 <div className="space-y-6 max-w-2xl mx-auto py-6">
                   <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-xl text-xs text-slate-700 space-y-1">
-                    <div className="font-bold text-amber-900">Validación de Firmas Oficiales de Zona 001</div>
-                    <p>Las firmas se computan automáticamente desde el personal asignado a la escuela y la Dirección de USAER 2E.</p>
+                    <div className="font-bold text-amber-900">ValidaciÃ³n de Firmas Oficiales de Zona 001</div>
+                    <p>Las firmas se computan automÃ¡ticamente desde el personal asignado a la escuela y la DirecciÃ³n de USAER 2E.</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6">
                     <div className="p-4 border-2 border-dashed border-slate-300 rounded-xl text-center space-y-2">
-                      <div className="text-xs text-slate-400 uppercase font-semibold">Elaboró</div>
+                      <div className="text-xs text-slate-400 uppercase font-semibold">ElaborÃ³</div>
                       <div className="font-bold text-slate-900 text-sm">
                         {doc.firmas_resueltas?.elaboro || doc.datos?.Docente_Especialista || 'Docente Especialista USAER'}
                       </div>
-                      <div className="text-[11px] text-slate-500">Maestra de Apoyo / Área Especialista</div>
+                      <div className="text-[11px] text-slate-500">Maestra de Apoyo / Ãrea Especialista</div>
                     </div>
 
                     <div className="p-4 border-2 border-dashed border-amber-400 bg-amber-50/20 rounded-xl text-center space-y-2">
-                      <div className="text-xs text-amber-700 uppercase font-bold">Vo. Bo. Dirección USAER</div>
+                      <div className="text-xs text-amber-700 uppercase font-bold">Vo. Bo. DirecciÃ³n USAER</div>
                       <div className="font-bold text-slate-900 text-sm">
-                        {doc.firmas_resueltas?.vo_bo || 'Psic. Edgar Adrián Yam Briceño MD'}
+                        {doc.firmas_resueltas?.vo_bo || 'Psic. Edgar AdriÃ¡n Yam BriceÃ±o MD'}
                       </div>
                       <div className="text-[11px] text-slate-500">Director USAER 02-E</div>
                     </div>
@@ -1761,12 +1761,12 @@
                         Alumno: aluNom,
                         id_alumno: activeAlumnoId,
                         barreras_o_necesidades: propuesta.barrera || propuesta.barreras_o_necesidades || 'Barrera identificada',
-                        'Necesidades educativas específicas': propuesta.barrera || propuesta.barreras_o_necesidades || 'Barrera identificada',
+                        'Necesidades educativas especÃ­ficas': propuesta.barrera || propuesta.barreras_o_necesidades || 'Barrera identificada',
                         pda: propuesta.pda || propuesta.aprendizaje || '',
                         'Aprendizaje y/u objetivo': propuesta.pda || propuesta.aprendizaje || '',
-                        descriptor: propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeño observable.',
-                        'Descriptor de logro': propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeño observable.',
-                        'Descriptor Observable': propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeño observable.',
+                        descriptor: propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeÃ±o observable.',
+                        'Descriptor de logro': propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeÃ±o observable.',
+                        'Descriptor Observable': propuesta.descriptor || propuesta.descriptor_observable || 'El alumno demuestra desempeÃ±o observable.',
                         apoyos: propuesta.apoyos || propuesta.ajustes_razonables || 'Apoyos visuales y estructurados.',
                         'Apoyos y Ajustes': propuesta.apoyos || propuesta.ajustes_razonables || 'Apoyos visuales y estructurados.',
                       };
@@ -1789,18 +1789,18 @@
     }
 
     // =============================================================
-    // COMPONENTE: ASISTENTE PEDAGÓGICO IA
+    // COMPONENTE: ASISTENTE PEDAGÃ“GICO IA
     // =============================================================
     function PedagogicalChatComponent({ alumnoId, onInsertProposal }) {
-      const [messages, setMessages] = useState([
+      const [messages, setMessages] = React.useState([
         {
           sender: 'ai',
-          text: 'Hola. Soy el Asistente Pedagógico de USAER 02-E. Puedo sugerir descriptores observables para tus alumnos alineados a los 14 indicadores de la Zona 001. ¿En qué aprendizaje o ajuste estás trabajando?'
+          text: 'Hola. Soy el Asistente PedagÃ³gico de USAER 02-E. Puedo sugerir descriptores observables para tus alumnos alineados a los 14 indicadores de la Zona 001. Â¿En quÃ© aprendizaje o ajuste estÃ¡s trabajando?'
         }
       ]);
-      const [input, setInput] = useState('');
-      const [loading, setLoading] = useState(false);
-      const [lastProposal, setLastProposal] = useState(null);
+      const [input, setInput] = React.useState('');
+      const [loading, setLoading] = React.useState(false);
+      const [lastProposal, setLastProposal] = React.useState(null);
 
       const handleSend = async (e) => {
         if (e) e.preventDefault();
@@ -1821,7 +1821,7 @@
             setLastProposal(res.propuesta_tabla);
           }
         } catch (err) {
-          setMessages(prev => [...prev, { sender: 'ai', text: 'Error consultando el motor pedagógico.' }]);
+          setMessages(prev => [...prev, { sender: 'ai', text: 'Error consultando el motor pedagÃ³gico.' }]);
         } finally {
           setLoading(false);
         }
@@ -1831,8 +1831,8 @@
         <div className="flex flex-col h-full space-y-3">
           <div className="flex justify-between items-center border-b border-slate-100 pb-2">
             <div className="flex items-center space-x-2">
-              <span className="text-amber-600 font-bold">🤖</span>
-              <span className="font-bold text-xs text-slate-800">Asistente Pedagógico Zona 001</span>
+              <span className="text-amber-600 font-bold">ðŸ¤–</span>
+              <span className="font-bold text-xs text-slate-800">Asistente PedagÃ³gico Zona 001</span>
             </div>
             <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Activo</span>
           </div>
@@ -1866,7 +1866,7 @@
                 }}
                 className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-xs shadow-sm transition"
               >
-                + Insertar en Planeación (1 Clic)
+                + Insertar en PlaneaciÃ³n (1 Clic)
               </button>
             </div>
           )}
@@ -1876,7 +1876,7 @@
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Instrucción pedagógica..."
+              placeholder="InstrucciÃ³n pedagÃ³gica..."
               className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-amber-500"
             />
             <button
@@ -1892,20 +1892,20 @@
     }
 
     // =============================================================
-    // VISTA 3: EXPEDIENTES INTEGRALES (307 ALUMNOS, LÍNEA DE TIEMPO)
+    // VISTA 3: EXPEDIENTES INTEGRALES (307 ALUMNOS, LÃNEA DE TIEMPO)
     // =============================================================
     function ExpedientesView({ initialAlumnoId, onBack, setMetrics }) {
-      const [alumnos, setAlumnos] = useState([]);
-      const [loadingAlumnos, setLoadingAlumnos] = useState(true);
-      const [errorAlumnos, setErrorAlumnos] = useState(null);
-      const [busqueda, setBusqueda] = useState('');
-      const [filtroMaestra, setFiltroMaestra] = useState('TODAS');
-      const [selectedId, setSelectedId] = useState(initialAlumnoId || null);
-      const [expediente, setExpediente] = useState(null);
-      const [loadingExp, setLoadingExp] = useState(false);
-      const [activeExpTab, setActiveExpTab] = useState('resumen');
+      const [alumnos, setAlumnos] = React.useState([]);
+      const [loadingAlumnos, setLoadingAlumnos] = React.useState(true);
+      const [errorAlumnos, setErrorAlumnos] = React.useState(null);
+      const [busqueda, setBusqueda] = React.useState('');
+      const [filtroMaestra, setFiltroMaestra] = React.useState('TODAS');
+      const [selectedId, setSelectedId] = React.useState(initialAlumnoId || null);
+      const [expediente, setExpediente] = React.useState(null);
+      const [loadingExp, setLoadingExp] = React.useState(false);
+      const [activeExpTab, setActiveExpTab] = React.useState('resumen');
 
-      useEffect(() => {
+      React.useEffect(() => {
         setLoadingAlumnos(true);
         setErrorAlumnos(null);
         apiRequest('/api/alumnos')
@@ -1918,13 +1918,13 @@
             }
           })
           .catch(err => {
-            console.error("Error al cargar padrón de alumnos:", err);
-            setErrorAlumnos(err.message || 'Error cargando padrón');
+            console.error("Error al cargar padrÃ³n de alumnos:", err);
+            setErrorAlumnos(err.message || 'Error cargando padrÃ³n');
             setLoadingAlumnos(false);
           });
       }, []);
 
-      useEffect(() => {
+      React.useEffect(() => {
         if (!selectedId) return;
         setLoadingExp(true);
         const t0 = performance.now();
@@ -1958,7 +1958,7 @@
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-                ← Volver a Mis Documentos
+                â† Volver a Mis Documentos
               </button>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Expedientes de Alumnos</h1>
             </div>
@@ -1966,7 +1966,7 @@
               href={`${API_BASE}/api/alumnos/exportar`}
               className="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border border-slate-300 transition"
             >
-              Exportar Padrón CSV 📥
+              Exportar PadrÃ³n CSV ðŸ“¥
             </a>
           </div>
 
@@ -1974,7 +1974,7 @@
             {/* Lista Izquierda de Alumnos */}
             <div className="lg:col-span-4 bg-white p-4 rounded-xl border border-slate-200 space-y-3 self-start">
               <div className="flex justify-between items-center">
-                <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">Matrícula de Atención</h3>
+                <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">MatrÃ­cula de AtenciÃ³n</h3>
                 <span className="text-[11px] font-bold bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
                   {alumnosFiltrados.length} alumnos
                 </span>
@@ -2005,15 +2005,15 @@
               )}
 
               {loadingAlumnos ? (
-                <div className="text-center py-8 text-xs text-slate-400">Cargando matrícula de atención...</div>
+                <div className="text-center py-8 text-xs text-slate-400">Cargando matrÃ­cula de atenciÃ³n...</div>
               ) : errorAlumnos ? (
                 <div className="text-center py-6 text-xs text-red-500 bg-red-50 rounded-lg p-3">
-                  <div>⚠️ {errorAlumnos}</div>
+                  <div>âš ï¸ {errorAlumnos}</div>
                   <button onClick={() => location.reload()} className="mt-2 text-[11px] underline font-bold text-amber-700">Reintentar</button>
                 </div>
               ) : alumnosFiltrados.length === 0 ? (
                 <div className="text-center py-8 text-xs text-slate-400">
-                  No se encontraron alumnos para tu escuela o criterio de búsqueda.
+                  No se encontraron alumnos para tu escuela o criterio de bÃºsqueda.
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
@@ -2026,8 +2026,8 @@
                       }`}
                     >
                       <div>{al.nombre_completo || al.Nombre_Completo}</div>
-                      <div className="text-[11px] text-slate-500">{al.grado}° {al.grupo} • {al.escuela}</div>
-                      <div className="text-[10px] text-amber-700 font-semibold mt-0.5">👤 {al.maestra_apoyo}</div>
+                      <div className="text-[11px] text-slate-500">{al.grado}Â° {al.grupo} â€¢ {al.escuela}</div>
+                      <div className="text-[10px] text-amber-700 font-semibold mt-0.5">ðŸ‘¤ {al.maestra_apoyo}</div>
                     </div>
                   ))}
                 </div>
@@ -2037,12 +2037,12 @@
             {/* Vista Derecha del Expediente Integral */}
             <div className="lg:col-span-8 bg-white p-6 rounded-xl border border-slate-200 space-y-5">
               {loadingAlumnos ? (
-                <div className="text-center py-16 text-slate-500 text-sm">Cargando padrón escolar...</div>
+                <div className="text-center py-16 text-slate-500 text-sm">Cargando padrÃ³n escolar...</div>
               ) : alumnos.length === 0 ? (
                 <div className="text-center py-16 text-slate-500 text-sm">
-                  <div className="text-2xl mb-2">📋</div>
+                  <div className="text-2xl mb-2">ðŸ“‹</div>
                   <div className="font-bold text-slate-700">No hay alumnos asignados a este perfil o escuela.</div>
-                  <div className="text-xs text-slate-400 mt-1">Si perteneces a una escuela específica, verifica haber iniciado sesión con tu cuenta correspondiente.</div>
+                  <div className="text-xs text-slate-400 mt-1">Si perteneces a una escuela especÃ­fica, verifica haber iniciado sesiÃ³n con tu cuenta correspondiente.</div>
                 </div>
               ) : loadingExp || !expediente ? (
                 <div className="text-center py-16 text-slate-500 text-sm">Cargando expediente integral desde base relacional...</div>
@@ -2053,27 +2053,27 @@
                       <h2 className="text-xl font-bold text-slate-900">{expediente.alumno?.nombre_completo}</h2>
                       <div className="text-xs text-slate-500 mt-1">
                         <span>ID: {expediente.alumno?.id}</span>
-                        <span className="mx-2">•</span>
+                        <span className="mx-2">â€¢</span>
                         <span>CURP: {expediente.alumno?.curp || 'No registrada'}</span>
-                        <span className="mx-2">•</span>
+                        <span className="mx-2">â€¢</span>
                         <span>{expediente.alumno?.escuela}</span>
-                        <span className="mx-2">•</span>
-                        <span>Grado: {expediente.alumno?.grado}° {expediente.alumno?.grupo}</span>
+                        <span className="mx-2">â€¢</span>
+                        <span>Grado: {expediente.alumno?.grado}Â° {expediente.alumno?.grupo}</span>
                       </div>
                     </div>
                     <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
-                      {expediente.alumno?.condicion || 'Atención USAER'}
+                      {expediente.alumno?.condicion || 'AtenciÃ³n USAER'}
                     </span>
                   </div>
 
                   <div className="flex border-b border-slate-200 space-x-1 text-xs font-bold overflow-x-auto pb-1">
                     {[
                       { id: 'resumen', label: 'Resumen e Historia' },
-                      { id: 'epp', label: 'Evaluación Psicopedagógica (EPP)' },
+                      { id: 'epp', label: 'EvaluaciÃ³n PsicopedagÃ³gica (EPP)' },
                       { id: 'bap', label: `BAP (${expediente.anexo3_bap?.length || 0})` },
                       { id: 'sugerencias', label: `Sugerencias (${expediente.anexo4_sugerencias?.length || 0})` },
                       { id: 'eventos', label: `Eventos (${expediente.anexo5_eventos?.length || 0})` },
-                      { id: 'derivacion', label: 'Derivación y Salud' },
+                      { id: 'derivacion', label: 'DerivaciÃ³n y Salud' },
                     ].map(t => (
                       <button
                         key={t.id}
@@ -2095,12 +2095,12 @@
                           <div className="text-slate-900">{expediente.alumno?.maestra_apoyo || 'Por asignar'}</div>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                          <div className="font-bold text-slate-700">Tipo de Atención</div>
-                          <div className="text-slate-900">{expediente.alumno?.tipo_atencion || 'Atención Focalizada'}</div>
+                          <div className="font-bold text-slate-700">Tipo de AtenciÃ³n</div>
+                          <div className="text-slate-900">{expediente.alumno?.tipo_atencion || 'AtenciÃ³n Focalizada'}</div>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                           <div className="font-bold text-slate-700">Turno y CCT</div>
-                          <div className="text-slate-900">{expediente.alumno?.turno} • {expediente.alumno?.cct}</div>
+                          <div className="text-slate-900">{expediente.alumno?.turno} â€¢ {expediente.alumno?.cct}</div>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                           <div className="font-bold text-slate-700">Documentos Vinculados</div>
@@ -2108,10 +2108,10 @@
                         </div>
                       </div>
 
-                      {/* Línea de Tiempo del Alumno */}
+                      {/* LÃ­nea de Tiempo del Alumno */}
                       {expediente.linea_tiempo && expediente.linea_tiempo.length > 0 && (
                         <div className="pt-2 space-y-2">
-                          <h4 className="text-xs font-bold uppercase text-slate-600">📜 Línea de Tiempo del Expediente ({expediente.linea_tiempo.length})</h4>
+                          <h4 className="text-xs font-bold uppercase text-slate-600">ðŸ“œ LÃ­nea de Tiempo del Expediente ({expediente.linea_tiempo.length})</h4>
                           <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                             {expediente.linea_tiempo.map((lt, idx) => (
                               <div key={idx} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs flex justify-between items-start">
@@ -2134,14 +2134,14 @@
                         <div className="space-y-3">
                           <div className="flex justify-between items-center text-slate-500">
                             <span>Ciclo Escolar: {expediente.epp.ciclo}</span>
-                            <span>Revisión: {expediente.epp.revision}</span>
+                            <span>RevisiÃ³n: {expediente.epp.revision}</span>
                           </div>
                           {Object.entries(expediente.epp.partes || {}).map(([area, datos]) => {
                             if (area === 'META') return null;
                             return (
                               <div key={area} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                                 <div className="font-bold text-slate-900 uppercase tracking-wider text-[11px] text-amber-700">
-                                  Área: {area}
+                                  Ãrea: {area}
                                 </div>
                                 {typeof datos === 'object' ? (
                                   Object.entries(datos).map(([k, v]) => (
@@ -2157,7 +2157,7 @@
                           })}
                         </div>
                       ) : (
-                        <div className="text-center py-8 text-slate-500">No hay Evaluación Psicopedagógica cargada para este ciclo.</div>
+                        <div className="text-center py-8 text-slate-500">No hay EvaluaciÃ³n PsicopedagÃ³gica cargada para este ciclo.</div>
                       )}
                     </div>
                   )}
@@ -2167,12 +2167,12 @@
                       {expediente.anexo3_bap?.map((b) => (
                         <div key={b.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                           <div className="flex justify-between items-center font-bold text-slate-800">
-                            <span>Detección BAP {b.tipo_deteccion === 'GRUPAL' ? '· GRUPAL DE AULA' : ''}</span>
+                            <span>DetecciÃ³n BAP {b.tipo_deteccion === 'GRUPAL' ? 'Â· GRUPAL DE AULA' : ''}</span>
                             <span className="text-slate-400 font-normal">{b.fecha}</span>
                           </div>
-                          {b.fisicas && <div><strong>Físicas:</strong> {b.fisicas}</div>}
+                          {b.fisicas && <div><strong>FÃ­sicas:</strong> {b.fisicas}</div>}
                           {b.actitudinales && <div><strong>Actitudinales:</strong> {b.actitudinales}</div>}
-                          {b.pedagogicas && <div><strong>Pedagógicas:</strong> {b.pedagogicas}</div>}
+                          {b.pedagogicas && <div><strong>PedagÃ³gicas:</strong> {b.pedagogicas}</div>}
                           {b.organizativas && <div><strong>Organizativas:</strong> {b.organizativas}</div>}
                         </div>
                       ))}
@@ -2184,7 +2184,7 @@
                       {expediente.anexo4_sugerencias?.map((sug) => (
                         <div key={sug.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                           <div className="flex justify-between items-center font-bold text-slate-800">
-                            <span>Área: {sug.area}</span>
+                            <span>Ãrea: {sug.area}</span>
                             <span className="text-slate-400 font-normal">{sug.fecha}</span>
                           </div>
                           <div><strong>Sugerencias:</strong> {sug.sugerencias}</div>
@@ -2211,10 +2211,10 @@
 
                   {activeExpTab === 'derivacion' && (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
-                      <div className="font-bold text-slate-900">Anexo VII — Formato de Derivación</div>
+                      <div className="font-bold text-slate-900">Anexo VII â€” Formato de DerivaciÃ³n</div>
                       <div><strong>Docente Regular:</strong> {expediente.anexo7_derivacion?.docente_regular || 'No registrado'}</div>
                       <div><strong>Salud:</strong> {expediente.anexo7_derivacion?.salud || 'Buena salud reportada'}</div>
-                      <div><strong>Seguimiento Médico:</strong> {expediente.anexo7_derivacion?.seguimiento_medico || 'Sin seguimiento activo'}</div>
+                      <div><strong>Seguimiento MÃ©dico:</strong> {expediente.anexo7_derivacion?.seguimiento_medico || 'Sin seguimiento activo'}</div>
                       <div><strong>Aspecto Relevante:</strong> {expediente.anexo7_derivacion?.aspecto_relevante || 'Ninguno'}</div>
                     </div>
                   )}
@@ -2227,13 +2227,13 @@
     }
 
     // =============================================================
-    // VISTA 4: EVALUACIÓN PSICOPEDAGÓGICA (EPP MULTI-ÁREA)
+    // VISTA 4: EVALUACIÃ“N PSICOPEDAGÃ“GICA (EPP MULTI-ÃREA)
     // =============================================================
     function EPPView({ onBack, onOpenAlumno, setMetrics }) {
-      const [listaEPP, setListaEPP] = useState([]);
-      const [loading, setLoading] = useState(true);
+      const [listaEPP, setListaEPP] = React.useState([]);
+      const [loading, setLoading] = React.useState(true);
 
-      useEffect(() => {
+      React.useEffect(() => {
         const t0 = performance.now();
         apiRequest('/api/epp').then(data => {
           setListaEPP(data);
@@ -2247,9 +2247,9 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Evaluación Psicopedagógica (EPP)</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">EvaluaciÃ³n PsicopedagÃ³gica (EPP)</h1>
           </div>
 
           <div className="grid gap-4">
@@ -2258,21 +2258,21 @@
                 <div className="flex justify-between items-center">
                   <div>
                     <h3 className="font-bold text-slate-900 text-base">{epp.alumno_nombre}</h3>
-                    <div className="text-xs text-slate-500">ID: {epp.alumno_id} • Ciclo: {epp.ciclo} • Revisión: {epp.revision}</div>
+                    <div className="text-xs text-slate-500">ID: {epp.alumno_id} â€¢ Ciclo: {epp.ciclo} â€¢ RevisiÃ³n: {epp.revision}</div>
                   </div>
                   <button
                     onClick={() => onOpenAlumno(epp.alumno_id)}
                     className="text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 transition"
                   >
-                    Ver Expediente Completo →
+                    Ver Expediente Completo â†’
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2 pt-2 text-xs">
-                  {['Aprendizaje', 'Psicología', 'Comunicación', 'Trabajo Social'].map(area => (
+                  {['Aprendizaje', 'PsicologÃ­a', 'ComunicaciÃ³n', 'Trabajo Social'].map(area => (
                     <div key={area} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
                       <div className="font-bold text-slate-700">{area}</div>
-                      <div className="text-[11px] text-emerald-700 mt-1">✓ Registro completado</div>
+                      <div className="text-[11px] text-emerald-700 mt-1">âœ“ Registro completado</div>
                     </div>
                   ))}
                 </div>
@@ -2284,14 +2284,14 @@
     }
 
     // =============================================================
-    // VISTA 5: ANEXO III - DETECCIÓN DE BAP (INDIVIDUAL Y GRUPAL)
+    // VISTA 5: ANEXO III - DETECCIÃ“N DE BAP (INDIVIDUAL Y GRUPAL)
     // =============================================================
     function Anexo3View({ onBack, setMetrics }) {
-      const [baps, setBaps] = useState([]);
-      const [busqueda, setBusqueda] = useState('');
-      const [loading, setLoading] = useState(true);
+      const [baps, setBaps] = React.useState([]);
+      const [busqueda, setBusqueda] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/anexo3')
           .then(data => { setBaps(data); setLoading(false); })
           .catch(() => setLoading(false));
@@ -2311,9 +2311,9 @@
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-                ← Volver
+                â† Volver
               </button>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo III — Detección de BAP</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo III â€” DetecciÃ³n de BAP</h1>
             </div>
             <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
               {filtrados.length} registros
@@ -2332,20 +2332,20 @@
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando detecciones de BAP...</div>
           ) : filtrados.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
-              No hay registros de BAP para este criterio de búsqueda o escuela asignada.
+              No hay registros de BAP para este criterio de bÃºsqueda o escuela asignada.
             </div>
           ) : (
             <div className="grid gap-3">
               {filtrados.map((b, i) => (
                 <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2 hover:border-amber-400 transition">
                   <div className="flex justify-between items-center font-bold text-slate-900">
-                    <span className="text-sm">{b.nombre_alumno || b.Nombre_Alumno || 'Detección Grupal'}</span>
+                    <span className="text-sm">{b.nombre_alumno || b.Nombre_Alumno || 'DetecciÃ³n Grupal'}</span>
                     <span className="text-slate-400 font-normal">{b.fecha || b.Fecha}</span>
                   </div>
-                  <div className="text-slate-500">Escuela: {b.escuela || b.Escuela} • Alumno/Grupo: {b.id_alumno || b.ID_Alumno}</div>
-                  {(b.fisicas || b.Fisicas) && <div><strong>Físicas/Arquitectónicas:</strong> {b.fisicas || b.Fisicas}</div>}
+                  <div className="text-slate-500">Escuela: {b.escuela || b.Escuela} â€¢ Alumno/Grupo: {b.id_alumno || b.ID_Alumno}</div>
+                  {(b.fisicas || b.Fisicas) && <div><strong>FÃ­sicas/ArquitectÃ³nicas:</strong> {b.fisicas || b.Fisicas}</div>}
                   {(b.actitudinales || b.Actitudinales) && <div><strong>Actitudinales:</strong> {b.actitudinales || b.Actitudinales}</div>}
-                  {(b.pedagogicas || b.Pedagogicas || b.Curriculares) && <div><strong>Curriculares/Pedagógicas:</strong> {b.pedagogicas || b.Pedagogicas || b.Curriculares}</div>}
+                  {(b.pedagogicas || b.Pedagogicas || b.Curriculares) && <div><strong>Curriculares/PedagÃ³gicas:</strong> {b.pedagogicas || b.Pedagogicas || b.Curriculares}</div>}
                   {(b.organizativas || b.Organizativas) && <div><strong>Organizativas:</strong> {b.organizativas || b.Organizativas}</div>}
                 </div>
               ))}
@@ -2359,11 +2359,11 @@
     // VISTA 6: ANEXO IV - HOJA DE SUGERENCIAS
     // =============================================================
     function Anexo4View({ onBack, setMetrics }) {
-      const [sugerencias, setSugerencias] = useState([]);
-      const [busqueda, setBusqueda] = useState('');
-      const [loading, setLoading] = useState(true);
+      const [sugerencias, setSugerencias] = React.useState([]);
+      const [busqueda, setBusqueda] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/anexo4')
           .then(data => { setSugerencias(data); setLoading(false); })
           .catch(() => setLoading(false));
@@ -2383,9 +2383,9 @@
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-                ← Volver
+                â† Volver
               </button>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo IV — Hojas de Sugerencias</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo IV â€” Hojas de Sugerencias</h1>
             </div>
             <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
               {filtradas.length} hojas
@@ -2394,7 +2394,7 @@
 
           <input
             type="text"
-            placeholder="Buscar por alumno, área o contenido..."
+            placeholder="Buscar por alumno, Ã¡rea o contenido..."
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
@@ -2415,10 +2415,10 @@
                     <span className="text-slate-400 font-normal">{s.fecha || s.Fecha}</span>
                   </div>
                   <div className="text-slate-500">
-                    <span>Área: <strong className="text-amber-800">{s.area || s.Area || 'Pedagógica'}</strong></span>
-                    <span className="mx-2">•</span>
+                    <span>Ãrea: <strong className="text-amber-800">{s.area || s.Area || 'PedagÃ³gica'}</strong></span>
+                    <span className="mx-2">â€¢</span>
                     <span>Especialista: {s.docente_especialista || s.Docente_Especialista || s.Especialista || 'USAER'}</span>
-                    {(s.escuela || s.Escuela) && <span> • Escuela: {s.escuela || s.Escuela}</span>}
+                    {(s.escuela || s.Escuela) && <span> â€¢ Escuela: {s.escuela || s.Escuela}</span>}
                   </div>
                   {(s.motivo || s.Motivo) && <div><strong>Motivo:</strong> {s.motivo || s.Motivo}</div>}
                   <div><strong>Sugerencias para el Docente Regular:</strong> {s.sugerencias || s.Sugerencias}</div>
@@ -2435,11 +2435,11 @@
     // VISTA 7: ANEXO V - EVENTOS SIGNIFICATIVOS (408 REGISTROS)
     // =============================================================
     function Anexo5View({ onBack, setMetrics }) {
-      const [eventos, setEventos] = useState([]);
-      const [busqueda, setBusqueda] = useState('');
-      const [loading, setLoading] = useState(true);
+      const [eventos, setEventos] = React.useState([]);
+      const [busqueda, setBusqueda] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/anexo5')
           .then(data => { setEventos(data); setLoading(false); })
           .catch(() => setLoading(false));
@@ -2459,18 +2459,18 @@
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-                ← Volver
+                â† Volver
               </button>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo V — Eventos Significativos</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo V â€” Eventos Significativos</h1>
             </div>
             <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
-              {filtrados.length} eventos históricos
+              {filtrados.length} eventos histÃ³ricos
             </span>
           </div>
 
           <input
             type="text"
-            placeholder="Buscar por alumno, especialista o descripción del evento..."
+            placeholder="Buscar por alumno, especialista o descripciÃ³n del evento..."
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white shadow-sm"
@@ -2480,7 +2480,7 @@
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando eventos significativos...</div>
           ) : filtrados.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
-              No hay eventos significativos registrados en tu búsqueda.
+              No hay eventos significativos registrados en tu bÃºsqueda.
             </div>
           ) : (
             <div className="space-y-2">
@@ -2491,7 +2491,7 @@
                     <div className="text-slate-700">{ev.evento || ev.Evento}</div>
                     <div className="text-[11px] text-slate-500">
                       <span>Registrado por: <strong>{ev.especialista || ev.Especialista}</strong></span>
-                      {(ev.escuela || ev.Escuela) && <span className="ml-2">• Escuela: {ev.escuela || ev.Escuela}</span>}
+                      {(ev.escuela || ev.Escuela) && <span className="ml-2">â€¢ Escuela: {ev.escuela || ev.Escuela}</span>}
                     </div>
                   </div>
                   <span className="text-slate-400 font-mono text-xs whitespace-nowrap ml-4">{ev.fecha || ev.Fecha}</span>
@@ -2504,13 +2504,13 @@
     }
 
     // =============================================================
-    // VISTA 8: ANEXO VII - DERIVACIÓN Y SEGUIMIENTO MÉDICO
+    // VISTA 8: ANEXO VII - DERIVACIÃ“N Y SEGUIMIENTO MÃ‰DICO
     // =============================================================
     function Anexo7View({ onBack, setMetrics }) {
-      const [derivaciones, setDerivaciones] = useState([]);
-      const [loading, setLoading] = useState(true);
+      const [derivaciones, setDerivaciones] = React.useState([]);
+      const [loading, setLoading] = React.useState(true);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/anexo7')
           .then(data => { setDerivaciones(data); setLoading(false); })
           .catch(() => setLoading(false));
@@ -2520,16 +2520,16 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo VII — Derivación y Salud</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Anexo VII â€” DerivaciÃ³n y Salud</h1>
           </div>
 
           {loading ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">Cargando derivaciones...</div>
           ) : derivaciones.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
-              No hay derivaciones médicas ni de salud registradas para tus alumnos.
+              No hay derivaciones mÃ©dicas ni de salud registradas para tus alumnos.
             </div>
           ) : (
             <div className="grid gap-3">
@@ -2542,7 +2542,7 @@
                   {(d.escuela || d.Escuela) && <div className="text-slate-500 font-semibold">Escuela: {d.escuela || d.Escuela}</div>}
                   <div><strong>Docente Regular:</strong> {d.docente_regular || d.Docente_Regular || 'No registrado'}</div>
                   <div><strong>Salud:</strong> {d.salud || d.Salud || 'Buena salud'}</div>
-                  <div><strong>Seguimiento Médico:</strong> {d.seguimiento_medico || d.Seguimiento_Medico || 'En observación'}</div>
+                  <div><strong>Seguimiento MÃ©dico:</strong> {d.seguimiento_medico || d.Seguimiento_Medico || 'En observaciÃ³n'}</div>
                   {(d.aspecto_relevante || d.Aspecto_Relevante) && <div><strong>Aspecto Relevante:</strong> {d.aspecto_relevante || d.Aspecto_Relevante}</div>}
                 </div>
               ))}
@@ -2556,9 +2556,9 @@
     // VISTA 9: HORARIOS DE APOYO
     // =============================================================
     function HorariosView({ onBack, setMetrics }) {
-      const [horarios, setHorarios] = useState(null);
+      const [horarios, setHorarios] = React.useState(null);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/horarios').then(setHorarios);
       }, []);
 
@@ -2568,7 +2568,7 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Horarios de Apoyo Semanal</h1>
           </div>
@@ -2589,13 +2589,13 @@
           </div>
 
           <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-3">
-            <h3 className="font-bold text-slate-800 text-sm">Distribución de Apoyo en Escuelas</h3>
+            <h3 className="font-bold text-slate-800 text-sm">DistribuciÃ³n de Apoyo en Escuelas</h3>
             <div className="grid gap-2 max-h-96 overflow-y-auto">
               {(horarios.horarios_apoyo || []).slice(0, 30).map((h, i) => (
                 <div key={i} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs flex justify-between items-center">
                   <div>
-                    <span className="font-bold text-slate-900">{h.Dia || 'Lunes'} • {h.Hora || '08:00'}</span>
-                    <span className="mx-2">•</span>
+                    <span className="font-bold text-slate-900">{h.Dia || 'Lunes'} â€¢ {h.Hora || '08:00'}</span>
+                    <span className="mx-2">â€¢</span>
                     <span className="text-slate-600">{h.Escuela} ({h.Grado_Grupo})</span>
                   </div>
                   <span className="text-amber-800 font-semibold">{h.Maestra_Apoyo || h.Especialista}</span>
@@ -2611,9 +2611,9 @@
     // VISTA 10: CRONOGRAMA MENSUAL
     // =============================================================
     function CronogramasView({ onBack, setMetrics }) {
-      const [cronogramas, setCronogramas] = useState(null);
+      const [cronogramas, setCronogramas] = React.useState(null);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/cronogramas').then(setCronogramas);
       }, []);
 
@@ -2623,7 +2623,7 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Cronogramas Mensuales del Equipo</h1>
           </div>
@@ -2632,10 +2632,10 @@
             {(cronogramas.cronogramas || []).map((c, i) => (
               <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
                 <div className="flex justify-between items-center font-bold text-slate-900">
-                  <span className="text-sm">{c.Personal || c.Especialista} — {c.Mes || 'Mensual'}</span>
+                  <span className="text-sm">{c.Personal || c.Especialista} â€” {c.Mes || 'Mensual'}</span>
                   <span className="text-slate-400 font-normal">{c.Ciclo || '2026-2027'}</span>
                 </div>
-                <div>{c.Actividad || c.Detalle || 'Actividades de acompañamiento técnico en escuelas asignadas.'}</div>
+                <div>{c.Actividad || c.Detalle || 'Actividades de acompaÃ±amiento tÃ©cnico en escuelas asignadas.'}</div>
               </div>
             ))}
           </div>
@@ -2647,10 +2647,10 @@
     // VISTA 11: CALENDARIO DE ACTIVIDADES SEGEY / USAER (130 EVENTOS)
     // =============================================================
     function CalendarioView({ onBack, setMetrics }) {
-      const [eventos, setEventos] = useState([]);
-      const [filtroMes, setFiltroMes] = useState('TODOS');
+      const [eventos, setEventos] = React.useState([]);
+      const [filtroMes, setFiltroMes] = React.useState('TODOS');
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/calendario').then(setEventos);
       }, []);
 
@@ -2666,7 +2666,7 @@
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-                ← Volver
+                â† Volver
               </button>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Calendario Oficial de Actividades SEGEY / USAER</h1>
             </div>
@@ -2694,7 +2694,7 @@
               <div key={i} className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-center shadow-sm">
                 <div>
                   <div className="font-bold text-slate-900 text-sm">{ev.actividad || ev.Actividad || ev.nombre}</div>
-                  <div className="text-slate-500 mt-0.5">{ev.tipo || 'Actividad Institucional'} • {ev.responsable || 'Dirección / Zona'}</div>
+                  <div className="text-slate-500 mt-0.5">{ev.tipo || 'Actividad Institucional'} â€¢ {ev.responsable || 'DirecciÃ³n / Zona'}</div>
                 </div>
                 <span className="text-amber-800 font-bold bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 whitespace-nowrap ml-4">
                   {ev.fecha || ev.Fecha}
@@ -2710,11 +2710,11 @@
     // VISTA 12: DOCENTES REGULARES (71 MAESTROS DE PRIMARIA)
     // =============================================================
     function DocentesRegularesView({ onBack, setMetrics }) {
-      const [docentes, setDocentes] = useState([]);
-      const [busqueda, setBusqueda] = useState('');
-      const [loading, setLoading] = useState(true);
+      const [docentes, setDocentes] = React.useState([]);
+      const [busqueda, setBusqueda] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/docentes-regulares')
           .then(data => { setDocentes(data); setLoading(false); })
           .catch(() => setLoading(false));
@@ -2732,7 +2732,7 @@
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-                ← Volver
+                â† Volver
               </button>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Directorio de Maestros de Primaria (7 Escuelas)</h1>
             </div>
@@ -2763,10 +2763,10 @@
                   <div className="text-slate-600">Escuela: {d.nombre_escuela || d.Nombre_Escuela || d.Escuela}</div>
                   <div className="text-slate-500">
                     <span>Grado y Grupo: <strong>{d.grado || d.Grado} {d.grupo || d.Grupo}</strong></span>
-                    {(d.turno || d.Turno) && <span className="ml-2">• {d.turno || d.Turno}</span>}
+                    {(d.turno || d.Turno) && <span className="ml-2">â€¢ {d.turno || d.Turno}</span>}
                   </div>
-                  {(d.telefono || d.Telefono) && <div className="text-slate-400 text-[11px]">📞 {d.telefono || d.Telefono}</div>}
-                  {(d.email || d.Email) && <div className="text-slate-400 text-[11px]">✉️ {d.email || d.Email}</div>}
+                  {(d.telefono || d.Telefono) && <div className="text-slate-400 text-[11px]">ðŸ“ž {d.telefono || d.Telefono}</div>}
+                  {(d.email || d.Email) && <div className="text-slate-400 text-[11px]">âœ‰ï¸ {d.email || d.Email}</div>}
                 </div>
               ))}
             </div>
@@ -2776,14 +2776,14 @@
     }
 
     // =============================================================
-    // VISTA 13: NOVEDADES DE SUPERVISIÓN (111 DOCUMENTOS ZONA 001)
+    // VISTA 13: NOVEDADES DE SUPERVISIÃ“N (111 DOCUMENTOS ZONA 001)
     // =============================================================
     function NovedadesView({ onBack, setMetrics }) {
-      const [novedades, setNovedades] = useState([]);
-      const [busqueda, setBusqueda] = useState('');
-      const [loading, setLoading] = useState(true);
+      const [novedades, setNovedades] = React.useState([]);
+      const [busqueda, setBusqueda] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/novedades')
           .then(data => { setNovedades(data); setLoading(false); })
           .catch(() => setLoading(false));
@@ -2801,9 +2801,9 @@
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-                ← Volver
+                â† Volver
               </button>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Novedades de Supervisión · ATP Zona 001</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Novedades de SupervisiÃ³n Â· ATP Zona 001</h1>
             </div>
             <span className="text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200">
               {filtradas.length} documentos oficiales
@@ -2830,7 +2830,7 @@
                 <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs flex justify-between items-center shadow-sm hover:border-amber-400 transition">
                   <div className="space-y-1">
                     <div className="font-bold text-slate-900 text-sm">{n.Nombre || n.nombre || n.Titulo || n.asunto || n.Asunto}</div>
-                    <div className="text-slate-500">{n.Extracto || n.extracto || n.Descripcion || 'Circular oficial emitida por la Supervisión Escolar Zona 001.'}</div>
+                    <div className="text-slate-500">{n.Extracto || n.extracto || n.Descripcion || 'Circular oficial emitida por la SupervisiÃ³n Escolar Zona 001.'}</div>
                   </div>
                   {(n.Enlace || n.enlace) && (
                     <a
@@ -2839,7 +2839,7 @@
                       rel="noreferrer"
                       className="text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 whitespace-nowrap ml-4 transition"
                     >
-                      Ver Documento ↗
+                      Ver Documento â†—
                     </a>
                   )}
                 </div>
@@ -2851,28 +2851,28 @@
     }
 
     // =============================================================
-    // VISTA 14: JUNTAS ACADÉMICAS Y RELATORÍAS
+    // VISTA 14: JUNTAS ACADÃ‰MICAS Y RELATORÃAS
     // =============================================================
     function JuntasView({ onBack, setMetrics }) {
-      const [juntas, setJuntas] = useState(null);
+      const [juntas, setJuntas] = React.useState(null);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/juntas').then(setJuntas);
       }, []);
 
-      if (!juntas) return <div className="text-center py-16 text-slate-500 text-sm">Cargando catálogo metodológico...</div>;
+      if (!juntas) return <div className="text-center py-16 text-slate-500 text-sm">Cargando catÃ¡logo metodolÃ³gico...</div>;
 
       return (
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Juntas Académicas y Catálogo de Metodologías</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Juntas AcadÃ©micas y CatÃ¡logo de MetodologÃ­as</h1>
           </div>
 
           <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
-            <h3 className="font-bold text-slate-800 text-sm">Catálogo Oficial de Metodologías Pedagógicas</h3>
+            <h3 className="font-bold text-slate-800 text-sm">CatÃ¡logo Oficial de MetodologÃ­as PedagÃ³gicas</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
               {Object.entries(juntas.catalogo_metodologias || {}).map(([clave, desc]) => (
                 <div key={clave} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
@@ -2890,9 +2890,9 @@
     // VISTA 15: METAS PERSONALES
     // =============================================================
     function MetasView({ onBack, setMetrics }) {
-      const [metas, setMetas] = useState([]);
+      const [metas, setMetas] = React.useState([]);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/metas').then(setMetas);
       }, []);
 
@@ -2900,7 +2900,7 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Metas Personales Trimestrales</h1>
           </div>
@@ -2922,12 +2922,12 @@
     }
 
     // =============================================================
-    // VISTA 16: TRÁMITES
+    // VISTA 16: TRÃMITES
     // =============================================================
     function TramitesView({ onBack, setMetrics }) {
-      const [tramites, setTramites] = useState([]);
+      const [tramites, setTramites] = React.useState([]);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/tramites').then(setTramites);
       }, []);
 
@@ -2935,9 +2935,9 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Trámites y Solicitudes Administrativas</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">TrÃ¡mites y Solicitudes Administrativas</h1>
           </div>
 
           <div className="grid gap-3">
@@ -2947,7 +2947,7 @@
                   <span className="text-sm">{t.Tipo || t.Asunto}</span>
                   <span className="text-slate-400 font-normal">{t.Fecha}</span>
                 </div>
-                <div>Solicitante: {t.Solicitante} • Estatus: <strong className="text-amber-800">{t.Estatus || 'En Proceso'}</strong></div>
+                <div>Solicitante: {t.Solicitante} â€¢ Estatus: <strong className="text-amber-800">{t.Estatus || 'En Proceso'}</strong></div>
               </div>
             ))}
           </div>
@@ -2959,9 +2959,9 @@
     // VISTA 17: INFORMES
     // =============================================================
     function InformesView({ onBack, setMetrics }) {
-      const [informes, setInformes] = useState([]);
+      const [informes, setInformes] = React.useState([]);
 
-      useEffect(() => {
+      React.useEffect(() => {
         apiRequest('/api/informes').then(setInformes);
       }, []);
 
@@ -2969,9 +2969,9 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Informes y Documentos Pedagógicos</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Informes y Documentos PedagÃ³gicos</h1>
           </div>
 
           <div className="grid gap-3">
@@ -2990,14 +2990,14 @@
     }
 
     // =============================================================
-    // VISTA 18: ACTAS DE VISITA Y OFICIOS DE COMISIÓN
+    // VISTA 18: ACTAS DE VISITA Y OFICIOS DE COMISIÃ“N
     // =============================================================
     function ActasYOficiosView({ onBack, setMetrics }) {
-      const [visitas, setVisitas] = useState([]);
-      const [oficios, setOficios] = useState([]);
-      const [subTab, setSubTab] = useState('visitas');
+      const [visitas, setVisitas] = React.useState([]);
+      const [oficios, setOficios] = React.useState([]);
+      const [subTab, setSubTab] = React.useState('visitas');
 
-      useEffect(() => {
+      React.useEffect(() => {
         const t0 = performance.now();
         Promise.all([
           apiRequest('/api/visitas'),
@@ -3014,9 +3014,9 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Actas de Visita y Oficios de Comisión</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Actas de Visita y Oficios de ComisiÃ³n</h1>
           </div>
 
           <div className="flex border-b border-slate-200 space-x-2 text-xs font-bold">
@@ -3026,7 +3026,7 @@
                 subTab === 'visitas' ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-500'
               }`}
             >
-              📋 Actas de Visita de Acompañamiento ({visitas.length})
+              ðŸ“‹ Actas de Visita de AcompaÃ±amiento ({visitas.length})
             </button>
             <button
               onClick={() => setSubTab('oficios')}
@@ -3034,7 +3034,7 @@
                 subTab === 'oficios' ? 'border-amber-600 text-amber-800 bg-amber-50/50' : 'border-transparent text-slate-500'
               }`}
             >
-              📜 Oficios de Comisión ({oficios.length})
+              ðŸ“œ Oficios de ComisiÃ³n ({oficios.length})
             </button>
           </div>
 
@@ -3046,7 +3046,7 @@
                     <span className="font-bold text-slate-900 text-sm">Escuela: {v.Escuela}</span>
                     <span className="text-slate-400">{v.Fecha}</span>
                   </div>
-                  <div><strong>Personal de Acompañamiento:</strong> {v.Personal}</div>
+                  <div><strong>Personal de AcompaÃ±amiento:</strong> {v.Personal}</div>
                   <div><strong>Motivo:</strong> {v.Motivo}</div>
                   {v.Observaciones && <div className="text-slate-600"><strong>Observaciones:</strong> {v.Observaciones}</div>}
                 </div>
@@ -3060,7 +3060,7 @@
                 <div key={i} className="p-4 bg-white rounded-xl border border-slate-200 text-xs space-y-1 shadow-sm">
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-slate-900 text-sm">Folio: {o.Folio}</span>
-                    <span className="text-slate-400">Emisión: {o.Fecha_Emision}</span>
+                    <span className="text-slate-400">EmisiÃ³n: {o.Fecha_Emision}</span>
                   </div>
                   <div><strong>Destino:</strong> {o.Destino} ({o.Escuela})</div>
                   <div><strong>Personal comisionado:</strong> {o.Maestra_Apoyo}</div>
@@ -3075,12 +3075,12 @@
     }
 
     // =============================================================
-    // VISTA 19: ESTADÍSTICAS INSTITUCIONALES DE ZONA
+    // VISTA 19: ESTADÃSTICAS INSTITUCIONALES DE ZONA
     // =============================================================
     function EstadisticasView({ onBack, setMetrics }) {
-      const [stats, setStats] = useState(null);
+      const [stats, setStats] = React.useState(null);
 
-      useEffect(() => {
+      React.useEffect(() => {
         const t0 = performance.now();
         apiRequest('/api/estadisticas/zona').then(data => {
           setStats(data);
@@ -3097,21 +3097,21 @@
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
             <button onClick={onBack} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition">
-              ← Volver
+              â† Volver
             </button>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Estadísticas de Zona 001</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">EstadÃ­sticas de Zona 001</h1>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-              <div className="text-slate-500 text-xs font-semibold">Total Alumnos en Padrón</div>
+              <div className="text-slate-500 text-xs font-semibold">Total Alumnos en PadrÃ³n</div>
               <div className="text-2xl font-black text-slate-900 mt-1">{stats.total_alumnos}</div>
               <div className="text-[11px] text-emerald-600 mt-1">Activos en ciclo {stats.ciclo_activo}</div>
             </div>
             <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
               <div className="text-slate-500 text-xs font-semibold">Escuelas de la Zona</div>
               <div className="text-2xl font-black text-amber-600 mt-1">{stats.total_escuelas}</div>
-              <div className="text-[11px] text-slate-400 mt-1">Primarias públicas</div>
+              <div className="text-[11px] text-slate-400 mt-1">Primarias pÃºblicas</div>
             </div>
             <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
               <div className="text-slate-500 text-xs font-semibold">Cumplimiento EPP</div>
@@ -3121,13 +3121,13 @@
             <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
               <div className="text-slate-500 text-xs font-semibold">Actas y Oficios</div>
               <div className="text-2xl font-black text-slate-900 mt-1">{stats.visitas_registradas + stats.oficios_emitidos}</div>
-              <div className="text-[11px] text-slate-400 mt-1">Supervisión técnica</div>
+              <div className="text-[11px] text-slate-400 mt-1">SupervisiÃ³n tÃ©cnica</div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-5 bg-white rounded-xl border border-slate-200 space-y-3">
-              <h3 className="font-bold text-slate-800 text-sm">Distribución por Condición o Discapacidad</h3>
+              <h3 className="font-bold text-slate-800 text-sm">DistribuciÃ³n por CondiciÃ³n o Discapacidad</h3>
               <div className="space-y-2 text-xs">
                 {Object.entries(stats.distribucion_condicion || {}).map(([cond, count]) => (
                   <div key={cond} className="flex justify-between items-center py-1 border-b border-slate-100">
@@ -3139,7 +3139,7 @@
             </div>
 
             <div className="p-5 bg-white rounded-xl border border-slate-200 space-y-3">
-              <h3 className="font-bold text-slate-800 text-sm">Matrícula por Escuela</h3>
+              <h3 className="font-bold text-slate-800 text-sm">MatrÃ­cula por Escuela</h3>
               <div className="space-y-2 text-xs">
                 {Object.entries(stats.distribucion_escuela || {}).map(([esc, count]) => (
                   <div key={esc} className="flex justify-between items-center py-1 border-b border-slate-100">
