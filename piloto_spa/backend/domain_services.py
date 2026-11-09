@@ -55,10 +55,13 @@ from data.sql_repository import (
     update_alumno_sql,
     anexo3_sql,
     save_anexo3_sql,
+    update_anexo3_sql,
     anexo4_sql,
     save_anexo4_sql,
+    update_anexo4_sql,
     anexo5_sql,
     save_anexo5_sql,
+    update_anexo5_sql,
     anexo7_sql,
     save_anexo7_sql,
     epp_listar_sql,
@@ -770,7 +773,8 @@ def listar_epp_autorizados(
 
 def obtener_epp_documento(alumno_id: str, ciclo: str = "2026-2027") -> Dict[str, Any]:
     """Recupera el informe EPP para el ciclo activo desde la BD normalizando claves de áreas."""
-    docs = epp_listar_sql([alumno_id])
+    clean_id = str(alumno_id).replace("epp-", "").replace("alu-uppcoder-", "").strip()
+    docs = epp_listar_sql([clean_id, f"epp-{clean_id}"])
     if docs:
         doc = next((d for d in docs if d.get("ciclo") == ciclo or not ciclo), docs[0])
         partes = dict(doc.get("partes") or {})
@@ -1296,8 +1300,16 @@ def guardar_anexo3_documento(payload: Dict[str, Any]) -> str:
     return save_anexo3_sql(payload)
 
 
+def actualizar_anexo3_documento(id_anexo3: str, cambios: Dict[str, Any]) -> str:
+    return update_anexo3_sql(id_anexo3, cambios)
+
+
 def guardar_anexo4_documento(payload: Dict[str, Any]) -> str:
     return save_anexo4_sql(payload)
+
+
+def actualizar_anexo4_documento(id_anexo4: str, cambios: Dict[str, Any]) -> str:
+    return update_anexo4_sql(id_anexo4, cambios)
 
 
 def guardar_anexo5_documento(payload: Dict[str, Any]) -> str:
@@ -1321,6 +1333,10 @@ def guardar_anexo5_documento(payload: Dict[str, Any]) -> str:
             fecha=str(payload.get("Fecha", time.strftime("%Y-%m-%d"))),
         )
     return aid
+
+
+def actualizar_anexo5_documento(id_evento: str, cambios: Dict[str, Any]) -> str:
+    return update_anexo5_sql(id_evento, cambios)
 
 
 def guardar_anexo7_documento(payload: Dict[str, Any]) -> str:

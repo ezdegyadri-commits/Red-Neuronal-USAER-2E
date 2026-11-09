@@ -90,8 +90,11 @@ from piloto_spa.backend.domain_services import (
     guardar_planeacion_transaccional,
     eliminar_planeacion_documento,
     guardar_anexo3_documento,
+    actualizar_anexo3_documento,
     guardar_anexo4_documento,
+    actualizar_anexo4_documento,
     guardar_anexo5_documento,
+    actualizar_anexo5_documento,
     guardar_anexo7_documento,
     obtener_visitas_documentos,
     guardar_visita_documento,
@@ -839,10 +842,11 @@ def exportar_alumnos_csv(user: SessionUser = Depends(validar_token_sesion)):
 
 
 def _verificar_acceso_alumno(alumno_id: str, user: SessionUser) -> Dict[str, Any]:
-    if str(alumno_id).startswith("GRUPO-") or str(alumno_id) == "GRUPAL":
-        return {"id": alumno_id, "nombre_completo": alumno_id}
+    clean_id = str(alumno_id).replace("epp-", "").replace("alu-uppcoder-", "").strip()
+    if clean_id.startswith("GRUPO-") or clean_id == "GRUPAL":
+        return {"id": clean_id, "nombre_completo": clean_id}
     alumnos = obtener_alumnos_autorizados("DIRECTOR", ["TODAS"], incluir_inactivos=True)
-    alumno = next((a for a in alumnos if str(a.get("id")) == str(alumno_id)), None)
+    alumno = next((a for a in alumnos if str(a.get("id")).replace("epp-", "").strip() == clean_id), None)
     if not alumno:
         raise HTTPException(status_code=404, detail=f"Alumno {alumno_id} no encontrado en el padrón central.")
     if user.director or "TRABAJO" in user.rol.upper() or "TODAS" in user.escuelas_permitidas:
@@ -888,6 +892,18 @@ def crear_anexo3(payload: Anexo3Payload, user: SessionUser = Depends(validar_tok
     return {"status": "success", "id": aid, "mensaje": "Detección de BAP (Anexo III) registrada correctamente."}
 
 
+@app.put("/api/anexo3/{anexo_id}")
+def actualizar_anexo3_endpoint(anexo_id: str, payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    aid = actualizar_anexo3_documento(anexo_id, payload)
+    return {"status": "success", "id": aid, "mensaje": "Anexo III actualizado correctamente."}
+
+
+@app.delete("/api/anexo3/{anexo_id}")
+def anular_anexo3_endpoint(anexo_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    aid = actualizar_anexo3_documento(anexo_id, {"Estado": "ANULADO"})
+    return {"status": "success", "id": aid, "mensaje": "Anexo III anulado lógicamente."}
+
+
 @app.get("/api/anexo4")
 def listar_anexo4_endpoint(user: SessionUser = Depends(validar_token_sesion)):
     return obtener_anexo4_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
@@ -924,6 +940,18 @@ def crear_anexo4(payload: Anexo4Payload, user: SessionUser = Depends(validar_tok
     return {"status": "success", "id": aid, "mensaje": "Hoja de sugerencias (Anexo IV) guardada correctamente."}
 
 
+@app.put("/api/anexo4/{anexo_id}")
+def actualizar_anexo4_endpoint(anexo_id: str, payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    aid = actualizar_anexo4_documento(anexo_id, payload)
+    return {"status": "success", "id": aid, "mensaje": "Hoja de sugerencias (Anexo IV) actualizada correctamente."}
+
+
+@app.delete("/api/anexo4/{anexo_id}")
+def anular_anexo4_endpoint(anexo_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    aid = actualizar_anexo4_documento(anexo_id, {"Estado": "ANULADA"})
+    return {"status": "success", "id": aid, "mensaje": "Hoja de sugerencias (Anexo IV) anulada lógicamente."}
+
+
 @app.get("/api/anexo5")
 def listar_anexo5_endpoint(user: SessionUser = Depends(validar_token_sesion)):
     return obtener_anexo5_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
@@ -955,6 +983,18 @@ def crear_anexo5(payload: Anexo5Payload, user: SessionUser = Depends(validar_tok
     }
     aid = guardar_anexo5_documento(doc)
     return {"status": "success", "id": aid, "mensaje": "Evento significativo (Anexo V) registrado correctamente."}
+
+
+@app.put("/api/anexo5/{evento_id}")
+def actualizar_anexo5_endpoint(evento_id: str, payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    aid = actualizar_anexo5_documento(evento_id, payload)
+    return {"status": "success", "id": aid, "mensaje": "Evento significativo actualizado correctamente."}
+
+
+@app.delete("/api/anexo5/{evento_id}")
+def anular_anexo5_endpoint(evento_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    aid = actualizar_anexo5_documento(evento_id, {"Estado": "ANULADO"})
+    return {"status": "success", "id": aid, "mensaje": "Evento significativo anulado lógicamente."}
 
 
 @app.get("/api/anexo7")
@@ -1116,25 +1156,28 @@ def listar_epps_endpoint(user: SessionUser = Depends(validar_token_sesion)):
 
 @app.get("/api/epp/{alumno_id}")
 def consultar_epp(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    _verificar_acceso_alumno(alumno_id, user)
-    return obtener_epp_documento(alumno_id)
+    clean_id = str(alumno_id).replace("epp-", "").replace("alu-uppcoder-", "").strip()
+    _verificar_acceso_alumno(clean_id, user)
+    return obtener_epp_documento(clean_id)
 
 
 @app.post("/api/epp")
 def guardar_epp(payload: EPPPayload, user: SessionUser = Depends(validar_token_sesion)):
-    _verificar_acceso_alumno(payload.alumno, user)
+    clean_id = str(payload.alumno).replace("epp-", "").replace("alu-uppcoder-", "").strip()
+    _verificar_acceso_alumno(clean_id, user)
     return guardar_epp_documento(payload.model_dump(), autor_cuenta=user.usuario)
 
 
 @app.get("/api/epp/{alumno_id}/pdf")
 def descargar_epp_pdf(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    _verificar_acceso_alumno(alumno_id, user)
-    doc_epp = obtener_epp_documento(alumno_id)
-    alumno_info = next((a for a in obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas, user.nombre) if a.get("id") == alumno_id), None)
+    clean_id = str(alumno_id).replace("epp-", "").replace("alu-uppcoder-", "").strip()
+    _verificar_acceso_alumno(clean_id, user)
+    doc_epp = obtener_epp_documento(clean_id)
+    alumno_info = next((a for a in obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas, user.nombre) if a.get("id") == clean_id), None)
     if not alumno_info:
         from data.sql_repository import padron_alumnos_sql
         alumnos_todos = padron_alumnos_sql()
-        alumno_info = next((a for a in alumnos_todos if a.get("id") == alumno_id), {"id": alumno_id, "nombre_completo": alumno_id, "Nombre_Escuela": "USAER 02E"})
+        alumno_info = next((a for a in alumnos_todos if a.get("id") == clean_id), {"id": clean_id, "nombre_completo": clean_id, "Nombre_Escuela": "USAER 02E"})
     try:
         from documents.epp import generar_pdf as generar_pdf_epp
         pdf_bytes = generar_pdf_epp(doc_epp, alumno_info)
