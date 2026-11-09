@@ -58,6 +58,14 @@ for s_dir in services_dirs:
     descargar("services/planeacion_huella.py", s_dir / "planeacion_huella.py")
     descargar("services/planeacion_edicion.py", s_dir / "planeacion_edicion.py")
 
+doc_dirs = [
+    Path("/home/uppcoder/app/documents"),
+    Path("/home/uppcoder/app/usaer2e/documents"),
+]
+for d_dir in doc_dirs:
+    descargar("documents/planeacion.py", d_dir / "planeacion.py")
+    descargar("documents/epp.py", d_dir / "epp.py")
+
 for b_dir in backend_dirs:
     descargar("piloto_spa/backend/auth_service.py", b_dir / "auth_service.py")
     descargar("piloto_spa/backend/domain_services.py", b_dir / "domain_services.py")
