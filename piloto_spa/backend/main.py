@@ -436,7 +436,7 @@ def auto_actualizar_servidor(user: SessionUser = Depends(validar_token_sesion)):
     import subprocess
     try:
         res = subprocess.run([sys.executable, str(script_path)], capture_output=True, text=True, timeout=60)
-        return {"status": "ok", "stdout": res.stdout[-400:], "stderr": res.stderr[-400:]}
+        return {"status": "ok", "code": res.returncode, "stdout": res.stdout, "stderr": res.stderr}
     except Exception as exc:
         return {"status": "error", "detalle": str(exc)}
 
