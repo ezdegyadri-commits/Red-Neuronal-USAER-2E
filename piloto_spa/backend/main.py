@@ -254,10 +254,8 @@ def reconciliar_base_datos() -> Dict[str, Any]:
         for item in data.get("alumnos", []):
             aid = item["id"]
             ids_canonicos.add(aid)
-            # Asegurar estatus activo para alumnos del padrón
+            # Respetar el estatus canonico del alumno (BAJA, INACTIVO, DUPLICADO - CONSERVADO, PENDIENTE DE VALIDACION, ACTIVO)
             item_status = str(item.get("estatus") or "ACTIVO").strip().upper()
-            if item_status not in ("BAJA", "INACTIVO"):
-                item_status = "ACTIVO"
             item["estatus"] = item_status
 
             obj = session.query(Alumno).filter_by(id=aid).first()

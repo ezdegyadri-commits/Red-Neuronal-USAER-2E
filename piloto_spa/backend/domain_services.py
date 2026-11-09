@@ -206,7 +206,8 @@ def obtener_alumnos_autorizados(
         # Omitir registros anulados
         if estatus_str == "ANULADO_MIGRACION":
             continue
-        if not incluir_inactivos and estatus_str not in ("ACTIVO", "PENDIENTE DE VALIDACIÓN", "PENDIENTE DE VALIDACION"):
+        # Omitir registros no activos (bajas, inactivos, duplicados de resguardo y pendientes de validación)
+        if not incluir_inactivos and estatus_str != "ACTIVO":
             continue
 
         eid, esc_oficial = resolver_escuela_canonica(r.get("Nombre_Escuela", ""), r.get("ID_Escuela", ""))
