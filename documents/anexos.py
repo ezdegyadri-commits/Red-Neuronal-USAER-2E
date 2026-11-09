@@ -650,3 +650,81 @@ def anexo7_pdf(registro):
     )
 
     return bytes(pdf.output())
+
+
+def generar_informe_pdf(informe: dict) -> bytes:
+    """Genera el PDF oficial de Informe de Seguimiento Pedagógico / Administrativo."""
+    class InformePDF(FPDF):
+        def header(self):
+            encabezado = header_b64()
+            if encabezado:
+                try:
+                    contenido = encabezado.split(",", 1)[1]
+                    self.image(BytesIO(base64.b64decode(contenido)), x=12, y=8, w=192)
+                except Exception:
+                    pass
+            self.set_y(38)
+            self.set_font("Helvetica", "B", 13)
+            self.set_text_color(22, 56, 82)
+            self.cell(0, 6, _fpdf_text(str(informe.get("tipo_informe", "INFORME DE SEGUIMIENTO PEDAGÓGICO")).upper()), align="C", new_x="LMARGIN", new_y="NEXT")
+            self.set_text_color(0, 0, 0)
+            self.set_font("Helvetica", "", 9)
+            self.cell(0, 5, _fpdf_text(f"USAER 02-E · Ciclo Escolar {SCHOOL_YEAR} · Zona 001 Educación Especial"), align="C", new_x="LMARGIN", new_y="NEXT")
+            self.ln(2)
+
+        def footer(self):
+            self.set_y(-12)
+            self.set_font("Helvetica", "", 7)
+            self.set_text_color(100, 110, 120)
+            self.cell(0, 4, _fpdf_text(f"USAER 02-E · Documento Oficial de Seguimiento · Página {self.page_no()}"), align="C")
+
+    pdf = InformePDF(orientation="P", unit="mm", format="letter")
+    pdf.set_margins(14, 14, 14)
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.add_page()
+    pdf.set_y(52)
+
+    # Datos generales
+    pdf.set_fill_color(240, 244, 248)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(188, 6, _fpdf_text("  1. DATOS GENERALES DE IDENTIFICACIÓN"), border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 8.5)
+    pdf.cell(94, 6, _fpdf_text(f" Alumno: {informe.get('nombre_alumno', 'No especificado')}"), border=1)
+    pdf.cell(94, 6, _fpdf_text(f" ID: {informe.get('id_alumno', '')}"), border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(94, 6, _fpdf_text(f" Escuela: {informe.get('escuela', '')}"), border=1)
+    pdf.cell(94, 6, _fpdf_text(f" Grado y Grupo: {informe.get('grado_grupo', '')}"), border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(94, 6, _fpdf_text(f" Periodo: {informe.get('periodo', '')}"), border=1)
+    pdf.cell(94, 6, _fpdf_text(f" Fecha de Emisión: {informe.get('fecha', '')}"), border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    secciones = [
+        ("2. AVANCES PEDAGÓGICOS Y LOGROS OBSERVADOS", informe.get("avances", "Sin observaciones registradas.")),
+        ("3. BARRERAS PARA EL APRENDIZAJE Y LA PARTICIPACIÓN ATENDIDAS", informe.get("barreras_atendidas", "Sin observaciones registradas.")),
+        ("4. ACUERDOS Y VINCULACIÓN CON LA FAMILIA", informe.get("acuerdos_familia", "Sin acuerdos registrados.")),
+        ("5. RECOMENDACIONES PARA EL DOCENTE REGULAR Y CONTEXTO ÁULICO", informe.get("recomendaciones_aula", "Sin recomendaciones registradas.")),
+    ]
+
+    for titulo, contenido in secciones:
+        pdf.set_fill_color(240, 244, 248)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(188, 6, _fpdf_text(f"  {titulo}"), border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 8.5)
+        pdf.multi_cell(188, 5, _fpdf_text(contenido or "Sin información."), border=1, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+
+    pdf.ln(6)
+    pdf.set_font("Helvetica", "", 8.5)
+    y_firmas = pdf.get_y()
+    if y_firmas > 220:
+        pdf.add_page()
+        y_firmas = pdf.get_y() + 10
+
+    pdf.cell(94, 5, "____________________________________________", align="C")
+    pdf.cell(94, 5, "____________________________________________", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(94, 4, _fpdf_text(informe.get("elaborado_por", "Docente de Apoyo / Especialista")), align="C")
+    pdf.cell(94, 4, "Psic. Edgar Adrián Yam Briceño", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "I", 7.5)
+    pdf.cell(94, 4, "Firma del Responsable de Elaboración", align="C")
+    pdf.cell(94, 4, "Director de USAER 02-E", align="C")
+
+    return bytes(pdf.output())

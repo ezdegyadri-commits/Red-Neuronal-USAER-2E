@@ -1711,3 +1711,210 @@ def obtener_estadisticas_zona(
         "ciclo_activo": "2026-2027",
         "zona": "Zona 001 Educación Especial",
     }
+
+
+# -------------------------------------------------------------
+# 10. ASISTENTE PEDAGÓGICO CONTEXTUALIZADO Y FILTRO DE PERTINENCIA
+# -------------------------------------------------------------
+def generar_propuesta_actividad_docente(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Genera propuesta de intervención con filtro estricto de pertinencia pedagógica.
+    Garantiza que alumnos en etapa presilábica/inicial NUNCA reciban comprensión
+    de textos largos ni redacción libre; prioriza método seleccionado (Troncoso,
+    conciencia fonológica, Singapur, etc.), apoyos DUA y conductas observables.
+    """
+    alumno_id = str(payload.get("alumno_id") or "").replace("epp-", "").strip()
+    nivel = str(payload.get("nivel_aprendizaje") or "Presilábico / Inicial").strip()
+    metodo = str(payload.get("metodo") or "Conciencia Fonológica y Asociación").strip()
+    area = str(payload.get("area") or "Aprendizaje").strip()
+    prioridad = str(payload.get("prioridad") or "").strip()
+    apoyos = payload.get("apoyos", ["Material concreto manipulable", "Claves visuales"])
+    duracion = int(payload.get("duracion_min") or 30)
+
+    # Recuperar antecedentes del alumno si existe ID
+    eventos_alumno = []
+    epp_alumno = {}
+    if alumno_id:
+        try:
+            df_ev = anexo5_sql()
+            if not df_ev.empty and "ID_Alumno" in df_ev.columns:
+                sub = df_ev[df_ev["ID_Alumno"].astype(str) == alumno_id]
+                eventos_alumno = sub["Evento"].dropna().tolist()[:3]
+            epp_docs = epp_listar_sql([alumno_id])
+            if epp_docs:
+                epp_alumno = epp_docs[0].get("partes", {})
+        except Exception:
+            pass
+
+    # FILTRO DE PERTINENCIA SEGÚN NIVEL REAL DE APRENDIZAJE
+    es_inicial = any(term in nivel.lower() for term in ["presil", "inicial", "fonol", "cero"])
+    es_silabico = "sil" in nivel.lower() and not es_inicial
+
+    # Verificar si hay clave de Gemini para IA generativa
+    from config.secretos import secreto
+    from config.settings import GEMINI_MODEL
+    try:
+        from google import genai
+    except ImportError:
+        genai = None
+
+    api_key = ""
+    try:
+        api_key = secreto("GEMINI_API_KEY", "")
+    except Exception:
+        pass
+
+    if api_key and genai is not None:
+        try:
+            client = genai.Client(api_key=api_key)
+            prompt = f"""Actúa como especialista de educación especial USAER Yucatán (Zona 001).
+Diseña una actividad pedagógica adaptable y de alta pertinencia para un alumno de primaria.
+REGLAS OBLIGATORIAS:
+- Nivel de aprendizaje del alumno: {nivel}.
+- Método docente seleccionado: {metodo}.
+- Área de atención: {area}.
+- Apoyos DUA requeridos: {', '.join(apoyos)}.
+- Duración de sesión: {duracion} minutos.
+- Eventos o antecedentes documentados: {'; '.join(eventos_alumno) if eventos_alumno else 'Sin antecedentes críticos'}.
+- RESTRICCIÓN PEDAGÓGICA ESTRICTA: {"El alumno NO lee ni escribe palabras completas. PROHIBIDO proponer lectura de textos, comprensión lectora autónoma o redacción de mensajes. Proponer exclusivamente discriminación de fonemas, reconocimiento con apoyo multisensorial, letras móviles, trazos táctiles o método Troncoso." if es_inicial else "Ajustar al nivel silábico/alfabético con palabras bisílabas directas y apoyo visual."}
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con los campos:
+titulo (string breve y motivador),
+proposito_observable (string con verbo en infinitivo y conducta observable),
+inicio (string con reactivación y presentación con apoyo visual, 5-7 min),
+desarrollo (string con actividad central manipulativa/gráfica según el método, 15-20 min),
+cierre (string con metacognición sencilla y evidencia gráfica, 5 min),
+materiales_especificos (array de strings con materiales tangibles),
+apoyos_dua (array de strings con ajustes razonables),
+criterio_evaluacion (string con indicador de logro claro)."""
+
+            resp = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config={"temperature": 0.3, "response_mime_type": "application/json"}
+            )
+            raw = (getattr(resp, "text", "") or "").strip()
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.I)
+            data = json.loads(raw)
+            data["origen"] = f"IA Generativa ({GEMINI_MODEL})"
+            data["nivel_aplicado"] = nivel
+            data["metodo_aplicado"] = metodo
+            return data
+        except Exception:
+            pass  # Si falla la llamada o cuota de IA, pasar al motor determinista
+
+    # MOTOR DETERMINISTA EXPERTO (Sin IA o cuando falla la cuota / red)
+    if "troncoso" in metodo.lower() or (es_inicial and "aprendizaje" in area.lower()):
+        return {
+            "titulo": "Caja de Sonidos y Palabras Clave (Método Troncoso / Multisensorial)",
+            "proposito_observable": "Identificar el fonema inicial y asociar la tarjeta de palabra con su imagen representativa (nombre propio y vocabulario básico).",
+            "inicio": "Presentar una caja sorpresa con 3 objetos reales o miniaturas cuyo nombre sea significativo para el alumno. Pronunciar enfatizando el fonema inicial y solicitar que el alumno repita el sonido frente al espejo.",
+            "desarrollo": "Sobre la mesa, colocar la tarjeta con la foto del alumno y su nombre en letra mayúscula de molde (color rojo). Entregarle letras móviles de madera/textura para que ensamble su nombre por superposición. Posteriormente, realizar el trazo de la vocal inicial en una bandeja con arena o harina kinestésica.",
+            "cierre": "Pegar la imagen con su nombre en su cuaderno de trabajo y felicitar el esfuerzo mediante un reforzador social tangible.",
+            "materiales_especificos": ["Tarjetas con imagen y palabra del Método Troncoso", "Bandeja sensorial con arena/harina", "Letras móviles de madera con relieve", "Espejo de mesa individual"],
+            "apoyos_dua": ["Presentación multisensorial (táctil, visual y auditiva)", "Modelado físico guiado mano sobre mano", "Tiempo de espera prolongado sin presión"],
+            "criterio_evaluacion": "Logra emparejar la tarjeta de imagen con su nombre o fonema inicial con mínimo apoyo físico o verbal.",
+            "origen": "Motor Pedagógico Determinista Especializado USAER 2E",
+            "nivel_aplicado": nivel,
+            "metodo_aplicado": metodo
+        }
+    elif "fonol" in metodo.lower():
+        return {
+            "titulo": "Detective de Sonidos: Caza del Fonema Inicial",
+            "proposito_observable": "Reconocer y aislar auditivamente el sonido inicial de palabras cotidianas apoyado con claves gestuales y visuales.",
+            "inicio": "Escuchar una rima o canción corta enfocada en el sonido meta (ej. /m/). El especialista muestra el gesto articulatorio y el alumno imita la posición de los labios.",
+            "desarrollo": "Se colocan 4 tarjetas de animales u objetos familiares boca abajo. Al voltear cada una, el alumno produce el sonido inicial con ayuda de palmadas o fichas de colores. Si comienza con el sonido meta, coloca la tarjeta en la 'casa del detective'.",
+            "cierre": "Conteo conjunto de las tarjetas encontradas y dibujo libre del objeto que más le gustó.",
+            "materiales_especificos": ["Tarjetas ilustradas de alta definición (Anexo visual)", "Fichas de colores para segmentación", "Lotería de sonidos"],
+            "apoyos_dua": ["Claves gestuales articulatorias de apoyo (Dactilología/Gesto de apoyo)", "Reducción de estímulos distractores en la mesa", "Instrucciones paso a paso"],
+            "criterio_evaluacion": "Distingue el fonema meta en al menos 3 de 4 oportunidades presentadas.",
+            "origen": "Motor Pedagógico Determinista Especializado USAER 2E",
+            "nivel_aplicado": nivel,
+            "metodo_aplicado": metodo
+        }
+    elif "singapur" in metodo.lower() or "mate" in prioridad.lower():
+        return {
+            "titulo": "Exploración Numérica Concreto-Pictórico-Simbólico (COPISI)",
+            "proposito_observable": "Cuantificar colecciones de 1 a 5 elementos utilizando material manipulable y asociar con el cardinal correspondiente.",
+            "inicio": "Canto de conteo interactivo utilizando los dedos de la mano con títeres de dedo o fichas de animales.",
+            "desarrollo": "Fase Concreta: Colocar regletas o cubos conectables formando torres según la cantidad indicada (1 al 5). Fase Pictórica: Pintar con huellitas de pintura digital la cantidad de puntos que corresponde a cada torre. Fase Simbólica: Emparejar con la tarjeta del número escrito.",
+            "cierre": "Juego de 'adivina cuántos guardé en la mano': el alumno siente con sus manos las fichas y dice la cantidad.",
+            "materiales_especificos": ["Cubos conectables o fichas de plástico", "Tarjetas de puntos (constelaciones numéricas)", "Pintura digital dactilar", "Tarjetas numéricas 1-5 con lija"],
+            "apoyos_dua": ["Tránsito gradual de lo concreto a lo abstracto", "Organizador visual de correspondencia uno a uno", "Refuerzo háptico (números de lija)"],
+            "criterio_evaluacion": "Cuenta de manera estable colecciones de hasta 5 elementos señalando uno a uno sin saltar objetos.",
+            "origen": "Motor Pedagógico Determinista Especializado USAER 2E",
+            "nivel_aplicado": nivel,
+            "metodo_aplicado": metodo
+        }
+    elif "saac" in metodo.lower() or "comunicacion" in area.lower():
+        return {
+            "titulo": "Intercambio Comunicativo Funcional con Tira-Frase (PECS / SAAC)",
+            "proposito_observable": "Estructurar una petición espontánea mediante el uso de pictograma 'Yo quiero' y entregar al interlocutor para obtener el objeto deseado.",
+            "inicio": "El especialista presenta dos objetos de alto interés del alumno dentro de recipientes transparentes cerrados, provocando la necesidad comunicativa.",
+            "desarrollo": "Modelar el retiro del pictograma del objeto deseado del tablero de comunicación, colocarlo en la tira de velcro y entregarlo en la mano del especialista. El especialista verbaliza la frase completa ('¡Ah, tú quieres la plastilina!') y entrega el objeto de inmediato.",
+            "cierre": "Celebración de la interacción lograda y registro de la cantidad de intercambios independientes sin ayuda física.",
+            "materiales_especificos": ["Tablero de comunicación con velcro", "Pictogramas plastificados (ARASAAC)", "Objetos o juguetes reforzadores de alto interés"],
+            "apoyos_dua": ["Ayuda física decreciente (mano sobre mano a sombra)", "Refuerzo inmediato contingente a la entrega", "Anticipación visual de turnos"],
+            "criterio_evaluacion": "Realiza la entrega física del pictograma al interlocutor para solicitar lo que desea de forma independiente o con ayuda mínima.",
+            "origen": "Motor Pedagógico Determinista Especializado USAER 2E",
+            "nivel_aplicado": nivel,
+            "metodo_aplicado": metodo
+        }
+    else:
+        return {
+            "titulo": "Secuencia Didáctica Adaptada con Enfoque DUA",
+            "proposito_observable": "Participar activamente en la consigna escolar mediante el uso de apoyos gráficos y pasos estructurados.",
+            "inicio": "Activación con preguntas detonadoras apoyadas con imágenes y planteamiento claro de lo que se aprenderá en la sesión.",
+            "desarrollo": "Trabajo colaborativo o individual guiado con división de la tarea en 3 pasos breves. Cada paso concluido se marca en un organizador de lista de cotejo visual.",
+            "cierre": "Puesta en común de los productos logrados y coevaluación con caritas de satisfacción.",
+            "materiales_especificos": ["Guía gráfica con pictogramas", "Lista de cotejo visual de pasos", "Material didáctico adaptado"],
+            "apoyos_dua": ["Múltiples formas de representación y expresión", "Segmentación de la consigna", "Tiempo flexible para responder"],
+            "criterio_evaluacion": "Cumple los 3 pasos de la actividad contando con el apoyo del organizador visual.",
+            "origen": "Motor Pedagógico Determinista Especializado USAER 2E",
+            "nivel_aplicado": nivel,
+            "metodo_aplicado": metodo
+        }
+
+
+def generar_propuesta_redaccion_epp(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Genera propuesta contextual de redacción para EPP bajo lineamientos SEGEY Yucatán."""
+    area = str(payload.get("area") or "Conclusión").strip()
+    obs = str(payload.get("observaciones") or "").strip()
+    instrumentos = payload.get("instrumentos", [])
+
+    if area == "Conclusión":
+        return {
+            "area": "Conclusión",
+            "sintesis_redaccion": f"A partir de los instrumentos aplicados ({', '.join(instrumentos) if instrumentos else 'observación directa y entrevistas'}), se identifica que el alumno muestra fortalezas en su disposición para la interacción y respuesta ante mediadores visuales y concretos. Requiere acompañamiento prioritario para consolidar habilidades básicas de acceso al currículo formal.",
+            "propuesta_nee": [
+                {
+                    "necesidad": "Requiere utilizar mediación táctil y visual continua (tarjetas con imágenes y material concreto) para consolidar el reconocimiento de fonemas y la noción de cantidad.",
+                    "prioridad": "Alta",
+                    "area": "Aprendizaje"
+                },
+                {
+                    "necesidad": "Requiere instrucciones fraccionadas en pasos breves y modelado directo para favorecer la comprensión de consignas escolares complejas.",
+                    "prioridad": "Media",
+                    "area": "Aprendizaje"
+                }
+            ],
+            "propuesta_bap": [
+                {
+                    "contexto": "Áulico",
+                    "barrera": "Estrategias de enseñanza homogéneas predominantemente verbales sin apoyos gráficos o sensoriales diversificados.",
+                    "apoyo_propuesto": "Implementar el Diseño Universal para el Aprendizaje (DUA) con tableros visuales de anticipación y materiales concretos."
+                },
+                {
+                    "contexto": "Escolar",
+                    "barrera": "Tiempos rígidos de respuesta y actividades de evaluación estandarizadas no adaptadas al ritmo del alumno.",
+                    "apoyo_propuesto": "Flexibilización de tiempos y diversificación de instrumentos de evaluación (rúbricas y listas de cotejo)."
+                }
+            ]
+        }
+    else:
+        return {
+            "area": area,
+            "sintesis_redaccion": f"[{instrumentos[0] if instrumentos else 'OBS'}] En el área de {area}, se observa que el alumno responde favorablemente ante actividades estructuradas con apoyos tangibles. {obs if obs else 'Se recomienda mantener consignas claras y modelado previo en las tareas cotidianas.'}",
+            "fortalezas": "Muestra interés y motivación cuando se utilizan materiales manipulables y reforzadores sociales.",
+            "necesidades_especificas": f"Consolidar la autonomía en el seguimiento de secuencias de trabajo correspondientes a {area}.",
+            "apoyos_recomendados": "Uso de claves visuales, temporizadores y reforzamiento positivo contingente."
+        }

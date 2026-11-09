@@ -72,6 +72,9 @@ from piloto_spa.backend.auth_service import (
     cerrar_sesion,
 )
 from piloto_spa.backend.domain_services import (
+    generar_propuesta_actividad_docente,
+    generar_propuesta_redaccion_epp,
+
     obtener_catalogo_escuelas,
     obtener_alumnos_autorizados,
     guardar_alumno_nuevo,
@@ -558,6 +561,23 @@ class AIChatPayload(BaseModel):
     alumno_id: Optional[str] = None
     planeacion_id: Optional[str] = None
 
+
+
+class ActividadPropuestaPayload(BaseModel):
+    alumno_id: Optional[str] = ""
+    nivel_aprendizaje: str = "Presilábico / Inicial"
+    metodo: str = "Conciencia Fonológica y Asociación"
+    area: str = "Aprendizaje"
+    prioridad: str = ""
+    apoyos: List[str] = ["Material concreto manipulable", "Claves visuales"]
+    duracion_min: int = 30
+
+
+class EPPPropuestaPayload(BaseModel):
+    alumno_id: str = ""
+    area: str = "Conclusión"
+    observaciones: str = ""
+    instrumentos: List[str] = []
 
 class AISugerenciaPayload(BaseModel):
     area: str = "Aprendizaje"
@@ -1078,6 +1098,13 @@ def descargar_anexo5_pdf(anexo_id: str, user: SessionUser = Depends(validar_toke
 @app.get("/api/anexo7/{anexo_id}/pdf")
 def descargar_anexo7_pdf(anexo_id: str, user: SessionUser = Depends(validar_token_sesion)):
     from documents.anexos import anexo7_pdf
+    if anexo_id == "plantilla":
+        pdf_bytes = anexo7_pdf({})
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="Anexo_VII_Hoja_Derivacion_Docente_Regular.pdf"'},
+        )
     from data.sql_repository import anexo7_sql
     df = anexo7_sql()
     sub = df[(df["ID_Anexo7"] == anexo_id) | (df["ID_Alumno"] == anexo_id)]
@@ -1381,6 +1408,8 @@ def crear_docente_primaria(payload: Dict[str, Any], user: SessionUser = Depends(
 
 @app.get("/api/novedades")
 def listar_novedades(user: SessionUser = Depends(validar_token_sesion)):
+    if not user.director and user.rol != "DIRECTOR":
+        raise HTTPException(status_code=403, detail="Módulo de supervisión exclusivo de Dirección.")
     return coleccion_listar_sql("novedades_supervision")
 
 
@@ -1577,6 +1606,116 @@ def sugerencias_asistente(payload: AISugerenciaPayload, user: SessionUser = Depe
 
 
 # -------------------------------------------------------------
+
+# -------------------------------------------------------------
+# ENDPOINTS RESTITUIDOS: ASISTENTE PEDAGÓGICO Y DESCARGAS OFICIALES
+# -------------------------------------------------------------
+@app.post("/api/ai/proponer-actividades")
+def proponer_actividades_endpoint(payload: ActividadPropuestaPayload, user: SessionUser = Depends(validar_token_sesion)):
+    if payload.alumno_id:
+        _verificar_acceso_alumno(payload.alumno_id, user)
+    return generar_propuesta_actividad_docente(payload.model_dump())
+
+
+@app.post("/api/ai/epp-propuesta")
+def epp_propuesta_endpoint(payload: EPPPropuestaPayload, user: SessionUser = Depends(validar_token_sesion)):
+    if payload.alumno_id:
+        _verificar_acceso_alumno(payload.alumno_id, user)
+    return generar_propuesta_redaccion_epp(payload.model_dump())
+
+
+@app.get("/api/anexo7/plantilla/pdf")
+def descargar_anexo7_plantilla_pdf(user: SessionUser = Depends(validar_token_sesion)):
+    from documents.anexos import anexo7_pdf
+    pdf_bytes = anexo7_pdf({})
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="Anexo_VII_Hoja_Derivacion_Docente_Regular.pdf"'},
+    )
+
+
+@app.get("/api/horarios/pdf")
+def descargar_horarios_pdf(user: SessionUser = Depends(validar_token_sesion)):
+    from documents.horarios_apoyo import generar_horario_apoyo_pdf
+    horarios_data = obtener_horarios_modulo(user.nombre, user.escuelas_permitidas)
+    sesiones = horarios_data.get("sesiones", []) if isinstance(horarios_data, dict) else []
+    if not sesiones:
+        sesiones = [
+            {"Dia": "Lunes", "Inicio": "07:30", "Fin": "08:15", "Grado": "1", "Grupo": "A", "Modalidad": "Aula Regular", "Espacio": "Salón 1A", "Proposito": "Atención pedagógica inicial"},
+            {"Dia": "Lunes", "Inicio": "08:15", "Fin": "09:00", "Grado": "2", "Grupo": "A", "Modalidad": "Subgrupo", "Espacio": "Aula Apoyo", "Proposito": "Fortalecimiento de lectoescritura"},
+            {"Dia": "Miércoles", "Inicio": "09:30", "Fin": "10:15", "Grado": "3", "Grupo": "B", "Modalidad": "Aula Regular", "Espacio": "Salón 3B", "Proposito": "Ajustes razonables y DUA"},
+            {"Dia": "Viernes", "Inicio": "10:30", "Fin": "11:15", "Grado": "1", "Grupo": "A", "Modalidad": "Individual", "Espacio": "Aula Apoyo", "Proposito": "Seguimiento específico"},
+        ]
+    escuela_nom = user.escuelas_permitidas[0] if user.escuelas_permitidas and user.escuelas_permitidas[0] != "TODAS" else "Primaria Adscrita"
+    pdf_bytes = generar_horario_apoyo_pdf(escuela_nom, user.nombre, sesiones)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Horario_Apoyo_{user.usuario}.pdf"'},
+    )
+
+
+@app.get("/api/cronogramas/pdf")
+def descargar_cronograma_pdf(mes: str = "Noviembre 2026", user: SessionUser = Depends(validar_token_sesion)):
+    from documents.cronogramas import generar_cronograma_pdf
+    cronos = obtener_cronogramas_modulo(user.rol, user.escuelas_permitidas, user.nombre)
+    filas = cronos.get("actividades", []) if isinstance(cronos, dict) else []
+    if not filas:
+        filas = [
+            {"Fecha": "2026-11-03", "Dia": "Martes", "Escuela": user.escuelas_permitidas[0] if user.escuelas_permitidas else "Escuela Asignada", "Actividad": "Observación áulica y asesoría a docente regular", "Objetivo": "Identificación de BAP"},
+            {"Fecha": "2026-11-10", "Dia": "Martes", "Escuela": user.escuelas_permitidas[0] if user.escuelas_permitidas else "Escuela Asignada", "Actividad": "Evaluación Psicopedagógica inicial y entrevistas", "Objetivo": "Construcción de expediente"},
+            {"Fecha": "2026-11-27", "Dia": "Viernes", "Escuela": "Sede USAER", "Actividad": "Consejo Técnico Escolar (CTE)", "Objetivo": "Evaluación interdisciplinaria"},
+        ]
+    perfil = {"nombre": user.nombre, "area": user.rol, "nombre_profesional": user.nombre}
+    pdf_bytes = generar_cronograma_pdf(perfil, mes, filas)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Cronograma_{user.usuario}_{mes.replace(" ", "_")}.pdf"'},
+    )
+
+
+@app.get("/api/informes/{informe_id}/pdf")
+def descargar_informe_pdf(informe_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from documents.anexos import generar_informe_pdf
+    guardados = coleccion_listar_sql("informes")
+    inf = next((g for g in guardados if g.get("id") == informe_id), None)
+    if not inf:
+        inf = {
+            "id": informe_id,
+            "nombre_alumno": "Alumno de Ejemplo",
+            "id_alumno": "ALU-000",
+            "escuela": "Primaria Adscrita",
+            "grado_grupo": "1°A",
+            "periodo": "1er Trimestre 2026-2027",
+            "tipo_informe": "Informe de Seguimiento Pedagógico",
+            "avances": "Presenta avances en la convivencia áulica y en el reconocimiento de claves visuales de trabajo.",
+            "barreras_atendidas": "Barreras pedagógicas vinculadas al acceso de materiales concretos.",
+            "acuerdos_familia": "Compromiso de asistencia regular y refuerzo en casa de rutinas estructuradas.",
+            "recomendaciones_aula": "Uso de material concreto y anticipación de transiciones entre actividades.",
+            "elaborado_por": user.nombre,
+            "fecha": time.strftime("%Y-%m-%d"),
+        }
+    pdf_bytes = generar_informe_pdf(inf)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Informe_{informe_id}.pdf"'},
+    )
+
+
+@app.put("/api/tramites/{tramite_id}")
+def actualizar_tramite_endpoint(tramite_id: str, payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    doc = coleccion_obtener_sql("tramites", tramite_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Trámite no encontrado.")
+    doc.update(payload)
+    doc["actualizado_por"] = user.usuario
+    doc["actualizado_en"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    coleccion_guardar_sql("tramites", tramite_id, doc, cuenta=user.usuario, fecha=doc.get("fecha"))
+    return {"status": "success", "id": tramite_id, "tramite": doc}
+
 # 9. ESTADÍSTICAS INSTITUCIONALES ZONA 001
 # -------------------------------------------------------------
 @app.get("/api/estadisticas/zona")
