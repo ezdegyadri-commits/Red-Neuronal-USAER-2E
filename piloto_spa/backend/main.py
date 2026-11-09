@@ -60,6 +60,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Query, status, Resp
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import pandas as pd
 
@@ -1407,6 +1408,17 @@ def descargar_concentrado():
 # -------------------------------------------------------------
 SPA_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+# Montaje de archivos estáticos locales (CSS compilado, JS precompilado, React)
+for _s_cand in [
+    SPA_STATIC_DIR,
+    Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static"),
+    Path("/home/uppcoder/app/static"),
+]:
+    if _s_cand.exists():
+        app.mount("/static", StaticFiles(directory=str(_s_cand)), name="static")
+        break
+
+
 
 @app.get("/", response_class=HTMLResponse)
 def index_spa():
@@ -1419,6 +1431,7 @@ def index_spa():
         if p.exists():
             return HTMLResponse(
                 content=p.read_text(encoding="utf-8"),
-                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
             )
     return HTMLResponse("<h1>USAER 2E 2.0</h1><p>Compilando frontend...</p>")

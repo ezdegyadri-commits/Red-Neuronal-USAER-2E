@@ -63,6 +63,10 @@ for b_dir in backend_dirs:
     descargar("piloto_spa/backend/domain_services.py", b_dir / "domain_services.py")
     descargar("piloto_spa/backend/main.py", b_dir / "main.py")
     descargar("piloto_spa/backend/static/index.html", b_dir / "static" / "index.html")
+    descargar("piloto_spa/backend/static/css/tailwind.min.css", b_dir / "static" / "css" / "tailwind.min.css")
+    descargar("piloto_spa/backend/static/js/app.js", b_dir / "static" / "js" / "app.js")
+    descargar("piloto_spa/backend/static/js/react.production.min.js", b_dir / "static" / "js" / "react.production.min.js")
+    descargar("piloto_spa/backend/static/js/react-dom.production.min.js", b_dir / "static" / "js" / "react-dom.production.min.js")
     # Asegurar copia de base de datos, repositorios y semilla histórica en el release activo
     rel_data_dir = b_dir.parent.parent / "data"
     descargar("data/database.py", rel_data_dir / "database.py")
@@ -74,10 +78,15 @@ for b_dir in backend_dirs:
     descargar("services/planeacion_huella.py", rel_svc_dir / "planeacion_huella.py")
     descargar("services/planeacion_edicion.py", rel_svc_dir / "planeacion_edicion.py")
 
-# 2. Actualizar root main.py e index.html estático de reserva
+# 2. Actualizar root main.py y todos los recursos estaticos en /home/uppcoder/app
 descargar("main.py", Path("/home/uppcoder/app/main.py"))
-descargar("piloto_spa/backend/static/index.html", Path("/home/uppcoder/app/static/index.html"))
-descargar("piloto_spa/backend/static/index.html", Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static/index.html"))
+
+for root_s in [Path("/home/uppcoder/app/static"), Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static")]:
+    descargar("piloto_spa/backend/static/index.html", root_s / "index.html")
+    descargar("piloto_spa/backend/static/css/tailwind.min.css", root_s / "css" / "tailwind.min.css")
+    descargar("piloto_spa/backend/static/js/app.js", root_s / "js" / "app.js")
+    descargar("piloto_spa/backend/static/js/react.production.min.js", root_s / "js" / "react.production.min.js")
+    descargar("piloto_spa/backend/static/js/react-dom.production.min.js", root_s / "js" / "react-dom.production.min.js")
 
 # 3. Verificar importación y ejecutar reconciliación de PostgreSQL 17 con el Python del entorno FastAPI
 print("Verificando importación y reconciliando PostgreSQL 17...")
