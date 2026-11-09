@@ -96,6 +96,8 @@ for doc_name in ["planeacion.py", "epp.py", "anexos.py", "oficios.py", "visitas.
 for img_dir in [Path("/home/uppcoder/app"), Path("/home/uppcoder/app/usaer2e")]:
     descargar("encabezado.png", img_dir / "encabezado.png")
     descargar("pie_pagina.png", img_dir / "pie_pagina.png")
+    descargar("Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx", img_dir / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx")
+    descargar("tools/generar_concentrado_excel.py", img_dir / "tools" / "generar_concentrado_excel.py")
 
 for root_s in [Path("/home/uppcoder/app/static"), Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static")]:
     descargar("piloto_spa/backend/static/index.html", root_s / "index.html")

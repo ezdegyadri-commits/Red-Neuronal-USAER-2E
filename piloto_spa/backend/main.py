@@ -1057,7 +1057,12 @@ def descargar_oficio_pdf(oficio_id: str, user: SessionUser = Depends(validar_tok
     from documents.oficios import generar_oficio_comision
     from data.sql_repository import oficios_comision_sql
     df = oficios_comision_sql()
-    sub = df[(df["ID"] == oficio_id) | (df["Folio"] == oficio_id)]
+    mask = (df["Folio"].astype(str) == str(oficio_id))
+    if "ID_Oficio" in df.columns:
+        mask = mask | (df["ID_Oficio"].astype(str) == str(oficio_id))
+    if "ID" in df.columns:
+        mask = mask | (df["ID"].astype(str) == str(oficio_id))
+    sub = df[mask]
     if sub.empty:
         raise HTTPException(status_code=404, detail=f"Oficio {oficio_id} no encontrado")
     pdf_bytes = generar_oficio_comision(sub.iloc[0].to_dict())
@@ -1543,15 +1548,27 @@ def estadisticas_zona(user: SessionUser = Depends(validar_token_sesion)):
 @app.get("/descargar-concentrado")
 @app.get("/api/descargar-concentrado")
 def descargar_concentrado():
-    excel_path = Path(ROOT_DIR) / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx"
-    if not excel_path.exists():
+    for p in [
+        Path(ROOT_DIR) / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx",
+        Path("/home/uppcoder/app/Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx"),
+        Path("/home/uppcoder/app/usaer2e/Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx"),
+    ]:
+        if p.exists():
+            return FileResponse(
+                path=str(p),
+                filename="Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx",
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+    try:
         from tools.generar_concentrado_excel import crear_libro_concentrado
-        crear_libro_concentrado()
-    return FileResponse(
-        path=str(excel_path),
-        filename="Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+        excel_path = crear_libro_concentrado()
+        return FileResponse(
+            path=str(excel_path),
+            filename="Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo generar el concentrado: {e}")
 
 
 # -------------------------------------------------------------
