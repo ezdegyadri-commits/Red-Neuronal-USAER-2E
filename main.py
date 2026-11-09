@@ -97,7 +97,13 @@ def favicon_root():
 @app.get("/api/diag")
 def diag():
     try:
+        import os
         from data.database import get_session, Usuario, Alumno, Escuela
+        xlsx_cands = [
+            str(Path(p) / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx")
+            for p in ["/home/uppcoder/app", "/home/uppcoder/app/usaer2e", "/home/uppcoder/app/usaer2e/piloto_spa/backend", str(Path(__file__).resolve().parent)]
+        ]
+        xlsx_found = [p for p in xlsx_cands if Path(p).exists()]
         with get_session() as s:
             return {
                 "status": "OK",
@@ -105,6 +111,10 @@ def diag():
                 "usuarios": s.query(Usuario).count(),
                 "alumnos": s.query(Alumno).count(),
                 "escuelas": s.query(Escuela).count(),
+                "xlsx_found": xlsx_found,
+                "xlsx_cands": xlsx_cands,
+                "cwd": os.getcwd(),
+                "file": __file__,
             }
     except Exception as e:
         return {"status": "ERROR_DB", "startup_error": STARTUP_ERROR, "detalle": str(e)}
