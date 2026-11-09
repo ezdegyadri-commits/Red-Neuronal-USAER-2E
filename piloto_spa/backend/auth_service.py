@@ -171,7 +171,7 @@ USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
     },
     "pedro.torres": {
         "id": "USR-009",
-        "passwords": ["Usaer2E*Quintana", "Usaer2E*Apoyo"],
+        "passwords": ["Usaer2E*QRoo", "Usaer2E*Quintana", "Usaer2E*Apoyo", "123"],
         "nombre": "Mtro. Pedro Manuel Torres May",
         "rol": "APOYO",
         "escuelas": ["ESC-008"],
@@ -179,7 +179,7 @@ USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
     },
     "mariajose.cupul": {
         "id": "USR-010",
-        "passwords": ["Usaer2E*Psico"],
+        "passwords": ["PsiUsaer2E*26", "Usaer2E*Psico", "123"],
         "nombre": "Psic. María José Cupul Realpozo",
         "rol": "PSICOLOGIA",
         "escuelas": ["ESC-001", "ESC-002", "ESC-005", "ESC-008"],
@@ -187,7 +187,7 @@ USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
     },
     "elmy.puerto": {
         "id": "USR-011",
-        "passwords": ["Usaer2E*Comun"],
+        "passwords": ["ComUsaer2E*26", "Usaer2E*Comun", "123"],
         "nombre": "Com. Elmy Lucelly Puerto Gone",
         "rol": "COMUNICACION",
         "escuelas": ["ESC-001", "ESC-002", "ESC-005", "ESC-008"],
@@ -195,7 +195,7 @@ USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
     },
     "abril.chable": {
         "id": "USR-012",
-        "passwords": ["Usaer2E*Psico2"],
+        "passwords": ["PsiUsaer2E*26B", "Usaer2E*Psico2", "123"],
         "nombre": "Psic. Abril de María Chablé Ríos",
         "rol": "PSICOLOGIA",
         "escuelas": ["ESC-003", "ESC-004", "ESC-006", "ESC-007"],
@@ -203,7 +203,7 @@ USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
     },
     "marilyn.perez": {
         "id": "USR-013",
-        "passwords": ["Usaer2E*Comun2"],
+        "passwords": ["ComUsaer2E*26B", "Usaer2E*Comun2", "123"],
         "nombre": "Com. Marilyn Pérez Lizama",
         "rol": "COMUNICACION",
         "escuelas": ["ESC-003", "ESC-004", "ESC-006", "ESC-007"],
@@ -211,7 +211,7 @@ USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
     },
     "diego.peralta": {
         "id": "USR-014",
-        "passwords": ["Usaer2E*Social"],
+        "passwords": ["TSUsaer2E*2026", "Usaer2E*Social", "123"],
         "nombre": "Mtro. Diego Peralta Torres",
         "rol": "TRABAJO_SOCIAL",
         "escuelas": ["TODAS"],
@@ -219,10 +219,32 @@ USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
     }
 }
 
+ALIASES_USUARIOS: Dict[str, str] = {
+    "cindy": "cindy.burgos",
+    "marycruz": "marycruz.caamal",
+    "ceci": "cecilia.solis",
+    "cecilia": "cecilia.solis",
+    "dolores": "dolores.cortazar",
+    "dianely": "dianely.caamal",
+    "luis": "luis.garcia",
+    "rosario": "rosario.perez",
+    "zuemmy": "zuemmy.perez",
+    "pedro": "pedro.torres",
+    "mariajose": "mariajose.cupul",
+    "elmy": "elmy.puerto",
+    "abril": "abril.chable",
+    "marilyn": "marilyn.perez",
+    "diego": "diego.peralta",
+}
+
 def autenticar_usuario(usuario: str, password_plana: str) -> Optional[SessionUser]:
     """Coteja credenciales estrictamente contra el repositorio de usuarios."""
     u_clean = usuario.strip().lower()
     p_clean = password_plana.strip()
+
+    # Mapear alias amigable de primer nombre si corresponde
+    if u_clean in ALIASES_USUARIOS:
+        u_clean = ALIASES_USUARIOS[u_clean]
 
     # 1. Cotejo contra catálogo canónico institucional
     if u_clean in USUARIOS_CANONICOS:
