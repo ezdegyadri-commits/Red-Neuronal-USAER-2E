@@ -982,6 +982,126 @@ def crear_anexo7(payload: Anexo7Payload, user: SessionUser = Depends(validar_tok
     return {"status": "success", "id": aid, "mensaje": "Ficha de derivación (Anexo VII) guardada correctamente."}
 
 
+@app.get("/api/anexo3/{anexo_id}/pdf")
+def descargar_anexo3_pdf(anexo_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from documents.anexos import anexo3_pdf
+    from data.sql_repository import anexo3_sql
+    df = anexo3_sql()
+    sub = df[(df["ID_Anexo3"] == anexo_id) | (df["ID_Alumno"] == anexo_id)]
+    if sub.empty:
+        raise HTTPException(status_code=404, detail=f"Anexo III {anexo_id} no encontrado")
+    aid = sub.iloc[0].get("ID_Alumno", anexo_id)
+    alumno = {"ID_Alumno": aid, "Nombre_Completo": sub.iloc[0].get("Nombre_Alumno", aid), "Nombre_Escuela": sub.iloc[0].get("Escuela", "")}
+    pdf_bytes = anexo3_pdf(alumno, sub)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Anexo_III_{anexo_id}.pdf"'},
+    )
+
+
+@app.get("/api/anexo4/{anexo_id}/pdf")
+def descargar_anexo4_pdf(anexo_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from documents.anexos import anexo4_pdf
+    from data.sql_repository import anexo4_sql
+    df = anexo4_sql()
+    sub = df[(df["ID_Anexo4"] == anexo_id) | (df["ID_Alumno"] == anexo_id)]
+    if sub.empty:
+        raise HTTPException(status_code=404, detail=f"Anexo IV {anexo_id} no encontrado")
+    aid = sub.iloc[0].get("ID_Alumno", anexo_id)
+    alumno = {"ID_Alumno": aid, "Nombre_Completo": sub.iloc[0].get("Nombre_Alumno", aid), "Nombre_Escuela": sub.iloc[0].get("Escuela", "")}
+    pdf_bytes = anexo4_pdf(alumno, sub)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Anexo_IV_{anexo_id}.pdf"'},
+    )
+
+
+@app.get("/api/anexo5/{anexo_id}/pdf")
+def descargar_anexo5_pdf(anexo_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from documents.anexos import anexo5_pdf
+    from data.sql_repository import anexo5_sql
+    df = anexo5_sql()
+    sub = df[(df["ID_Evento"] == anexo_id) | (df["ID_Alumno"] == anexo_id)]
+    if sub.empty:
+        raise HTTPException(status_code=404, detail=f"Anexo V {anexo_id} no encontrado")
+    aid = sub.iloc[0].get("ID_Alumno", anexo_id)
+    alumno = {"ID_Alumno": aid, "Nombre_Completo": sub.iloc[0].get("Nombre_Alumno", aid), "Nombre_Escuela": sub.iloc[0].get("Escuela", "")}
+    pdf_bytes = anexo5_pdf(alumno, sub)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Anexo_V_{anexo_id}.pdf"'},
+    )
+
+
+@app.get("/api/anexo7/{anexo_id}/pdf")
+def descargar_anexo7_pdf(anexo_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from documents.anexos import anexo7_pdf
+    from data.sql_repository import anexo7_sql
+    df = anexo7_sql()
+    sub = df[(df["ID_Anexo7"] == anexo_id) | (df["ID_Alumno"] == anexo_id)]
+    if sub.empty:
+        raise HTTPException(status_code=404, detail=f"Anexo VII {anexo_id} no encontrado")
+    pdf_bytes = anexo7_pdf(sub.iloc[0].to_dict())
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Anexo_VII_{anexo_id}.pdf"'},
+    )
+
+
+@app.get("/api/oficios/{oficio_id}/pdf")
+def descargar_oficio_pdf(oficio_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from documents.oficios import generar_oficio_comision
+    from data.sql_repository import oficios_comision_sql
+    df = oficios_comision_sql()
+    sub = df[(df["ID"] == oficio_id) | (df["Folio"] == oficio_id)]
+    if sub.empty:
+        raise HTTPException(status_code=404, detail=f"Oficio {oficio_id} no encontrado")
+    pdf_bytes = generar_oficio_comision(sub.iloc[0].to_dict())
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Oficio_{oficio_id}.pdf"'},
+    )
+
+
+@app.get("/api/visitas/{visita_id}/pdf")
+def descargar_visita_pdf(visita_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from documents.visitas import visita_pdf
+    from data.sql_repository import visitas_sql
+    df = visitas_sql()
+    sub = df[(df["ID_Visita"] == visita_id) | (df["ID_Visita"].str.lower() == visita_id.lower())]
+    if sub.empty:
+        raise HTTPException(status_code=404, detail=f"Visita {visita_id} no encontrada")
+    row = sub.iloc[0].to_dict()
+    motivos_list = [m.strip() for m in str(row.get("Motivo", "")).split("\n") if m.strip()] or [str(row.get("Motivo", "Acompañamiento"))]
+    firmantes_list = [
+        (str(row.get("Personal", user.nombre)), "Personal de Acompañamiento USAER 2E"),
+        (user.nombre if user.rol == "DIRECTOR" else "Director(a) de Escuela / USAER", "Vo. Bo. Institucional"),
+    ]
+    pdf_bytes = visita_pdf(
+        titulo=f"ACTA DE VISITA — {row.get('Tipo_Acta', 'ACOMPAÑAMIENTO')}".upper(),
+        folio=str(row.get("ID_Visita", visita_id)),
+        escuela=str(row.get("Escuela", "")),
+        lugar=str(row.get("Lugar", "Mérida, Yucatán")),
+        fecha=str(row.get("Fecha", "")),
+        ciclo="2026-2027",
+        especialidad="USAER 02-E (Zona 001 Primarias)",
+        motivos=motivos_list,
+        detalles=str(row.get("Observaciones", "")),
+        descripcion=str(row.get("Observaciones", "Se constató el desarrollo de las actividades programadas.")),
+        firmantes=firmantes_list,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Visita_{visita_id}.pdf"'},
+    )
+
+
 # -------------------------------------------------------------
 # 4. EVALUACIÓN PSICOPEDAGÓGICA (EPP) MULTI-ÁREA
 # -------------------------------------------------------------

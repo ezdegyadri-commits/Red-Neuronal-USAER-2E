@@ -85,9 +85,17 @@ for b_dir in backend_dirs:
     descargar("services/planeacion_local.py", rel_svc_dir / "planeacion_local.py")
     descargar("services/planeacion_huella.py", rel_svc_dir / "planeacion_huella.py")
     descargar("services/planeacion_edicion.py", rel_svc_dir / "planeacion_edicion.py")
+    rel_doc_dir = b_dir.parent.parent / "documents"
+    for doc_name in ["planeacion.py", "epp.py", "anexos.py", "oficios.py", "visitas.py"]:
+        descargar(f"documents/{doc_name}", rel_doc_dir / doc_name)
 
-# 2. Actualizar root main.py y todos los recursos estaticos en /home/uppcoder/app
+# 2. Actualizar root main.py, recursos institucionales, documentos y estaticos en /home/uppcoder/app
 descargar("main.py", Path("/home/uppcoder/app/main.py"))
+for doc_name in ["planeacion.py", "epp.py", "anexos.py", "oficios.py", "visitas.py"]:
+    descargar(f"documents/{doc_name}", Path(f"/home/uppcoder/app/documents/{doc_name}"))
+for img_dir in [Path("/home/uppcoder/app"), Path("/home/uppcoder/app/usaer2e")]:
+    descargar("encabezado.png", img_dir / "encabezado.png")
+    descargar("pie_pagina.png", img_dir / "pie_pagina.png")
 
 for root_s in [Path("/home/uppcoder/app/static"), Path("/home/uppcoder/app/usaer2e/piloto_spa/backend/static")]:
     descargar("piloto_spa/backend/static/index.html", root_s / "index.html")

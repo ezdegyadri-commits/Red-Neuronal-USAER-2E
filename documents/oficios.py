@@ -132,7 +132,10 @@ def generar_oficio_comision(registro):
     pdf.set_font("Helvetica", size=11)
 
     fecha_emision = registro.get("Fecha_Emision") or str(date.today())
-    folio = int(registro.get("Folio", 0) or 0)
+    import re
+    raw_folio = str(registro.get("Folio", 0) or 0)
+    digits = re.sub(r"\D", "", raw_folio)
+    folio = int(digits) if digits else 1
     escuela = str(registro.get("Escuela", "")).strip()
     director = str(registro.get("Director_Escuela", "")).strip()
     if not director:

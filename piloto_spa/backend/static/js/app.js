@@ -102,14 +102,13 @@ class ErrorBoundary extends React.Component {
 // Cliente API con Bearer Token y manejo de sesión
 async function descargarArchivoAutenticado(endpoint, nombreArchivo) {
   try {
-    const token = sessionStorage.getItem('token') || '';
+    const token = sessionStorage.getItem('usaer_token') || sessionStorage.getItem('token') || '';
     const headers = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const sep = endpoint.includes('?') ? '&' : '?';
-    const url = token ? `${endpoint}${sep}token=${encodeURIComponent(token)}` : endpoint;
-    const res = await fetch(url, {
+    const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+    const res = await fetch(fullUrl, {
       method: 'GET',
       headers: headers
     });
@@ -121,6 +120,9 @@ async function descargarArchivoAutenticado(endpoint, nombreArchivo) {
       } catch (_) {
         errText = res.statusText;
       }
+      if (res.status === 401) {
+        throw new Error('Sesión expirada o no autorizada. Por favor inicie sesión nuevamente.');
+      }
       throw new Error(errText);
     }
     const blob = await res.blob();
@@ -131,7 +133,7 @@ async function descargarArchivoAutenticado(endpoint, nombreArchivo) {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 10000);
+    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 15000);
   } catch (err) {
     alert('Aviso de descarga: ' + err.message);
   }
@@ -1828,9 +1830,9 @@ function ExpedientesView({
     className: "text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition"
   }, "\u2190 Volver a Mis Documentos"), /*#__PURE__*/React.createElement("h1", {
     className: "text-2xl font-bold tracking-tight text-slate-900"
-  }, "Expedientes de Alumnos")), /*#__PURE__*/React.createElement("a", {
-    href: `${API_BASE}/api/alumnos/exportar`,
-    className: "text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border border-slate-300 transition"
+  }, "Expedientes de Alumnos")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => descargarArchivoAutenticado('/api/alumnos/exportar', 'Padron_Alumnos_USAER_2E.csv'),
+    className: "text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border border-slate-300 transition cursor-pointer"
   }, "Exportar Padr\xF3n CSV \uD83D\uDCE5")), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-1 lg:grid-cols-12 gap-6"
   }, /*#__PURE__*/React.createElement("div", {
@@ -2544,9 +2546,15 @@ function Anexo3View({
     className: "flex justify-between items-center font-bold text-slate-900"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-sm"
-  }, b.nombre_alumno || b.Nombre_Alumno || 'Detección Grupal'), /*#__PURE__*/React.createElement("span", {
+  }, b.nombre_alumno || b.Nombre_Alumno || 'Detección Grupal'), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
     className: "text-slate-400 font-normal"
-  }, b.fecha || b.Fecha)), /*#__PURE__*/React.createElement("div", {
+  }, b.fecha || b.Fecha), /*#__PURE__*/React.createElement("button", {
+    onClick: () => descargarArchivoAutenticado(`/api/anexo3/${b.id || b.ID_Anexo3 || b.id_alumno || b.ID_Alumno}/pdf`, `Anexo_III_${b.id || b.ID_Anexo3 || b.id_alumno || b.ID_Alumno}.pdf`),
+    className: "px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded font-bold text-[11px] transition cursor-pointer",
+    title: "Descargar Anexo III Oficial PDF"
+  }, "\uD83D\uDCC4 PDF"))), /*#__PURE__*/React.createElement("div", {
     className: "text-slate-500"
   }, "Escuela: ", b.escuela || b.Escuela, " \u2022 Alumno/Grupo: ", b.id_alumno || b.ID_Alumno), (b.fisicas || b.Fisicas) && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "F\xEDsicas/Arquitect\xF3nicas:"), " ", b.fisicas || b.Fisicas), (b.actitudinales || b.Actitudinales) && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Actitudinales:"), " ", b.actitudinales || b.Actitudinales), (b.pedagogicas || b.Pedagogicas || b.Curriculares) && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Curriculares/Pedag\xF3gicas:"), " ", b.pedagogicas || b.Pedagogicas || b.Curriculares), (b.organizativas || b.Organizativas) && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Organizativas:"), " ", b.organizativas || b.Organizativas)))));
 }
@@ -2607,9 +2615,15 @@ function Anexo4View({
     className: "flex justify-between items-center font-bold text-slate-900"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-sm"
-  }, s.nombre_alumno || s.Nombre_Alumno || s.Alumno || 'Sugerencias de Grupo'), /*#__PURE__*/React.createElement("span", {
+  }, s.nombre_alumno || s.Nombre_Alumno || s.Alumno || 'Sugerencias de Grupo'), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
     className: "text-slate-400 font-normal"
-  }, s.fecha || s.Fecha)), /*#__PURE__*/React.createElement("div", {
+  }, s.fecha || s.Fecha), /*#__PURE__*/React.createElement("button", {
+    onClick: () => descargarArchivoAutenticado(`/api/anexo4/${s.id || s.ID_Anexo4 || s.id_alumno || s.ID_Alumno}/pdf`, `Anexo_IV_${s.id || s.ID_Anexo4 || s.id_alumno || s.ID_Alumno}.pdf`),
+    className: "px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded font-bold text-[11px] transition cursor-pointer",
+    title: "Descargar Anexo IV Oficial PDF"
+  }, "\uD83D\uDCC4 PDF"))), /*#__PURE__*/React.createElement("div", {
     className: "text-slate-500"
   }, /*#__PURE__*/React.createElement("span", null, "\xC1rea: ", /*#__PURE__*/React.createElement("strong", {
     className: "text-amber-800"
@@ -2682,9 +2696,15 @@ function Anexo5View({
     className: "text-[11px] text-slate-500"
   }, /*#__PURE__*/React.createElement("span", null, "Registrado por: ", /*#__PURE__*/React.createElement("strong", null, ev.especialista || ev.Especialista)), (ev.escuela || ev.Escuela) && /*#__PURE__*/React.createElement("span", {
     className: "ml-2"
-  }, "\u2022 Escuela: ", ev.escuela || ev.Escuela))), /*#__PURE__*/React.createElement("span", {
-    className: "text-slate-400 font-mono text-xs whitespace-nowrap ml-4"
-  }, ev.fecha || ev.Fecha)))));
+  }, "\u2022 Escuela: ", ev.escuela || ev.Escuela))), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col items-end space-y-2 ml-4"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-400 font-mono text-xs whitespace-nowrap"
+  }, ev.fecha || ev.Fecha), /*#__PURE__*/React.createElement("button", {
+    onClick: () => descargarArchivoAutenticado(`/api/anexo5/${ev.id || ev.ID_Evento || ev.id_alumno || ev.ID_Alumno}/pdf`, `Anexo_V_${ev.id || ev.ID_Evento || ev.id_alumno || ev.ID_Alumno}.pdf`),
+    className: "px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded font-bold text-[11px] transition cursor-pointer",
+    title: "Descargar Anexo V Oficial PDF"
+  }, "\uD83D\uDCC4 PDF"))))));
 }
 
 // =============================================================
@@ -2724,9 +2744,15 @@ function Anexo7View({
     className: "flex justify-between items-center font-bold text-slate-900"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-sm"
-  }, d.nombre_alumno || d.Nombre_Alumno || d.Alumno), /*#__PURE__*/React.createElement("span", {
+  }, d.nombre_alumno || d.Nombre_Alumno || d.Alumno), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
     className: "text-slate-400 font-normal"
-  }, d.fecha || d.Fecha)), (d.escuela || d.Escuela) && /*#__PURE__*/React.createElement("div", {
+  }, d.fecha || d.Fecha), /*#__PURE__*/React.createElement("button", {
+    onClick: () => descargarArchivoAutenticado(`/api/anexo7/${d.id || d.ID_Anexo7 || d.id_alumno || d.ID_Alumno}/pdf`, `Anexo_VII_${d.id || d.ID_Anexo7 || d.id_alumno || d.ID_Alumno}.pdf`),
+    className: "px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded font-bold text-[11px] transition cursor-pointer",
+    title: "Descargar Anexo VII Oficial PDF"
+  }, "\uD83D\uDCC4 PDF"))), (d.escuela || d.Escuela) && /*#__PURE__*/React.createElement("div", {
     className: "text-slate-500 font-semibold"
   }, "Escuela: ", d.escuela || d.Escuela), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Docente Regular:"), " ", d.docente_regular || d.Docente_Regular || 'No registrado'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Salud:"), " ", d.salud || d.Salud || 'Buena salud'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Seguimiento M\xE9dico:"), " ", d.seguimiento_medico || d.Seguimiento_Medico || 'En observación'), (d.aspecto_relevante || d.Aspecto_Relevante) && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Aspecto Relevante:"), " ", d.aspecto_relevante || d.Aspecto_Relevante)))));
 }
@@ -3204,9 +3230,15 @@ function ActasYOficiosView({
     className: "flex justify-between items-center"
   }, /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-slate-900 text-sm"
-  }, "Escuela: ", v.Escuela), /*#__PURE__*/React.createElement("span", {
+  }, "Escuela: ", v.Escuela), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
     className: "text-slate-400"
-  }, v.Fecha)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Personal de Acompa\xF1amiento:"), " ", v.Personal), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Motivo:"), " ", v.Motivo), v.Observaciones && /*#__PURE__*/React.createElement("div", {
+  }, v.Fecha), /*#__PURE__*/React.createElement("button", {
+    onClick: () => descargarArchivoAutenticado(`/api/visitas/${v.id || v.ID_Visita || v.Folio}/pdf`, `Visita_${v.id || v.ID_Visita || v.Folio}.pdf`),
+    className: "px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded font-bold text-[11px] transition cursor-pointer",
+    title: "Descargar Acta de Visita Oficial PDF"
+  }, "\uD83D\uDCC4 PDF"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Personal de Acompa\xF1amiento:"), " ", v.Personal), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Motivo:"), " ", v.Motivo), v.Observaciones && /*#__PURE__*/React.createElement("div", {
     className: "text-slate-600"
   }, /*#__PURE__*/React.createElement("strong", null, "Observaciones:"), " ", v.Observaciones)))), subTab === 'oficios' && /*#__PURE__*/React.createElement("div", {
     className: "space-y-3"
@@ -3217,9 +3249,15 @@ function ActasYOficiosView({
     className: "flex justify-between items-center"
   }, /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-slate-900 text-sm"
-  }, "Folio: ", o.Folio), /*#__PURE__*/React.createElement("span", {
+  }, "Folio: ", o.Folio), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
     className: "text-slate-400"
-  }, "Emisi\xF3n: ", o.Fecha_Emision)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Destino:"), " ", o.Destino, " (", o.Escuela, ")"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Personal comisionado:"), " ", o.Maestra_Apoyo), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Asunto:"), " ", o.Asunto), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Horario:"), " ", o.Horario)))));
+  }, "Emisi\xF3n: ", o.Fecha_Emision), /*#__PURE__*/React.createElement("button", {
+    onClick: () => descargarArchivoAutenticado(`/api/oficios/${o.id || o.Folio}/pdf`, `Oficio_${o.id || o.Folio}.pdf`),
+    className: "px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded font-bold text-[11px] transition cursor-pointer",
+    title: "Descargar Oficio de Comisi\xF3n Oficial PDF"
+  }, "\uD83D\uDCC4 PDF"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Destino:"), " ", o.Destino, " (", o.Escuela, ")"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Personal comisionado:"), " ", o.Maestra_Apoyo), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Asunto:"), " ", o.Asunto), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Horario:"), " ", o.Horario)))));
 }
 
 // =============================================================
@@ -3249,13 +3287,19 @@ function EstadisticasView({
   return /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
   }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center space-x-3"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onBack,
     className: "text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition"
   }, "\u2190 Volver"), /*#__PURE__*/React.createElement("h1", {
     className: "text-2xl font-bold tracking-tight text-slate-900"
-  }, "Estad\xEDsticas de Zona 001")), /*#__PURE__*/React.createElement("div", {
+  }, "Estad\xEDsticas de Zona 001")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => descargarArchivoAutenticado('/descargar-concentrado', 'Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx'),
+    className: "px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow transition cursor-pointer flex items-center space-x-1.5",
+    title: "Descargar Concentrado Excel Oficial"
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCCA Concentrado XLSX"))), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-4 gap-4"
   }, /*#__PURE__*/React.createElement("div", {
     className: "p-4 bg-white rounded-xl border border-slate-200 shadow-sm"
