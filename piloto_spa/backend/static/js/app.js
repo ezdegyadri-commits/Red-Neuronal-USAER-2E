@@ -100,6 +100,42 @@ class ErrorBoundary extends React.Component {
 }
 
 // Cliente API con Bearer Token y manejo de sesión
+async function descargarArchivoAutenticado(endpoint, nombreArchivo) {
+  try {
+    const token = sessionStorage.getItem('token') || '';
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const sep = endpoint.includes('?') ? '&' : '?';
+    const url = token ? `${endpoint}${sep}token=${encodeURIComponent(token)}` : endpoint;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: headers
+    });
+    if (!res.ok) {
+      let errText = 'Error en descarga';
+      try {
+        const errJson = await res.json();
+        errText = errJson.detail || res.statusText;
+      } catch (_) {
+        errText = res.statusText;
+      }
+      throw new Error(errText);
+    }
+    const blob = await res.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = nombreArchivo || 'documento.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 10000);
+  } catch (err) {
+    alert('Aviso de descarga: ' + err.message);
+  }
+}
 async function apiRequest(endpoint, options = {}) {
   const token = sessionStorage.getItem('usaer_token');
   const headers = {
@@ -1006,11 +1042,10 @@ function PlaneacionEditorView({
     className: "w-2 h-2 rounded-full bg-red-400"
   }), /*#__PURE__*/React.createElement("span", {
     className: "text-red-600"
-  }, "Error al guardar"))), /*#__PURE__*/React.createElement("a", {
-    href: `${API_BASE}/api/planeaciones/${doc.id}/pdf`,
-    target: "_blank",
-    rel: "noreferrer",
-    className: "px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5"
+  }, "Error al guardar"))), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => descargarArchivoAutenticado(`/api/planeaciones/${doc.id}/pdf`, `Planeacion_${doc.id}.pdf`),
+    className: "px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5 shadow-sm"
   }, /*#__PURE__*/React.createElement("span", null, "Descargar PDF"), /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCC4")), /*#__PURE__*/React.createElement("button", {
     onClick: () => setAssistantOpen(!assistantOpen),
     className: `px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-sm transition flex items-center space-x-1.5 ${assistantOpen ? 'bg-amber-600 text-white ring-2 ring-amber-400' : 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100'}`
@@ -1092,137 +1127,171 @@ function PlaneacionEditorView({
   }, /*#__PURE__*/React.createElement("th", {
     className: "p-2.5 w-1/5"
   }, "Alumno"), /*#__PURE__*/React.createElement("th", {
-    className: "p-2.5 w-1/4"
+    className: "p-2.5 w-1/5"
+  }, "Aprendizaje / PDA (Objetivo)"), /*#__PURE__*/React.createElement("th", {
+    className: "p-2.5 w-1/5"
   }, "Barrera o Necesidad (BAP)"), /*#__PURE__*/React.createElement("th", {
-    className: "p-2.5 w-1/4"
+    className: "p-2.5 w-1/5"
   }, "Descriptor Observable (Zona 001)"), /*#__PURE__*/React.createElement("th", {
-    className: "p-2.5 w-1/4"
+    className: "p-2.5 w-1/5"
   }, "Apoyos y Ajustes Razonables"), /*#__PURE__*/React.createElement("th", {
     className: "p-2.5 w-8"
   }))), /*#__PURE__*/React.createElement("tbody", {
     className: "divide-y divide-slate-100"
-  }, tablaNEE.map((row, idx) => /*#__PURE__*/React.createElement("tr", {
-    key: idx,
-    className: "hover:bg-slate-50/70 transition"
-  }, /*#__PURE__*/React.createElement("td", {
-    className: "p-2"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "text",
-    value: row.alumno || row.Alumno || '',
-    onChange: e => {
-      const val = e.target.value;
-      mutarDoc(d => {
-        const copy = [...tablaNEE];
-        copy[idx] = {
-          ...copy[idx],
-          alumno: val,
-          Alumno: val
-        };
-        return {
+  }, tablaNEE.map((row, idx) => {
+    var _alumnosEnPlaneacion$;
+    return /*#__PURE__*/React.createElement("tr", {
+      key: idx,
+      className: "hover:bg-slate-50/70 transition"
+    }, /*#__PURE__*/React.createElement("td", {
+      className: "p-2"
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "text",
+      value: row.alumno || row.Alumno || ((_alumnosEnPlaneacion$ = alumnosEnPlaneacion[0]) === null || _alumnosEnPlaneacion$ === void 0 ? void 0 : _alumnosEnPlaneacion$.nombre) || '',
+      onChange: e => {
+        const val = e.target.value;
+        mutarDoc(d => {
+          const copy = [...tablaNEE];
+          copy[idx] = {
+            ...copy[idx],
+            alumno: val,
+            Alumno: val
+          };
+          return {
+            ...d,
+            tablas: {
+              ...d.tablas,
+              nee: copy,
+              aprendizajes: copy
+            }
+          };
+        });
+      },
+      placeholder: "Nombre del Alumno",
+      className: "w-full p-1.5 border border-slate-200 rounded font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("td", {
+      className: "p-2"
+    }, /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: row.pda || row["Aprendizaje y/u objetivo"] || row.objetivo || '',
+      onChange: e => {
+        const val = e.target.value;
+        mutarDoc(d => {
+          const copy = [...tablaNEE];
+          copy[idx] = {
+            ...copy[idx],
+            pda: val,
+            "Aprendizaje y/u objetivo": val,
+            objetivo: val
+          };
+          return {
+            ...d,
+            tablas: {
+              ...d.tablas,
+              nee: copy,
+              aprendizajes: copy
+            }
+          };
+        });
+      },
+      placeholder: "Aprendizaje y/u objetivo curricular (PDA)...",
+      className: "w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("td", {
+      className: "p-2"
+    }, /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: row.barreras_o_necesidades || row["Necesidades educativas específicas"] || row["Barrera o Necesidad"] || '',
+      onChange: e => {
+        const val = e.target.value;
+        mutarDoc(d => {
+          const copy = [...tablaNEE];
+          copy[idx] = {
+            ...copy[idx],
+            barreras_o_necesidades: val,
+            "Necesidades educativas específicas": val,
+            "Barrera o Necesidad": val
+          };
+          return {
+            ...d,
+            tablas: {
+              ...d.tablas,
+              nee: copy,
+              aprendizajes: copy
+            }
+          };
+        });
+      },
+      placeholder: "Barrera para el Aprendizaje o Necesidad...",
+      className: "w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("td", {
+      className: "p-2"
+    }, /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: row.descriptor || row["Descriptor de logro"] || row["Descriptor Observable"] || row.descriptor_observable || '',
+      onChange: e => {
+        const val = e.target.value;
+        mutarDoc(d => {
+          const copy = [...tablaNEE];
+          copy[idx] = {
+            ...copy[idx],
+            descriptor: val,
+            "Descriptor de logro": val,
+            "Descriptor Observable": val
+          };
+          return {
+            ...d,
+            tablas: {
+              ...d.tablas,
+              nee: copy,
+              aprendizajes: copy
+            }
+          };
+        });
+      },
+      className: "w-full p-1.5 border border-amber-300 bg-amber-50/30 rounded text-slate-900 font-medium focus:outline-none focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("td", {
+      className: "p-2"
+    }, /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: row.apoyos || row["Apoyos y Ajustes"] || row["Apoyos o ajustes"] || row.ajustes_razonables || '',
+      onChange: e => {
+        const val = e.target.value;
+        mutarDoc(d => {
+          const copy = [...tablaNEE];
+          copy[idx] = {
+            ...copy[idx],
+            apoyos: val,
+            "Apoyos y Ajustes": val,
+            "Apoyos o ajustes": val,
+            ajustes_razonables: val
+          };
+          return {
+            ...d,
+            tablas: {
+              ...d.tablas,
+              nee: copy,
+              aprendizajes: copy
+            }
+          };
+        });
+      },
+      className: "w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("td", {
+      className: "p-2 text-center"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        mutarDoc(d => ({
           ...d,
           tablas: {
             ...d.tablas,
-            nee: copy,
-            aprendizajes: copy
+            nee: tablaNEE.filter((_, i) => i !== idx),
+            aprendizajes: tablaNEE.filter((_, i) => i !== idx)
           }
-        };
-      });
-    },
-    className: "w-full p-1.5 border border-slate-200 rounded font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
-  })), /*#__PURE__*/React.createElement("td", {
-    className: "p-2"
-  }, /*#__PURE__*/React.createElement("textarea", {
-    rows: "2",
-    value: row.barreras_o_necesidades || row["Necesidades educativas específicas"] || row["Barrera o Necesidad"] || '',
-    onChange: e => {
-      const val = e.target.value;
-      mutarDoc(d => {
-        const copy = [...tablaNEE];
-        copy[idx] = {
-          ...copy[idx],
-          barreras_o_necesidades: val,
-          "Necesidades educativas específicas": val,
-          "Barrera o Necesidad": val
-        };
-        return {
-          ...d,
-          tablas: {
-            ...d.tablas,
-            nee: copy,
-            aprendizajes: copy
-          }
-        };
-      });
-    },
-    className: "w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
-  })), /*#__PURE__*/React.createElement("td", {
-    className: "p-2"
-  }, /*#__PURE__*/React.createElement("textarea", {
-    rows: "2",
-    value: row.descriptor || row["Descriptor de logro"] || row["Descriptor Observable"] || row.descriptor_observable || '',
-    onChange: e => {
-      const val = e.target.value;
-      mutarDoc(d => {
-        const copy = [...tablaNEE];
-        copy[idx] = {
-          ...copy[idx],
-          descriptor: val,
-          "Descriptor de logro": val,
-          "Descriptor Observable": val
-        };
-        return {
-          ...d,
-          tablas: {
-            ...d.tablas,
-            nee: copy,
-            aprendizajes: copy
-          }
-        };
-      });
-    },
-    className: "w-full p-1.5 border border-amber-300 bg-amber-50/30 rounded text-slate-900 font-medium focus:outline-none focus:border-amber-500"
-  })), /*#__PURE__*/React.createElement("td", {
-    className: "p-2"
-  }, /*#__PURE__*/React.createElement("textarea", {
-    rows: "2",
-    value: row.apoyos || row["Apoyos y Ajustes"] || row["Apoyos o ajustes"] || row.ajustes_razonables || '',
-    onChange: e => {
-      const val = e.target.value;
-      mutarDoc(d => {
-        const copy = [...tablaNEE];
-        copy[idx] = {
-          ...copy[idx],
-          apoyos: val,
-          "Apoyos y Ajustes": val,
-          "Apoyos o ajustes": val,
-          ajustes_razonables: val
-        };
-        return {
-          ...d,
-          tablas: {
-            ...d.tablas,
-            nee: copy,
-            aprendizajes: copy
-          }
-        };
-      });
-    },
-    className: "w-full p-1.5 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-amber-500"
-  })), /*#__PURE__*/React.createElement("td", {
-    className: "p-2 text-center"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      mutarDoc(d => ({
-        ...d,
-        tablas: {
-          ...d.tablas,
-          nee: tablaNEE.filter((_, i) => i !== idx),
-          aprendizajes: tablaNEE.filter((_, i) => i !== idx)
-        }
-      }));
-    },
-    className: "text-slate-400 hover:text-red-600 font-bold p-1"
-  }, "\u2715")))))))), activeTab === 'dosificacion' && /*#__PURE__*/React.createElement("div", {
+        }));
+      },
+      className: "text-slate-400 hover:text-red-600 font-bold p-1"
+    }, "\u2715")));
+  }))))), activeTab === 'dosificacion' && /*#__PURE__*/React.createElement("div", {
     className: "space-y-4"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between items-center"
@@ -1327,6 +1396,31 @@ function PlaneacionEditorView({
   })), /*#__PURE__*/React.createElement("div", {
     className: "space-y-2"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "text-[10px] uppercase font-bold text-slate-400"
+  }, "Temporalidad / Per\xEDodo:"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: dos.Temporalidad || dos.temporalidad || '',
+    onChange: e => {
+      const val = e.target.value;
+      mutarDoc(d => {
+        const copy = [...tablaDosificacion];
+        copy[i] = {
+          ...copy[i],
+          Temporalidad: val,
+          temporalidad: val
+        };
+        return {
+          ...d,
+          tablas: {
+            ...d.tablas,
+            dosificacion: copy
+          }
+        };
+      });
+    },
+    className: "w-full p-1.5 border border-slate-200 rounded bg-white text-xs mb-1.5",
+    placeholder: "ej. Octubre 2026 / 45 min..."
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     className: "text-[10px] uppercase font-bold text-slate-400"
   }, "Recursos:"), /*#__PURE__*/React.createElement("input", {
     type: "text",
@@ -1538,8 +1632,8 @@ function PlaneacionEditorView({
     alumnoId: activeAlumnoId,
     onInsertProposal: propuesta => {
       mutarDoc(d => {
-        var _alumnosEnPlaneacion$;
-        const aluNom = propuesta.alumno || ((_alumnosEnPlaneacion$ = alumnosEnPlaneacion.find(a => a.id === activeAlumnoId)) === null || _alumnosEnPlaneacion$ === void 0 ? void 0 : _alumnosEnPlaneacion$.nombre) || 'Alumno';
+        var _alumnosEnPlaneacion$2;
+        const aluNom = propuesta.alumno || ((_alumnosEnPlaneacion$2 = alumnosEnPlaneacion.find(a => a.id === activeAlumnoId)) === null || _alumnosEnPlaneacion$2 === void 0 ? void 0 : _alumnosEnPlaneacion$2.nombre) || 'Alumno';
         const nuevaFila = {
           alumno: aluNom,
           Alumno: aluNom,
@@ -1942,7 +2036,7 @@ function ExpedientesView({
 }
 
 // =============================================================
-// VISTA 4: EVALUACIÓN PSICOPEDAGÓGICA (EPP MULTI-ÁREA)
+// VISTA 4: EVALUACIÓN PSICOPEDAGÓGICA (EPP MULTI-ÁREA VIVA)
 // =============================================================
 function EPPView({
   onBack,
@@ -1950,52 +2044,448 @@ function EPPView({
   setMetrics
 }) {
   const [listaEPP, setListaEPP] = React.useState([]);
+  const [alumnosList, setAlumnosList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  React.useEffect(() => {
+  const [selectedAlumnoId, setSelectedAlumnoId] = React.useState(null);
+  const [eppDoc, setEppDoc] = React.useState(null);
+  const [loadingDoc, setLoadingDoc] = React.useState(false);
+  const [activeArea, setActiveArea] = React.useState('Aprendizaje');
+  const [guardando, setGuardando] = React.useState(false);
+  const [guardadoExito, setGuardadoExito] = React.useState(false);
+  const [busqueda, setBusqueda] = React.useState('');
+  const cargarLista = React.useCallback(async () => {
+    setLoading(true);
     const t0 = performance.now();
-    apiRequest('/api/epp').then(data => {
-      setListaEPP(data);
+    try {
+      const [epps, alus] = await Promise.all([apiRequest('/api/epp'), apiRequest('/api/alumnos')]);
+      setListaEPP(epps || []);
+      setAlumnosList(alus || []);
       const t1 = performance.now();
       setMetrics(m => ({
         latency: Math.round(t1 - t0),
-        requests: m.requests + 1
+        requests: m.requests + 2
       }));
+    } catch (err) {
+      console.error("Error cargando lista EPP:", err);
+    } finally {
       setLoading(false);
-    });
+    }
   }, [setMetrics]);
+  React.useEffect(() => {
+    cargarLista();
+  }, [cargarLista]);
+  const abrirEPP = async alumnoId => {
+    setSelectedAlumnoId(alumnoId);
+    setLoadingDoc(true);
+    setGuardadoExito(false);
+    try {
+      const doc = await apiRequest(`/api/epp/${alumnoId}`);
+      setEppDoc(doc);
+    } catch (err) {
+      console.error("Error abriendo EPP:", err);
+      alert("Error abriendo informe EPP: " + err.message);
+    } finally {
+      setLoadingDoc(false);
+    }
+  };
+  const guardarEPP = async () => {
+    if (!eppDoc) return;
+    setGuardando(true);
+    setGuardadoExito(false);
+    try {
+      await apiRequest('/api/epp', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: eppDoc.id || `epp-${selectedAlumnoId}`,
+          alumno: selectedAlumnoId,
+          ciclo: eppDoc.ciclo || '2026-2027',
+          partes: eppDoc.partes || {}
+        })
+      });
+      setGuardadoExito(true);
+      setTimeout(() => setGuardadoExito(false), 3000);
+      cargarLista();
+    } catch (err) {
+      console.error("Error guardando EPP:", err);
+      alert("Error al guardar EPP: " + err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const mutarParte = (area, campo, valor) => {
+    setEppDoc(prev => {
+      if (!prev) return prev;
+      const partes = {
+        ...prev.partes
+      };
+      const areaObj = {
+        ...(partes[area] || {})
+      };
+      areaObj[campo] = valor;
+      partes[area] = areaObj;
+      return {
+        ...prev,
+        partes
+      };
+    });
+  };
+  const filtrados = listaEPP.filter(e => {
+    const nom = (e.nombre_alumno || e.alumno_nombre || '').toLowerCase();
+    const esc = (e.escuela || '').toLowerCase();
+    const q = busqueda.toLowerCase();
+    return nom.includes(q) || esc.includes(q) || (e.alumno_id || '').toLowerCase().includes(q);
+  });
+  const alumnoSeleccionadoInfo = alumnosList.find(a => a.id === selectedAlumnoId) || {};
+  if (selectedAlumnoId && eppDoc) {
+    const partes = eppDoc.partes || {};
+    const pAprendizaje = partes.Aprendizaje || partes.APRENDIZAJE || {};
+    const pPsicologia = partes.Psicología || partes.PSICOLOGIA || {};
+    const pComunicacion = partes.Comunicación || partes.COMUNICACION || {};
+    const pTrabajoSocial = partes['Trabajo Social'] || partes.TRABAJO_SOCIAL || {};
+    const pConclusion = partes.Conclusión || partes.CONCLUSION || {};
+    return /*#__PURE__*/React.createElement("div", {
+      className: "space-y-5"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center space-x-3"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setSelectedAlumnoId(null);
+        setEppDoc(null);
+      },
+      className: "px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition"
+    }, "\u2190 Volver a Lista EPP"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+      className: "text-lg font-bold text-slate-900"
+    }, alumnoSeleccionadoInfo.nombre_completo || eppDoc.nombre_alumno || selectedAlumnoId), /*#__PURE__*/React.createElement("div", {
+      className: "text-xs text-slate-500"
+    }, "Escuela: ", alumnoSeleccionadoInfo.escuela || 'USAER 2E', " \u2022 Ciclo: ", eppDoc.ciclo || '2026-2027', " \u2022 Revisi\xF3n: ", eppDoc.revision || 'Actual'))), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center space-x-2"
+    }, guardadoExito && /*#__PURE__*/React.createElement("span", {
+      className: "text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200"
+    }, "\u2713 Guardado confirmado"), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => descargarArchivoAutenticado(`/api/epp/${selectedAlumnoId}/pdf`, `EPP_${selectedAlumnoId}.pdf`),
+      className: "px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5 shadow-sm"
+    }, /*#__PURE__*/React.createElement("span", null, "Descargar PDF (Anexo XVII)"), /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCC4")), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: guardarEPP,
+      disabled: guardando,
+      className: "px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5 shadow"
+    }, /*#__PURE__*/React.createElement("span", null, guardando ? 'Guardando...' : '💾 Guardar EPP')))), /*#__PURE__*/React.createElement("div", {
+      className: "flex border-b border-slate-200 space-x-1 text-sm font-semibold overflow-x-auto"
+    }, [{
+      id: 'Aprendizaje',
+      label: '1. Área Pedagógica / Aprendizaje'
+    }, {
+      id: 'Psicología',
+      label: '2. Área de Psicología'
+    }, {
+      id: 'Comunicación',
+      label: '3. Área de Comunicación'
+    }, {
+      id: 'Trabajo Social',
+      label: '4. Área de Trabajo Social'
+    }, {
+      id: 'Conclusión',
+      label: '5. Conclusión, BAP y NEE'
+    }].map(tab => /*#__PURE__*/React.createElement("button", {
+      key: tab.id,
+      onClick: () => setActiveArea(tab.id),
+      className: `px-4 py-2.5 border-b-2 font-bold transition text-xs sm:text-sm whitespace-nowrap ${activeArea === tab.id ? 'border-amber-600 text-amber-700 bg-amber-50/50' : 'border-transparent text-slate-500 hover:text-slate-800'}`
+    }, tab.label))), activeArea === 'Aprendizaje' && /*#__PURE__*/React.createElement("div", {
+      className: "bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4"
+    }, /*#__PURE__*/React.createElement("h3", {
+      className: "text-sm font-bold text-slate-800 uppercase tracking-wide border-b border-slate-100 pb-2"
+    }, "Evaluaci\xF3n Pedag\xF3gica del Aprendizaje"), /*#__PURE__*/React.createElement("div", {
+      className: "grid grid-cols-1 md:grid-cols-2 gap-4 text-xs"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Estilo de Aprendizaje Predominante:"), /*#__PURE__*/React.createElement("input", {
+      type: "text",
+      value: pAprendizaje.estilo_aprendizaje || pAprendizaje['5.2. Estilo de aprendizaje'] || '',
+      onChange: e => mutarParte('Aprendizaje', 'estilo_aprendizaje', e.target.value),
+      placeholder: "ej. Visual y kinest\xE9sico, requiere apoyos gr\xE1ficos...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Nivel de Competencia Curricular:"), /*#__PURE__*/React.createElement("input", {
+      type: "text",
+      value: pAprendizaje.nivel_competencia_curricular || pAprendizaje['5.1. Competencia curricular'] || '',
+      onChange: e => mutarParte('Aprendizaje', 'nivel_competencia_curricular', e.target.value),
+      placeholder: "ej. Fase 3 / 2\xB0 Primaria en proceso...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    }))), /*#__PURE__*/React.createElement("div", {
+      className: "space-y-3 text-xs"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Lectura y Escritura Funcional:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pAprendizaje['4.1. Lectura y escritura funcional'] || '',
+      onChange: e => mutarParte('Aprendizaje', '4.1. Lectura y escritura funcional', e.target.value),
+      placeholder: "Nivel presil\xE1bico/sil\xE1bico, reconocimiento de graf\xEDas, segmentaci\xF3n...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Pensamiento Matem\xE1tico Funcional:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pAprendizaje['4.1. Matemáticas funcionales'] || '',
+      onChange: e => mutarParte('Aprendizaje', '4.1. Matemáticas funcionales', e.target.value),
+      placeholder: "Conteo oral, resoluci\xF3n de problemas con material concreto, correspondencia 1 a 1...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Conceptos Relativos al Dinero y Vida Diaria:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pAprendizaje['4.1. Conceptos relativos al dinero'] || '',
+      onChange: e => mutarParte('Aprendizaje', '4.1. Conceptos relativos al dinero', e.target.value),
+      placeholder: "Reconocimiento de monedas/billetes, uso aut\xF3nomo en transacciones b\xE1sicas...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Avances Observables y Desempe\xF1o en Aula:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "3",
+      value: pAprendizaje.avances_observables || '',
+      onChange: e => mutarParte('Aprendizaje', 'avances_observables', e.target.value),
+      placeholder: "Logros observables en el per\xEDodo de evaluaci\xF3n...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Apoyos y Ajustes Razonables Requeridos:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pAprendizaje.apoyos_requeridos || '',
+      onChange: e => mutarParte('Aprendizaje', 'apoyos_requeridos', e.target.value),
+      placeholder: "Ajustes DUA, temporales, materiales y espaciales...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })))), activeArea === 'Psicología' && /*#__PURE__*/React.createElement("div", {
+      className: "bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4"
+    }, /*#__PURE__*/React.createElement("h3", {
+      className: "text-sm font-bold text-slate-800 uppercase tracking-wide border-b border-slate-100 pb-2"
+    }, "Evaluaci\xF3n Psicol\xF3gica y Madurativa"), /*#__PURE__*/React.createElement("div", {
+      className: "space-y-3 text-xs"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Atenci\xF3n y Concentraci\xF3n:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pPsicologia['3.1. Atención'] || pPsicologia.atencion_y_memoria || '',
+      onChange: e => mutarParte('Psicología', '3.1. Atención', e.target.value),
+      placeholder: "Focalizaci\xF3n, sostenimiento, distractores visuales o auditivos...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Memoria y Procesamiento Cognitivo:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pPsicologia['3.2. Memoria'] || '',
+      onChange: e => mutarParte('Psicología', '3.2. Memoria', e.target.value),
+      placeholder: "Memoria inmediata auditivo-verbal, retenci\xF3n secuencial...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Percepci\xF3n Visomotora e Integraci\xF3n (Bender / Koppitz / Frostig):"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pPsicologia['3.3. Percepción'] || '',
+      onChange: e => mutarParte('Psicología', '3.3. Percepción', e.target.value),
+      placeholder: "Edad visomotora equivalente, indicadores neurol\xF3gicos o de madurez...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Desarrollo Socioemocional, Autoestima y Conducta:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pPsicologia.desarrollo_emocional || pPsicologia['4.2. Autoestima'] || '',
+      onChange: e => mutarParte('Psicología', 'desarrollo_emocional', e.target.value),
+      placeholder: "Autorregulaci\xF3n, interacci\xF3n con pares y figuras de autoridad...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Recomendaciones y Estrategias Espec\xEDficas:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pPsicologia.recomendaciones || '',
+      onChange: e => mutarParte('Psicología', 'recomendaciones', e.target.value),
+      placeholder: "Pautas psicol\xF3gicas para el docente regular y la familia...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })))), activeArea === 'Comunicación' && /*#__PURE__*/React.createElement("div", {
+      className: "bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4"
+    }, /*#__PURE__*/React.createElement("h3", {
+      className: "text-sm font-bold text-slate-800 uppercase tracking-wide border-b border-slate-100 pb-2"
+    }, "Evaluaci\xF3n de la Comunicaci\xF3n y el Lenguaje"), /*#__PURE__*/React.createElement("div", {
+      className: "space-y-3 text-xs"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Comprensi\xF3n Receptiva y Seguimiento de Instrucciones:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pComunicacion['4.1. Comprensión receptiva'] || pComunicacion.lenguaje_comprensivo || '',
+      onChange: e => mutarParte('Comunicación', '4.1. Comprensión receptiva', e.target.value),
+      placeholder: "Comprensi\xF3n en interacci\xF3n social y seguimiento de consignas acad\xE9micas...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Expresi\xF3n Oral y Articulaci\xF3n Fonol\xF3gica:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pComunicacion['4.1. Comprensión expresiva'] || pComunicacion['4.1. Lenguaje oral: fonológico'] || pComunicacion.lenguaje_expresivo || '',
+      onChange: e => mutarParte('Comunicación', '4.1. Comprensión expresiva', e.target.value),
+      placeholder: "Articulaci\xF3n, repertorio l\xE9xico, estructuraci\xF3n sint\xE1ctica...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Pragm\xE1tica e Intenci\xF3n Comunicativa:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pComunicacion['4.1. Lenguaje oral: pragmático'] || pComunicacion['4.1. Comunicación y lenguaje: intención comunicativa'] || '',
+      onChange: e => mutarParte('Comunicación', '4.1. Lenguaje oral: pragmático', e.target.value),
+      placeholder: "Contacto visual, turnos de habla, adaptaci\xF3n al contexto escolar...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Recomendaciones y Estrategias Comunicativas:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pComunicacion.recomendaciones || '',
+      onChange: e => mutarParte('Comunicación', 'recomendaciones', e.target.value),
+      placeholder: "Estrategias de modelado, apoyos visuales, sistemas aumentativos si aplica...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })))), activeArea === 'Trabajo Social' && /*#__PURE__*/React.createElement("div", {
+      className: "bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4"
+    }, /*#__PURE__*/React.createElement("h3", {
+      className: "text-sm font-bold text-slate-800 uppercase tracking-wide border-b border-slate-100 pb-2"
+    }, "Estudio y Contexto Sociofamiliar"), /*#__PURE__*/React.createElement("div", {
+      className: "space-y-3 text-xs"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Din\xE1mica Familiar y Cuidadores Principales:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pTrabajoSocial.dinamica_familiar || pTrabajoSocial['6.2. Contexto familiar'] || '',
+      onChange: e => mutarParte('Trabajo Social', 'dinamica_familiar', e.target.value),
+      placeholder: "Composici\xF3n del hogar, roles parentales, pautas de crianza...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Antecedentes de Embarazo, Parto y Salud Temprana:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pTrabajoSocial['2.1. Embarazo'] || pTrabajoSocial['2.2. Parto'] || pTrabajoSocial['2.4. Salud'] || '',
+      onChange: e => mutarParte('Trabajo Social', '2.1. Embarazo', e.target.value),
+      placeholder: "Gestaci\xF3n, complicaciones pre/perinatales, antecedentes m\xE9dicos...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Autonom\xEDa en el Hogar y Utilizaci\xF3n de la Comunidad:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pTrabajoSocial['4.3. Autocuidado'] || pTrabajoSocial['4.3. Actividades en la casa'] || pTrabajoSocial['4.3. Utilización de la comunidad'] || '',
+      onChange: e => mutarParte('Trabajo Social', '4.3. Autocuidado', e.target.value),
+      placeholder: "Higiene personal, responsabilidades en casa, desenvolvimiento en el entorno...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "Acuerdos y Compromisos de la Familia:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pTrabajoSocial.acuerdos_casa || '',
+      onChange: e => mutarParte('Trabajo Social', 'acuerdos_casa', e.target.value),
+      placeholder: "Compromisos asumidos por los tutores para el seguimiento escolar...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })))), activeArea === 'Conclusión' && /*#__PURE__*/React.createElement("div", {
+      className: "bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4"
+    }, /*#__PURE__*/React.createElement("h3", {
+      className: "text-sm font-bold text-slate-800 uppercase tracking-wide border-b border-slate-100 pb-2"
+    }, "S\xEDntesis Interdisciplinaria, BAP y NEE Oficiales"), /*#__PURE__*/React.createElement("div", {
+      className: "space-y-3 text-xs"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "S\xEDntesis Diagn\xF3stica Integral (7.1):"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "3",
+      value: pConclusion.sintesis || pConclusion['7.1. Conclusión'] || '',
+      onChange: e => mutarParte('Conclusión', 'sintesis', e.target.value),
+      placeholder: "Conclusi\xF3n diagn\xF3stica consensuada por el equipo interdisciplinario...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "font-bold text-slate-700 block mb-1"
+    }, "\xC9nfasis de Atenci\xF3n y Apoyos Acordados:"), /*#__PURE__*/React.createElement("textarea", {
+      rows: "2",
+      value: pConclusion['Énfasis de atención acordado'] || pConclusion['Acuerdos y apoyos del equipo'] || '',
+      onChange: e => mutarParte('Conclusión', 'Énfasis de atención acordado', e.target.value),
+      placeholder: "Prioridades de intervenci\xF3n y acuerdos entre USAER y Escuela Regular...",
+      className: "w-full p-2 border border-slate-200 rounded-lg text-slate-800 focus:border-amber-500"
+    })))));
+  }
   return /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col sm:flex-row sm:items-center justify-between gap-3"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center space-x-3"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onBack,
     className: "text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition"
-  }, "\u2190 Volver"), /*#__PURE__*/React.createElement("h1", {
+  }, "\u2190 Volver"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
     className: "text-2xl font-bold tracking-tight text-slate-900"
-  }, "Evaluaci\xF3n Psicopedag\xF3gica (EPP)")), /*#__PURE__*/React.createElement("div", {
-    className: "grid gap-4"
-  }, listaEPP.map(epp => /*#__PURE__*/React.createElement("div", {
-    key: epp.id,
-    className: "p-4 bg-white rounded-xl border border-slate-200 space-y-3"
+  }, "Evaluaci\xF3n Psicopedag\xF3gica (EPP)"), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-500"
+  }, "Gesti\xF3n de informes cl\xEDnicos y pedag\xF3gicos oficiales (Anexos XVII y XVIII)"))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-xs bg-amber-50 text-amber-800 font-bold px-3 py-1 rounded-full border border-amber-200"
+  }, filtrados.length, " Evaluaciones Disponibles"))), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col sm:flex-row gap-3"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "Buscar evaluaci\xF3n por nombre de alumno, escuela o ID...",
+    value: busqueda,
+    onChange: e => setBusqueda(e.target.value),
+    className: "flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 shadow-sm"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("select", {
+    onChange: e => {
+      if (e.target.value) abrirEPP(e.target.value);
+    },
+    className: "px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow",
+    defaultValue: ""
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "",
+    disabled: true
+  }, "+ Abrir / Evaluar Alumno..."), alumnosList.map(a => /*#__PURE__*/React.createElement("option", {
+    key: a.id,
+    value: a.id
+  }, a.nombre_completo, " (", a.escuela || 'USAER', ")"))))), loading ? /*#__PURE__*/React.createElement("div", {
+    className: "text-center py-20 bg-white rounded-xl border border-slate-200"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "flex justify-between items-center"
+    className: "inline-block animate-spin text-amber-600 text-3xl mb-3"
+  }, "\u25C8"), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-600 text-sm font-medium"
+  }, "Cargando evaluaciones psicopedag\xF3gicas...")) : /*#__PURE__*/React.createElement("div", {
+    className: "grid gap-4"
+  }, filtrados.map(epp => /*#__PURE__*/React.createElement("div", {
+    key: epp.id,
+    className: "p-4 bg-white rounded-xl border border-slate-200 space-y-3 shadow-sm hover:border-amber-300 transition"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col sm:flex-row sm:items-center justify-between gap-2"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
     className: "font-bold text-slate-900 text-base"
-  }, epp.alumno_nombre), /*#__PURE__*/React.createElement("div", {
+  }, epp.nombre_alumno || epp.alumno_nombre || epp.alumno_id || epp.id), /*#__PURE__*/React.createElement("div", {
     className: "text-xs text-slate-500"
-  }, "ID: ", epp.alumno_id, " \u2022 Ciclo: ", epp.ciclo, " \u2022 Revisi\xF3n: ", epp.revision)), /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenAlumno(epp.alumno_id),
-    className: "text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 transition"
-  }, "Ver Expediente Completo \u2192")), /*#__PURE__*/React.createElement("div", {
-    className: "grid grid-cols-1 md:grid-cols-4 gap-2 pt-2 text-xs"
-  }, ['Aprendizaje', 'Psicología', 'Comunicación', 'Trabajo Social'].map(area => /*#__PURE__*/React.createElement("div", {
-    key: area,
-    className: "p-2.5 bg-slate-50 rounded-lg border border-slate-200"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "font-bold text-slate-700"
-  }, area), /*#__PURE__*/React.createElement("div", {
-    className: "text-[11px] text-emerald-700 mt-1"
-  }, "\u2713 Registro completado"))))))));
+  }, "ID: ", /*#__PURE__*/React.createElement("span", {
+    className: "font-mono font-bold text-slate-700"
+  }, epp.alumno_id || epp.id), " \u2022 Escuela: ", epp.escuela || 'Primaria', " \u2022 Ciclo: ", epp.ciclo || '2026-2027', " \u2022 Revisi\xF3n: ", epp.revision || 'Actual')), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => descargarArchivoAutenticado(`/api/epp/${epp.alumno_id || epp.id}/pdf`, `EPP_${epp.alumno_id || epp.id}.pdf`),
+    className: "text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg border border-slate-200 transition flex items-center space-x-1"
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCC4 PDF")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => abrirEPP(epp.alumno_id || epp.id),
+    className: "text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 px-3 py-1.5 rounded-lg shadow transition flex items-center space-x-1"
+  }, /*#__PURE__*/React.createElement("span", null, "Editar EPP Viva \u2192")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenAlumno(epp.alumno_id || epp.id),
+    className: "text-xs font-semibold text-slate-500 hover:text-slate-800 px-2 py-1.5 transition"
+  }, "Expediente"))), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 text-xs"
+  }, ['Aprendizaje', 'Psicología', 'Comunicación', 'Trabajo Social'].map(area => {
+    const tieneDatos = Array.isArray(epp.areas_registradas) && (epp.areas_registradas.includes(area) || epp.areas_registradas.includes(area.toUpperCase()));
+    return /*#__PURE__*/React.createElement("div", {
+      key: area,
+      className: `p-2.5 rounded-lg border ${tieneDatos ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-500'}`
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "font-bold flex items-center justify-between"
+    }, /*#__PURE__*/React.createElement("span", null, area), /*#__PURE__*/React.createElement("span", null, tieneDatos ? '✓' : '•')), /*#__PURE__*/React.createElement("div", {
+      className: "text-[11px] mt-0.5"
+    }, tieneDatos ? 'Evaluación registrada' : 'Pendiente de captura'));
+  }))))));
 }
 
 // =============================================================

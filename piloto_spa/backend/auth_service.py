@@ -18,7 +18,7 @@ import secrets
 import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
-from fastapi import HTTPException, Header, status
+from fastapi import HTTPException, Header, Query, status
 
 from data.sql_repository import usuarios_sql
 
@@ -309,16 +309,25 @@ def emitir_token_sesion(user: SessionUser) -> str:
     }
     return token
 
-def validar_token_sesion(authorization: Optional[str] = Header(None)) -> SessionUser:
-    """Dependencia de FastAPI para validar el token Bearer. Rechaza cualquier intento anónimo."""
-    if not authorization:
+def validar_token_sesion(
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+) -> SessionUser:
+    """Dependencia de FastAPI para validar el token Bearer o por query param. Rechaza cualquier intento anónimo."""
+    token_str = None
+    if authorization:
+        partes = authorization.split()
+        token_str = partes[1] if len(partes) == 2 and partes[0].lower() == "bearer" else authorization.strip()
+    elif token:
+        token_str = token.strip()
+
+    if not token_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Autenticación requerida. Token no proporcionado."
         )
 
-    partes = authorization.split()
-    token = partes[1] if len(partes) == 2 and partes[0].lower() == "bearer" else authorization.strip()
+    token = token_str
 
     if token == "token_oficial_edgar_director_2026":
         return SessionUser(

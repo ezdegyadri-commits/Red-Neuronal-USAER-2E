@@ -850,11 +850,17 @@ def delete_planeacion_sql(id_planeacion: str) -> bool:
 
 
 def epp_listar_sql(ids_alumnos: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-    """Consulta indexada ultrarrápida de informes EPP filtrados por los alumnos autorizados."""
+    """Consulta indexada ultrarrápida de informes EPP filtrados por los alumnos autorizados (tolerante a prefijo epp-)."""
     with get_session() as session:
         query = session.query(EPPDoc)
         if ids_alumnos is not None:
-            query = query.filter(EPPDoc.alumno.in_([str(a).strip() for a in ids_alumnos]))
+            ids_limpios = [str(a).strip() for a in ids_alumnos if str(a).strip()]
+            candidatos_ids = set(ids_limpios)
+            for a in ids_limpios:
+                candidatos_ids.add(f"epp-{a}")
+                if a.startswith("epp-"):
+                    candidatos_ids.add(a[4:])
+            query = query.filter((EPPDoc.alumno.in_(list(candidatos_ids))) | (EPPDoc.id.in_(list(candidatos_ids))))
         records = query.order_by(EPPDoc.actualizado_en.desc()).all()
         docs = []
         for r in records:

@@ -753,9 +753,12 @@ def listar_epp_autorizados(
             k for k in ("Aprendizaje", "Psicología", "Comunicación", "Trabajo Social", "Conclusión", "APRENDIZAJE", "PSICOLOGIA", "COMUNICACION", "TRABAJO_SOCIAL")
             if partes.get(k)
         ]
+        nom = al.get("nombre_completo", aid)
         out.append({
             **d,
-            "nombre_alumno": al.get("nombre_completo", aid),
+            "nombre_alumno": nom,
+            "alumno_nombre": nom,
+            "alumno_id": aid,
             "escuela": al.get("escuela", ""),
             "grado": al.get("grado", ""),
             "grupo": al.get("grupo", ""),
@@ -879,15 +882,32 @@ def obtener_epp_documento(alumno_id: str, ciclo: str = "2026-2027") -> Dict[str,
 
 
 def guardar_epp_documento(doc_payload: Dict[str, Any], autor_cuenta: str) -> Dict[str, Any]:
-    """Persiste el informe EPP con hash de revisión atómico en la BD."""
+    """Persiste el informe EPP con hash de revisión atómico en la BD fusionando áreas sin pérdida."""
+    eid = str(doc_payload.get("id") or f"epp-{doc_payload.get('alumno')}")
+    alumno_id = str(doc_payload.get("alumno", ""))
+
+    # Cargar existente para no sobreescribir áreas de otros especialistas
+    docs_existentes = epp_listar_sql([alumno_id])
+    existente = next((d for d in docs_existentes if d.get("id") == eid or d.get("alumno") == alumno_id), None)
+
+    nuevas_partes = dict(doc_payload.get("partes") or {})
+    if existente and existente.get("partes"):
+        partes_fusionadas = dict(existente.get("partes"))
+        for k, v in nuevas_partes.items():
+            if isinstance(v, dict) and isinstance(partes_fusionadas.get(k), dict):
+                partes_fusionadas[k] = {**partes_fusionadas[k], **v}
+            else:
+                partes_fusionadas[k] = v
+        doc_payload["partes"] = partes_fusionadas
+
     doc_payload["revision"] = f"rev-epp-{uuid.uuid4().hex[:6]}"
     doc_payload["fecha"] = time.strftime("%Y-%m-%d %H:%M:%S")
     guardar_epp_sql(doc_payload)
     return {
         "status": "success",
-        "id": doc_payload["id"],
+        "id": eid,
         "revision": doc_payload["revision"],
-        "mensaje": "Evaluación Psicopedagógica guardada correctamente en base relacional.",
+        "mensaje": "Evaluación Psicopedagógica guardada correctamente en base relacional sin pérdida de áreas.",
     }
 
 
@@ -1036,6 +1056,72 @@ def obtener_planeacion_con_firmas(doc_id: str, usuario_cuenta: str) -> Dict[str,
     elif not tablas.get("nee") and tablas.get("Tabla principal"):
         tablas["nee"] = tablas["Tabla principal"]
 
+    # Extraer nombre por omisión del alumno si el documento lo tiene
+    nombre_alumno_doc = ""
+    alumnos_doc = datos.get("Alumnos") or []
+    if isinstance(alumnos_doc, list) and len(alumnos_doc) > 0 and isinstance(alumnos_doc[0], dict):
+        nombre_alumno_doc = alumnos_doc[0].get("Nombre del alumno") or alumnos_doc[0].get("Nombre_Completo") or alumnos_doc[0].get("nombre") or ""
+
+    # Normalizar filas de nee y aprendizajes en ambas direcciones
+    filas_nee = tablas.get("nee") or tablas.get("aprendizajes") or []
+    filas_norm = []
+    for r in filas_nee:
+        if not isinstance(r, dict):
+            continue
+        row = dict(r)
+        pda = row.get("Aprendizaje y/u objetivo") or row.get("pda") or ""
+        descriptor = row.get("Descriptor de logro") or row.get("descriptor") or row.get("Descriptor Observable") or ""
+        barreras = row.get("Necesidades educativas específicas") or row.get("barreras_o_necesidades") or row.get("barreras") or ""
+        apoyos = row.get("Apoyos y Ajustes") or row.get("apoyos") or row.get("Apoyos o ajustes") or ""
+        alu = row.get("Alumno") or row.get("alumno") or nombre_alumno_doc
+
+        row["Aprendizaje y/u objetivo"] = pda
+        row["pda"] = pda
+        row["Descriptor de logro"] = descriptor
+        row["descriptor"] = descriptor
+        row["Necesidades educativas específicas"] = barreras
+        row["barreras_o_necesidades"] = barreras
+        row["Apoyos y Ajustes"] = apoyos
+        row["apoyos"] = apoyos
+        row["Alumno"] = alu
+        row["alumno"] = alu
+        filas_norm.append(row)
+
+    tablas["nee"] = filas_norm
+    tablas["aprendizajes"] = filas_norm
+
+    # Normalizar filas de dosificación
+    filas_dosi = tablas.get("dosificacion") or []
+    dosi_norm = []
+    for r in filas_dosi:
+        if not isinstance(r, dict):
+            continue
+        row = dict(r)
+        temp = row.get("Temporalidad") or row.get("temporalidad") or ""
+        act = row.get("Actividades") or row.get("actividades") or ""
+        ctx = row.get("Contextos") or row.get("contextos") or ""
+        rec = row.get("Recursos") or row.get("recursos") or ""
+
+        row["Temporalidad"] = temp
+        row["temporalidad"] = temp
+        row["Actividades"] = act
+        row["actividades"] = act
+        row["Contextos"] = ctx
+        row["contextos"] = ctx
+        row["Recursos"] = rec
+        row["recursos"] = rec
+        dosi_norm.append(row)
+
+    tablas["dosificacion"] = dosi_norm
+
+    # Asignar título claro por defecto si estaba vacío
+    meta = doc.setdefault("metadatos", {})
+    if not meta.get("titulo"):
+        esc = datos.get("Escuela") or "Primaria"
+        esp = datos.get("Docente_Especialista") or "Especialista USAER"
+        mes = datos.get("Mes") or datos.get("Periodo") or "Ciclo 2026-2027"
+        meta["titulo"] = f"Planeación {doc.get('formato', 'XXIII')} - {esc} - {esp} ({mes})"
+
     firmas = resolver_firmas_planeacion(doc)
     doc["firmas_resueltas"] = firmas
     return doc
@@ -1116,12 +1202,58 @@ def guardar_planeacion_transaccional(
 
     merged["metadatos"] = meta_merged
 
-    # Sincronizar tablas para compatibilidad total con Streamlit
+    # Sincronizar tablas para compatibilidad total con Streamlit y ReportLab PDF
     tablas = merged.setdefault("tablas", {})
-    if "nee" in tablas and "aprendizajes" not in tablas:
-        tablas["aprendizajes"] = tablas["nee"]
-    elif "aprendizajes" in tablas and "nee" not in tablas:
-        tablas["nee"] = tablas["aprendizajes"]
+    filas_guardar = tablas.get("nee") or tablas.get("aprendizajes") or []
+    filas_g_norm = []
+    for r in filas_guardar:
+        if not isinstance(r, dict):
+            continue
+        row = dict(r)
+        pda = row.get("Aprendizaje y/u objetivo") or row.get("pda") or ""
+        descriptor = row.get("Descriptor de logro") or row.get("descriptor") or row.get("Descriptor Observable") or ""
+        barreras = row.get("Necesidades educativas específicas") or row.get("barreras_o_necesidades") or row.get("barreras") or ""
+        apoyos = row.get("Apoyos y Ajustes") or row.get("apoyos") or row.get("Apoyos o ajustes") or ""
+        alu = row.get("Alumno") or row.get("alumno") or ""
+
+        row["Aprendizaje y/u objetivo"] = pda
+        row["pda"] = pda
+        row["Descriptor de logro"] = descriptor
+        row["descriptor"] = descriptor
+        row["Necesidades educativas específicas"] = barreras
+        row["barreras_o_necesidades"] = barreras
+        row["Apoyos y Ajustes"] = apoyos
+        row["apoyos"] = apoyos
+        row["Alumno"] = alu
+        row["alumno"] = alu
+        filas_g_norm.append(row)
+
+    tablas["nee"] = filas_g_norm
+    tablas["aprendizajes"] = filas_g_norm
+
+    # Sincronizar dosificación
+    filas_d = tablas.get("dosificacion") or []
+    d_norm = []
+    for r in filas_d:
+        if not isinstance(r, dict):
+            continue
+        row = dict(r)
+        temp = row.get("Temporalidad") or row.get("temporalidad") or ""
+        act = row.get("Actividades") or row.get("actividades") or ""
+        ctx = row.get("Contextos") or row.get("contextos") or ""
+        rec = row.get("Recursos") or row.get("recursos") or ""
+
+        row["Temporalidad"] = temp
+        row["temporalidad"] = temp
+        row["Actividades"] = act
+        row["actividades"] = act
+        row["Contextos"] = ctx
+        row["contextos"] = ctx
+        row["Recursos"] = rec
+        row["recursos"] = rec
+        d_norm.append(row)
+
+    tablas["dosificacion"] = d_norm
 
     # Sincronizar textos para compatibilidad con el reporte PDF y Streamlit
     textos = merged.setdefault("textos", {})

@@ -994,6 +994,29 @@ def guardar_epp(payload: EPPPayload, user: SessionUser = Depends(validar_token_s
     return guardar_epp_documento(payload.model_dump(), autor_cuenta=user.usuario)
 
 
+@app.get("/api/epp/{alumno_id}/pdf")
+def descargar_epp_pdf(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    _verificar_acceso_alumno(alumno_id, user)
+    doc_epp = obtener_epp_documento(alumno_id)
+    alumno_info = next((a for a in obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas, user.nombre) if a.get("id") == alumno_id), None)
+    if not alumno_info:
+        from data.sql_repository import padron_alumnos_sql
+        alumnos_todos = padron_alumnos_sql()
+        alumno_info = next((a for a in alumnos_todos if a.get("id") == alumno_id), {"id": alumno_id, "nombre_completo": alumno_id, "Nombre_Escuela": "USAER 02E"})
+    try:
+        from documents.epp import generar_pdf as generar_pdf_epp
+        pdf_bytes = generar_pdf_epp(doc_epp, alumno_info)
+        content_val = pdf_bytes.getvalue() if hasattr(pdf_bytes, "getvalue") else pdf_bytes
+        return Response(
+            content=content_val,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="EPP_{alumno_id}.pdf"'},
+        )
+    except Exception as e:
+        logger.error(f"Error generando PDF de EPP para {alumno_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generando PDF de EPP: {str(e)}")
+
+
 # -------------------------------------------------------------
 # 5. PLANEACIÓN PEDAGÓGICA (FORMATOS XXI, XXIII, XXV, XIX, XX)
 # -------------------------------------------------------------
