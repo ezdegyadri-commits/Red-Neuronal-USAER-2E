@@ -34,7 +34,12 @@ def usar_sql() -> bool:
 
 
 def read(name): return df_sheet(name)
-@st.cache_data(ttl=10, show_spinner=False)
+# Rendimiento: antes ttl=10, así que casi cada interacción volvía a descargar
+# la hoja Alumnos completa de Google Sheets y a reordenar/deduplicar el padrón.
+# Se iguala a read_sheet (ttl=300). Las escrituras siguen invalidando el
+# caché con clear_alumnos_cache()/clear_cache('Alumnos'), así que un alta o
+# una edición se ve de inmediato sin esperar al TTL.
+@st.cache_data(ttl=300, show_spinner=False)
 def _alumnos_operativos():
  """Lee solo la base interna vigente y omite columnas duplicadas heredadas."""
  frame = read('Alumnos')
