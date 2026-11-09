@@ -94,7 +94,7 @@ for b_dir in backend_dirs:
 descargar("main.py", Path("/home/uppcoder/app/main.py"))
 for doc_name in ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py"]:
     descargar(f"documents/{doc_name}", Path(f"/home/uppcoder/app/documents/{doc_name}"))
-for img_dir in [Path("/home/uppcoder/app"), Path("/home/uppcoder/app/usaer2e")]:
+for img_dir in [Path("/home/uppcoder/app"), Path("/home/uppcoder/app/usaer2e"), Path("/home/uppcoder/app/usaer2e/piloto_spa/backend")]:
     descargar("encabezado.png", img_dir / "encabezado.png")
     descargar("pie_pagina.png", img_dir / "pie_pagina.png")
     descargar("Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx", img_dir / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx")

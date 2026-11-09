@@ -422,17 +422,16 @@ def auto_actualizar_servidor(user: SessionUser = Depends(validar_token_sesion)):
     if not user.director:
         raise HTTPException(status_code=403, detail="Acceso reservado exclusivamente a Dirección.")
     
-    script_path = Path(__file__).resolve().parents[2] / "tools" / "actualizar_uppcoder.py"
+    script_path = Path("/home/uppcoder/app/tools/actualizar_uppcoder.py")
+    try:
+        import urllib.request
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        url_upd = f"https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USAER-2E/piloto-spa/tools/actualizar_uppcoder.py?v={int(time.time())}"
+        urllib.request.urlretrieve(url_upd, str(script_path))
+    except Exception as dl_err:
+        logging.getLogger("uvicorn").warning("No se pudo actualizar actualizar_uppcoder.py: %s", dl_err)
     if not script_path.exists():
-        script_path = Path("/home/uppcoder/app/tools/actualizar_uppcoder.py")
-    if not script_path.exists():
-        try:
-            import urllib.request
-            script_path.parent.mkdir(parents=True, exist_ok=True)
-            url_upd = f"https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USAER-2E/piloto-spa/tools/actualizar_uppcoder.py?v={int(time.time())}"
-            urllib.request.urlretrieve(url_upd, str(script_path))
-        except Exception as dl_err:
-            logging.getLogger("uvicorn").warning("No se pudo descargar actualizar_uppcoder.py: %s", dl_err)
+        script_path = Path(__file__).resolve().parents[2] / "tools" / "actualizar_uppcoder.py"
     
     import subprocess
     try:
@@ -1552,6 +1551,7 @@ def descargar_concentrado():
         Path(ROOT_DIR) / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx",
         Path("/home/uppcoder/app/Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx"),
         Path("/home/uppcoder/app/usaer2e/Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx"),
+        Path(__file__).resolve().parent / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx",
     ]:
         if p.exists():
             return FileResponse(
