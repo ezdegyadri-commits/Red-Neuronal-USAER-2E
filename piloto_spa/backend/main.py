@@ -425,6 +425,14 @@ def auto_actualizar_servidor(user: SessionUser = Depends(validar_token_sesion)):
     script_path = Path(__file__).resolve().parents[2] / "tools" / "actualizar_uppcoder.py"
     if not script_path.exists():
         script_path = Path("/home/uppcoder/app/tools/actualizar_uppcoder.py")
+    if not script_path.exists():
+        try:
+            import urllib.request
+            script_path.parent.mkdir(parents=True, exist_ok=True)
+            url_upd = f"https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USAER-2E/piloto-spa/tools/actualizar_uppcoder.py?v={int(time.time())}"
+            urllib.request.urlretrieve(url_upd, str(script_path))
+        except Exception as dl_err:
+            logging.getLogger("uvicorn").warning("No se pudo descargar actualizar_uppcoder.py: %s", dl_err)
     
     import subprocess
     try:
