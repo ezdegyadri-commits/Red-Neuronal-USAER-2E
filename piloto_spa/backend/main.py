@@ -1732,7 +1732,7 @@ def listar_actas_alias(escuela: Optional[str] = None, user: SessionUser = Depend
 def panel_direccion_resumen(user: SessionUser = Depends(validar_token_sesion)):
     if not user.director:
         raise HTTPException(status_code=403, detail="Acceso reservado exclusivamente a Dirección.")
-    return estado_general_bd(user=user)
+    return estado_base_datos()
 
 
 @app.get("/api/admin/padron-excel")
@@ -1787,8 +1787,8 @@ def guardar_observaciones_planeacion_endpoint(
 ):
     if not user.director:
         raise HTTPException(status_code=403, detail="Acceso reservado exclusivamente a Dirección.")
+    from data.database import get_session, PlaneacionDoc
     with get_session() as session:
-        from data.database import PlaneacionDoc
         p = session.query(PlaneacionDoc).filter_by(id=doc_id).first()
         if not p:
             raise HTTPException(status_code=404, detail="Planeación no encontrada.")
