@@ -5,6 +5,7 @@ Sustituye la latencia de Google Sheets con operaciones SQL indexadas y transacci
 from datetime import datetime, timezone
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import uuid
 
