@@ -97,8 +97,9 @@ def favicon_root():
 @app.get("/api/diag")
 def diag():
     try:
-        import os
-        from data.database import get_session, Usuario, Alumno, Escuela
+        import os, inspect
+        import piloto_spa.backend.main as pbm
+        src_panel = inspect.getsource(pbm.panel_direccion_resumen) if hasattr(pbm, "panel_direccion_resumen") else "NO_EXISTE"
         xlsx_cands = [
             str(Path(p) / "Concentrado_Revision_Planificaciones_USAER_02E_2026_2027.xlsx")
             for p in ["/home/uppcoder/app", "/home/uppcoder/app/usaer2e", "/home/uppcoder/app/usaer2e/piloto_spa/backend", str(Path(__file__).resolve().parent)]
@@ -107,6 +108,7 @@ def diag():
         with get_session() as s:
             return {
                 "status": "OK",
+                "src_panel": src_panel,
                 "startup_error": STARTUP_ERROR,
                 "usuarios": s.query(Usuario).count(),
                 "alumnos": s.query(Alumno).count(),
