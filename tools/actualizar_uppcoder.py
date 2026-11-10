@@ -62,7 +62,7 @@ doc_dirs = [
     Path("/home/uppcoder/app/documents"),
     Path("/home/uppcoder/app/usaer2e/documents"),
 ]
-doc_files = ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py"]
+doc_files = ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py", "reportes.py"]
 for d_dir in doc_dirs:
     for doc_name in doc_files:
         descargar(f"documents/{doc_name}", d_dir / doc_name)
@@ -87,12 +87,12 @@ for b_dir in backend_dirs:
     descargar("services/planeacion_huella.py", rel_svc_dir / "planeacion_huella.py")
     descargar("services/planeacion_edicion.py", rel_svc_dir / "planeacion_edicion.py")
     rel_doc_dir = b_dir.parent.parent / "documents"
-    for doc_name in ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py"]:
+    for doc_name in ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py", "reportes.py"]:
         descargar(f"documents/{doc_name}", rel_doc_dir / doc_name)
 
 # 2. Actualizar root main.py, recursos institucionales, documentos y estaticos en /home/uppcoder/app
 descargar("main.py", Path("/home/uppcoder/app/main.py"))
-for doc_name in ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py"]:
+for doc_name in ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py", "reportes.py"]:
     descargar(f"documents/{doc_name}", Path(f"/home/uppcoder/app/documents/{doc_name}"))
 for img_dir in [Path("/home/uppcoder/app"), Path("/home/uppcoder/app/usaer2e"), Path("/home/uppcoder/app/usaer2e/piloto_spa/backend")]:
     descargar("encabezado.png", img_dir / "encabezado.png")

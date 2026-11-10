@@ -1714,11 +1714,87 @@ def actualizar_tramite_endpoint(tramite_id: str, payload: Dict[str, Any], user: 
     coleccion_guardar_sql("tramites", tramite_id, doc, cuenta=user.usuario, fecha=doc.get("fecha"))
     return {"status": "success", "id": tramite_id, "tramite": doc}
 
-# 9. ESTADÍSTICAS INSTITUCIONALES ZONA 001
+# 9. ESTADÍSTICAS INSTITUCIONALES ZONA 001, PANEL DE DIRECCIÓN Y REPORTES
 # -------------------------------------------------------------
 @app.get("/api/estadisticas/zona")
+@app.get("/api/estadisticas")
 def estadisticas_zona(user: SessionUser = Depends(validar_token_sesion)):
     return obtener_estadisticas_zona(user.rol, user.escuelas_permitidas, user.nombre)
+
+
+@app.get("/api/actas")
+def listar_actas_alias(escuela: Optional[str] = None, user: SessionUser = Depends(validar_token_sesion)):
+    return listar_visitas(escuela=escuela, user=user)
+
+
+@app.get("/api/panel-direccion")
+@app.get("/api/admin/panel-resumen")
+def panel_direccion_resumen(user: SessionUser = Depends(validar_token_sesion)):
+    if not user.director:
+        raise HTTPException(status_code=403, detail="Acceso reservado exclusivamente a Dirección.")
+    return estado_general_bd(user=user)
+
+
+@app.get("/api/admin/padron-excel")
+def descargar_padron_excel(user: SessionUser = Depends(validar_token_sesion)):
+    if not user.director:
+        raise HTTPException(status_code=403, detail="Acceso reservado a Dirección.")
+    try:
+        from data.sql_repository import alumnos_sql, escuelas_sql
+        from documents.reportes import generar_padron_usaer
+        al = alumnos_sql()
+        esc = escuelas_sql()
+        excel_bytes = generar_padron_usaer(al, esc)
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="Padron_USAER_02E_2026_2027.xlsx"'},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error generando padrón oficial: {exc}")
+
+
+@app.get("/api/admin/personal-excel")
+def descargar_personal_excel(user: SessionUser = Depends(validar_token_sesion)):
+    if not user.director:
+        raise HTTPException(status_code=403, detail="Acceso reservado a Dirección.")
+    try:
+        from data.sql_repository import personal_sql, escuelas_sql, alumnos_sql, asignaciones_sql
+        from documents.reportes import generar_formato_personal
+        p = personal_sql()
+        esc = escuelas_sql()
+        al = alumnos_sql()
+        asig = asignaciones_sql()
+        excel_bytes = generar_formato_personal(p, esc, al, asig)
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="Personal_USAER_02E_2026_2027.xlsx"'},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error generando formato de personal: {exc}")
+
+
+class ObservacionesDirectorPayload(BaseModel):
+    observaciones: str
+
+
+@app.post("/api/planeaciones/{doc_id}/observaciones")
+def guardar_observaciones_planeacion_endpoint(
+    doc_id: str,
+    payload: ObservacionesDirectorPayload,
+    user: SessionUser = Depends(validar_token_sesion),
+):
+    if not user.director:
+        raise HTTPException(status_code=403, detail="Acceso reservado exclusivamente a Dirección.")
+    with get_session() as session:
+        from data.database import PlaneacionDoc
+        p = session.query(PlaneacionDoc).filter_by(id=doc_id).first()
+        if not p:
+            raise HTTPException(status_code=404, detail="Planeación no encontrada.")
+        p.observaciones_director = payload.observaciones.strip()
+        session.commit()
+    return {"status": "success", "id": doc_id, "observaciones_director": payload.observaciones.strip()}
 
 
 # -------------------------------------------------------------
