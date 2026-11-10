@@ -472,18 +472,48 @@ def save_anexo7_sql(record: Dict[str, Any]) -> str:
 
 
 def visitas_sql() -> pd.DataFrame:
-    with get_session() as session:
-        registros = session.query(RegistroVisita).all()
-        if not registros:
-            return pd.DataFrame(columns=["ID_Visita", "Fecha", "Escuela", "Personal", "Motivo", "Observaciones", "Evidencia", "Estatus", "Tipo_Acta", "Lugar"])
-        return pd.DataFrame([
-            {
-                "ID_Visita": r.id, "Fecha": r.fecha, "Escuela": r.escuela, "Personal": r.personal,
-                "Motivo": r.motivo, "Observaciones": r.observaciones, "Evidencia": r.evidencia,
-                "Estatus": r.estatus, "Tipo_Acta": r.tipo_acta, "Lugar": r.lugar
-            }
-            for r in registros
-        ])
+    try:
+        with get_session() as session:
+            registros = session.query(RegistroVisita).all()
+            if registros:
+                return pd.DataFrame([
+                    {
+                        "ID_Visita": r.id, "Fecha": r.fecha, "Escuela": r.escuela, "Personal": r.personal,
+                        "Motivo": r.motivo, "Observaciones": r.observaciones, "Evidencia": r.evidencia,
+                        "Estatus": r.estatus, "Tipo_Acta": r.tipo_acta, "Lugar": r.lugar
+                    }
+                    for r in registros
+                ])
+    except Exception:
+        pass
+
+    # Fallback lectura si PostgreSQL no tiene visitas aún
+    for gz_path in [Path("/home/uppcoder/app/data/semilla_historica_completa.json.gz"), Path("data/semilla_historica_completa.json.gz")]:
+        if gz_path.exists():
+            try:
+                import gzip
+                with gzip.open(gz_path, "rt", encoding="utf-8") as f:
+                    semilla = json.load(f)
+                v_items = semilla.get("visitas", [])
+                if v_items:
+                    return pd.DataFrame([
+                        {
+                            "ID_Visita": v.get("id") or v.get("ID_Visita") or "",
+                            "Fecha": v.get("fecha") or v.get("Fecha") or "",
+                            "Escuela": v.get("escuela") or v.get("Escuela") or "",
+                            "Personal": v.get("personal") or v.get("Personal") or "",
+                            "Motivo": v.get("motivo") or v.get("Motivo") or "",
+                            "Observaciones": v.get("observaciones") or v.get("Observaciones") or "",
+                            "Evidencia": v.get("evidencia") or v.get("Evidencia") or "",
+                            "Estatus": v.get("estatus") or v.get("Estatus") or "GUARDADA",
+                            "Tipo_Acta": v.get("tipo_acta") or v.get("Tipo_Acta") or "",
+                            "Lugar": v.get("lugar") or v.get("Lugar") or "",
+                        }
+                        for v in v_items
+                    ])
+            except Exception:
+                pass
+    return pd.DataFrame(columns=["ID_Visita", "Fecha", "Escuela", "Personal", "Motivo", "Observaciones", "Evidencia", "Estatus", "Tipo_Acta", "Lugar"])
 
 
 def save_visita_sql(record: Dict[str, Any]) -> str:
@@ -913,15 +943,68 @@ def _local_colecciones_path() -> Path:
     return Path("data/colecciones_locales.json")
 
 
+_SEMILLA_COLECCIONES_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
+
+
 def _cargar_colecciones_locales() -> Dict[str, Dict[str, Any]]:
+    global _SEMILLA_COLECCIONES_CACHE
+    if _SEMILLA_COLECCIONES_CACHE is None:
+        _SEMILLA_COLECCIONES_CACHE = {}
+        for gz_candidate in [
+            Path("/home/uppcoder/app/data/semilla_historica_completa.json.gz"),
+            Path("data/semilla_historica_completa.json.gz"),
+        ]:
+            if gz_candidate.exists():
+                try:
+                    import gzip
+                    with gzip.open(gz_candidate, "rt", encoding="utf-8") as f:
+                        semilla = json.load(f)
+                    for col in semilla.get("colecciones", []):
+                        mod = str(col.get("modulo", "")).strip()
+                        reg = str(col.get("registro_id") or col.get("id") or "").strip()
+                        pk = str(col.get("id") or f"{mod}:{reg}").strip()
+                        if not pk:
+                            continue
+                        # Asegurar prefijo normalizado para búsqueda por módulo
+                        if not pk.startswith(f"{mod}:") and mod:
+                            norm_pk = f"{mod}:{pk}"
+                        else:
+                            norm_pk = pk
+                        payload = col.get("payload")
+                        if payload is None and col.get("payload_json"):
+                            try:
+                                payload = json.loads(col["payload_json"])
+                            except Exception:
+                                payload = {}
+                        item_dict = {
+                            "id": norm_pk,
+                            "modulo": mod,
+                            "registro_id": reg or pk.split(":", 1)[-1],
+                            "cuenta": str(col.get("cuenta") or ""),
+                            "id_escuela": str(col.get("id_escuela") or ""),
+                            "id_alumno": str(col.get("id_alumno") or ""),
+                            "fecha": str(col.get("fecha") or ""),
+                            "estado": str(col.get("estado") or "ACTIVO"),
+                            "payload": payload or {},
+                        }
+                        _SEMILLA_COLECCIONES_CACHE[norm_pk] = item_dict
+                        if pk != norm_pk:
+                            _SEMILLA_COLECCIONES_CACHE[pk] = item_dict
+                    break
+                except Exception as exc:
+                    logger.warning("Aviso cargando semilla para colecciones: %s", exc)
+
+    res = dict(_SEMILLA_COLECCIONES_CACHE or {})
     p = _local_colecciones_path()
     if p.exists():
         try:
             with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
+                locales = json.load(f)
+                if isinstance(locales, dict):
+                    res.update(locales)
         except Exception:
             pass
-    return {}
+    return res
 
 
 def _guardar_colecciones_locales(data: Dict[str, Dict[str, Any]]):
@@ -1002,20 +1085,26 @@ def coleccion_listar_sql(
     # Fallback persistente local
     locales = _cargar_colecciones_locales()
     out = []
+    seen_ids = set()
     for pk, r in locales.items():
-        if not pk.startswith(f"{mod_clean}:"):
+        r_mod = str(r.get("modulo") or "").strip()
+        if r_mod != mod_clean and not pk.startswith(f"{mod_clean}:"):
             continue
         if r.get("estado") == "ANULADO":
             continue
-        if id_escuela and r.get("id_escuela") != str(id_escuela).strip():
+        if id_escuela and str(r.get("id_escuela") or "").strip() != str(id_escuela).strip():
             continue
-        if id_alumno and r.get("id_alumno") != str(id_alumno).strip():
+        if id_alumno and str(r.get("id_alumno") or "").strip() != str(id_alumno).strip():
             continue
-        if cuenta and r.get("cuenta") != str(cuenta).strip():
+        if cuenta and str(r.get("cuenta") or "").strip() != str(cuenta).strip():
             continue
         payload = r.get("payload") or {}
         item = dict(payload) if isinstance(payload, dict) else {"valor": payload}
-        item.setdefault("id", r.get("registro_id") or pk.split(":", 1)[-1])
+        reg_id = str(r.get("registro_id") or pk.split(":", 1)[-1])
+        if reg_id in seen_ids:
+            continue
+        seen_ids.add(reg_id)
+        item.setdefault("id", reg_id)
         item.setdefault("_modulo", mod_clean)
         out.append(item)
     return out

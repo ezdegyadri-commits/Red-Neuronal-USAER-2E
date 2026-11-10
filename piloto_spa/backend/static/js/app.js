@@ -571,6 +571,9 @@ function MisDocumentosView({
   const [busqueda, setBusqueda] = React.useState('');
   const [modalAlumno, setModalAlumno] = React.useState(false);
   const [deleteTargetId, setDeleteTargetId] = React.useState(null);
+  const [seccionPlaneacion, setSeccionPlaneacion] = React.useState('individuales');
+  const [escuelaGrupalSel, setEscuelaGrupalSel] = React.useState('Damián Carmona');
+  const [gradoGrupalSel, setGradoGrupalSel] = React.useState('TODOS');
 
   // Estado para nuevo alumno
   const [nuevoNombre, setNuevoNombre] = React.useState('');
@@ -638,45 +641,69 @@ function MisDocumentosView({
     const q = busqueda.toLowerCase();
     return (((_p$metadatos = p.metadatos) === null || _p$metadatos === void 0 ? void 0 : _p$metadatos.titulo) || '').toLowerCase().includes(q) || (((_p$datos = p.datos) === null || _p$datos === void 0 ? void 0 : _p$datos.Escuela) || '').toLowerCase().includes(q) || (((_p$datos2 = p.datos) === null || _p$datos2 === void 0 ? void 0 : _p$datos2.Docente_Especialista) || '').toLowerCase().includes(q) || (p.id || '').toLowerCase().includes(q);
   });
+
+  const gruposPrimaria = [
+    { grado: "1", grupo: "A" },
+    { grado: "2", grupo: "A" },
+    { grado: "3", grupo: "A" },
+    { grado: "4", grupo: "A" },
+    { grado: "5", grupo: "A" },
+    { grado: "6", grupo: "A" }
+  ].filter(g => gradoGrupalSel === 'TODOS' || g.grado === gradoGrupalSel);
+
   return /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+    className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
     className: "text-2xl font-bold tracking-tight text-slate-900"
-  }, "Mis Documentos de Trabajo"), /*#__PURE__*/React.createElement("p", {
+  }, "Planeación Institucional USAER 2E"), /*#__PURE__*/React.createElement("p", {
     className: "text-sm text-slate-500"
-  }, "Historial completo de planeaciones y expedientes autorizados")), /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center space-x-3"
+  }, "Formato vivo, colaborativo y oficial: planes individuales y guías grupales compartidas")), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2 bg-slate-100 p-1 rounded-xl"
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setModalAlumno(true),
-    className: "px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold text-sm transition"
-  }, "+ Alta R\xE1pida de Alumno"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenDoc(`plan-nuevo-${Date.now().toString(36)}`),
-    className: "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-semibold shadow-sm text-sm transition flex items-center space-x-2"
-  }, /*#__PURE__*/React.createElement("span", null, "+"), /*#__PURE__*/React.createElement("span", null, "Nueva Planeaci\xF3n (Anexo XXIII)")))), /*#__PURE__*/React.createElement("div", {
-    className: "relative"
+    type: "button",
+    onClick: () => setSeccionPlaneacion('individuales'),
+    className: `px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${seccionPlaneacion === 'individuales' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`
+  }, /*#__PURE__*/React.createElement("span", null, "📝"), /*#__PURE__*/React.createElement("span", null, "PLANEACIONES INDIVIDUALES (ANEXO XXIII)")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setSeccionPlaneacion('grupales'),
+    className: `px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${seccionPlaneacion === 'grupales' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`
+  }, /*#__PURE__*/React.createElement("span", null, "👥"), /*#__PURE__*/React.createElement("span", null, "PLANEACIONES GRUPALES (ANEXO XIX)")))), seccionPlaneacion === 'individuales' ? /*#__PURE__*/React.createElement("div", {
+    className: "space-y-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "relative flex-1"
   }, /*#__PURE__*/React.createElement("input", {
     type: "text",
     value: busqueda,
     onChange: e => setBusqueda(e.target.value),
-    placeholder: "Buscar por alumno, escuela, grado o aprendizaje esperado...",
-    className: "w-full pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-sm"
+    placeholder: "Buscar plan individual por alumno, escuela, grado o aprendizaje...",
+    className: "w-full pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-sm"
   })), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setModalAlumno(true),
+    className: "px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold text-xs transition cursor-pointer whitespace-nowrap"
+  }, "+ Alta Rápida"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenDoc(`plan-nuevo-${Date.now().toString(36)}`),
+    className: "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-sm text-xs transition flex items-center space-x-1.5 cursor-pointer whitespace-nowrap"
+  }, /*#__PURE__*/React.createElement("span", null, "+"), /*#__PURE__*/React.createElement("span", null, "Nueva Planeación Individual")))), /*#__PURE__*/React.createElement("div", {
     className: "space-y-3"
   }, /*#__PURE__*/React.createElement("h2", {
     className: "text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2"
-  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCDD Planeaciones y Planes de Intervenci\xF3n"), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", null, "📋 Planes Individuales de Intervención (Anexo XXIII)"), /*#__PURE__*/React.createElement("span", {
     className: "text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full"
   }, planesFiltrados.length)), loading ? /*#__PURE__*/React.createElement("div", {
     className: "text-center py-12 bg-white rounded-xl border border-slate-200"
   }, /*#__PURE__*/React.createElement("div", {
     className: "inline-block animate-spin text-amber-600 text-2xl mb-2"
-  }, "\u25C8"), /*#__PURE__*/React.createElement("p", {
+  }, "⟳"), /*#__PURE__*/React.createElement("p", {
     className: "text-sm text-slate-500"
-  }, "Cargando documentos desde PostgreSQL...")) : planesFiltrados.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "Cargando planes individuales desde PostgreSQL...")) : planesFiltrados.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "text-center py-8 bg-white rounded-xl border border-slate-200 text-slate-500 text-sm"
-  }, "No hay planeaciones que coincidan con la b\xFAsqueda.") : /*#__PURE__*/React.createElement("div", {
+  }, "No hay planeaciones individuales que coincidan con la búsqueda.") : /*#__PURE__*/React.createElement("div", {
     className: "grid gap-3"
   }, planesFiltrados.map(plan => {
     var _plan$metadatos, _plan$datos, _plan$datos2, _plan$datos3;
@@ -690,31 +717,35 @@ function MisDocumentosView({
       className: "flex items-center space-x-2"
     }, /*#__PURE__*/React.createElement("span", {
       className: "font-bold text-slate-900 group-hover:text-amber-700 transition"
-    }, ((_plan$metadatos = plan.metadatos) === null || _plan$metadatos === void 0 ? void 0 : _plan$metadatos.titulo) || `Planeaci\u00f3n Anexo ${plan.formato}`), /*#__PURE__*/React.createElement("span", {
-      className: `text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${plan.estado === 'APROBADO' || plan.estado === 'AUTORIZADA' ? 'bg-emerald-100 text-emerald-800' : plan.estado === 'REVISI\u00d3N' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`
-    }, plan.estado)), /*#__PURE__*/React.createElement("div", {
+    }, ((_plan$metadatos = plan.metadatos) === null || _plan$metadatos === void 0 ? void 0 : _plan$metadatos.titulo) || `Planeación Anexo ${plan.formato || 'XXIII'}`), /*#__PURE__*/React.createElement("span", {
+      className: `text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${plan.estado === 'APROBADO' || plan.estado === 'AUTORIZADA' ? 'bg-emerald-100 text-emerald-800' : plan.estado === 'REVISIÓN' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`
+    }, plan.estado || 'BORRADOR')), /*#__PURE__*/React.createElement("div", {
       className: "text-xs text-slate-500 flex items-center space-x-3"
-    }, /*#__PURE__*/React.createElement("span", null, "\uD83C\uDFEB ", ((_plan$datos = plan.datos) === null || _plan$datos === void 0 ? void 0 : _plan$datos.Escuela) || 'Primaria Oficial'), /*#__PURE__*/React.createElement("span", null, "\u2022"), /*#__PURE__*/React.createElement("span", null, "Grado: ", ((_plan$datos2 = plan.datos) === null || _plan$datos2 === void 0 ? void 0 : _plan$datos2.Grado_Grupo) || 'Atenci\u00f3n USAER'), /*#__PURE__*/React.createElement("span", null, "\u2022"), /*#__PURE__*/React.createElement("span", null, ((_plan$datos3 = plan.datos) === null || _plan$datos3 === void 0 ? void 0 : _plan$datos3.Docente_Especialista) || 'Docente USAER'), /*#__PURE__*/React.createElement("span", null, "\u2022"), /*#__PURE__*/React.createElement("span", null, "Guardado: ", plan.guardado_en || 'Reciente'))), /*#__PURE__*/React.createElement("div", {
-      className: "flex items-center space-x-3"
+    }, /*#__PURE__*/React.createElement("span", null, "🏫 ", ((_plan$datos = plan.datos) === null || _plan$datos === void 0 ? void 0 : _plan$datos.Escuela) || 'Primaria Oficial'), /*#__PURE__*/React.createElement("span", null, "•"), /*#__PURE__*/React.createElement("span", null, "Grado: ", ((_plan$datos2 = plan.datos) === null || _plan$datos2 === void 0 ? void 0 : _plan$datos2.Grado_Grupo) || 'Atención USAER'), /*#__PURE__*/React.createElement("span", null, "•"), /*#__PURE__*/React.createElement("span", null, ((_plan$datos3 = plan.datos) === null || _plan$datos3 === void 0 ? void 0 : _plan$datos3.Docente_Especialista) || 'Docente USAER'), /*#__PURE__*/React.createElement("span", null, "•"), /*#__PURE__*/React.createElement("span", null, "Guardado: ", plan.guardado_en || 'Reciente'))), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center space-x-2"
     }, plan.observaciones_director && /*#__PURE__*/React.createElement("span", {
       className: "text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 font-medium hidden sm:inline"
-    }, "\uD83D\uDCAC Con Vo. Bo."), /*#__PURE__*/React.createElement("button", {
+    }, "💬 Con Vo. Bo."), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => descargarArchivoAutenticado(`/api/planeaciones/${plan.id}/pdf`, `Planeacion_${plan.id}.pdf`),
+      className: "text-xs font-semibold text-slate-700 hover:text-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition cursor-pointer"
+    }, "📄 PDF"), /*#__PURE__*/React.createElement("button", {
       onClick: () => onOpenDoc(plan.id),
-      className: "text-xs font-semibold text-amber-600 hover:text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 hover:bg-amber-50 transition"
-    }, "Abrir \u2192"), /*#__PURE__*/React.createElement("button", {
+      className: "text-xs font-semibold text-amber-600 hover:text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 hover:bg-amber-50 transition cursor-pointer"
+    }, "Abrir →"), /*#__PURE__*/React.createElement("button", {
       onClick: () => setDeleteTargetId(plan.id),
-      className: "text-xs text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition",
-      title: "Eliminar planeaci\xF3n"
-    }, "\uD83D\uDDD1\uFE0F")));
+      className: "text-xs text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer",
+      title: "Eliminar planeación"
+    }, "🗑️")));
   }))), /*#__PURE__*/React.createElement("div", {
-    className: "space-y-3 pt-4"
+    className: "space-y-3 pt-4 border-t border-slate-200"
   }, /*#__PURE__*/React.createElement("h2", {
     className: "text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2"
-  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDC65 Expedientes de Alumnos Asignados"), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", null, "👥 Expedientes de Alumnos en Atención"), /*#__PURE__*/React.createElement("span", {
     className: "text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full"
   }, alumnos.length)), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
-  }, alumnos.slice(0, 15).map(al => /*#__PURE__*/React.createElement("div", {
+  }, alumnos.slice(0, 12).map(al => /*#__PURE__*/React.createElement("div", {
     key: al.id,
     onClick: () => onOpenExpediente(al.id),
     className: "bg-white p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition cursor-pointer space-y-1.5"
@@ -722,20 +753,119 @@ function MisDocumentosView({
     className: "font-bold text-slate-800 text-sm"
   }, al.nombre_completo), /*#__PURE__*/React.createElement("div", {
     className: "text-xs text-slate-500"
-  }, /*#__PURE__*/React.createElement("span", null, al.grado, "\xB0 ", al.grupo), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", null, al.grado, "° ", al.grupo), /*#__PURE__*/React.createElement("span", {
     className: "mx-1.5"
-  }, "\u2022"), /*#__PURE__*/React.createElement("span", null, al.escuela)), /*#__PURE__*/React.createElement("div", {
+  }, "•"), /*#__PURE__*/React.createElement("span", null, al.escuela)), /*#__PURE__*/React.createElement("div", {
     className: "pt-1 flex items-center justify-between"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-[11px] bg-amber-50 text-amber-800 font-semibold px-2 py-0.5 rounded border border-amber-200"
-  }, al.condicion || 'Atenci\u00f3n USAER'), /*#__PURE__*/React.createElement("span", {
+  }, al.condicion || 'Atención USAER'), /*#__PURE__*/React.createElement("span", {
     className: "text-xs text-slate-400 hover:text-slate-700 font-medium"
-  }, "Ver expediente \u2192"))))), alumnos.length > 15 && /*#__PURE__*/React.createElement("div", {
+  }, "Ver expediente →"))))), alumnos.length > 12 && /*#__PURE__*/React.createElement("div", {
     className: "text-center pt-2"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => onOpenExpediente(alumnos[0].id),
     className: "text-xs text-amber-700 font-bold hover:underline"
-  }, "Ver todos los ", alumnos.length, " alumnos en el m\xF3dulo de Expedientes \u2192"))), deleteTargetId && /*#__PURE__*/React.createElement("div", {
+  }, "Ver todos los ", alumnos.length, " alumnos en el módulo de Expedientes →")))) : /*#__PURE__*/React.createElement("div", {
+    className: "space-y-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-amber-50/70 border border-amber-200 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "space-y-1"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-bold text-amber-950 text-sm flex items-center space-x-1.5"
+  }, /*#__PURE__*/React.createElement("span", null, "👥"), /*#__PURE__*/React.createElement("span", null, "Guía Grupal Compartida de Intervención (Anexo XIX)")), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-amber-900"
+  }, "Matriz horizontal colaborativa para el aula regular. Cada especialista (Apoyo, Psicología, Comunicación y Trabajo Social) aporta su apartado sin sobrescribir el trabajo de sus colegas.")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => onOpenDoc(`guia-xix-${escuelaGrupalSel.replace(/ /g, '_')}-general`),
+    className: "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+  }, /*#__PURE__*/React.createElement("span", null, "✨"), /*#__PURE__*/React.createElement("span", null, "Abrir Editor Anexo XIX"))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-xs"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-3 w-full sm:w-auto"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-slate-700 whitespace-nowrap"
+  }, "Escuela Primaria:"), /*#__PURE__*/React.createElement("select", {
+    value: escuelaGrupalSel,
+    onChange: e => setEscuelaGrupalSel(e.target.value),
+    className: "p-2 border border-slate-200 rounded-lg font-semibold text-slate-800 w-full sm:w-64"
+  }, ["Damián Carmona", "Ichcaanziho", "Gregorio Torres Quintero", "Remigio Aguilar Sosa", "Elvira Parra Ávila", "Manuel Sarrado", "Domingo Solís Rodríguez", "Quintana Roo"].map(esc => /*#__PURE__*/React.createElement("option", {
+    key: esc,
+    value: esc
+  }, esc)))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2 w-full sm:w-auto"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-slate-700 whitespace-nowrap"
+  }, "Grado:"), /*#__PURE__*/React.createElement("select", {
+    value: gradoGrupalSel,
+    onChange: e => setGradoGrupalSel(e.target.value),
+    className: "p-2 border border-slate-200 rounded-lg font-semibold text-slate-800 text-xs"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "TODOS"
+  }, "Todos los grados (1° a 6°)"), ["1", "2", "3", "4", "5", "6"].map(g => /*#__PURE__*/React.createElement("option", {
+    key: g,
+    value: g
+  }, g, "° Grado"))))), /*#__PURE__*/React.createElement("div", {
+    className: "grid gap-4"
+  }, gruposPrimaria.map(grp => {
+    const docIdGrp = `guia-xix-${escuelaGrupalSel.replace(/ /g, '_')}-${grp.grado}${grp.grupo}`;
+    return /*#__PURE__*/React.createElement("div", {
+      key: `${grp.grado}-${grp.grupo}`,
+      className: "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 hover:border-amber-400 transition"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
+      className: "font-bold text-slate-900 text-sm flex items-center space-x-2"
+    }, /*#__PURE__*/React.createElement("span", null, "🏫 ", escuelaGrupalSel, " · ", grp.grado, "° ", grp.grupo), /*#__PURE__*/React.createElement("span", {
+      className: "bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] px-2 py-0.5 rounded-full font-bold"
+    }, "Anexo XIX Activo")), /*#__PURE__*/React.createElement("p", {
+      className: "text-xs text-slate-500"
+    }, "Atención colaborativa del aula regular · Ajustes DUA institucionales")), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center space-x-2"
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => onOpenDoc(docIdGrp),
+      className: "px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+    }, /*#__PURE__*/React.createElement("span", null, "Abrir Guía Compartida →")), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => descargarArchivoAutenticado(`/api/planeaciones/${docIdGrp}/pdf`, `Guia_Grupal_Anexo_XIX_${escuelaGrupalSel}_${grp.grado}${grp.grupo}.pdf`),
+      className: "px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+    }, /*#__PURE__*/React.createElement("span", null, "📄"), /*#__PURE__*/React.createElement("span", null, "PDF Anexo XIX")))), /*#__PURE__*/React.createElement("div", {
+      className: "grid grid-cols-1 md:grid-cols-4 gap-3 text-xs"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "font-bold text-slate-800 flex items-center space-x-1"
+    }, /*#__PURE__*/React.createElement("span", null, "📘"), /*#__PURE__*/React.createElement("span", null, "Aprendizaje / Apoyo")), /*#__PURE__*/React.createElement("p", {
+      className: "text-slate-600 text-[11px]"
+    }, "Ajustes DUA al plan de estudios, diversificación de actividades y apoyos en lectura/escritura/cálculo.")), /*#__PURE__*/React.createElement("div", {
+      className: "bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "font-bold text-slate-800 flex items-center space-x-1"
+    }, /*#__PURE__*/React.createElement("span", null, "🧠"), /*#__PURE__*/React.createElement("span", null, "Psicología")), /*#__PURE__*/React.createElement("p", {
+      className: "text-slate-600 text-[11px]"
+    }, "Estrategias de autorregulación, clima socioemocional del grupo y pautas conductuales positivas.")), /*#__PURE__*/React.createElement("div", {
+      className: "bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "font-bold text-slate-800 flex items-center space-x-1"
+    }, /*#__PURE__*/React.createElement("span", null, "🗣️"), /*#__PURE__*/React.createElement("span", null, "Comunicación")), /*#__PURE__*/React.createElement("p", {
+      className: "text-slate-600 text-[11px]"
+    }, "Intercambio funcional, apoyos visuales/SAAC y enriquecimiento del lenguaje en el aula regular.")), /*#__PURE__*/React.createElement("div", {
+      className: "bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "font-bold text-slate-800 flex items-center space-x-1"
+    }, /*#__PURE__*/React.createElement("span", null, "🏠"), /*#__PURE__*/React.createElement("span", null, "Trabajo Social")), /*#__PURE__*/React.createElement("p", {
+      className: "text-slate-600 text-[11px]"
+    }, "Vinculación escuela-familia, compromisos de corresponsabilidad en el hogar y asistencia regular."))), /*#__PURE__*/React.createElement("div", {
+      className: "bg-amber-50/50 p-2.5 rounded-xl border border-amber-100 flex items-center justify-between text-xs text-amber-900"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "font-medium"
+    }, "🏛️ Revisión de Dirección: Estado colegiado al corriente para el ciclo escolar."), /*#__PURE__*/React.createElement("span", {
+      className: "text-[11px] font-bold text-amber-800 cursor-pointer hover:underline",
+      onClick: () => onOpenDoc(docIdGrp)
+    }, "Editar observaciones y Vo. Bo. →")));
+  })))), deleteTargetId && /*#__PURE__*/React.createElement("div", {
     className: "fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4"
@@ -2543,36 +2673,36 @@ ${formula}` : formula;
         setModalAsistenteEPP(true);
       },
       className: "px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow cursor-pointer"
-    }, /*#__PURE__*/React.createElement("span", null, "\u2728 Asistente EPP")), /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement("span", null, "✨ Asistente de redacción")), /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: guardarEPP,
       disabled: guardando,
       className: "px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5 shadow cursor-pointer"
-    }, /*#__PURE__*/React.createElement("span", null, guardando ? 'Guardando...' : '\u1f4be Guardar EPP')))), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", null, guardando ? 'Guardando...' : 'Guardar EPP')))), /*#__PURE__*/React.createElement("div", {
       className: "flex border-b border-slate-200 space-x-1 text-sm font-semibold overflow-x-auto"
     }, [{
       id: 'Aprendizaje',
-      label: '\u1f4d6 Aprendizaje',
+      label: 'Aprendizaje',
       canEdit: puedeEditarAprendizaje
     }, {
-      id: 'Psicolog\u00eda',
-      label: '\u1f9e0 Psicolog\u00eda',
+      id: 'Psicología',
+      label: 'Psicología',
       canEdit: puedeEditarPsicologia
     }, {
-      id: 'Comunicaci\u00f3n',
-      label: '\u1f5e3\ufe0f Comunicaci\u00f3n',
+      id: 'Comunicación',
+      label: 'Comunicación y Lenguaje',
       canEdit: puedeEditarComunicacion
     }, {
       id: 'Trabajo Social',
-      label: '\u1f3e0 Trabajo Social',
+      label: 'Trabajo Social',
       canEdit: puedeEditarTrabajoSocial
     }, {
-      id: 'Conclusi\u00f3n',
-      label: '\u1f4cb Conclusi\u00f3n e Intervenci\u00f3n',
+      id: 'Conclusión',
+      label: 'Conclusión e Intervención',
       canEdit: true
     }, {
       id: 'Pruebas',
-      label: '\u1f4c1 Pruebas y Evidencias',
+      label: 'Pruebas y Evidencias',
       canEdit: true
     }].map(tab => /*#__PURE__*/React.createElement("button", {
       key: tab.id,
@@ -5091,6 +5221,12 @@ function PanelDireccionView({
   const [configOficio, setConfigOficio] = React.useState({});
 
   // 1. Relatorías
+  const [subTabRel, setSubTabRel] = React.useState('nueva');
+  const [motoresIA, setMotoresIA] = React.useState([]);
+  const [motorSel, setMotorSel] = React.useState('gemini-1.5-flash');
+  const [apiKeyManual, setApiKeyManual] = React.useState('');
+  const [motorUtilizadoInfo, setMotorUtilizadoInfo] = React.useState('');
+  const [busquedaRel, setBusquedaRel] = React.useState('');
   const [sesionRel, setSesionRel] = React.useState('Primera Sesión');
   const [tipoJunta, setTipoJunta] = React.useState('Junta de USAER');
   const [modalidadJunta, setModalidadJunta] = React.useState('Sesión de CTE');
@@ -5112,7 +5248,7 @@ function PanelDireccionView({
   const [alumnoSeleccionado, setAlumnoSeleccionado] = React.useState(null);
 
   // 3. Supervisión de Horarios
-  const [escuelaHorSel, setEscuelaHorSel] = React.useState('ESC-001');
+  const [escuelaHorSel, setEscuelaHorSel] = React.useState('Damián Carmona');
   const [docenteHorSel, setDocenteHorSel] = React.useState('');
   const [sesionesHorario, setSesionesHorario] = React.useState([]);
   const [cargandoHorario, setCargandoHorario] = React.useState(false);
@@ -5145,19 +5281,30 @@ function PanelDireccionView({
     setLoading(true);
     const t0 = performance.now();
     try {
-      const [resPanel, alus, rels, ofs, pers, confs] = await Promise.all([
+      const [resPanel, alus, rels, ofs, pers, confs, mots] = await Promise.all([
         apiRequest('/api/panel-direccion').catch(() => null),
         apiRequest('/api/alumnos?incluir_inactivos=true').catch(() => []),
         apiRequest('/api/relatorias').catch(() => []),
         apiRequest('/api/oficios').catch(() => []),
         apiRequest('/api/personal').catch(() => []),
-        apiRequest('/api/oficios/configuracion').catch(() => [])
+        apiRequest('/api/oficios/configuracion').catch(() => []),
+        apiRequest('/api/ai/motores').catch(() => null)
       ]);
       setResumen(resPanel);
       setAlumnos(alus || []);
       setRelatorias(rels || []);
       setOficios(ofs || []);
       setPersonal(pers || []);
+      if (mots && mots.motores) {
+        setMotoresIA(mots.motores);
+        if (mots.proveedor_activo === 'plantilla') {
+          setMotorSel('plantilla-institucional');
+        } else if (mots.proveedor_activo === 'openai') {
+          setMotorSel('gpt-4o');
+        } else {
+          setMotorSel('gemini-1.5-flash');
+        }
+      }
       if (confs && confs.length > 0) {
         const c = confs[0];
         setConfigOficio(c);
@@ -5170,7 +5317,7 @@ function PanelDireccionView({
         setEmitirDocente(pers[0].Nombre_Completo || pers[0].nombre || '');
       }
       const t1 = performance.now();
-      setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 6 }));
+      setMetrics(m => ({ latency: Math.round(t1 - t0), requests: m.requests + 7 }));
     } catch (e) {
       console.error("Error cargando panel de dirección:", e);
     } finally {
@@ -5186,7 +5333,7 @@ function PanelDireccionView({
   React.useEffect(() => {
     if (activeTab === 'horarios') {
       setCargandoHorario(true);
-      apiRequest(`/api/horarios`).then(data => {
+      apiRequest(`/api/horarios?escuela=${encodeURIComponent(escuelaHorSel)}&docente=${encodeURIComponent(docenteHorSel)}`).then(data => {
         const ses = (data && data.sesiones) || [];
         setSesionesHorario(ses);
         setCargandoHorario(false);
@@ -5197,7 +5344,8 @@ function PanelDireccionView({
   // Cargar cronograma al cambiar mes o docente
   React.useEffect(() => {
     if (activeTab === 'cronogramas') {
-      apiRequest(`/api/cronogramas`).then(data => {
+      const docParam = docenteCronSel === 'TODOS' ? '' : docenteCronSel;
+      apiRequest(`/api/cronogramas?mes=${encodeURIComponent(mesCronSel)}&docente=${encodeURIComponent(docParam)}`).then(data => {
         const acts = (data && data.actividades) || [];
         setActividadesCrono(acts);
       }).catch(() => {});
@@ -5216,12 +5364,15 @@ function PanelDireccionView({
           notas: notasRel,
           tipo_junta: tipoJunta,
           modalidad_junta: modalidadJunta,
-          fecha: fechaRel
+          fecha: fechaRel,
+          motor: motorSel,
+          api_key_manual: apiKeyManual
         })
       });
       if (resp && resp.texto) {
         setCuerpoRel(resp.texto);
-        setAcuerdosRel("• Dar seguimiento a las evaluaciones psicopedagógicas vigentes.\n• Continuar con los ajustes razonables en aula regular.\n• Coordinar visitas de acompañamiento escolar.");
+        setMotorUtilizadoInfo(resp.motor_utilizado || '');
+        setAcuerdosRel("• Dar seguimiento a las evaluaciones psicopedagógicas vigentes.\n• Continuar con los ajustes razonables en aula regular conforme a DUA.\n• Coordinar visitas de acompañamiento escolar según cronograma.");
       }
     } catch (err) {
       alert("Error al generar borrador de relatoría: " + err.message);
@@ -5364,6 +5515,16 @@ function PanelDireccionView({
     return true;
   });
 
+  const relsFiltradas = relatorias.filter(r => {
+    const q = busquedaRel.toLowerCase();
+    return (r.sesion || '').toLowerCase().includes(q) ||
+           (r.tema || '').toLowerCase().includes(q) ||
+           (r.fecha || '').toLowerCase().includes(q) ||
+           (r.tipo_junta || '').toLowerCase().includes(q) ||
+           (r.autor || '').toLowerCase().includes(q) ||
+           (r.origen || '').toLowerCase().includes(q);
+  });
+
   return /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
   }, /*#__PURE__*/React.createElement("div", {
@@ -5433,14 +5594,53 @@ function PanelDireccionView({
   }, tab.count)))), activeTab === 'relatorias' && /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
   }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2 border-b border-slate-200 pb-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setSubTabRel('nueva'),
+    className: `px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${subTabRel === 'nueva' ? 'bg-amber-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
+  }, /*#__PURE__*/React.createElement("span", null, "✨"), /*#__PURE__*/React.createElement("span", null, "Nueva Relatoría")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setSubTabRel('historial'),
+    className: `px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${subTabRel === 'historial' ? 'bg-amber-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
+  }, /*#__PURE__*/React.createElement("span", null, "📚"), /*#__PURE__*/React.createElement("span", null, "Historial de Relatorías y Actas"), /*#__PURE__*/React.createElement("span", {
+    className: `text-[10px] px-1.5 py-0.5 rounded-full ${subTabRel === 'historial' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-800'}`
+  }, relatorias.length))), subTabRel === 'nueva' && /*#__PURE__*/React.createElement("div", {
+    className: "space-y-6"
+  }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "border-b border-slate-100 pb-3"
-  }, /*#__PURE__*/React.createElement("h2", {
+    className: "border-b border-slate-100 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
     className: "text-base font-bold text-slate-900"
   }, "Generador Oficial de Relatorías del CTE y Juntas de Zona"), /*#__PURE__*/React.createElement("p", {
     className: "text-xs text-slate-500"
-  }, "Genera, revisa, edita y descarga la relatoría en formato oficial carta con membrete oficial, sello y hoja de firmas (ReportLab). Funciona también sin IA externa mediante redacción institucional garantizada.")), /*#__PURE__*/React.createElement("div", {
+  }, "Redacción con modelos generativos (Gemini / OpenAI) o plantilla institucional determinista.")), motorUtilizadoInfo && /*#__PURE__*/React.createElement("div", {
+    className: "px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-semibold flex items-center space-x-1"
+  }, /*#__PURE__*/React.createElement("span", null, "✓ Motor:"), /*#__PURE__*/React.createElement("span", null, motorUtilizadoInfo))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 space-y-2 text-xs"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "font-bold text-amber-950 flex items-center space-x-1.5"
+  }, /*#__PURE__*/React.createElement("span", null, "⚙️"), /*#__PURE__*/React.createElement("span", null, "Selección del Motor de Inteligencia Artificial / Redacción")), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "font-bold text-slate-700 block mb-1"
+  }, "Motor Activo"), /*#__PURE__*/React.createElement("select", {
+    value: motorSel,
+    onChange: e => setMotorSel(e.target.value),
+    className: "w-full p-2 border border-slate-300 rounded-lg text-slate-900 bg-white font-medium"
+  }, motoresIA.map(m => /*#__PURE__*/React.createElement("option", {
+    key: m.id,
+    value: m.id
+  }, m.nombre, m.disponible ? ' (Disponible)' : ' (Configurar Clave)')))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "font-bold text-slate-700 block mb-1"
+  }, "Clave de API Opcional (Si no está en servidor)"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: apiKeyManual,
+    onChange: e => setApiKeyManual(e.target.value),
+    placeholder: "Dejar en blanco para usar clave del servidor...",
+    className: "w-full p-2 border border-slate-300 rounded-lg text-slate-900 bg-white font-mono text-[11px]"
+  })))), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     className: "font-bold text-slate-700 block mb-1"
@@ -5452,7 +5652,9 @@ function PanelDireccionView({
     value: "Junta de USAER"
   }, "Junta de USAER"), /*#__PURE__*/React.createElement("option", {
     value: "Junta de Zona"
-  }, "Junta de Zona"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+  }, "Junta de Zona"), /*#__PURE__*/React.createElement("option", {
+    value: "Reunión de trabajo"
+  }, "Reunión de trabajo"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     className: "font-bold text-slate-700 block mb-1"
   }, "Modalidad de la Junta"), /*#__PURE__*/React.createElement("select", {
     value: modalidadJunta,
@@ -5462,7 +5664,9 @@ function PanelDireccionView({
     value: "Sesión de CTE"
   }, "Sesión de CTE"), /*#__PURE__*/React.createElement("option", {
     value: "Junta Académica"
-  }, "Junta Académica"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+  }, "Junta Académica"), /*#__PURE__*/React.createElement("option", {
+    value: "Seguimiento Interdisciplinario"
+  }, "Seguimiento Interdisciplinario"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     className: "font-bold text-slate-700 block mb-1"
   }, "Sesión"), /*#__PURE__*/React.createElement("select", {
     value: sesionRel,
@@ -5556,32 +5760,58 @@ function PanelDireccionView({
     value: acuerdosRel,
     onChange: e => setAcuerdosRel(e.target.value),
     className: "w-full p-3 border border-slate-200 rounded-xl text-slate-800 font-sans focus:border-amber-500 text-xs leading-relaxed"
-  })))), /*#__PURE__*/React.createElement("div", {
+  }))))), subTabRel === 'historial' && /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "flex justify-between items-center border-b border-slate-100 pb-2"
-  }, /*#__PURE__*/React.createElement("h3", {
+    className: "flex flex-col sm:flex-row justify-between sm:items-center border-b border-slate-100 pb-3 gap-3"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
     className: "text-sm font-bold text-slate-900"
-  }, "Historial de Relatorías Registradas"), /*#__PURE__*/React.createElement("span", {
+  }, "Historial de Relatorías y Actas Colegiadas"), /*#__PURE__*/React.createElement("p", {
     className: "text-xs text-slate-500"
-  }, relatorias.length, " registros en base de datos")), relatorias.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "Reuniones de CTE, Juntas de Zona y Actas de USAER registradas e históricas.")), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: busquedaRel,
+    onChange: e => setBusquedaRel(e.target.value),
+    placeholder: "Buscar por tema, sesión o autor...",
+    className: "p-2 border border-slate-200 rounded-lg text-xs w-full sm:w-64"
+  })), relsFiltradas.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "text-center py-8 text-slate-400 text-xs"
-  }, "Aún no se han guardado relatorías institucionales. Completa el generador superior para emitir la primera.") : /*#__PURE__*/React.createElement("div", {
+  }, "No se encontraron relatorías que coincidan con la búsqueda.") : /*#__PURE__*/React.createElement("div", {
     className: "divide-y divide-slate-100 text-xs"
-  }, relatorias.map((r, idx) => /*#__PURE__*/React.createElement("div", {
+  }, relsFiltradas.map((r, idx) => /*#__PURE__*/React.createElement("div", {
     key: r.id || idx,
-    className: "py-3 flex items-center justify-between gap-4"
+    className: "py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50 px-2 rounded-lg transition"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "space-y-0.5"
+    className: "space-y-1"
   }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: `px-2 py-0.5 rounded text-[10px] font-bold ${r.es_historico ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`
+  }, r.tipo_junta || 'Acta Oficial'), /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-slate-900"
-  }, r.sesion || 'Sesión CTE', " · ", r.tema || 'Tema sin título'), /*#__PURE__*/React.createElement("div", {
-    className: "text-slate-500 text-[11px]"
-  }, r.fecha, " · ", r.tipo_junta || 'Junta de USAER', " · Autor: ", r.autor || 'Dirección')), /*#__PURE__*/React.createElement("button", {
+  }, r.sesion || 'Sesión CTE', " · ", r.tema || 'Reunión Colegiada')), /*#__PURE__*/React.createElement("div", {
+    className: "text-slate-500 text-[11px] flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", null, "📅 ", r.fecha || 'Sin fecha'), /*#__PURE__*/React.createElement("span", null, "•"), /*#__PURE__*/React.createElement("span", null, "👤 ", r.autor || 'Dirección'), r.es_historico && /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-400 text-[10px]"
+  }, "(Histórico Recuperado)"))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2 self-end sm:self-auto"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setTipoJunta(r.tipo_junta || 'Junta de USAER');
+      setSesionRel(r.sesion || 'Primera Sesión');
+      setTemaRel(r.tema || '');
+      setCuerpoRel(r.cuerpo || r.acuerdos || '');
+      setAcuerdosRel(r.acuerdos || '');
+      setRelatoriaGuardadaId(r.id);
+      setSubTabRel('nueva');
+    },
+    className: "px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition cursor-pointer"
+  }, "Cargar en Editor"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => descargarArchivoAutenticado(`/api/relatorias/${r.id}/pdf`, `Relatoria_${r.id}.pdf`),
     className: "px-3 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 font-bold rounded-lg text-xs transition cursor-pointer flex items-center space-x-1"
-  }, /*#__PURE__*/React.createElement("span", null, "📄"), /*#__PURE__*/React.createElement("span", null, "Descargar PDF"))))))), activeTab === 'expedientes' && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "📄"), /*#__PURE__*/React.createElement("span", null, "Descargar PDF")))))))), activeTab === 'expedientes' && /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3 text-xs"
@@ -5689,44 +5919,50 @@ function PanelDireccionView({
   })))))), activeTab === 'horarios' && /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 text-xs"
+    className: "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 text-xs"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center space-x-3 w-full sm:w-auto"
+    className: "flex flex-wrap items-center gap-3 w-full md:w-auto"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
   }, /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-slate-700 whitespace-nowrap"
-  }, "Supervisar Escuela:"), /*#__PURE__*/React.createElement("select", {
+  }, "Escuela:"), /*#__PURE__*/React.createElement("select", {
     value: escuelaHorSel,
     onChange: e => setEscuelaHorSel(e.target.value),
-    className: "p-2 border border-slate-200 rounded-lg font-semibold text-slate-800 w-full sm:w-64"
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "Damián Carmona"
-  }, "Damián Carmona · Mtra. Cindy"), /*#__PURE__*/React.createElement("option", {
-    value: "Ichcaanziho"
-  }, "Ichcaanziho · Mtra. Ceci / Mtra. Marycruz"), /*#__PURE__*/React.createElement("option", {
-    value: "Gregorio Torres Quintero"
-  }, "Gregorio Torres Quintero · Mtra. Dolores"), /*#__PURE__*/React.createElement("option", {
-    value: "Remigio Aguilar Sosa"
-  }, "Remigio Aguilar Sosa · Mtra. Dianely"), /*#__PURE__*/React.createElement("option", {
-    value: "Elvira Parra Ávila"
-  }, "Elvira Parra Ávila · Mtro. Luis Jorge"), /*#__PURE__*/React.createElement("option", {
-    value: "Manuel Sarrado"
-  }, "Manuel Sarrado · Mtra. Rosario"), /*#__PURE__*/React.createElement("option", {
-    value: "Domingo Solís Rodríguez"
-  }, "Domingo Solís Rodríguez · Mtra. Zuemmy"), /*#__PURE__*/React.createElement("option", {
-    value: "Quintana Roo"
-  }, "Quintana Roo · Mtro. Pedro"))), /*#__PURE__*/React.createElement("button", {
+    className: "p-2 border border-slate-200 rounded-lg font-semibold text-slate-800 text-xs w-48"
+  }, ["Damián Carmona", "Ichcaanziho", "Gregorio Torres Quintero", "Remigio Aguilar Sosa", "Elvira Parra Ávila", "Manuel Sarrado", "Domingo Solís Rodríguez", "Quintana Roo"].map(esc => /*#__PURE__*/React.createElement("option", {
+    key: esc,
+    value: esc
+  }, esc)))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-slate-700 whitespace-nowrap"
+  }, "Docente de Apoyo:"), /*#__PURE__*/React.createElement("select", {
+    value: docenteHorSel,
+    onChange: e => setDocenteHorSel(e.target.value),
+    className: "p-2 border border-slate-200 rounded-lg font-semibold text-slate-800 text-xs w-52"
+  }, listaDocentesApoyo.map(d => /*#__PURE__*/React.createElement("option", {
+    key: d.id,
+    value: d.id
+  }, d.nombre))))), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => descargarArchivoAutenticado(`/api/horarios/pdf?escuela=${encodeURIComponent(escuelaHorSel)}`, `Horario_Supervision_${escuelaHorSel.replace(/ /g, '_')}.pdf`),
-    className: "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition flex items-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+    onClick: () => descargarArchivoAutenticado(`/api/horarios/pdf?escuela=${encodeURIComponent(escuelaHorSel)}&docente=${encodeURIComponent(docenteHorSel)}`, `Horario_${escuelaHorSel.replace(/ /g, '_')}_${docenteHorSel.replace(/ /g, '_')}.pdf`),
+    className: "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition flex items-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap self-end md:self-auto"
   }, /*#__PURE__*/React.createElement("span", null, "📄"), /*#__PURE__*/React.createElement("span", null, "Descargar Horario Oficial Supervisado (PDF)"))), /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "border-b border-slate-100 pb-2 flex justify-between items-center"
-  }, /*#__PURE__*/React.createElement("h3", {
+    className: "border-b border-slate-100 pb-3 flex flex-col sm:flex-row justify-between sm:items-center gap-2"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
     className: "font-bold text-slate-900 text-sm"
-  }, "Cuadrícula de Horario Semanal Vigente · ", escuelaHorSel), /*#__PURE__*/React.createElement("span", {
-    className: "text-[11px] text-slate-500"
-  }, "Supervisión no destructiva: La edición corresponde a cada docente.")), cargandoHorario ? /*#__PURE__*/React.createElement("div", {
+  }, "Cuadrícula de Horario Semanal Vigente · ", escuelaHorSel), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-500"
+  }, "Supervisión institucional del docente de apoyo: ", docenteHorSel === 'TODOS' ? 'Plantilla completa de la escuela' : docenteHorSel)), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-3 text-xs"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg font-bold"
+  }, "Sesiones: ", sesionesHorario.length), /*#__PURE__*/React.createElement("span", {
+    className: "px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-bold"
+  }, "Horas aprox: ", (sesionesHorario.length * 0.75).toFixed(1), " hrs/sem"))), cargandoHorario ? /*#__PURE__*/React.createElement("div", {
     className: "py-12 text-center text-slate-400 text-xs"
   }, "Consultando horario oficial...") : /*#__PURE__*/React.createElement("div", {
     className: "overflow-x-auto"
@@ -5751,7 +5987,7 @@ function PanelDireccionView({
   }, sesionesHorario.length === 0 ? /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
     colSpan: "6",
     className: "p-6 text-center text-slate-400 text-xs"
-  }, "No hay sesiones registradas en el horario vigente de esta escuela.")) : sesionesHorario.map((s, i) => /*#__PURE__*/React.createElement("tr", {
+  }, "No hay sesiones registradas en el horario vigente para la selección actual.")) : sesionesHorario.map((s, i) => /*#__PURE__*/React.createElement("tr", {
     key: i,
     className: "hover:bg-slate-50"
   }, /*#__PURE__*/React.createElement("td", {
@@ -5766,9 +6002,9 @@ function PanelDireccionView({
     className: "bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-semibold"
   }, s.Modalidad || 'Aula Regular')), /*#__PURE__*/React.createElement("td", {
     className: "p-2.5 text-slate-600"
-  }, s.Espacio || 'Salón'), /*#__PURE__*/React.createElement("td", {
+  }, s.Espacio || 'Salón regular'), /*#__PURE__*/React.createElement("td", {
     className: "p-2.5 text-slate-600"
-  }, s.Proposito || 'Atención técnica')))))))), activeTab === 'oficios' && /*#__PURE__*/React.createElement("div", {
+  }, s.Proposito || 'Acompañamiento pedagógico y ajustes DUA')))))))), activeTab === 'oficios' && /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4"
@@ -5938,42 +6174,46 @@ function PanelDireccionView({
   }, /*#__PURE__*/React.createElement("span", null, "📄"), /*#__PURE__*/React.createElement("span", null, "Descargar PDF"))))))), activeTab === 'cronogramas' && /*#__PURE__*/React.createElement("div", {
     className: "space-y-6"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 text-xs"
+    className: "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 text-xs"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center space-x-3 w-full sm:w-auto"
+    className: "flex flex-wrap items-center gap-3 w-full md:w-auto"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
   }, /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-slate-700 whitespace-nowrap"
   }, "Mes:"), /*#__PURE__*/React.createElement("select", {
     value: mesCronSel,
     onChange: e => setMesCronSel(e.target.value),
     className: "p-2 border border-slate-200 rounded-lg font-semibold text-slate-800 text-xs w-44"
-  }, ["Septiembre 2026", "Octubre 2026", "Noviembre 2026", "Diciembre 2026", "Enero 2027", "Febrero 2027", "Marzo 2027", "Abril 2027", "Mayo 2027", "Junio 2027", "Julio 2027"].map(m => /*#__PURE__*/React.createElement("option", {
+  }, ["Agosto 2026", "Septiembre 2026", "Octubre 2026", "Noviembre 2026", "Diciembre 2026", "Enero 2027", "Febrero 2027", "Marzo 2027", "Abril 2027", "Mayo 2027", "Junio 2027", "Julio 2027"].map(m => /*#__PURE__*/React.createElement("option", {
     key: m,
     value: m
-  }, m))), /*#__PURE__*/React.createElement("span", {
-    className: "font-bold text-slate-700 whitespace-nowrap ml-2"
-  }, "Profesional:"), /*#__PURE__*/React.createElement("select", {
+  }, m)))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-slate-700 whitespace-nowrap"
+  }, "Área Especialista:"), /*#__PURE__*/React.createElement("select", {
     value: docenteCronSel,
     onChange: e => setDocenteCronSel(e.target.value),
-    className: "p-2 border border-slate-200 rounded-lg font-semibold text-slate-800 text-xs w-56"
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "TODOS"
-  }, "Agenda Global Consolidada"), personal.map((p, i) => /*#__PURE__*/React.createElement("option", {
-    key: i,
-    value: p.Nombre_Completo || p.nombre || ''
-  }, p.Nombre_Completo || p.nombre)))), /*#__PURE__*/React.createElement("button", {
+    className: "p-2 border border-slate-200 rounded-lg font-semibold text-slate-800 text-xs w-64"
+  }, especialistasCrono.map(esp => /*#__PURE__*/React.createElement("option", {
+    key: esp.id,
+    value: esp.id
+  }, esp.nombre))))), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => descargarArchivoAutenticado(`/api/cronogramas/pdf?mes=${encodeURIComponent(mesCronSel)}&docente=${encodeURIComponent(docenteCronSel === 'TODOS' ? user.nombre : docenteCronSel)}`, `Cronograma_${mesCronSel.replace(/ /g, '_')}.pdf`),
-    className: "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition flex items-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+    onClick: () => descargarArchivoAutenticado(`/api/cronogramas/pdf?mes=${encodeURIComponent(mesCronSel)}&docente=${encodeURIComponent(docenteCronSel === 'TODOS' ? user.nombre : docenteCronSel)}`, `Cronograma_${mesCronSel.replace(/ /g, '_')}_${docenteCronSel.replace(/ /g, '_')}.pdf`),
+    className: "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition flex items-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap self-end md:self-auto"
   }, /*#__PURE__*/React.createElement("span", null, "📄"), /*#__PURE__*/React.createElement("span", null, "Descargar Cronograma Oficial (PDF)"))), /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "border-b border-slate-100 pb-2 flex justify-between items-center"
-  }, /*#__PURE__*/React.createElement("h3", {
+    className: "border-b border-slate-100 pb-2 flex flex-col sm:flex-row justify-between sm:items-center gap-2"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
     className: "font-bold text-slate-900 text-sm"
-  }, "Actividades y Visitas Escolares · ", mesCronSel), /*#__PURE__*/React.createElement("span", {
-    className: "text-[11px] text-slate-500"
-  }, "Supervisión institucional del equipo multidisciplinario")), /*#__PURE__*/React.createElement("div", {
+  }, "Actividades y Visitas Escolares · ", mesCronSel), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-500"
+  }, "Supervisión institucional del equipo técnico: ", docenteCronSel === 'TODOS' ? 'Consolidado Global Especialistas' : docenteCronSel)), /*#__PURE__*/React.createElement("span", {
+    className: "px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg font-bold text-xs"
+  }, "Actividades: ", actividadesCrono.length)), /*#__PURE__*/React.createElement("div", {
     className: "overflow-x-auto"
   }, /*#__PURE__*/React.createElement("table", {
     className: "w-full text-left text-xs"

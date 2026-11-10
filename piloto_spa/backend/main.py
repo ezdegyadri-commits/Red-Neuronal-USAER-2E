@@ -1360,8 +1360,13 @@ def guardar_config_oficios(payload: Dict[str, Any], user: SessionUser = Depends(
 # 7. HORARIOS, CRONOGRAMAS, CALENDARIO, MAESTROS PRIMARIA, NOVEDADES, JUNTAS, METAS, TRÁMITES E INFORMES
 # -------------------------------------------------------------
 @app.get("/api/horarios")
-def listar_horarios(user: SessionUser = Depends(validar_token_sesion)):
-    return obtener_horarios_modulo(user.rol, user.escuelas_permitidas, user.nombre)
+def listar_horarios(
+    escuela: Optional[str] = None,
+    docente: Optional[str] = None,
+    user: SessionUser = Depends(validar_token_sesion)
+):
+    target_doc = docente if (docente and user.director) else (user.nombre if not user.director else "")
+    return obtener_horarios_modulo(user.rol, user.escuelas_permitidas, target_doc, escuela=escuela or "")
 
 
 @app.post("/api/horarios")
@@ -1370,8 +1375,14 @@ def guardar_horario(payload: Dict[str, Any], user: SessionUser = Depends(validar
 
 
 @app.get("/api/cronogramas")
-def listar_cronogramas(user: SessionUser = Depends(validar_token_sesion)):
-    return obtener_cronogramas_modulo(user.rol, user.escuelas_permitidas, user.nombre)
+def listar_cronogramas(
+    mes: Optional[str] = None,
+    docente: Optional[str] = None,
+    usuario: Optional[str] = None,
+    user: SessionUser = Depends(validar_token_sesion)
+):
+    target = (docente or usuario) if (docente or usuario) and user.director else (user.nombre if not user.director else "")
+    return obtener_cronogramas_modulo(user.rol, user.escuelas_permitidas, target, mes=mes or "")
 
 
 @app.post("/api/cronogramas")
@@ -1459,9 +1470,85 @@ def listar_personal_endpoint(user: SessionUser = Depends(validar_token_sesion)):
     return df.to_dict(orient="records") if not df.empty else []
 
 
+@app.get("/api/ai/motores")
+def listar_motores_ia(user: SessionUser = Depends(validar_token_sesion)):
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    motores = [
+        {
+            "id": "gemini-1.5-flash",
+            "nombre": "Google Gemini 1.5 Flash (Rápido y Oficial)",
+            "proveedor": "Google",
+            "disponible": bool(gemini_key),
+            "recomendado": bool(gemini_key)
+        },
+        {
+            "id": "gemini-2.5-pro",
+            "nombre": "Google Gemini 2.5 Pro (Razonamiento Complejo)",
+            "proveedor": "Google",
+            "disponible": bool(gemini_key),
+            "recomendado": False
+        },
+        {
+            "id": "gpt-4o",
+            "nombre": "OpenAI GPT-4o",
+            "proveedor": "OpenAI",
+            "disponible": bool(openai_key),
+            "recomendado": bool(openai_key and not gemini_key)
+        },
+        {
+            "id": "plantilla-institucional",
+            "nombre": "Plantilla Institucional USAER 2E (Determinista / Sin API Key)",
+            "proveedor": "USAER 2E",
+            "disponible": True,
+            "recomendado": not bool(gemini_key or openai_key)
+        }
+    ]
+    return {
+        "motores": motores,
+        "proveedor_activo": "gemini" if gemini_key else ("openai" if openai_key else "plantilla"),
+        "tiene_llave": bool(gemini_key or openai_key)
+    }
+
+
 @app.get("/api/relatorias")
 def listar_relatorias(user: SessionUser = Depends(validar_token_sesion)):
-    return coleccion_listar_sql("relatorias")
+    guardadas = coleccion_listar_sql("relatorias")
+    ids_guardadas = {str(r.get("id")) for r in guardadas}
+
+    # Integrar actas históricas de visitas (Juntas de USAER y Reuniones de Trabajo)
+    from data.sql_repository import visitas_sql
+    try:
+        df_v = visitas_sql()
+        if not df_v.empty:
+            for _, v in df_v.iterrows():
+                tipo = str(v.get("Tipo_Acta") or "").strip()
+                motivo = str(v.get("Motivo") or "").strip()
+                if any(k in tipo.lower() or k in motivo.lower() for k in ["junta", "reunión", "reunion", "cte", "consejo técnico"]):
+                    vid = f"visita-{v.get('ID_Visita')}"
+                    if vid in ids_guardadas:
+                        continue
+                    obs = str(v.get("Observaciones") or "").strip()
+                    evid = str(v.get("Evidencia") or "").strip()
+                    guardadas.append({
+                        "id": vid,
+                        "fecha": str(v.get("Fecha") or "")[:10],
+                        "sesion": motivo or tipo or "Reunión de Trabajo",
+                        "tipo_junta": tipo or "Junta de USAER",
+                        "modalidad": "Presencial" + (f" ({v.get('Escuela')})" if v.get("Escuela") else ""),
+                        "tema": motivo or "Atención Pedagógica y Organización Escolar",
+                        "cuerpo": obs or f"Reunión colegiada celebrada en {v.get('Escuela') or 'Sede USAER 02E'}.",
+                        "acuerdos": evid or "• Continuar con el acompañamiento pedagógico programado.",
+                        "asistentes": 6,
+                        "autor": str(v.get("Personal") or "Dirección USAER"),
+                        "origen": "Histórico (Actas de Visita)",
+                        "guardado_en": str(v.get("Fecha") or "")
+                    })
+    except Exception as exc:
+        logger.warning("Aviso integrando visitas en relatorias: %s", exc)
+
+    guardadas.sort(key=lambda x: str(x.get("fecha") or ""), reverse=True)
+    return guardadas
 
 
 @app.post("/api/relatorias")
@@ -1492,50 +1579,94 @@ def generar_relatoria_endpoint(payload: Dict[str, Any], user: SessionUser = Depe
     tipo_junta = str(payload.get("tipo_junta") or "Junta de USAER")
     modalidad_junta = str(payload.get("modalidad_junta") or "Sesión de CTE")
     fecha_str = str(payload.get("fecha") or time.strftime("%Y-%m-%d"))
+    motor_solicitado = str(payload.get("motor") or "").strip().lower()
+    api_key_manual = str(payload.get("api_key_manual") or "").strip()
 
     texto_generado = None
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if api_key:
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            prompt = (
-                f"Actúa como secretario técnico de la USAER 02-E y redacta una relatoría institucional "
-                f"de la sesión indicada. No inventes hechos ni compromisos; basa la redacción en las notas provistas.\n"
-                f"Estructura el cuerpo en:\n"
-                f"1. Contexto y desarrollo: síntesis formal del diálogo colegiado.\n"
-                f"2. Reflexiones y retos pedagógicos.\n"
-                f"3. Acuerdos y compromisos con responsables y plazos.\n\n"
-                f"Tipo de junta: {tipo_junta}\n"
-                f"Modalidad: {modalidad_junta}\n"
-                f"Fecha de la sesión: {fecha_str}\n"
-                f"Sesión: {sesion}\n"
-                f"Tema central: {tema}\n"
-                f"Notas de Dirección: {notas or 'Sin notas adicionales'}\n"
-            )
-            res = model.generate_content(prompt)
-            if res and res.text:
-                texto_generado = res.text.strip()
-        except Exception as e:
-            logger.warning(f"Generador externo relatorías no disponible: {e}")
+    motor_utilizado = "Plantilla Institucional Determinista"
 
+    prompt = (
+        f"Actúa como secretario técnico de la USAER 02-E y redacta una relatoría institucional "
+        f"de la sesión indicada. No inventes hechos ni compromisos; basa la redacción en las notas provistas.\n"
+        f"Estructura el cuerpo en:\n"
+        f"1. Contexto y desarrollo: síntesis formal del diálogo colegiado.\n"
+        f"2. Reflexiones y retos pedagógicos.\n"
+        f"3. Acuerdos y compromisos con responsables y plazos.\n\n"
+        f"Tipo de junta: {tipo_junta}\n"
+        f"Modalidad: {modalidad_junta}\n"
+        f"Fecha de la sesión: {fecha_str}\n"
+        f"Sesión: {sesion}\n"
+        f"Tema central: {tema}\n"
+        f"Notas de Dirección: {notas or 'Revisión técnica de atención pedagógica y ajustes razonables'}\n"
+    )
+
+    # 1. Probar Gemini si fue seleccionado o si hay llave Gemini
+    gemini_key = api_key_manual if (api_key_manual and "AIza" in api_key_manual) else (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    if not texto_generado and (motor_solicitado.startswith("gemini") or (gemini_key and not motor_solicitado.startswith("gpt") and not motor_solicitado.startswith("plantilla"))):
+        if gemini_key:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=gemini_key)
+                modelo_nom = "gemini-1.5-flash"
+                if "2.5" in motor_solicitado or "pro" in motor_solicitado:
+                    modelo_nom = "gemini-1.5-pro"
+                model = genai.GenerativeModel(modelo_nom)
+                res = model.generate_content(prompt)
+                if res and res.text:
+                    texto_generado = res.text.strip()
+                    motor_utilizado = f"Google Gemini ({modelo_nom})"
+            except Exception as e:
+                logger.warning(f"Generador Gemini relatorías no disponible: {e}")
+
+    # 2. Probar OpenAI si fue seleccionado o si hay llave OpenAI
+    openai_key = api_key_manual if (api_key_manual and api_key_manual.startswith("sk-")) else os.getenv("OPENAI_API_KEY")
+    if not texto_generado and (motor_solicitado.startswith("gpt") or (openai_key and not motor_solicitado.startswith("plantilla"))):
+        if openai_key:
+            try:
+                import urllib.request
+                import json
+                req_data = json.dumps({
+                    "model": "gpt-4o",
+                    "messages": [
+                        {"role": "system", "content": "Eres el secretario técnico de la USAER 02E. Redactas relatorías institucionales formales."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.4
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    "https://api.openai.com/v1/chat/completions",
+                    data=req_data,
+                    headers={
+                        "Authorization": f"Bearer {openai_key}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    resp_json = json.loads(resp.read().decode("utf-8"))
+                    texto_generado = resp_json["choices"][0]["message"]["content"].strip()
+                    motor_utilizado = "OpenAI GPT-4o"
+            except Exception as e:
+                logger.warning(f"Generador OpenAI relatorías no disponible: {e}")
+
+    # 3. Si no hay proveedor externo o falló, plantilla institucional estructurada
     if not texto_generado:
+        motor_utilizado = "Plantilla Institucional Determinista"
         texto_generado = (
             f"1. Contexto y desarrollo:\n"
-            f"El personal de la USAER 02-E se reunió en modalidad {modalidad_junta.lower()} ({tipo_junta}) "
+            f"El personal docente y técnico de la USAER 02-E se reunió formalmente en modalidad {modalidad_junta.lower()} ({tipo_junta}) "
             f"para abordar la temática «{tema}» correspondiente a la {sesion}.\n"
-            f"{notas if notas else 'Se dio inicio con la revisión de prioridades técnico-pedagógicas y el análisis de la atención a alumnos con BAP.'}\n\n"
+            f"{notas if notas else 'Se dio inicio con la revisión de prioridades técnico-pedagógicas, el análisis colegiado de la atención a alumnos que enfrentan BAP y la organización de los apoyos en las escuelas primarias adscritas.'}\n\n"
             f"2. Reflexiones y retos pedagógicos:\n"
             f"El colegiado reflexionó sobre la importancia de consolidar los ajustes razonables en las aulas regulares, "
-            f"fortaleciendo la colaboración interdisciplinaria entre docentes de apoyo, especialistas de área y personal directivo.\n\n"
+            f"fortaleciendo la colaboración interdisciplinaria entre docentes de apoyo, especialistas de área y personal directivo.\n"
+            f"Se enfatizó la necesidad de mantener actualizados los expedientes institucionales y articular la evaluación psicopedagógica con la planeación de intervención.\n\n"
             f"3. Acuerdos y compromisos:\n"
             f"• Dar seguimiento puntual a las evaluaciones psicopedagógicas y planes de intervención vigentes.\n"
             f"• Coordinar las visitas de acompañamiento escolar conforme a los cronogramas publicados.\n"
-            f"• Mantener actualizados los expedientes y registros en la plataforma institucional."
+            f"• Mantener actualizados los expedientes y registros en la plataforma institucional USAER 2E."
         )
 
-    return {"status": "success", "texto": texto_generado}
+    return {"status": "success", "texto": texto_generado, "motor_utilizado": motor_utilizado}
 
 
 @app.get("/api/relatorias/{relatoria_id}/pdf")
@@ -1546,6 +1677,24 @@ def descargar_relatoria_pdf(relatoria_id: str, user: SessionUser = Depends(valid
     if not rel:
         guardados = coleccion_listar_sql("relatorias")
         rel = next((r for r in guardados if str(r.get("id")) == str(relatoria_id)), None)
+    if not rel and relatoria_id.startswith("visita-"):
+        from data.sql_repository import visitas_sql
+        df_v = visitas_sql()
+        target_vid = relatoria_id.replace("visita-", "")
+        v_sub = df_v[df_v["ID_Visita"] == target_vid]
+        if not v_sub.empty:
+            vr = v_sub.iloc[0]
+            rel = {
+                "id": relatoria_id,
+                "fecha": str(vr.get("Fecha") or "")[:10],
+                "sesion": str(vr.get("Motivo") or vr.get("Tipo_Acta") or "Reunión de Trabajo"),
+                "tipo_junta": str(vr.get("Tipo_Acta") or "Junta de USAER"),
+                "modalidad": "Presencial (" + str(vr.get("Escuela") or "USAER") + ")",
+                "tema": str(vr.get("Motivo") or "Reunión de Trabajo Colegiado"),
+                "cuerpo": str(vr.get("Observaciones") or f"Reunión celebrada en {vr.get('Escuela')}."),
+                "acuerdos": str(vr.get("Evidencia") or "• Seguimiento puntual a los compromisos acordados."),
+                "asistentes": 6
+            }
     if not rel:
         raise HTTPException(status_code=404, detail="Relatoría no encontrada.")
     fecha_dt = None
