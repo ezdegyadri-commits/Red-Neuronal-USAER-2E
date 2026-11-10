@@ -7,7 +7,7 @@ import time
 import sys
 from pathlib import Path
 
-BASE_RAW = "https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USAER-2E/piloto-spa"
+BASE_RAW = "https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USAER-2E/efd32b7"
 
 # 0. Eliminar directorios sombra accidentales en /home/uppcoder/app
 for bogus in [Path("/home/uppcoder/app/piloto_spa"), Path("/home/uppcoder/app/static")]:
