@@ -139,8 +139,26 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-def reconciliar_base_datos() -> Dict[str, Any]:
-    """Sincroniza e hidrata el 100% de la información histórica desde semilla_historica_completa.json.gz."""
+def reconciliar_base_datos(confirmacion_manual: bool = False) -> Dict[str, Any]:
+    """Herramienta administrativa de migración histórica manual.
+
+    SALVAGUARDA ESTRICTA DE DATOS OPERATIVOS:
+    1. DESACTIVADA DEL ARRANQUE: Nunca se ejecuta automáticamente en el startup de FastAPI.
+    2. PROTEGIDA: Requiere el parámetro explícito confirmacion_manual=True.
+    3. SIN DESCARGAS EXTERNAS: No descarga semillas ni archivos desde GitHub.
+    4. NO DESTRUCTIVA: Nunca sobrescribe alumnos, usuarios, contraseñas,
+       planeaciones, EPP ni documentos existentes en PostgreSQL. Solo inserta registros ausentes.
+    5. NUNCA ANULA ALUMNOS: Se eliminó cualquier lógica de marcado a ANULADO_MIGRACION.
+    """
+    if not confirmacion_manual:
+        logging.getLogger("uvicorn").warning(
+            "reconciliar_base_datos invocada sin confirmacion_manual=True. Operación CANCELADA para proteger datos operativos."
+        )
+        return {
+            "status": "bloqueado",
+            "motivo": "Reconciliación manual protegida. Requiere confirmacion_manual=True explícita."
+        }
+
     from data.database import (
         Base,
         get_engine,
@@ -194,116 +212,71 @@ def reconciliar_base_datos() -> Dict[str, Any]:
                     with open(cand, "r", encoding="utf-8") as f:
                         data = json.load(f)
                 if data and "alumnos" in data and len(data["alumnos"]) > 0:
-                    logging.getLogger("uvicorn").info("Semilla cargada con éxito desde %s (%d alumnos)", cand, len(data["alumnos"]))
+                    logging.getLogger("uvicorn").info("Semilla leída localmente desde %s (%d alumnos)", cand, len(data["alumnos"]))
                     break
             except Exception as e:
-                logging.getLogger("uvicorn").warning("Error leyendo semilla %s: %s", cand, e)
+                logging.getLogger("uvicorn").warning("Error leyendo semilla local %s: %s", cand, e)
 
-    # Fallback seguro: Descarga directa desde GitHub de la semilla histórica oficial si no está en disco
     if not data or "alumnos" not in data or len(data["alumnos"]) == 0:
-        try:
-            import urllib.request
-            url = "https://raw.githubusercontent.com/ezdegyadri-commits/Red-Neuronal-USAER-2E/piloto-spa/data/semilla_historica_completa.json.gz"
-            logging.getLogger("uvicorn").info("Descargando semilla histórica de emergencia desde GitHub: %s", url)
-            tmp_gz = Path("/tmp/semilla_historica_completa.json.gz")
-            tmp_gz.parent.mkdir(parents=True, exist_ok=True)
-            urllib.request.urlretrieve(url, str(tmp_gz))
-            with gzip.open(tmp_gz, "rt", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as exc:
-            logging.getLogger("uvicorn").error("Error descargando semilla histórica remota: %s", exc)
-            return {"status": "sin_semilla", "error": str(exc)}
+        logging.getLogger("uvicorn").warning("reconciliar_base_datos: no se encontró semilla local válida. Operación omitida.")
+        return {"status": "sin_semilla_local"}
 
     resumen = {}
     with get_session() as session:
-        # 1. Escuelas
+        # 1. Escuelas (solo insertar si no existen)
         for item in data.get("escuelas", []):
             obj = session.query(Escuela).filter_by(id=item["id"]).first()
             if not obj:
                 session.add(Escuela(**item))
-            else:
-                for k, v in item.items():
-                    setattr(obj, k, v)
         session.commit()
 
-        # 2. Personal
+        # 2. Personal (solo insertar si no existen)
         for item in data.get("personal", []):
             obj = session.query(Personal).filter_by(id=item["id"]).first()
             if not obj:
                 session.add(Personal(**item))
-            else:
-                for k, v in item.items():
-                    setattr(obj, k, v)
         session.commit()
 
-        # 3. Usuarios
+        # 3. Usuarios (solo insertar si no existen; NUNCA modificar contraseñas, roles ni escuelas)
         for item in data.get("usuarios", []):
             obj = session.query(Usuario).filter_by(usuario=item["usuario"]).first() or session.query(Usuario).filter_by(id=item["id"]).first()
             if not obj:
                 session.add(Usuario(**item))
-            else:
-                obj.nombre = item.get("nombre", obj.nombre)
-                obj.usuario = item.get("usuario", obj.usuario)
-                obj.password = item.get("password", obj.password)
-                obj.rol = item.get("rol", obj.rol)
-                obj.escuelas_permitidas = item.get("escuelas_permitidas", obj.escuelas_permitidas)
         session.commit()
 
-        # 4. Alumnos canónicos (sin romper llaves foráneas previas)
-        ids_canonicos = set()
+        # 4. Alumnos canónicos (solo insertar si no existen; NUNCA sobrescribir alumnos ni alterar estatus)
         for item in data.get("alumnos", []):
             aid = item["id"]
-            ids_canonicos.add(aid)
-            # Respetar el estatus canonico del alumno (BAJA, INACTIVO, DUPLICADO - CONSERVADO, PENDIENTE DE VALIDACION, ACTIVO)
-            item_status = str(item.get("estatus") or "ACTIVO").strip().upper()
-            item["estatus"] = item_status
-
             obj = session.query(Alumno).filter_by(id=aid).first()
             if not obj:
+                item_status = str(item.get("estatus") or "ACTIVO").strip().upper()
+                item["estatus"] = item_status
                 session.add(Alumno(**item))
-            else:
-                for k, v in item.items():
-                    if hasattr(obj, k):
-                        setattr(obj, k, v)
-                obj.estatus = item_status
-
-        # Restaurar estatus ACTIVO para cualquier alumno real con formato ALU- que haya sido marcado erróneamente como anulado
-        for alu_existente in session.query(Alumno).all():
-            aid_str = str(alu_existente.id or "")
-            if aid_str.startswith("alu-uppcoder"):
-                continue
-            if aid_str not in ids_canonicos:
-                alu_existente.estatus = "ANULADO_MIGRACION"
-                alu_existente.id_escuela = ""
-                alu_existente.maestra_apoyo = ""
-            elif alu_existente.estatus == "ANULADO_MIGRACION":
-                alu_existente.estatus = "ACTIVO"
-
         session.commit()
         resumen["alumnos"] = session.query(Alumno).filter(Alumno.estatus == "ACTIVO").count()
 
-        # 5. Planeaciones (167 documentos con JSON reconstruido e íntegro)
+        # 5. Planeaciones (solo insertar si no existen; NUNCA sobrescribir planeaciones activas)
         for item in data.get("planeaciones", []):
             pid = item["id"]
-            payload_str = item.get("payload_json", "{}")
-            datos_str = item.get("datos_json", "{}")
-            metadatos_str = item.get("metadatos_json", "{}")
-            tablas_str = item.get("tablas_json", "{}")
-            textos_str = item.get("textos_json", "{}")
-            obs_dir = item.get("observaciones_director", "")
-            if payload_str and payload_str != "{}" and datos_str == "{}":
-                try:
-                    parsed = json.loads(payload_str)
-                    if isinstance(parsed, dict):
-                        datos_str = json.dumps(parsed.get("datos", {}), ensure_ascii=False)
-                        metadatos_str = json.dumps(parsed.get("metadatos", {}), ensure_ascii=False)
-                        tablas_str = json.dumps(parsed.get("tablas", {}), ensure_ascii=False)
-                        textos_str = json.dumps(parsed.get("textos", {}), ensure_ascii=False)
-                        obs_dir = str(parsed.get("observaciones_director", obs_dir) or "")
-                except Exception:
-                    pass
             obj = session.query(PlaneacionDoc).filter_by(id=pid).first()
             if not obj:
+                payload_str = item.get("payload_json", "{}")
+                datos_str = item.get("datos_json", "{}")
+                metadatos_str = item.get("metadatos_json", "{}")
+                tablas_str = item.get("tablas_json", "{}")
+                textos_str = item.get("textos_json", "{}")
+                obs_dir = item.get("observaciones_director", "")
+                if payload_str and payload_str != "{}" and datos_str == "{}":
+                    try:
+                        parsed = json.loads(payload_str)
+                        if isinstance(parsed, dict):
+                            datos_str = json.dumps(parsed.get("datos", {}), ensure_ascii=False)
+                            metadatos_str = json.dumps(parsed.get("metadatos", {}), ensure_ascii=False)
+                            tablas_str = json.dumps(parsed.get("tablas", {}), ensure_ascii=False)
+                            textos_str = json.dumps(parsed.get("textos", {}), ensure_ascii=False)
+                            obs_dir = str(parsed.get("observaciones_director", obs_dir) or "")
+                    except Exception:
+                        pass
                 session.add(PlaneacionDoc(
                     id=pid,
                     cuenta=item.get("cuenta", ""),
@@ -318,40 +291,19 @@ def reconciliar_base_datos() -> Dict[str, Any]:
                     payload_json=payload_str,
                     observaciones_director=obs_dir,
                 ))
-            else:
-                # Actualizar si estaba truncado o sin datos_json
-                if not obj.datos_json or obj.datos_json == "{}" or len(payload_str) > len(obj.payload_json or ""):
-                    obj.cuenta = item.get("cuenta", obj.cuenta)
-                    obj.formato = item.get("formato", obj.formato)
-                    obj.estado = item.get("estado", obj.estado)
-                    obj.revision = item.get("revision", obj.revision)
-                    obj.guardado_en = item.get("guardado_en", obj.guardado_en)
-                    obj.datos_json = datos_str
-                    obj.metadatos_json = metadatos_str
-                    obj.tablas_json = tablas_str
-                    obj.textos_json = textos_str
-                    obj.payload_json = payload_str
-                    obj.observaciones_director = obs_dir
         session.commit()
         resumen["planeaciones"] = session.query(PlaneacionDoc).count()
 
-        # 6. EPP (9 expedientes multi-área reconstruidos de 249 versiones)
+        # 6. EPP (solo insertar si no existen; NUNCA sobrescribir capturas recientes)
         for item in data.get("epp", []):
             eid = item["id"]
             obj = session.query(EPPDoc).filter_by(id=eid).first()
             if not obj:
                 session.add(EPPDoc(**item))
-            else:
-                obj.alumno = item.get("alumno", obj.alumno)
-                obj.ciclo = item.get("ciclo", obj.ciclo)
-                obj.estado = item.get("estado", obj.estado)
-                obj.revision = item.get("revision", obj.revision)
-                obj.fecha = item.get("fecha", obj.fecha)
-                obj.partes_json = item.get("partes_json", obj.partes_json)
         session.commit()
         resumen["epp"] = session.query(EPPDoc).count()
 
-        # 7. Anexo 3, Anexo 4, Anexo 5, Anexo 7, Visitas, Oficios, Docentes y Colecciones
+        # 7. Anexos, Visitas, Oficios, Docentes y Colecciones (solo insertar registros ausentes)
         for ModelCls, key_name in [
             (Anexo3Deteccion, "anexo3"),
             (Anexo4Sugerencia, "anexo4"),
@@ -367,7 +319,6 @@ def reconciliar_base_datos() -> Dict[str, Any]:
                 items = data.get(key_name, [])
                 if not items:
                     continue
-                # Verificar primero si la tabla existe en la BD
                 try:
                     session.query(ModelCls).first()
                 except Exception:
@@ -391,32 +342,19 @@ def reconciliar_base_datos() -> Dict[str, Any]:
             except Exception as exc:
                 session.rollback()
                 logging.getLogger("uvicorn").warning("Aviso reconciliando %s: %s", key_name, exc)
-                # Inserción registro a registro como fallback seguro
-                try:
-                    for it in data.get(key_name, []):
-                        iid = str(it.get("id") or "").strip()
-                        if not iid:
-                            continue
-                        exists = session.query(ModelCls).filter_by(id=iid).first()
-                        if not exists:
-                            filt_it = {k: v for k, v in it.items() if k in valid_columns}
-                            session.add(ModelCls(**filt_it))
-                    session.commit()
-                    resumen[key_name] = session.query(ModelCls).count()
-                except Exception as exc2:
-                    session.rollback()
-                    logging.getLogger("uvicorn").error("Error persistiendo %s: %s", key_name, exc2)
 
     return resumen
 
 
 @app.on_event("startup")
 def inicializar_base_datos():
-    """Inicializa el esquema relacional y asegura la presencia del 100% de los datos históricos."""
-    try:
-        reconciliar_base_datos()
-    except Exception as exc:
-        logging.getLogger("uvicorn").error("Error inicializando semilla relacional: %s", exc)
+    """Arranque seguro de producción:
+    La reconciliación automática de base de datos está estrictamente DESACTIVADA
+    para proteger capturas nuevas, estados y planeaciones de las maestras.
+    """
+    logging.getLogger("uvicorn").info(
+        "Arranque de producción: Reconciliación automática DESACTIVADA para proteger datos operativos y capturas."
+    )
 
 
 

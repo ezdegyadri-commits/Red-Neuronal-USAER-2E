@@ -50,7 +50,6 @@ for d_dir in data_dirs:
     descargar("data/database.py", d_dir / "database.py")
     descargar("data/sql_repository.py", d_dir / "sql_repository.py")
     descargar("data/origen_operativo.py", d_dir / "origen_operativo.py")
-    descargar("data/semilla_historica_completa.json.gz", d_dir / "semilla_historica_completa.json.gz")
 
 services_dirs = [
     Path("/home/uppcoder/app/services"),
@@ -84,7 +83,6 @@ for b_dir in backend_dirs:
     descargar("data/database.py", rel_data_dir / "database.py")
     descargar("data/sql_repository.py", rel_data_dir / "sql_repository.py")
     descargar("data/origen_operativo.py", rel_data_dir / "origen_operativo.py")
-    descargar("data/semilla_historica_completa.json.gz", rel_data_dir / "semilla_historica_completa.json.gz")
     rel_svc_dir = b_dir.parent.parent / "services"
     descargar("services/planeacion_local.py", rel_svc_dir / "planeacion_local.py")
     descargar("services/planeacion_huella.py", rel_svc_dir / "planeacion_huella.py")
@@ -118,7 +116,7 @@ res = subprocess.run(
     [
         py_exe,
         "-c",
-        "import main; res = main.reconciliar_base_datos(); print('RECONCILIACION DB:', res); print('MAIN APP CARGADA OK:', main.app.title, 'ERROR:', main.STARTUP_ERROR)"
+        "import main; print('MAIN APP CARGADA OK:', main.app.title, 'ERROR:', main.STARTUP_ERROR)"
     ],
     capture_output=True, text=True, cwd="/home/uppcoder/app"
 )

@@ -187,13 +187,6 @@ def obtener_alumnos_autorizados(
     """Consulta el padrón de alumnos filtrado estrictamente por los permisos del usuario en la BD."""
     df = alumnos_sql()
     if df.empty:
-        try:
-            from piloto_spa.backend.main import reconciliar_base_datos
-            reconciliar_base_datos()
-            df = alumnos_sql()
-        except Exception:
-            pass
-    if df.empty:
         return []
 
     records = df.to_dict(orient="records")

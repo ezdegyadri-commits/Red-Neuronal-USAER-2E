@@ -70,22 +70,28 @@ except Exception as exc:
         return HTMLResponse(f"<h1>USAER 2E 2.0</h1><pre>{STARTUP_ERROR}</pre>")
 
 
-def reconciliar_base_datos():
-    """Sincroniza e hidrata el 100% de la información histórica desde semilla_historica_completa.json.gz."""
+def reconciliar_base_datos(confirmacion_manual: bool = False):
+    """Herramienta de migración manual protegida.
+    Requiere confirmacion_manual=True explícita. Nunca se ejecuta automáticamente.
+    """
+    if not confirmacion_manual:
+        print("Aviso: reconciliar_base_datos bloqueada porque requiere confirmacion_manual=True.")
+        return {"error": "Reconciliación bloqueada. Requiere confirmacion_manual=True."}
     try:
         from piloto_spa.backend.main import reconciliar_base_datos as _rec
-        return _rec()
+        return _rec(confirmacion_manual=True)
     except Exception as exc:
         print(f"Aviso reconciliación DB: {exc}")
         return {"error": str(exc)}
 
 
 @app.on_event("startup")
-def startup_reconciliacion():
-    try:
-        reconciliar_base_datos()
-    except Exception as e:
-        print(f"Aviso startup DB: {e}")
+def startup_seguro():
+    """Arranque seguro de FastAPI:
+    La reconciliación automática de base de datos está estrictamente DESACTIVADA
+    para proteger capturas nuevas, estados y planeaciones de las maestras.
+    """
+    print("Startup completado: Reconciliación automática DESACTIVADA para protección de datos.")
 
 
 
