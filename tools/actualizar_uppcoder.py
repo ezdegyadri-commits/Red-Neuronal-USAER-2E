@@ -19,7 +19,10 @@ def descargar(rel_url, dest_path):
     url = f"{BASE_RAW}/{rel_url}?v={int(time.time())}"
     print(f"Descargando {rel_url} -> {dest_path}")
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(url, str(dest_path))
+    try:
+        urllib.request.urlretrieve(url, str(dest_path))
+    except Exception as exc:
+        print(f"Aviso: no se pudo descargar {rel_url}: {exc}")
 
 # Detectar todos los directorios backend reales (usaer2e + releases de spark)
 backend_dirs = []
@@ -62,7 +65,7 @@ doc_dirs = [
     Path("/home/uppcoder/app/documents"),
     Path("/home/uppcoder/app/usaer2e/documents"),
 ]
-doc_files = ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py", "reportes.py", "relatorias.py", "cronogramas.py", "horarios_apoyo.py", "oficios_comision.py"]
+doc_files = ["__init__.py", "planeacion.py", "epp.py", "anexos.py", "oficios.py", "paginacion.py", "visitas.py", "reportes.py", "relatorias.py", "cronogramas.py", "horarios_apoyo.py"]
 for d_dir in doc_dirs:
     for doc_name in doc_files:
         descargar(f"documents/{doc_name}", d_dir / doc_name)
