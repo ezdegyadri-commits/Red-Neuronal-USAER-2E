@@ -1603,8 +1603,11 @@ def generar_relatoria_endpoint(payload: Dict[str, Any], user: SessionUser = Depe
 @app.get("/api/relatorias/{relatoria_id}/pdf")
 def descargar_relatoria_pdf(relatoria_id: str, user: SessionUser = Depends(validar_token_sesion)):
     from documents.relatorias import generar_pdf_oficial
-    guardados = coleccion_listar_sql("relatorias")
-    rel = next((r for r in guardados if str(r.get("id")) == str(relatoria_id)), None)
+    from data.sql_repository import coleccion_obtener_sql
+    rel = coleccion_obtener_sql("relatorias", relatoria_id)
+    if not rel:
+        guardados = coleccion_listar_sql("relatorias")
+        rel = next((r for r in guardados if str(r.get("id")) == str(relatoria_id)), None)
     if not rel:
         raise HTTPException(status_code=404, detail="Relatoría no encontrada.")
     fecha_dt = None

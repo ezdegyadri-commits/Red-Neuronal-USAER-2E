@@ -905,6 +905,59 @@ def guardar_epp_sql(doc: Dict[str, Any]) -> str:
         return eid
 
 
+def _local_colecciones_path() -> Path:
+    for candidate in [Path("/home/uppcoder/app/data/colecciones_locales.json"), Path("data/colecciones_locales.json")]:
+        if candidate.parent.exists():
+            return candidate
+    return Path("data/colecciones_locales.json")
+
+
+def _cargar_colecciones_locales() -> Dict[str, Dict[str, Any]]:
+    p = _local_colecciones_path()
+    if p.exists():
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _guardar_colecciones_locales(data: Dict[str, Dict[str, Any]]):
+    p = _local_colecciones_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        logger.warning("Aviso guardando colecciones locales: %s", exc)
+
+
+def coleccion_obtener_sql(modulo: str, registro_id: str) -> Optional[Dict[str, Any]]:
+    """Obtiene un registro específico de una colección institucional por módulo e ID."""
+    mod_clean = str(modulo).strip()
+    reg_clean = str(registro_id).strip()
+    pk = f"{mod_clean}:{reg_clean}"
+    try:
+        with get_session() as session:
+            r = session.query(ColeccionInstitucional).filter_by(id=pk).first()
+            if r and r.estado != "ANULADO":
+                payload = json.loads(r.payload_json) if r.payload_json else {}
+                item = dict(payload) if isinstance(payload, dict) else {"valor": payload}
+                item.setdefault("id", reg_clean)
+                return item
+    except Exception:
+        pass
+    # Fallback local
+    locales = _cargar_colecciones_locales()
+    raw = locales.get(pk)
+    if raw and raw.get("estado") != "ANULADO":
+        item = dict(raw.get("payload") or {})
+        item.setdefault("id", reg_clean)
+        return item
+    return None
+
+
 def coleccion_listar_sql(
     modulo: str,
     id_escuela: Optional[str] = None,
@@ -912,9 +965,10 @@ def coleccion_listar_sql(
     cuenta: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Lista registros de una colección institucional con filtrado indexado y tolerancia a fallos."""
+    mod_clean = str(modulo).strip()
     try:
         with get_session() as session:
-            query = session.query(ColeccionInstitucional).filter(ColeccionInstitucional.modulo == str(modulo).strip())
+            query = session.query(ColeccionInstitucional).filter(ColeccionInstitucional.modulo == mod_clean)
             if id_escuela:
                 query = query.filter(ColeccionInstitucional.id_escuela == str(id_escuela).strip())
             if id_alumno:
@@ -922,30 +976,48 @@ def coleccion_listar_sql(
             if cuenta:
                 query = query.filter(ColeccionInstitucional.cuenta == str(cuenta).strip())
             rows = query.order_by(ColeccionInstitucional.fecha.desc(), ColeccionInstitucional.actualizado_en.desc()).all()
-            out = []
-            for r in rows:
-                if r.estado == "ANULADO":
-                    continue
-                try:
-                    payload = json.loads(r.payload_json) if r.payload_json else {}
-                except Exception:
-                    payload = {}
-                if isinstance(payload, dict):
-                    item = dict(payload)
-                else:
-                    item = {"valor": payload}
-                item.setdefault("id", str(r.registro_id or r.id))
-                item.setdefault("_modulo", str(r.modulo))
-                item.setdefault("_cuenta", str(r.cuenta or ""))
-                item.setdefault("_id_escuela", str(r.id_escuela or ""))
-                item.setdefault("_id_alumno", str(r.id_alumno or ""))
-                item.setdefault("_fecha", str(r.fecha or ""))
-                item.setdefault("_estado", str(r.estado or "ACTIVO"))
-                out.append(item)
-            return out
+            if rows:
+                out = []
+                for r in rows:
+                    if r.estado == "ANULADO":
+                        continue
+                    try:
+                        payload = json.loads(r.payload_json) if r.payload_json else {}
+                    except Exception:
+                        payload = {}
+                    item = dict(payload) if isinstance(payload, dict) else {"valor": payload}
+                    item.setdefault("id", str(r.registro_id or r.id))
+                    item.setdefault("_modulo", str(r.modulo))
+                    item.setdefault("_cuenta", str(r.cuenta or ""))
+                    item.setdefault("_id_escuela", str(r.id_escuela or ""))
+                    item.setdefault("_id_alumno", str(r.id_alumno or ""))
+                    item.setdefault("_fecha", str(r.fecha or ""))
+                    item.setdefault("_estado", str(r.estado or "ACTIVO"))
+                    out.append(item)
+                return out
     except Exception as exc:
         logger.warning("Aviso en coleccion_listar_sql (%s): %s", modulo, exc)
-        return []
+
+    # Fallback persistente local
+    locales = _cargar_colecciones_locales()
+    out = []
+    for pk, r in locales.items():
+        if not pk.startswith(f"{mod_clean}:"):
+            continue
+        if r.get("estado") == "ANULADO":
+            continue
+        if id_escuela and r.get("id_escuela") != str(id_escuela).strip():
+            continue
+        if id_alumno and r.get("id_alumno") != str(id_alumno).strip():
+            continue
+        if cuenta and r.get("cuenta") != str(cuenta).strip():
+            continue
+        payload = r.get("payload") or {}
+        item = dict(payload) if isinstance(payload, dict) else {"valor": payload}
+        item.setdefault("id", r.get("registro_id") or pk.split(":", 1)[-1])
+        item.setdefault("_modulo", mod_clean)
+        out.append(item)
+    return out
 
 
 def coleccion_guardar_sql(
@@ -958,11 +1030,32 @@ def coleccion_guardar_sql(
     fecha: str = "",
     estado: str = "ACTIVO",
 ) -> str:
-    """Guarda o actualiza un registro dentro de una colección institucional."""
+    """Guarda o actualiza un registro dentro de una colección institucional con respaldo en disco."""
     mod_clean = str(modulo).strip()
     reg_clean = str(registro_id or uuid.uuid4().hex[:12]).strip()
     pk = f"{mod_clean}:{reg_clean}"
     payload_str = json.dumps(payload, ensure_ascii=False)
+    
+    # 1. Guardar en respaldo local resistente
+    try:
+        locales = _cargar_colecciones_locales()
+        locales[pk] = {
+            "id": pk,
+            "modulo": mod_clean,
+            "registro_id": reg_clean,
+            "cuenta": str(cuenta or ""),
+            "id_escuela": str(id_escuela or ""),
+            "id_alumno": str(id_alumno or ""),
+            "fecha": str(fecha or time.strftime("%Y-%m-%d")),
+            "estado": str(estado or "ACTIVO"),
+            "payload": payload,
+            "actualizado_en": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        _guardar_colecciones_locales(locales)
+    except Exception as l_exc:
+        logger.warning("Aviso guardando colección local (%s): %s", pk, l_exc)
+
+    # 2. Intentar guardar en base de datos PostgreSQL si la tabla existe
     try:
         with get_session() as session:
             existente = session.query(ColeccionInstitucional).filter_by(id=pk).first()
