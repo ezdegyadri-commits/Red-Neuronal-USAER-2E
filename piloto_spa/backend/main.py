@@ -651,6 +651,7 @@ class VisitaPayload(BaseModel):
 class OficioPayload(BaseModel):
     id: Optional[str] = None
     folio: str = ""
+    folio_manual: Optional[int] = None
     clave_operacion: str = ""
     fecha_emision: str = ""
     fecha_comision: str = ""
@@ -1217,6 +1218,62 @@ def descargar_epp_pdf(alumno_id: str, user: SessionUser = Depends(validar_token_
         raise HTTPException(status_code=500, detail=f"Error generando PDF de EPP: {str(e)}")
 
 
+@app.post("/api/epp/{alumno_id}/pruebas")
+def adjuntar_prueba_epp(
+    alumno_id: str,
+    payload: Dict[str, Any],
+    user: SessionUser = Depends(validar_token_sesion)
+):
+    clean_id = str(alumno_id).replace("epp-", "").strip()
+    _verificar_acceso_alumno(clean_id, user)
+    reg_id = f"prueba-{clean_id}-{uuid.uuid4().hex[:6]}"
+    doc = {
+        "id": reg_id,
+        "alumno_id": clean_id,
+        "nombre_prueba": str(payload.get("nombre_prueba") or "Evaluación Psicopedagógica"),
+        "area": str(payload.get("area") or user.area or "Aprendizaje"),
+        "fecha": str(payload.get("fecha") or time.strftime("%Y-%m-%d")),
+        "aplicador": user.nombre,
+        "puntuaciones": payload.get("puntuaciones", {}),
+        "observaciones": str(payload.get("observaciones") or ""),
+        "nombre_archivo": str(payload.get("nombre_archivo") or ""),
+        "archivo_base64": str(payload.get("archivo_base64") or "")[:500000],
+        "guardado_en": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    coleccion_guardar_sql("epp_pruebas", reg_id, doc, cuenta=user.usuario, fecha=doc["fecha"])
+    return {"status": "success", "id": reg_id, "prueba": doc}
+
+
+@app.get("/api/epp/{alumno_id}/pruebas")
+def listar_pruebas_epp(
+    alumno_id: str,
+    user: SessionUser = Depends(validar_token_sesion)
+):
+    clean_id = str(alumno_id).replace("epp-", "").strip()
+    _verificar_acceso_alumno(clean_id, user)
+    todas = coleccion_listar_sql("epp_pruebas")
+    return [p for p in todas if str(p.get("alumno_id")) == clean_id]
+
+
+@app.post("/api/ai/epp-redaccion")
+def asistente_redaccion_epp(
+    payload: Dict[str, Any],
+    user: SessionUser = Depends(validar_token_sesion)
+):
+    area = str(payload.get("area") or "Aprendizaje")
+    campo = str(payload.get("campo") or "Lectura y escritura funcional")
+    ideas = str(payload.get("ideas") or "").strip()
+
+    propuesta = (
+        f"A partir de los instrumentos aplicados y las observaciones registradas en el área de {area}, "
+        f"el/la alumno/a demuestra competencias iniciales en {campo.lower()}. "
+        f"{ideas if ideas else 'Presenta disposición activa ante las actividades estructuradas con apoyos visuales y modelado directo.'} "
+        f"Se sugiere continuar con la mediación pedagógica diversificada, fortaleciendo la permanencia en la tarea "
+        f"mediante consignas claras, materiales multisensoriales y tiempos flexibles."
+    )
+    return {"status": "success", "campo": campo, "area": area, "propuesta": propuesta}
+
+
 # -------------------------------------------------------------
 # 5. PLANEACIÓN PEDAGÓGICA (FORMATOS XXI, XXIII, XXV, XIX, XX)
 # -------------------------------------------------------------
@@ -1329,6 +1386,7 @@ def listar_oficios(escuela: Optional[str] = None, user: SessionUser = Depends(va
 
 @app.post("/api/oficios")
 def crear_oficio(payload: OficioPayload, user: SessionUser = Depends(validar_token_sesion)):
+    from data.sql_repository import guardar_oficio_comision_sql
     doc = {
         "Folio": payload.folio,
         "Clave_Operacion": payload.clave_operacion or f"{payload.maestra_apoyo}|{payload.escuela}|{payload.fecha_comision}|{payload.asunto}",
@@ -1343,7 +1401,7 @@ def crear_oficio(payload: OficioPayload, user: SessionUser = Depends(validar_tok
         "Horario": payload.horario or "en su horario laboral",
         "Estado": "GENERADO",
     }
-    res = guardar_oficio_documento(doc)
+    res = guardar_oficio_comision_sql(doc, folio_manual=payload.folio_manual)
     return {"status": "success", "oficio": res, "mensaje": "Oficio de comisión emitido correctamente."}
 
 
@@ -1456,6 +1514,13 @@ def guardar_junta(payload: Dict[str, Any], user: SessionUser = Depends(validar_t
     return {"status": "success", "id": reg_id, "documento": doc}
 
 
+@app.get("/api/personal")
+def listar_personal_endpoint(user: SessionUser = Depends(validar_token_sesion)):
+    from data.sql_repository import personal_sql
+    df = personal_sql()
+    return df.to_dict(orient="records") if not df.empty else []
+
+
 @app.get("/api/relatorias")
 def listar_relatorias(user: SessionUser = Depends(validar_token_sesion)):
     return coleccion_listar_sql("relatorias")
@@ -1473,11 +1538,98 @@ def guardar_relatoria(payload: Dict[str, Any], user: SessionUser = Depends(valid
         "tema": str(payload.get("tema") or ""),
         "cuerpo": str(payload.get("cuerpo") or ""),
         "acuerdos": str(payload.get("acuerdos") or ""),
+        "asistentes": int(payload.get("asistentes", 6) or 6),
         "autor": user.nombre,
         "guardado_en": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     coleccion_guardar_sql("relatorias", reg_id, doc, cuenta=user.usuario, fecha=doc["fecha"])
     return {"status": "success", "id": reg_id, "relatoria": doc}
+
+
+@app.post("/api/relatorias/generar")
+def generar_relatoria_endpoint(payload: Dict[str, Any], user: SessionUser = Depends(validar_token_sesion)):
+    sesion = str(payload.get("sesion") or "Primera Sesión")
+    tema = str(payload.get("tema") or "Atención a la Diversidad y BAP")
+    notas = str(payload.get("notas") or "").strip()
+    tipo_junta = str(payload.get("tipo_junta") or "Junta de USAER")
+    modalidad_junta = str(payload.get("modalidad_junta") or "Sesión de CTE")
+    fecha_str = str(payload.get("fecha") or time.strftime("%Y-%m-%d"))
+
+    texto_generado = None
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if api_key:
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            prompt = (
+                f"Actúa como secretario técnico de la USAER 02-E y redacta una relatoría institucional "
+                f"de la sesión indicada. No inventes hechos ni compromisos; basa la redacción en las notas provistas.\n"
+                f"Estructura el cuerpo en:\n"
+                f"1. Contexto y desarrollo: síntesis formal del diálogo colegiado.\n"
+                f"2. Reflexiones y retos pedagógicos.\n"
+                f"3. Acuerdos y compromisos con responsables y plazos.\n\n"
+                f"Tipo de junta: {tipo_junta}\n"
+                f"Modalidad: {modalidad_junta}\n"
+                f"Fecha de la sesión: {fecha_str}\n"
+                f"Sesión: {sesion}\n"
+                f"Tema central: {tema}\n"
+                f"Notas de Dirección: {notas or 'Sin notas adicionales'}\n"
+            )
+            res = model.generate_content(prompt)
+            if res and res.text:
+                texto_generado = res.text.strip()
+        except Exception as e:
+            logger.warning(f"Generador externo relatorías no disponible: {e}")
+
+    if not texto_generado:
+        texto_generado = (
+            f"1. Contexto y desarrollo:\n"
+            f"El personal de la USAER 02-E se reunió en modalidad {modalidad_junta.lower()} ({tipo_junta}) "
+            f"para abordar la temática «{tema}» correspondiente a la {sesion}.\n"
+            f"{notas if notas else 'Se dio inicio con la revisión de prioridades técnico-pedagógicas y el análisis de la atención a alumnos con BAP.'}\n\n"
+            f"2. Reflexiones y retos pedagógicos:\n"
+            f"El colegiado reflexionó sobre la importancia de consolidar los ajustes razonables en las aulas regulares, "
+            f"fortaleciendo la colaboración interdisciplinaria entre docentes de apoyo, especialistas de área y personal directivo.\n\n"
+            f"3. Acuerdos y compromisos:\n"
+            f"• Dar seguimiento puntual a las evaluaciones psicopedagógicas y planes de intervención vigentes.\n"
+            f"• Coordinar las visitas de acompañamiento escolar conforme a los cronogramas publicados.\n"
+            f"• Mantener actualizados los expedientes y registros en la plataforma institucional."
+        )
+
+    return {"status": "success", "texto": texto_generado}
+
+
+@app.get("/api/relatorias/{relatoria_id}/pdf")
+def descargar_relatoria_pdf(relatoria_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from documents.relatorias import generar_pdf_oficial
+    guardados = coleccion_listar_sql("relatorias")
+    rel = next((r for r in guardados if str(r.get("id")) == str(relatoria_id)), None)
+    if not rel:
+        raise HTTPException(status_code=404, detail="Relatoría no encontrada.")
+    fecha_dt = None
+    try:
+        from datetime import date
+        f_str = str(rel.get("fecha", ""))[:10]
+        if f_str:
+            fecha_dt = date.fromisoformat(f_str)
+    except Exception:
+        pass
+    pdf_bytes = generar_pdf_oficial(
+        contenido_relatoria=rel.get("cuerpo", "") + ("\n\n**Acuerdos y compromisos:**\n" + rel.get("acuerdos", "") if rel.get("acuerdos") else ""),
+        num_asistentes=int(rel.get("asistentes", 6) or 6),
+        fecha=fecha_dt,
+        sesion=rel.get("sesion", "Sesión Ordinaria"),
+        tema=rel.get("tema", ""),
+        tipo_junta=rel.get("tipo_junta", "Junta de USAER"),
+        modalidad_junta=rel.get("modalidad", "Junta Académica"),
+    )
+    content_val = pdf_bytes.getvalue() if hasattr(pdf_bytes, "getvalue") else pdf_bytes
+    return Response(
+        content=content_val,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Relatoria_{relatoria_id}.pdf"'},
+    )
 
 
 @app.get("/api/metas")
@@ -1634,9 +1786,16 @@ def descargar_anexo7_plantilla_pdf(user: SessionUser = Depends(validar_token_ses
 
 
 @app.get("/api/horarios/pdf")
-def descargar_horarios_pdf(user: SessionUser = Depends(validar_token_sesion)):
-    from documents.horarios_apoyo import generar_horario_apoyo_pdf
-    horarios_data = obtener_horarios_modulo(user.nombre, user.escuelas_permitidas)
+def descargar_horarios_pdf(
+    escuela: Optional[str] = None,
+    docente: Optional[str] = None,
+    user: SessionUser = Depends(validar_token_sesion)
+):
+    from documents.horarios_apoyo import generar_horario_apoyo_cuadricula_pdf, generar_horario_apoyo_pdf
+    doc_nombre = docente if (docente and user.director) else user.nombre
+    esc_nombre = escuela if (escuela and user.director) else (user.escuelas_permitidas[0] if user.escuelas_permitidas and user.escuelas_permitidas[0] != "TODAS" else "Primaria Adscrita")
+
+    horarios_data = obtener_horarios_modulo(user.rol, user.escuelas_permitidas, doc_nombre)
     sesiones = horarios_data.get("sesiones", []) if isinstance(horarios_data, dict) else []
     if not sesiones:
         sesiones = [
@@ -1645,32 +1804,47 @@ def descargar_horarios_pdf(user: SessionUser = Depends(validar_token_sesion)):
             {"Dia": "Miércoles", "Inicio": "09:30", "Fin": "10:15", "Grado": "3", "Grupo": "B", "Modalidad": "Aula Regular", "Espacio": "Salón 3B", "Proposito": "Ajustes razonables y DUA"},
             {"Dia": "Viernes", "Inicio": "10:30", "Fin": "11:15", "Grado": "1", "Grupo": "A", "Modalidad": "Individual", "Espacio": "Aula Apoyo", "Proposito": "Seguimiento específico"},
         ]
-    escuela_nom = user.escuelas_permitidas[0] if user.escuelas_permitidas and user.escuelas_permitidas[0] != "TODAS" else "Primaria Adscrita"
-    pdf_bytes = generar_horario_apoyo_pdf(escuela_nom, user.nombre, sesiones)
+    franjas = sorted({
+        (str(row.get("Inicio", "")), str(row.get("Fin", "")))
+        for row in sesiones
+        if str(row.get("Inicio", "")).strip() and str(row.get("Fin", "")).strip()
+    })
+    try:
+        pdf_bytes = generar_horario_apoyo_cuadricula_pdf(esc_nombre, doc_nombre, sesiones, franjas)
+    except Exception:
+        pdf_bytes = generar_horario_apoyo_pdf(esc_nombre, doc_nombre, sesiones)
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="Horario_Apoyo_{user.usuario}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="Horario_Apoyo_{doc_nombre.replace(" ", "_")}.pdf"'},
     )
 
 
 @app.get("/api/cronogramas/pdf")
-def descargar_cronograma_pdf(mes: str = "Noviembre 2026", user: SessionUser = Depends(validar_token_sesion)):
+def descargar_cronograma_pdf(
+    mes: str = "Noviembre 2026",
+    usuario: Optional[str] = None,
+    docente: Optional[str] = None,
+    user: SessionUser = Depends(validar_token_sesion)
+):
     from documents.cronogramas import generar_cronograma_pdf
-    cronos = obtener_cronogramas_modulo(user.rol, user.escuelas_permitidas, user.nombre)
+    nom = (docente or usuario) if (docente or usuario) and user.director else user.nombre
+    cronos = obtener_cronogramas_modulo(user.rol, user.escuelas_permitidas, nom)
     filas = cronos.get("actividades", []) if isinstance(cronos, dict) else []
     if not filas:
         filas = [
-            {"Fecha": "2026-11-03", "Dia": "Martes", "Escuela": user.escuelas_permitidas[0] if user.escuelas_permitidas else "Escuela Asignada", "Actividad": "Observación áulica y asesoría a docente regular", "Objetivo": "Identificación de BAP"},
-            {"Fecha": "2026-11-10", "Dia": "Martes", "Escuela": user.escuelas_permitidas[0] if user.escuelas_permitidas else "Escuela Asignada", "Actividad": "Evaluación Psicopedagógica inicial y entrevistas", "Objetivo": "Construcción de expediente"},
+            {"Fecha": "2026-11-03", "Dia": "Martes", "Escuela": "Damián Carmona", "Actividad": "Observación áulica y asesoría a docente regular", "Objetivo": "Identificación de BAP"},
+            {"Fecha": "2026-11-10", "Dia": "Martes", "Escuela": "Ichcaanziho", "Actividad": "Evaluación Psicopedagógica inicial y entrevistas", "Objetivo": "Construcción de expediente"},
+            {"Fecha": "2026-11-17", "Dia": "Martes", "Escuela": "Gregorio Torres Quintero", "Actividad": "Acompañamiento pedagógico y diseño de ajustes", "Objetivo": "Seguimiento DUA"},
             {"Fecha": "2026-11-27", "Dia": "Viernes", "Escuela": "Sede USAER", "Actividad": "Consejo Técnico Escolar (CTE)", "Objetivo": "Evaluación interdisciplinaria"},
         ]
-    perfil = {"nombre": user.nombre, "area": user.rol, "nombre_profesional": user.nombre}
+    perfil = {"nombre": nom, "area": "Especialista" if not user.director else "Dirección", "nombre_profesional": nom}
     pdf_bytes = generar_cronograma_pdf(perfil, mes, filas)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="Cronograma_{user.usuario}_{mes.replace(" ", "_")}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="Cronograma_{nom.replace(" ", "_")}_{mes.replace(" ", "_")}.pdf"'},
     )
 
 
@@ -1732,7 +1906,41 @@ def listar_actas_alias(escuela: Optional[str] = None, user: SessionUser = Depend
 def panel_direccion_resumen(user: SessionUser = Depends(validar_token_sesion)):
     if not user.director:
         raise HTTPException(status_code=403, detail="Acceso reservado exclusivamente a Dirección.")
-    return estado_base_datos()
+    try:
+        from data.sql_repository import escuelas_sql, personal_sql
+        al_activos = len(obtener_alumnos_autorizados("DIRECTOR", ["TODAS"], incluir_inactivos=False))
+        al_totales = len(obtener_alumnos_autorizados("DIRECTOR", ["TODAS"], incluir_inactivos=True))
+        escuelas_df = escuelas_sql()
+        escuelas_lista = escuelas_df.to_dict(orient="records") if not escuelas_df.empty else []
+        personal_df = personal_sql()
+        personal_lista = personal_df.to_dict(orient="records") if not personal_df.empty else []
+
+        plan_docs = coleccion_listar_sql("planeaciones")
+        epp_docs = coleccion_listar_sql("epp")
+        oficios_docs = coleccion_listar_sql("oficios_comision")
+        relatorias_docs = coleccion_listar_sql("relatorias")
+        visitas_docs = coleccion_listar_sql("visitas")
+        novedades_docs = coleccion_listar_sql("novedades_supervision")
+        db_stat = estado_base_datos()
+
+        return {
+            "status": "OK",
+            "alumnos_activos": al_activos,
+            "alumnos_totales": al_totales,
+            "escuelas": len(escuelas_lista),
+            "escuelas_lista": escuelas_lista,
+            "personal_lista": personal_lista,
+            "planeaciones_count": len(plan_docs),
+            "epp_count": len(epp_docs),
+            "oficios_count": len(oficios_docs),
+            "relatorias_count": len(relatorias_docs),
+            "visitas_count": len(visitas_docs),
+            "novedades_count": len(novedades_docs),
+            "db_status": db_stat,
+        }
+    except Exception as exc:
+        logger.warning(f"Aviso en panel_direccion_resumen: {exc}")
+        return estado_base_datos()
 
 
 @app.get("/api/admin/padron-excel")
