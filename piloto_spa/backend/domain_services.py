@@ -215,8 +215,6 @@ def obtener_alumnos_autorizados(
                 maestra = "Mtra. Marycruz Caamal Coral"
             elif "CECILIA" in m_norm or "SOLIS" in m_norm:
                 maestra = "Mtra. María Cecilia Solís Vázquez"
-            else:
-                maestra = "Mtra. Marycruz Caamal Coral" if grado_str in ("1", "2", "3") else "Mtra. María Cecilia Solís Vázquez"
         elif eid == "ESC-003":
             maestra = "Mtra. Dolores Eugenia Cortázar Navarrete"
         elif eid == "ESC-004":
@@ -254,19 +252,21 @@ def obtener_alumnos_autorizados(
 
     # 1. Dirección y Trabajo Social: Acceso integral al padrón
     rol_clean = _norm(usuario_rol)
-    if "DIRECTOR" in rol_clean or "TRABAJO" in rol_clean or "TODAS" in escuelas_permitidas:
+    if "DIRECTOR" in rol_clean or "TODAS" in escuelas_permitidas:
         return alumnos
 
     # 2. Filtrado por escuelas asignadas (tolerante a clave ESC-00X y nombre oficial)
     permitidas_set = set()
     for e in escuelas_permitidas or []:
         e_str = str(e).strip()
+        if not e_str:
+            continue
         permitidas_set.add(e_str)
         e_norm = _norm(e_str)
         if e_norm:
             permitidas_set.add(e_norm)
         for code, (nom, _) in ESCUELAS_CANONICAS.items():
-            if e_str == code or e_norm == _norm(nom) or e_norm in _norm(nom) or _norm(nom) in e_norm:
+            if e_str == code or e_norm == _norm(nom):
                 permitidas_set.add(code)
                 permitidas_set.add(nom)
                 permitidas_set.add(_norm(nom))
@@ -280,24 +280,17 @@ def obtener_alumnos_autorizados(
     if "PSIC" in rol_clean or "COM" in rol_clean:
         return alumnos_escuela
 
-    # 4. Maestras de Apoyo en Ichcaanziho (ESC-002): división canónica entre Marycruz y Cecilia
-    nom_doc_clean = _norm(nombre_docente)
-    if "ESC-002" in permitidas_set and ("CECILIA" in nom_doc_clean or "MARYCRUZ" in nom_doc_clean or "SOLIS" in nom_doc_clean or "CAAMAL" in nom_doc_clean):
-        es_ceci = "CECILIA" in nom_doc_clean or "SOLIS" in nom_doc_clean
-        es_mary = "MARYCRUZ" in nom_doc_clean or "CAAMAL" in nom_doc_clean
+    if "TRABAJO" in rol_clean or "SOCIAL" in rol_clean:
+        return alumnos_escuela
 
-        alumnos_filtrados = []
-        for a in alumnos_escuela:
-            m = _norm(a.get("maestra_apoyo", ""))
-            if es_ceci and ("CECILIA" in m or "SOLIS" in m):
-                alumnos_filtrados.append(a)
-            elif es_mary and ("MARYCRUZ" in m or "CAAMAL" in m):
-                alumnos_filtrados.append(a)
-
-        return alumnos_filtrados if alumnos_filtrados else alumnos_escuela
-
-    # 5. Resto de maestras de apoyo: ven exclusivamente su escuela
-    return alumnos_escuela
+    # En Ichcaanziho se exige la asignación registrada, sin deducirla del grado.
+    from services.planeacion_firmas import _normalizar_identidad
+    docente = _normalizar_identidad(nombre_docente)
+    return [
+        a for a in alumnos_escuela if a["id_escuela"] != "ESC-002" or (
+            docente and docente == _normalizar_identidad(a["maestra_apoyo"])
+        )
+    ]
 
 
 def guardar_alumno_nuevo(payload: Dict[str, Any]) -> str:
@@ -912,101 +905,57 @@ def guardar_epp_documento(doc_payload: Dict[str, Any], autor_cuenta: str) -> Dic
 # -------------------------------------------------------------
 # 5. PLANEACIÓN PEDAGÓGICA (FORMATOS XXI, XXIII, XXV, XIX, XX)
 # -------------------------------------------------------------
-def listar_planeaciones_autorizadas(
-    cuenta: str,
-    usuario_rol: str,
-    escuelas_permitidas: List[str],
-    nombre_docente: str = "",
-    es_director: bool = False,
-) -> List[Dict[str, Any]]:
-    """Lista todas las planeaciones propias del usuario y las colaborativas de su escuela/cluster."""
-    es_global = es_director or "DIRECTOR" in _norm(usuario_rol) or "TRABAJO" in _norm(usuario_rol) or "TODAS" in escuelas_permitidas
-    todas = planeaciones_resumen_sql(cuenta="", es_director=True)
-    if es_global:
-        return todas
-
-    alumnos = obtener_alumnos_autorizados(usuario_rol, escuelas_permitidas, nombre_docente, incluir_inactivos=True)
-    esc_id_set = {a["id_escuela"] for a in alumnos} | {str(e).strip() for e in escuelas_permitidas}
-    esc_norm_set = {_norm(a["escuela"]) for a in alumnos}
-    es_especialista = "PSIC" in _norm(usuario_rol) or "COM" in _norm(usuario_rol)
-
-    filtradas = []
-    nom_doc_clean = _norm(nombre_docente)
-    for p in todas:
-        p_cuenta = str(p.get("cuenta") or "").strip()
-        datos = p.get("datos") or {}
-        doc_esp = str(datos.get("Docente_Especialista") or datos.get("Nombre del docente especialista") or "")
-        esc_plan = str(datos.get("Escuela") or datos.get("Escuela regular") or "").strip()
-        id_esc_plan = str(datos.get("ID_Escuela") or "").strip()
-
-        # 1. Es autor directo por cuenta de usuario o por nombre en el documento
-        if p_cuenta == cuenta or (nom_doc_clean and (nom_doc_clean in _norm(doc_esp) or _norm(doc_esp) in nom_doc_clean)):
-            filtradas.append(p)
-            continue
-
-        # 2. Corresponde a la escuela o cluster asignado
-        if (id_esc_plan and id_esc_plan in esc_id_set) or (esc_plan and _norm(esc_plan) in esc_norm_set):
-            filtradas.append(p)
-    return filtradas
+def _resumen_planeacion(doc):
+    datos = dict(doc.get("datos") or {})
+    meta = doc.get("metadatos") or {}
+    alumnos = datos.get("Alumnos") or []
+    grupos = sorted({" ".join(str(a.get(k) or "").strip() for k in ("Grado", "Grupo")).strip()
+                     for a in alumnos if isinstance(a, dict)} - {""})
+    datos["Escuela"] = datos.get("Escuela regular") or datos.get("Escuela") or ""
+    datos["Grado_Grupo"] = ", ".join(grupos) or datos.get("Grado y grupo") or datos.get("Grado_Grupo") or ""
+    datos["Docente_Especialista"] = datos.get("Nombre del especialista") or datos.get("Docente_Especialista") or ""
+    modo = meta.get("modalidad_planeacion")
+    grupal = (modo == "grupal" or doc.get("formato") in ("XIX", "XX")
+              or meta.get("vista_formato") == "guia" or bool(meta.get("guia_grupal_manual")))
+    return {**doc, "datos": datos, "modalidad": "grupal" if grupal else (modo or "sin clasificar")}
 
 
-def verificar_acceso_planeacion(
-    doc: Dict[str, Any],
-    usuario_cuenta: str,
-    usuario_rol: str,
-    escuelas_permitidas: List[str],
-    nombre_docente: str = "",
-) -> bool:
-    """Verifica si el usuario tiene alcance para consultar o modificar esta planeación."""
-    rol_clean = _norm(usuario_rol)
-    # 1. Dirección y Trabajo Social tienen acceso institucional global
-    if "DIRECTOR" in rol_clean or "TRABAJO" in rol_clean or "TODAS" in escuelas_permitidas:
+def _visible_planeacion(doc, cuenta, rol, escuelas, alumnos):
+    meta = doc.get("metadatos") or {}
+    if meta.get("borrador_eliminado") or doc.get("estado") == "ELIMINADO":
+        return False
+    if "DIRECTOR" in _norm(rol):
         return True
+    datos = doc.get("datos") or {}
+    ids = {str(a.get("ID_Alumno")).strip() for a in datos.get("Alumnos") or []
+           if isinstance(a, dict) and a.get("ID_Alumno")}
+    escuela = str(datos.get("ID_Escuela") or datos.get("Escuela_ID") or "").strip()
+    nombre_escuela = datos.get("Escuela regular") or datos.get("Escuela")
+    if not escuela and nombre_escuela:
+        escuela = next((id_esc for id_esc, (nom, _) in ESCUELAS_CANONICAS.items()
+                        if _norm(nom) == _norm(nombre_escuela)), "")
+    por_id = {a["id"]: a["id_escuela"] for a in alumnos}
+    if ids:
+        return all(a in por_id and (not escuela or por_id[a] == escuela) for a in ids)
+    if escuela == "ESC-002":
+        return False
+    return bool(doc.get("cuenta") == cuenta and escuela and
+                (escuela in escuelas or escuela in por_id.values() or "TODAS" in escuelas))
 
-    # 2. El propio autor siempre tiene acceso a su planeación
-    doc_cuenta = str(doc.get("cuenta") or "").strip().lower()
-    if usuario_cuenta and doc_cuenta and usuario_cuenta.strip().lower() == doc_cuenta:
-        return True
 
-    # 3. El docente nombrado explícitamente en los datos de la planeación
-    doc_nombre = _norm(
-        doc.get("datos", {}).get("Docente_Especialista", "")
-        or doc.get("datos", {}).get("Nombre del docente especialista", "")
-    )
-    usr_nombre = _norm(nombre_docente)
-    if usr_nombre and doc_nombre and (usr_nombre in doc_nombre or doc_nombre in usr_nombre):
-        return True
+def listar_planeaciones_autorizadas(cuenta, usuario_rol, escuelas_permitidas,
+                                      nombre_docente="", es_director=False):
+    rol = "DIRECTOR" if es_director else usuario_rol
+    alumnos = [] if es_director else obtener_alumnos_autorizados(
+        rol, escuelas_permitidas, nombre_docente, incluir_inactivos=True)
+    return [_resumen_planeacion(doc) for doc in planeaciones_resumen_sql(cuenta="", es_director=True)
+            if _visible_planeacion(doc, cuenta, rol, escuelas_permitidas, alumnos)]
 
-    # 4. Docentes y especialistas con la escuela asignada en su alcance
-    doc_esc = str(doc.get("datos", {}).get("Escuela") or doc.get("datos", {}).get("Escuela regular") or "").strip()
-    doc_eid = str(doc.get("datos", {}).get("ID_Escuela") or "").strip()
-    eid_canon, esc_canon = resolver_escuela_canonica(doc_esc, doc_eid)
 
-    permitidas_set = set()
-    for e in escuelas_permitidas or []:
-        e_str = str(e).strip()
-        permitidas_set.add(e_str)
-        e_norm = _norm(e_str)
-        if e_norm:
-            permitidas_set.add(e_norm)
-        for code, (nom, _) in ESCUELAS_CANONICAS.items():
-            if e_str == code or e_norm == _norm(nom) or e_norm in _norm(nom) or _norm(nom) in e_norm:
-                permitidas_set.add(code)
-                permitidas_set.add(nom)
-                permitidas_set.add(_norm(nom))
-
-    if eid_canon in permitidas_set or _norm(esc_canon) in permitidas_set or (doc_esc and _norm(doc_esc) in permitidas_set):
-        return True
-
-    # 5. Especialistas clínicos que hayan registrado aportaciones en aportaciones_equipo
-    metadatos = doc.get("metadatos") or {}
-    aportes = metadatos.get("aportaciones_equipo") or {}
-    if isinstance(aportes, dict):
-        for area, ap in aportes.items():
-            if isinstance(ap, dict) and str(ap.get("cuenta", "")).strip().lower() == usuario_cuenta.strip().lower():
-                return True
-
-    return False
+def verificar_acceso_planeacion(doc, usuario_cuenta, usuario_rol, escuelas_permitidas, nombre_docente=""):
+    alumnos = [] if "DIRECTOR" in _norm(usuario_rol) else obtener_alumnos_autorizados(
+        usuario_rol, escuelas_permitidas, nombre_docente, incluir_inactivos=True)
+    return _visible_planeacion(doc, usuario_cuenta, usuario_rol, escuelas_permitidas, alumnos)
 
 
 def obtener_planeacion_con_firmas(doc_id: str, usuario_cuenta: str) -> Dict[str, Any]:
@@ -1095,9 +1044,9 @@ def obtener_planeacion_con_firmas(doc_id: str, usuario_cuenta: str) -> Dict[str,
         if not isinstance(r, dict):
             continue
         row = dict(r)
-        temp = row.get("Temporalidad") or row.get("temporalidad") or ""
-        act = row.get("Actividades") or row.get("actividades") or ""
-        ctx = row.get("Contextos") or row.get("contextos") or ""
+        temp = row.get("Temporalidad") or row.get("temporalidad") or row.get("Fecha") or row.get("semana") or ""
+        act = row.get("Actividades") or row.get("actividades") or row.get("actividad") or ""
+        ctx = row.get("Contextos") or row.get("contextos") or row.get("modalidad") or ""
         rec = row.get("Recursos") or row.get("recursos") or ""
 
         row["Temporalidad"] = temp
@@ -1137,36 +1086,51 @@ def guardar_planeacion_transaccional(
     pid = payload.get("id") or f"plan-{uuid.uuid4().hex[:8]}"
     prev = planeacion_por_id_sql(pid) or {}
 
-    # Validar permisos si el documento ya existía previamente
-    if prev and usuario_rol:
-        if not verificar_acceso_planeacion(
-            doc=prev,
-            usuario_cuenta=autor_cuenta,
-            usuario_rol=usuario_rol,
-            escuelas_permitidas=escuelas_permitidas or [],
-            nombre_docente=nombre_docente,
-        ):
-            from fastapi import HTTPException
-            raise HTTPException(status_code=403, detail="No tiene permisos para modificar esta planeación.")
+    from fastapi import HTTPException
+    from services.planeacion_colaboracion import aportar
 
-    # Control de concurrencia optimista con revisiones
-    client_rev = str(payload.get("revision") or "").strip()
-    prev_rev = str(prev.get("revision") or "").strip()
+    escuelas = escuelas_permitidas or []
+    if prev and not verificar_acceso_planeacion(prev, autor_cuenta, usuario_rol, escuelas, nombre_docente):
+        raise HTTPException(403, "No tiene permisos para modificar esta planeación.")
+    prev_rev = str(prev.get("revision") or "")
     es_aporte_area = bool(payload.get("aporte_area"))
-
-    if prev and client_rev and prev_rev and client_rev != prev_rev and not es_aporte_area and not payload.get("forzar"):
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=409,
-            detail="Conflicto de concurrencia: El documento fue modificado en otra sesión o pestaña. Actualice antes de guardar."
-        )
-
+    if prev and str(payload.get("revision") or "") != prev_rev:
+        raise HTTPException(409, "La planeación cambió. Conserva tus cambios antes de recargar.")
+    if prev and not es_aporte_area and prev.get("cuenta") != autor_cuenta:
+        raise HTTPException(403, "La edición general corresponde a la cuenta autora.")
+    if prev and es_aporte_area:
+        info = payload["aporte_area"]
+        actor = {"cuenta": autor_cuenta, "nombre": nombre_docente, "area": area_docente,
+                 "director": "DIRECTOR" in _norm(usuario_rol)}
+        try:
+            doc = aportar(prev, actor, info.get("filas", []), info.get("observaciones", ""))
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        payload = {**doc, "revision": prev_rev}
+        es_aporte_area = False
+    elif not prev:
+        if es_aporte_area:
+            raise HTTPException(422, "Primero guarda la planeación del grupo.")
+        candidato = {**payload, "cuenta": autor_cuenta}
+        if not verificar_acceso_planeacion(candidato, autor_cuenta, usuario_rol, escuelas, nombre_docente):
+            raise HTTPException(403, "Selecciona alumnos de tu padrón autorizado.")
+    else:
+        # Las identidades, el contexto y los aportes previos se conservan.
+        payload["datos"] = prev.get("datos", {})
+        payload["formato"] = prev.get("formato", "XXIII")
+        payload["estado"] = prev.get("estado", "BORRADOR")
+        payload["observaciones_director"] = prev.get("observaciones_director", "")
+        payload["metadatos"].pop("aportaciones_equipo", None)
+        if isinstance(prev.get("metadatos", {}).get("guia_grupal_manual"), dict):
+            payload["metadatos"].pop("guia_grupal_manual", None)
     nueva_rev = f"rev-{uuid.uuid4().hex[:6]}"
 
     merged = dict(prev)
     merged.update(payload)
     merged["id"] = pid
-    merged["cuenta"] = prev.get("cuenta") or payload.get("cuenta") or autor_cuenta
+    merged["cuenta"] = prev.get("cuenta") or autor_cuenta
     merged["revision"] = nueva_rev
     merged["guardado_en"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1236,9 +1200,9 @@ def guardar_planeacion_transaccional(
         if not isinstance(r, dict):
             continue
         row = dict(r)
-        temp = row.get("Temporalidad") or row.get("temporalidad") or ""
-        act = row.get("Actividades") or row.get("actividades") or ""
-        ctx = row.get("Contextos") or row.get("contextos") or ""
+        temp = row.get("Temporalidad") or row.get("temporalidad") or row.get("Fecha") or row.get("semana") or ""
+        act = row.get("Actividades") or row.get("actividades") or row.get("actividad") or ""
+        ctx = row.get("Contextos") or row.get("contextos") or row.get("modalidad") or ""
         rec = row.get("Recursos") or row.get("recursos") or ""
 
         row["Temporalidad"] = temp
@@ -1264,7 +1228,8 @@ def guardar_planeacion_transaccional(
     elif "Observaciones" in textos and "observaciones" not in textos:
         textos["observaciones"] = textos["Observaciones"]
 
-    guardar_planeacion_sql(merged)
+    if not guardar_planeacion_sql(merged, comparar_revision=True, revision_anterior=prev_rev if prev else None):
+        raise HTTPException(409, "La planeación cambió antes de confirmar el guardado.")
     firmas = resolver_firmas_planeacion(merged)
 
     return {

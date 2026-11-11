@@ -827,11 +827,13 @@ def planeacion_por_id_sql(id_planeacion: str) -> Optional[Dict[str, Any]]:
         }
 
 
-def guardar_planeacion_sql(doc: Dict[str, Any]) -> str:
+def guardar_planeacion_sql(doc: Dict[str, Any], *, comparar_revision=False, revision_anterior=None) -> Optional[str]:
     """Persiste o actualiza una planeación en PostgreSQL con transacción atómica."""
     with get_session() as session:
         pid = str(doc.get("id") or uuid.uuid4().hex[:12])
-        existente = session.query(PlaneacionDoc).filter_by(id=pid).first()
+        existente = session.query(PlaneacionDoc).filter_by(id=pid).with_for_update().first()
+        if comparar_revision and (str(existente.revision or "") if existente else None) != revision_anterior:
+            return None
         payload_str = json.dumps(doc, ensure_ascii=False)
         datos_str = json.dumps(doc.get("datos", {}), ensure_ascii=False)
         metadatos_str = json.dumps(doc.get("metadatos", {}), ensure_ascii=False)
@@ -907,11 +909,13 @@ def epp_listar_sql(ids_alumnos: Optional[List[str]] = None) -> List[Dict[str, An
         return docs
 
 
-def guardar_epp_sql(doc: Dict[str, Any]) -> str:
+def guardar_epp_sql(doc: Dict[str, Any], *, comparar_revision=False, revision_anterior=None) -> Optional[str]:
     """Persiste un informe EPP en PostgreSQL."""
     with get_session() as session:
         eid = str(doc.get("id") or f"{doc.get('alumno')}:{doc.get('ciclo')}")
-        existente = session.query(EPPDoc).filter_by(id=eid).first()
+        existente = session.query(EPPDoc).filter_by(id=eid).with_for_update().first()
+        if comparar_revision and (str(existente.revision or "") if existente else None) != revision_anterior:
+            return None
         partes_str = json.dumps(doc.get("partes", {}), ensure_ascii=False)
         estado = str(doc.get("partes", {}).get("META", {}).get("estado", "BORRADOR"))
         if existente:

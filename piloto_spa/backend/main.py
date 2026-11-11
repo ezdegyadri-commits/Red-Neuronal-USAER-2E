@@ -802,16 +802,13 @@ def _verificar_acceso_alumno(alumno_id: str, user: SessionUser) -> Dict[str, Any
     clean_id = str(alumno_id).replace("epp-", "").replace("alu-uppcoder-", "").strip()
     if clean_id.startswith("GRUPO-") or clean_id == "GRUPAL":
         return {"id": clean_id, "nombre_completo": clean_id}
-    alumnos = obtener_alumnos_autorizados("DIRECTOR", ["TODAS"], incluir_inactivos=True)
-    alumno = next((a for a in alumnos if str(a.get("id")).replace("epp-", "").strip() == clean_id), None)
+    alumnos = obtener_alumnos_autorizados(
+        "DIRECTOR" if user.director else user.rol, user.escuelas_permitidas,
+        user.nombre, incluir_inactivos=True,
+    )
+    alumno = next((a for a in alumnos if str(a.get("id")).removeprefix("epp-").strip() == clean_id), None)
     if not alumno:
-        raise HTTPException(status_code=404, detail=f"Alumno {alumno_id} no encontrado en el padrón central.")
-    if user.director or "TRABAJO" in user.rol.upper() or "TODAS" in user.escuelas_permitidas:
-        return alumno
-    escuela_alumno = str(alumno.get("id_escuela", "")).strip()
-    permitidas = {str(e).strip() for e in user.escuelas_permitidas}
-    if escuela_alumno not in permitidas:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado a este centro de trabajo.")
+        raise HTTPException(404, "Alumno no disponible para esta cuenta.")
     return alumno
 
 
@@ -1118,98 +1115,174 @@ def listar_epps_endpoint(user: SessionUser = Depends(validar_token_sesion)):
     return listar_epp_autorizados(user.rol, user.escuelas_permitidas, user.nombre)
 
 
+def _id_epp(alumno_id):
+    value = str(alumno_id).removeprefix("epp-").removeprefix("alu-uppcoder-").strip()
+    if not value or value == "GRUPAL" or value.startswith("GRUPO-"):
+        raise HTTPException(404, "La EPP requiere un alumno del padrón autorizado.")
+    return value
+
+
+def _cargar_epp(alumno_id, ciclo, user):
+    from data.sql_repository import epp_listar_sql
+    from services.epp_modelo import clave
+
+    alumno_id = _id_epp(alumno_id)
+    alumno = _verificar_acceso_alumno(alumno_id, user)
+    try:
+        identificador = clave(alumno_id, ciclo)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    candidatos = [d for d in epp_listar_sql([alumno_id, "epp-" + alumno_id, "alu-uppcoder-" + alumno_id])
+                  if d["ciclo"] == ciclo]
+    if len(candidatos) > 1:
+        raise HTTPException(409, "Existen varias EPP para este ciclo. Dirección debe conciliar sus revisiones.")
+    return (candidatos[0] if candidatos else {
+        "id": identificador, "alumno": alumno_id, "ciclo": ciclo, "revision": None, "partes": {}
+    }), alumno
+
+
+def _vista_epp(doc, alumno, user):
+    from piloto_spa.backend.epp_viva import editables, vista_partes
+    from services.epp_modelo import BAP, NEE
+
+    return {"id": doc["id"], "alumno": _id_epp(doc["alumno"]), "ciclo": doc["ciclo"],
+            "revision": doc["revision"], "nombre_alumno": alumno.get("nombre_completo", ""),
+            "partes": vista_partes(doc), "editables": editables(doc, user),
+            "columnas": {"nee": NEE, "bap": BAP}}
+
+
 @app.get("/api/epp/{alumno_id}")
-def consultar_epp(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    clean_id = str(alumno_id).replace("epp-", "").replace("alu-uppcoder-", "").strip()
-    _verificar_acceso_alumno(clean_id, user)
-    return obtener_epp_documento(clean_id)
+def consultar_epp(alumno_id: str, ciclo: str = "2026-2027", user: SessionUser = Depends(validar_token_sesion)):
+    doc, alumno = _cargar_epp(alumno_id, ciclo, user)
+    return _vista_epp(doc, alumno, user)
+
+
+class EPPVivaPayload(BaseModel):
+    ciclo: str
+    area: str
+    revision: Optional[str] = None
+    campos: Dict[str, str] = Field(default_factory=dict)
+    instrumentos: Optional[str] = Field(default=None, max_length=12000)
+    fecha_aplicacion: Optional[str] = Field(default=None, max_length=100)
+    sintesis: Optional[str] = Field(default=None, max_length=12000)
+    nee: Optional[List[Dict[str, str]]] = Field(default=None, max_length=50)
+    bap: Optional[List[Dict[str, str]]] = Field(default=None, max_length=50)
+    revisada: bool = False
+
+
+@app.put("/api/epp/{alumno_id}/apartado")
+def guardar_epp_viva(alumno_id: str, payload: EPPVivaPayload, user: SessionUser = Depends(validar_token_sesion)):
+    from data.sql_repository import guardar_epp_sql
+    from piloto_spa.backend.epp_viva import editables, vista_partes
+    from services.epp_modelo import AREAS, validar_parte, pendientes
+    from sqlalchemy.exc import IntegrityError
+
+    doc, alumno = _cargar_epp(alumno_id, payload.ciclo, user)
+    if payload.area not in editables(doc, user):
+        raise HTTPException(403, "Este apartado corresponde a otra área o coordinación.")
+    if payload.revision != doc["revision"]:
+        raise HTTPException(409, "La EPP cambió en otra sesión. Conserva tu texto y abre la revisión más reciente.")
+    previas = vista_partes(doc)
+    valor = previas[payload.area]["contenido"]
+    if not payload.campos.keys() <= valor["campos"].keys():
+        raise HTTPException(422, "Hay campos fuera del formato de esta área.")
+    for key, value in payload.campos.items():
+        if not valor.get("no_requeridos", {}).get(key):
+            valor["campos"][key] = value
+            if key in valor:
+                valor[key] = value
+    for k in ("instrumentos", "fecha_aplicacion", "sintesis"):
+        if getattr(payload, k) is not None:
+            valor[k] = getattr(payload, k)
+    if payload.area == "Conclusión":
+        for k in ("nee", "bap"):
+            if getattr(payload, k) is not None:
+                valor[k] = getattr(payload, k)
+    elif payload.nee is not None or payload.bap is not None:
+        raise HTTPException(403, "Las tablas de determinación corresponden a la coordinación.")
+    valor["validada"] = payload.revisada
+    if payload.area == "Conclusión" and payload.revisada:
+        valor["revisiones_areas"] = {a: previas[a]["revision"] for a in AREAS}
+        control = {**previas, "Conclusión": {"contenido": valor}}
+        faltantes = pendientes({"partes": control})
+        if faltantes:
+            raise HTTPException(422, " ".join(faltantes))
+    try:
+        valor = validar_parte(payload.area, valor)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    revision = uuid.uuid4().hex
+    fecha = time.strftime("%Y-%m-%d %H:%M:%S")
+    doc["partes"][payload.area] = {"contenido": valor, "autor": user.nombre, "cuenta": user.usuario,
+                                  "revision": revision, "fecha": fecha,
+                                  "estado": "REVISADO" if payload.revisada else "BORRADOR"}
+    doc["partes"].setdefault("META", {"estado": "BORRADOR"})
+    doc.update(revision=revision, fecha=fecha)
+    try:
+        if guardar_epp_sql(doc, comparar_revision=True, revision_anterior=payload.revision) is None:
+            raise HTTPException(409, "Otra sesión guardó esta EPP. Conserva tu texto antes de reabrir.")
+    except IntegrityError as exc:
+        raise HTTPException(409, "Otra sesión abrió y guardó esta EPP.") from exc
+    return _vista_epp(doc, alumno, user)
 
 
 @app.post("/api/epp")
 def guardar_epp(payload: EPPPayload, user: SessionUser = Depends(validar_token_sesion)):
-    clean_id = str(payload.alumno).replace("epp-", "").replace("alu-uppcoder-", "").strip()
-    _verificar_acceso_alumno(clean_id, user)
-    return guardar_epp_documento(payload.model_dump(), autor_cuenta=user.usuario)
+    raise HTTPException(405, "Actualiza la página y guarda únicamente tu apartado de la EPP.")
 
 
 @app.get("/api/epp/{alumno_id}/pdf")
-def descargar_epp_pdf(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
-    clean_id = str(alumno_id).replace("epp-", "").replace("alu-uppcoder-", "").strip()
-    _verificar_acceso_alumno(clean_id, user)
-    doc_epp = obtener_epp_documento(clean_id)
-    alumno_info = next((a for a in obtener_alumnos_autorizados(user.rol, user.escuelas_permitidas, user.nombre) if a.get("id") == clean_id), None)
-    if not alumno_info:
-        from data.sql_repository import padron_alumnos_sql
-        alumnos_todos = padron_alumnos_sql()
-        alumno_info = next((a for a in alumnos_todos if a.get("id") == clean_id), {"id": clean_id, "nombre_completo": clean_id, "Nombre_Escuela": "USAER 02E"})
+def descargar_epp_pdf(alumno_id: str, ciclo: str = "2026-2027", user: SessionUser = Depends(validar_token_sesion)):
+    from documents.epp import generar_pdf
+    from piloto_spa.backend.epp_viva import vista_partes
+
+    doc, a = _cargar_epp(alumno_id, ciclo, user)
+    if doc["revision"] is None:
+        raise HTTPException(404, "Aún no hay un informe guardado para este ciclo.")
+    doc["partes"] = vista_partes(doc)
+    alumno = {"Nombre_Completo": a.get("nombre_completo"), "Nombre_Escuela": a.get("escuela"),
+              "Nivel_Educativo": a.get("nivel"), "CURP": a.get("curp"),
+              "Grado": a.get("grado"), "Grupo": a.get("grupo")}
+    return Response(generar_pdf(doc, alumno, incluir_firmas=False, precargar_datos=False),
+                    media_type="application/pdf", headers={"Cache-Control": "private, no-store"})
+
+
+class EPPAsistentePayload(BaseModel):
+    ciclo: str
+    area: str
+    campo: str = Field(default="", max_length=180)
+    notas: str = Field(default="", max_length=4000)
+    archivo_nombre: str = Field(default="", max_length=200)
+    archivo_base64: str = Field(default="", max_length=4194304)
+
+
+@app.post("/api/epp/{alumno_id}/propuesta")
+def proponer_epp_viva(alumno_id: str, payload: EPPAsistentePayload, user: SessionUser = Depends(validar_token_sesion)):
+    from piloto_spa.backend.epp_viva import editables, extraer, propuesta_campo, propuesta_conclusion, vista_partes
+    doc, _ = _cargar_epp(alumno_id, payload.ciclo, user)
+    if payload.area not in editables(doc, user):
+        raise HTTPException(403, "Esta cuenta no puede generar propuestas para ese apartado.")
     try:
-        from documents.epp import generar_pdf as generar_pdf_epp
-        pdf_bytes = generar_pdf_epp(doc_epp, alumno_info)
-        content_val = pdf_bytes.getvalue() if hasattr(pdf_bytes, "getvalue") else pdf_bytes
-        return Response(
-            content=content_val,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="EPP_{alumno_id}.pdf"'},
-        )
-    except Exception as e:
-        logger.error(f"Error generando PDF de EPP para {alumno_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error generando PDF de EPP: {str(e)}")
-
-
-@app.post("/api/epp/{alumno_id}/pruebas")
-def adjuntar_prueba_epp(
-    alumno_id: str,
-    payload: Dict[str, Any],
-    user: SessionUser = Depends(validar_token_sesion)
-):
-    clean_id = str(alumno_id).replace("epp-", "").strip()
-    _verificar_acceso_alumno(clean_id, user)
-    reg_id = f"prueba-{clean_id}-{uuid.uuid4().hex[:6]}"
-    doc = {
-        "id": reg_id,
-        "alumno_id": clean_id,
-        "nombre_prueba": str(payload.get("nombre_prueba") or "Evaluación Psicopedagógica"),
-        "area": str(payload.get("area") or user.area or "Aprendizaje"),
-        "fecha": str(payload.get("fecha") or time.strftime("%Y-%m-%d")),
-        "aplicador": user.nombre,
-        "puntuaciones": payload.get("puntuaciones", {}),
-        "observaciones": str(payload.get("observaciones") or ""),
-        "nombre_archivo": str(payload.get("nombre_archivo") or ""),
-        "archivo_base64": str(payload.get("archivo_base64") or "")[:500000],
-        "guardado_en": time.strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    coleccion_guardar_sql("epp_pruebas", reg_id, doc, cuenta=user.usuario, fecha=doc["fecha"])
-    return {"status": "success", "id": reg_id, "prueba": doc}
+        if payload.area == "Conclusión":
+            return propuesta_conclusion(doc)
+        if payload.campo not in vista_partes(doc)[payload.area]["contenido"]["campos"]:
+            raise ValueError("Selecciona un apartado del formato.")
+        texto, huella = extraer(payload.archivo_nombre, payload.archivo_base64) if payload.archivo_base64 else ("", "")
+        evidencia = "\n".join(x for x in (texto, payload.notas.strip()) if x)
+        return {"texto": propuesta_campo(payload.campo, evidencia), "archivo_sha256": huella,
+                "fuente": payload.archivo_nombre if huella else "Observación docente"}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except ImportError as exc:
+        raise HTTPException(503, "El lector de este archivo no está instalado. Prueba con TXT.") from exc
 
 
 @app.get("/api/epp/{alumno_id}/pruebas")
-def listar_pruebas_epp(
-    alumno_id: str,
-    user: SessionUser = Depends(validar_token_sesion)
-):
-    clean_id = str(alumno_id).replace("epp-", "").strip()
+def listar_pruebas_epp(alumno_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    clean_id = _id_epp(alumno_id)
     _verificar_acceso_alumno(clean_id, user)
-    todas = coleccion_listar_sql("epp_pruebas")
-    return [p for p in todas if str(p.get("alumno_id")) == clean_id]
-
-
-@app.post("/api/ai/epp-redaccion")
-def asistente_redaccion_epp(
-    payload: Dict[str, Any],
-    user: SessionUser = Depends(validar_token_sesion)
-):
-    area = str(payload.get("area") or "Aprendizaje")
-    campo = str(payload.get("campo") or "Lectura y escritura funcional")
-    ideas = str(payload.get("ideas") or "").strip()
-
-    propuesta = (
-        f"A partir de los instrumentos aplicados y las observaciones registradas en el área de {area}, "
-        f"el/la alumno/a demuestra competencias iniciales en {campo.lower()}. "
-        f"{ideas if ideas else 'Presenta disposición activa ante las actividades estructuradas con apoyos visuales y modelado directo.'} "
-        f"Se sugiere continuar con la mediación pedagógica diversificada, fortaleciendo la permanencia en la tarea "
-        f"mediante consignas claras, materiales multisensoriales y tiempos flexibles."
-    )
-    return {"status": "success", "campo": campo, "area": area, "propuesta": propuesta}
+    return [{k: p[k] for k in ("id", "nombre_prueba", "area", "fecha", "observaciones", "nombre_archivo") if k in p}
+            for p in coleccion_listar_sql("epp_pruebas") if str(p.get("alumno_id")) == clean_id]
 
 
 # -------------------------------------------------------------
@@ -1228,8 +1301,13 @@ def listar_planeaciones(user: SessionUser = Depends(validar_token_sesion)):
 
 @app.get("/api/planeaciones/{doc_id}")
 def obtener_planeacion(doc_id: str, user: SessionUser = Depends(validar_token_sesion)):
+    from data.sql_repository import planeacion_por_id_sql
+
+    registrada = planeacion_por_id_sql(doc_id)
+    if not registrada and not doc_id.startswith("plan-nuevo-"):
+        raise HTTPException(404, "Planeación no encontrada.")
     doc = obtener_planeacion_con_firmas(doc_id, usuario_cuenta=user.usuario)
-    if not verificar_acceso_planeacion(
+    if registrada and not verificar_acceso_planeacion(
         doc=doc,
         usuario_cuenta=user.usuario,
         usuario_rol=user.rol,
@@ -1240,6 +1318,13 @@ def obtener_planeacion(doc_id: str, user: SessionUser = Depends(validar_token_se
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permisos para acceder a esta planeación."
         )
+    meta = doc.get("metadatos", {})
+    datos = doc.get("datos", {})
+    if meta.get("modalidad_planeacion") == "grupal" and (
+        meta.get("vista_formato") == "guia" or isinstance(meta.get("guia_grupal_manual"), dict)
+    ) and all(k in datos for k in ("Alumnos", "Función")):
+        from services.planeacion_modalidad import guia_grupal
+        doc["guia_grupal"] = guia_grupal(doc)
     return doc
 
 
@@ -1859,9 +1944,7 @@ def proponer_actividades_endpoint(payload: ActividadPropuestaPayload, user: Sess
 
 @app.post("/api/ai/epp-propuesta")
 def epp_propuesta_endpoint(payload: EPPPropuestaPayload, user: SessionUser = Depends(validar_token_sesion)):
-    if payload.alumno_id:
-        _verificar_acceso_alumno(payload.alumno_id, user)
-    return generar_propuesta_redaccion_epp(payload.model_dump())
+    raise HTTPException(405, "Usa el asistente dentro del formato vivo de la EPP.")
 
 
 @app.get("/api/anexo7/plantilla/pdf")

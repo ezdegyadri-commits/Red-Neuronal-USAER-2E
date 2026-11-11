@@ -35,7 +35,7 @@ def _firma_especialista(nombre):
         pass
     return None
 
-def generar_pdf(doc, alumno, incluir_firmas=True):
+def generar_pdf(doc, alumno, incluir_firmas=True, *, precargar_datos=True):
     out = BytesIO(); styles = getSampleStyleSheet()
     small = ParagraphStyle('EPPCelda', parent=styles['Normal'], fontSize=8, leading=10)
     center = ParagraphStyle('EPPCeldaCentrada', parent=styles['Normal'], fontSize=7.5, leading=9.5, alignment=1)
@@ -53,7 +53,8 @@ def generar_pdf(doc, alumno, incluir_firmas=True):
             ('GRID', (0, 0), (-1, -1), .3, colors.grey), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
         return t
     values = {a: doc['partes'].get(a, {}).get('contenido', {}) for a in (*AREAS, 'Conclusión')}
-    values['Aprendizaje'] = precargar(values['Aprendizaje'], alumno, doc)
+    if precargar_datos:
+        values['Aprendizaje'] = precargar(values['Aprendizaje'], alumno, doc)
     fecha = max((str(v.get('fecha', '')) for v in doc['partes'].values() if isinstance(v, dict)), default='')[:10]
     epp_oficial_concluida = conclusion_vigente(doc) and all(values[a].get('validada') for a in AREAS)
     story = [p('Informe de Evaluación Psicopedagógica', styles['Title']), p('Servicio de Apoyo de Educación Especial · Anexo XVII'),

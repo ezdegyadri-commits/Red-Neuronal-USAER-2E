@@ -22,7 +22,7 @@ from fastapi import HTTPException, Header, Query, status
 
 from data.sql_repository import usuarios_sql
 
-SECRET_KEY = os.getenv("USAER_AUTH_SECRET", "usaer-2e-auth-token-secret-key-2026")
+SECRET_KEY = os.getenv('USAER_AUTH_SECRET') or secrets.token_urlsafe(48)
 TOKEN_TTL_SECONDS = 8 * 3600  # 8 horas de jornada laboral
 
 # Almacén de sesiones en memoria con expiración automática (aislamiento total)
@@ -88,137 +88,6 @@ def verify_password(plain_password: str, stored_hash: str) -> bool:
 
     return False
 
-USUARIOS_CANONICOS: Dict[str, Dict[str, Any]] = {
-    "edgar.director": {
-        "id": "USR-001",
-        "passwords": ["DirUsaer2E*2026", "123"],
-        "nombre": "Psic. Edgar Adrián Yam Briceño",
-        "rol": "DIRECTOR",
-        "escuelas": ["TODAS"],
-        "area": "Dirección"
-    },
-    "edgar": {
-        "id": "USR-001-A",
-        "passwords": ["DirUsaer2E*2026", "123"],
-        "nombre": "Psic. Edgar Adrián Yam Briceño",
-        "rol": "DIRECTOR",
-        "escuelas": ["TODAS"],
-        "area": "Dirección"
-    },
-    "cindy.burgos": {
-        "id": "USR-002",
-        "passwords": ["Usaer2E*Carmona"],
-        "nombre": "Mtra. Cindy Mayanín Burgos González",
-        "rol": "APOYO",
-        "escuelas": ["ESC-001"],
-        "area": "Aprendizaje"
-    },
-    "marycruz.caamal": {
-        "id": "USR-003",
-        "passwords": ["Usaer2E*Ichcaan", "Usaer2E*Ichcaanziho"],
-        "nombre": "Mtra. Marycruz Caamal Coral",
-        "rol": "APOYO",
-        "escuelas": ["ESC-002"],
-        "area": "Aprendizaje"
-    },
-    "cecilia.solis": {
-        "id": "USR-015",
-        "passwords": ["Usaer2E*Cecilia", "Usaer2E*Ichcaan2", "Usaer2E*Ichcaan", "Usaer2E*Ceci"],
-        "nombre": "Mtra. María Cecilia Solís Vázquez",
-        "rol": "APOYO",
-        "escuelas": ["ESC-002"],
-        "area": "Aprendizaje"
-    },
-    "dolores.cortazar": {
-        "id": "USR-004",
-        "passwords": ["Usaer2E*Torres", "Usaer2E*Gregorio"],
-        "nombre": "Mtra. Dolores Eugenia Cortázar Navarrete",
-        "rol": "APOYO",
-        "escuelas": ["ESC-003"],
-        "area": "Aprendizaje"
-    },
-    "dianely.caamal": {
-        "id": "USR-005",
-        "passwords": ["Usaer2E*Remigio", "Usaer2E*Aguilar"],
-        "nombre": "Mtra. Dianely de Sugeidy Caamal Tamay",
-        "rol": "APOYO",
-        "escuelas": ["ESC-004"],
-        "area": "Aprendizaje"
-    },
-    "luis.garcia": {
-        "id": "USR-006",
-        "passwords": ["Usaer2E*Elvira", "Usaer2E*Parra", "Usaer2E*Manuel"],
-        "nombre": "Mtro. Luis Jorge García Herrera",
-        "rol": "APOYO",
-        "escuelas": ["ESC-005"],
-        "area": "Aprendizaje"
-    },
-    "rosario.perez": {
-        "id": "USR-007",
-        "passwords": ["Usaer2E*Manuel", "Usaer2E*Sarrado", "Usaer2E*Domingo"],
-        "nombre": "Mtra. María del Rosario Pérez Vitorin",
-        "rol": "APOYO",
-        "escuelas": ["ESC-006"],
-        "area": "Aprendizaje"
-    },
-    "zuemmy.perez": {
-        "id": "USR-008",
-        "passwords": ["Usaer2E*Domingo", "Usaer2E*Solis", "Usaer2E*Quintana"],
-        "nombre": "Mtra. Zuemmy del Carmen Pérez Basto",
-        "rol": "APOYO",
-        "escuelas": ["ESC-007"],
-        "area": "Aprendizaje"
-    },
-    "pedro.torres": {
-        "id": "USR-009",
-        "passwords": ["Usaer2E*QRoo", "Usaer2E*Quintana", "Usaer2E*Apoyo", "123"],
-        "nombre": "Mtro. Pedro Manuel Torres May",
-        "rol": "APOYO",
-        "escuelas": ["ESC-008"],
-        "area": "Aprendizaje"
-    },
-    "mariajose.cupul": {
-        "id": "USR-010",
-        "passwords": ["PsiUsaer2E*26", "Usaer2E*Psico", "123"],
-        "nombre": "Psic. María José Cupul Realpozo",
-        "rol": "PSICOLOGIA",
-        "escuelas": ["ESC-001", "ESC-002", "ESC-005", "ESC-008"],
-        "area": "Psicología"
-    },
-    "elmy.puerto": {
-        "id": "USR-011",
-        "passwords": ["ComUsaer2E*26", "Usaer2E*Comun", "123"],
-        "nombre": "Com. Elmy Lucelly Puerto Gone",
-        "rol": "COMUNICACION",
-        "escuelas": ["ESC-001", "ESC-002", "ESC-005", "ESC-008"],
-        "area": "Comunicación"
-    },
-    "abril.chable": {
-        "id": "USR-012",
-        "passwords": ["PsiUsaer2E*26B", "Usaer2E*Psico2", "123"],
-        "nombre": "Psic. Abril de María Chablé Ríos",
-        "rol": "PSICOLOGIA",
-        "escuelas": ["ESC-003", "ESC-004", "ESC-006", "ESC-007"],
-        "area": "Psicología"
-    },
-    "marilyn.perez": {
-        "id": "USR-013",
-        "passwords": ["ComUsaer2E*26B", "Usaer2E*Comun2", "123"],
-        "nombre": "Com. Marilyn Pérez Lizama",
-        "rol": "COMUNICACION",
-        "escuelas": ["ESC-003", "ESC-004", "ESC-006", "ESC-007"],
-        "area": "Comunicación"
-    },
-    "diego.peralta": {
-        "id": "USR-014",
-        "passwords": ["TSUsaer2E*2026", "Usaer2E*Social", "123"],
-        "nombre": "Mtro. Diego Peralta Torres",
-        "rol": "TRABAJO_SOCIAL",
-        "escuelas": ["TODAS"],
-        "area": "Trabajo Social"
-    }
-}
-
 ALIASES_USUARIOS: Dict[str, str] = {
     "cindy": "cindy.burgos",
     "marycruz": "marycruz.caamal",
@@ -246,21 +115,6 @@ def autenticar_usuario(usuario: str, password_plana: str) -> Optional[SessionUse
     if u_clean in ALIASES_USUARIOS:
         u_clean = ALIASES_USUARIOS[u_clean]
 
-    # 1. Cotejo contra catálogo canónico institucional
-    if u_clean in USUARIOS_CANONICOS:
-        info = USUARIOS_CANONICOS[u_clean]
-        if p_clean in info["passwords"]:
-            es_dir = "DIRECTOR" in info["rol"]
-            return SessionUser(
-                id_usuario=info["id"],
-                nombre=info["nombre"],
-                usuario=u_clean,
-                rol=info["rol"],
-                escuelas_permitidas=info["escuelas"],
-                director=es_dir,
-                area=info["area"]
-            )
-
     if p_clean.lower() in PROHIBITED_PASSWORDS:
         return None
 
@@ -287,7 +141,7 @@ def autenticar_usuario(usuario: str, password_plana: str) -> Optional[SessionUse
     rol = str(usuario_row.get("Rol", "")).strip().upper()
     es_director = "DIRECTOR" in rol
     escuelas_str = str(usuario_row.get("Escuelas_Permitidas", "")).strip()
-    escuelas = [e.strip() for e in escuelas_str.split(",") if e.strip()] or (["TODAS"] if es_director else ["ESC-001"])
+    escuelas = [e.strip() for e in escuelas_str.split(",") if e.strip()] or (["TODAS"] if es_director else [])
 
     area = "Dirección" if es_director else "Aprendizaje"
     if "PSIC" in rol:
@@ -333,15 +187,12 @@ def emitir_token_sesion(user: SessionUser) -> str:
 
 def validar_token_sesion(
     authorization: Optional[str] = Header(None),
-    token: Optional[str] = Query(None),
 ) -> SessionUser:
     """Dependencia de FastAPI para validar el token Bearer o por query param. Rechaza cualquier intento anónimo."""
     token_str = None
     if authorization:
         partes = authorization.split()
         token_str = partes[1] if len(partes) == 2 and partes[0].lower() == "bearer" else authorization.strip()
-    elif token:
-        token_str = token.strip()
 
     if not token_str:
         raise HTTPException(
@@ -350,17 +201,6 @@ def validar_token_sesion(
         )
 
     token = token_str
-
-    if token == "token_oficial_edgar_director_2026":
-        return SessionUser(
-            id_usuario="USR-001",
-            nombre="Psic. Edgar Adrian Yam Briceno",
-            usuario="edgar.director",
-            rol="DIRECTOR",
-            escuelas_permitidas=["TODAS"],
-            director=True,
-            area="Dirección"
-        )
 
     # 1. Chequeo rápido en memoria
     sesion = _ACTIVE_SESSIONS.get(token)
