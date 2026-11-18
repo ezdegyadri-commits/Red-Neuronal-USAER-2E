@@ -1,3 +1,39 @@
+# Archivo histórico: las escrituras educativas se realizan en la plataforma nueva.
+# El bloqueo vive en el transporte, también para tareas pendientes y referencias importadas.
+import requests as _requests_consulta
+from urllib.parse import urlsplit as _urlsplit_consulta
+if not getattr(_requests_consulta.sessions.Session.request, "_usaer_solo_consulta", False):
+    _solicitud_original_consulta = _requests_consulta.sessions.Session.request
+    def _solicitud_consulta(self, method, url, *args, **kwargs):
+        destino = _urlsplit_consulta(str(url))
+        servicio = destino.hostname or ""
+        ruta = destino.path
+        escritura = str(method).upper() not in {"GET", "HEAD", "OPTIONS"}
+        # batchGet y búsquedas de Drive usan GET; los batchUpdate y uploads escriben.
+        if escritura and (servicio == "sheets.googleapis.com" or
+                (servicio in {"www.googleapis.com", "content.googleapis.com"} and
+                 (ruta.startswith("/drive/") or ruta.startswith("/upload/drive/")))):
+            raise RuntimeError("Versión histórica de solo consulta. Guarda los cambios en la plataforma nueva.")
+        return _solicitud_original_consulta(self, method, url, *args, **kwargs)
+    _solicitud_consulta._usaer_solo_consulta = True
+    _requests_consulta.sessions.Session.request = _solicitud_consulta
+
+
+# googleapiclient utiliza httplib2 para Drive; se protege también ese transporte.
+import httplib2 as _httplib2_consulta
+if not getattr(_httplib2_consulta.Http.request, "_usaer_solo_consulta", False):
+    _http_original_consulta = _httplib2_consulta.Http.request
+    def _http_consulta(self, uri, method="GET", *args, **kwargs):
+        destino = _urlsplit_consulta(str(uri))
+        if str(method).upper() not in {"GET", "HEAD", "OPTIONS"} and (
+                destino.hostname == "sheets.googleapis.com" or
+                (destino.hostname in {"www.googleapis.com", "content.googleapis.com"} and
+                 (destino.path.startswith("/drive/") or destino.path.startswith("/upload/drive/")))):
+            raise RuntimeError("Archivo histórico de solo consulta. Usa la plataforma nueva.")
+        return _http_original_consulta(self, uri, method, *args, **kwargs)
+    _http_consulta._usaer_solo_consulta = True
+    _httplib2_consulta.Http.request = _http_consulta
+
 import os
 import sys
 from pathlib import Path
@@ -36,6 +72,8 @@ from ui.sidebar import TITULOS_SIMPLIFICADOS
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon="◈", layout="wide", initial_sidebar_state="collapsed")
 inject()
+st.info("Archivo histórico de solo consulta. Toda captura, edición, eliminación y recuperación se realiza en la plataforma nueva.")
+st.link_button("Abrir plataforma nueva", "https://uwoyjp64-fastapi-usaer-2e-2-0.apps-2.websson.cloud/")
 from ui.interacciones_rapidas import activar as activar_respuesta_local
 # Se conserva la captura pendiente y la conciliación de los diarios de Sheets.
 # Instaladores móviles 1.0.0 disponibles en ingreso.
@@ -47,6 +85,31 @@ _inicio_clic=_tiempo.monotonic()
 recuperar_sesion()
 if st.session_state.get('_ruta_diagnostico'):
     _registro.getLogger(__name__).warning('usaer_ruta etapa=sesion segundos=%.3f',_tiempo.monotonic()-_inicio_clic)
+
+
+# No mostrar controles que ofrezcan guardar cambios en el archivo histórico.
+if st.session_state.get("autenticado"):
+    import functools as _functools_consulta
+    import re as _re_consulta
+    from streamlit.delta_generator import DeltaGenerator as _DG_consulta
+    def _instalar_control_consulta(nombre, condicional=False):
+        original = getattr(_DG_consulta, nombre)
+        if getattr(original, "_usaer_solo_consulta", False):
+            return
+        @_functools_consulta.wraps(original)
+        def control(self, *args, **kwargs):
+            etiqueta = str(args[0] if args else kwargs.get("label", "")).lower()
+            navegacion = _re_consulta.search(r"^(?:[←→⚙️📄📥🔎🔍 ]*)(?:ver|consultar|buscar|abrir|descargar|volver|inicio|cerrar sesi|anterior|siguiente)", etiqueta)
+            if st.session_state.get("autenticado") and (not condicional or not navegacion):
+                kwargs["disabled"] = True
+            return original(self, *args, **kwargs)
+        control._usaer_solo_consulta = True
+        setattr(_DG_consulta, nombre, control)
+    _instalar_control_consulta("form_submit_button")
+    _instalar_control_consulta("file_uploader")
+    _instalar_control_consulta("text_area")
+    _instalar_control_consulta("data_editor")
+    _instalar_control_consulta("button", condicional=True)
 
 # El acceso directo también identifica la cuenta antes de ofrecer escuelas.
 if st.query_params.get("p") in ("docentes", "docentes_primaria", "maestros_regulares") or st.query_params.get("form") in ("docentes", "docentes_primaria"):
